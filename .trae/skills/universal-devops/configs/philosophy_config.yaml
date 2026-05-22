@@ -1,0 +1,196 @@
+# 开源哲学融合引擎配置
+# Universal DevOps v7.0
+# 编码: UTF-8 无 BOM
+
+version: "1.0"
+description: "OpenCode/OpenClaude/Claw-Code 设计哲学融合配置"
+
+# ========== OpenCode 透明化配置 ==========
+opencode:
+  enabled: true
+  weight: 0.33                    # 默认权重（可在策略中调整）
+  
+  decision_logging:
+    auto_record: true             # 自动记录决策
+    min_importance_threshold: 0.6  # 最小重要性阈值
+    stakeholder_auto_trace: true  # 自动追溯利益相关者
+    
+  transparency_scoring:
+    completeness_weight: 0.3      # 完整性权重
+    traceability_weight: 0.3      # 可追溯性权重
+    openness_weight: 0.25         # 开放性权重
+    timeliness_weight: 0.15       # 及时性权重
+    score_range: [0, 100]
+    
+  visibility_levels:
+    PUBLIC:                       # 所有Agent可见
+      description: "公开级别 - 所有人可见"
+    INTERNAL:                     # 项目内可见
+      description: "内部级别 - 项目成员可见"
+    CONFIDENTIAL:                 # 需要授权可见
+      description: "机密级别 - 需要权限访问"
+    RESTRICTED:                   # 仅特定角色可见
+      description: "限制级别 - 仅指定人员访问"
+
+# ========== OpenClaude 编排配置 ==========
+openclaude:
+  enabled: true
+  weight: 0.34                    # 默认权重
+  
+  dag_workflow:
+    max_nodes: 50                  # DAG最大节点数
+    max_depth: 10                  # 最大嵌套深度
+    parallel_group_size: 5         # 并行组最大大小
+    default_timeout_seconds: 300   # 默认节点超时
+    default_retry_policy:
+      max_retries: 3
+      backoff_strategy: "exponential"
+      
+  context_management:
+    default_max_tokens: 128000     # 默认上下文窗口大小
+    compression_ratio: 0.5         # 压缩比率目标
+    strategies:
+      - name: "summary"
+        description: "摘要压缩"
+        trigger_threshold: 0.8
+      - name: "extraction"
+        description: "关键信息提取"
+        trigger_threshold: 0.85
+      - name: "truncation"
+        description: "截断旧消息"
+        trigger_threshold: 0.95
+        
+  memory_system:
+    persistence_enabled: true
+    max_entries_per_category: 1000
+    categories:
+      - project_knowledge
+      - user_preferences
+      - code_patterns
+      - error_solutions
+      - architecture_decisions
+    recall_top_k: 10               # 检索返回数量
+    relevance_threshold: 0.6       # 相关性阈值
+
+# ========== Claw-Code 契约驱动配置 ==========
+clawcode:
+  enabled: true
+  weight: 0.33                    # 默认权重
+  
+  contract_transformation:
+    assertion_generation:
+      target_languages: ["python", "typescript", "java"]
+      confidence_threshold: 0.7
+      auto_validate: true
+      
+    validation_functions:
+      rule_parser: "natural_language"
+      template_engine: "jinja2-like"
+      test_framework_integration: ["pytest", "jest", "junit"]
+      
+    api_contract_generation:
+      framework: "pydantic"
+      openapi_version: "3.1"
+      auto_documentation: true
+      
+    performance_benchmark:
+      default_metrics: ["response_time", "throughput", "error_rate"]
+      baseline_comparison: true
+      
+  soul_identity:
+    default_traits:
+      professional: 0.9
+      collaborative: 0.8
+      thoroughness: 0.85
+      adaptability: 0.75
+    value_system:
+      quality_first: true
+      transparency: true
+      security_mindset: true
+      continuous_learning: true
+
+# ========== 融合策略配置 ==========
+fusion_strategy:
+  default_strategy: "balanced"
+  
+  predefined_strategies:
+    balanced:
+      opencode_weight: 0.333
+      openclaw_weight: 0.334
+      clawcode_weight: 0.333
+      applicable_scenes: ["general_development", "feature_development", "bug_fixing"]
+      description: "均衡融合 - 三大理念均等应用"
+      
+    transparency_first:
+      opencode_weight: 0.50
+      openclaw_weight: 0.25
+      clawcode_weight: 0.25
+      applicable_scenes: ["architecture_decision", "requirement_analysis", "planning"]
+      description: "透明优先 - 强调决策透明和可追溯"
+      
+    orchestration_heavy:
+      opencode_weight: 0.20
+      openclaw_weight: 0.60
+      clawcode_weight: 0.20
+      applicable_scenes: ["multi_agent_coordination", "complex_workflow", "pipeline_execution"]
+      description: "编排密集 - 强调智能工作流编排"
+      
+    contract_driven:
+      opencode_weight: 0.20
+      openclaw_weight: 0.20
+      clawcode_weight: 0.60
+      applicable_scenes: ["tdd_development", "api_design", "specification_driven"]
+      description: "契约驱动 - 强调规范即测试"
+      
+    security_focused:
+      opencode_weight: 0.35
+      openclaw_weight: 0.25
+      clawcode_weight: 0.40
+      applicable_scenes: ["security_audit", "vulnerability_fix", "compliance_check"]
+      description: "安全聚焦 - 强化安全审查和合规"
+
+# ========== 场景自动选择规则 ==========
+scene_detection:
+  rules:
+    - pattern_keywords: ["架构决策", "技术选型", "ADR", "设计模式"]
+      recommended_strategy: "transparency_first"
+      confidence: 0.90
+      
+    - pattern_keywords: ["TDD", "测试驱动", "规范", "契约", "SDD"]
+      recommended_strategy: "contract_driven"
+      confidence: 0.92
+      
+    - pattern_keywords: ["多Agent", "并行", "协作", "编排", "流水线"]
+      recommended_strategy: "orchestration_heavy"
+      confidence: 0.88
+      
+    - pattern_keywords: ["安全", "漏洞", "审计", "合规", "OWASP"]
+      recommended_strategy: "security_focused"
+      confidence: 0.93
+      
+    - pattern_keywords: ["开发", "实现", "功能", "修复", "重构"]
+      recommended_strategy: "balanced"
+      confidence: 0.80
+
+# ========== 融合效果评估配置 ==========
+evaluation:
+  scoring_weights:
+    transparency_score: 0.25
+    orchestration_score: 0.30
+    contract_score: 0.25
+    efficiency_score: 0.20
+    
+  grade_scale:
+    A+: [95, 100]
+    A: [90, 95]
+    B+: [85, 90]
+    B: [80, 85]
+    C+: [75, 80]
+    C: [70, 75]
+    D: [60, 70]
+    F: [0, 60]
+    
+  quality_gates:
+    minimum_overall_score: 70
+    minimum_dimension_score: 60
+    auto_improvement_suggestions: true

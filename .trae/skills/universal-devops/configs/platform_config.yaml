@@ -1,0 +1,59 @@
+# 平台适配层配置 (Platform Adapter Configuration)
+
+# PowerShell 7 配置
+powershell:
+  executable_path: "pwsh"  # PowerShell 7 可执行文件名
+  min_version: "7.0"
+  
+  session_pool:
+    max_sessions: 5
+    idle_timeout_minutes: 30
+    cleanup_interval_minutes: 10
+    lru_eviction_enabled: true
+    
+  command_translation:
+    enabled: true
+    custom_mappings: {}  # 用户自定义命令映射覆盖
+    warn_on_unmapped: true
+    
+  encoding:
+    output_encoding: "utf-8-no-bom"
+    input_encoding: "utf-8"
+    error_encoding: "utf-8"
+    
+  path_handling:
+    auto_convert_unix_paths: true
+    normalize_separators: true
+    preserve_unc_paths: true
+
+# Bash 配置
+bash:
+  executable_path: "bash"
+  min_version: "5.0"
+  
+  signal_handling:
+    enable_graceful_shutdown: true
+    shutdown_timeout_seconds: 10
+    
+  background_processes:
+    max_background_processes: 10
+    auto_cleanup_on_exit: true
+    cleanup_interval_minutes: 5
+
+# 通用设置
+common:
+  command_timeout_seconds: 300  # 默认命令超时5分钟
+  output_buffer_size_bytes: 10485760  # 10MB
+  working_directory_detection: "auto"  # auto/git_root/current
+  
+  environment:
+    preserve_existing_vars: true
+    log_execution: true
+    log_path: "logs/platform_execution.log"
+
+# 编码设置（全局）
+encoding:
+  default: "UTF-8"
+  bom: false  # 无BOM
+  fallback: "latin-1"  # 编码检测失败时的回退编码
+  auto_detect: true  # 自动检测文件编码

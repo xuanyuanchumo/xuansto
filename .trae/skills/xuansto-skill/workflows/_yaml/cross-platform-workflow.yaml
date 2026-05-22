@@ -1,0 +1,276 @@
+metadata:
+  name: 跨平台协作开发工作流
+  version: "3.2.0"
+  description: 跨平台桌面与Web协同开发工作流
+  platform: cross-platform
+  min_agents: 3
+  max_agents: 10
+phases:
+  - id: phase-0
+    name: 平台检测
+    order: 0
+    optional: false
+    trigger_condition: 项目同时有Web和Desktop发布需求
+    agents:
+      primary: [fullstack-engineer, product-manager]
+      supporting: []
+    inputs:
+      - name: 项目需求文档
+        type: document
+        required: true
+      - name: 技术栈约束
+        type: document
+        required: true
+      - name: 目标用户画像
+        type: document
+        required: true
+    outputs:
+      - name: 平台需求分析报告
+        type: document
+        validation: Web与Desktop需求已明确区分
+      - name: 技术栈选型方案
+        type: document
+        validation: 技术栈选型已确认
+      - name: 平台差异矩阵
+        type: document
+        validation: 平台差异已识别并记录
+    quality_gates:
+      - gate_id: platform_requirements_clear
+        blocking: true
+        pass_criteria: Web与Desktop需求已明确区分
+      - gate_id: tech_stack_confirmed
+        blocking: true
+        pass_criteria: 技术栈选型已确认
+      - gate_id: platform_diffs_identified
+        blocking: true
+        pass_criteria: 平台差异已识别并记录
+    timeout_minutes: 60
+    retry:
+      max_attempts: 2
+      backoff: fixed
+  - id: phase-2
+    name: 共享层设计
+    order: 1
+    optional: false
+    trigger_condition: 平台检测完成
+    agents:
+      primary: [fullstack-engineer, backend-developer]
+      supporting: []
+    inputs:
+      - name: 平台需求分析报告
+        type: document
+        required: true
+        source_phase: phase-0
+      - name: 技术栈选型方案
+        type: document
+        required: true
+        source_phase: phase-0
+    outputs:
+      - name: 共享层架构设计文档
+        type: document
+        validation: 共享层与平台层边界清晰
+      - name: API接口契约
+        type: document
+        validation: API接口契约已定义
+      - name: 业务逻辑模块划分
+        type: document
+        validation: 业务逻辑无平台耦合
+    quality_gates:
+      - gate_id: shared_layer_boundary_clear
+        blocking: true
+        pass_criteria: 共享层与平台层边界清晰
+      - gate_id: api_contract_defined
+        blocking: true
+        pass_criteria: API接口契约已定义
+      - gate_id: no_platform_coupling
+        blocking: true
+        pass_criteria: 业务逻辑无平台耦合
+    timeout_minutes: 90
+    retry:
+      max_attempts: 2
+      backoff: fixed
+  - id: phase-4
+    name: TDD开发与代码审查
+    order: 2
+    optional: false
+    trigger_condition: 共享层设计完成
+    agents:
+      primary: [fullstack-engineer, desktop-developer, desktop-ui-adapter, backend-developer]
+      supporting: []
+    inputs:
+      - name: 共享层架构设计文档
+        type: document
+        required: true
+        source_phase: phase-2
+      - name: API接口契约
+        type: document
+        required: true
+        source_phase: phase-2
+      - name: 平台差异矩阵
+        type: document
+        required: true
+        source_phase: phase-0
+    outputs:
+      - name: 共享层代码与测试
+        type: code
+        validation: 共享层测试覆盖率>=80%
+      - name: Web端代码与测试
+        type: code
+        validation: Web端核心功能实现完成
+      - name: Desktop端代码与测试
+        type: code
+        validation: Desktop端核心功能实现完成
+      - name: 集成同步记录
+        type: document
+        validation: 两端功能对齐验证通过
+    quality_gates:
+      - gate_id: shared_coverage_80
+        blocking: true
+        pass_criteria: 共享层测试覆盖率>=80%
+      - gate_id: web_core_done
+        blocking: true
+        pass_criteria: Web端核心功能实现完成
+      - gate_id: desktop_core_done
+        blocking: true
+        pass_criteria: Desktop端核心功能实现完成
+      - gate_id: feature_alignment
+        blocking: true
+        pass_criteria: 两端功能对齐验证通过
+    timeout_minutes: 240
+    retry:
+      max_attempts: 3
+      backoff: exponential
+  - id: phase-5
+    name: 跨平台测试
+    order: 3
+    optional: false
+    trigger_condition: 并行实现完成
+    agents:
+      primary: [unit-tester, desktop-developer, fullstack-engineer]
+      supporting: []
+    inputs:
+      - name: Web端构建产物
+        type: artifact
+        required: true
+        source_phase: phase-4
+      - name: Desktop端构建产物
+        type: artifact
+        required: true
+        source_phase: phase-4
+      - name: 测试用例集
+        type: document
+        required: true
+    outputs:
+      - name: 跨平台测试报告
+        type: document
+        validation: 核心功能一致性100%
+      - name: 功能一致性矩阵
+        type: document
+      - name: 性能基准报告
+        type: document
+        validation: 性能指标达标
+      - name: 兼容性测试报告
+        type: document
+    quality_gates:
+      - gate_id: core_consistency_100
+        blocking: true
+        pass_criteria: 核心功能一致性100%
+      - gate_id: smoke_tests_pass
+        blocking: true
+        pass_criteria: 各平台冒烟测试全部通过
+      - gate_id: performance_met
+        blocking: true
+        pass_criteria: 性能指标达标
+      - gate_id: no_p0_p1
+        blocking: true
+        pass_criteria: 无P0/P1级缺陷
+    timeout_minutes: 120
+    retry:
+      max_attempts: 2
+      backoff: fixed
+  - id: phase-8
+    name: 统一验收与发布
+    order: 4
+    optional: false
+    trigger_condition: 跨平台测试通过
+    agents:
+      primary: [build-release-engineer, desktop-developer]
+      supporting: [product-manager]
+    inputs:
+      - name: 跨平台测试报告
+        type: document
+        required: true
+        source_phase: phase-5
+      - name: 功能一致性矩阵
+        type: document
+        required: true
+        source_phase: phase-5
+      - name: 各端构建产物
+        type: artifact
+        required: true
+    outputs:
+      - name: 统一验收报告
+        type: document
+        validation: Web端和Desktop端验收通过
+      - name: 待改进项清单
+        type: document
+      - name: 发布就绪确认
+        type: document
+        validation: 无阻塞性问题
+    quality_gates:
+      - gate_id: web_acceptance_pass
+        blocking: true
+        pass_criteria: Web端验收通过
+      - gate_id: desktop_acceptance_pass
+        blocking: true
+        pass_criteria: Desktop端验收通过
+      - gate_id: cross_platform_consistency
+        blocking: true
+        pass_criteria: 跨平台一致性验收通过
+      - gate_id: no_blockers
+        blocking: true
+        pass_criteria: 无阻塞性问题
+    timeout_minutes: 90
+    retry:
+      max_attempts: 2
+      backoff: fixed
+agent_matrix:
+  fullstack-engineer:
+    phases: [phase-0, phase-2, phase-4, phase-5]
+    role: primary
+    max_parallel_instances: 2
+  product-manager:
+    phases: [phase-0]
+    role: primary
+    max_parallel_instances: 1
+  backend-developer:
+    phases: [phase-2, phase-4]
+    role: primary
+    max_parallel_instances: 1
+  desktop-developer:
+    phases: [phase-4, phase-5, phase-8]
+    role: primary
+    max_parallel_instances: 1
+  desktop-ui-adapter:
+    phases: [phase-4]
+    role: primary
+    max_parallel_instances: 1
+  unit-tester:
+    phases: [phase-5]
+    role: primary
+    max_parallel_instances: 1
+  build-release-engineer:
+    phases: [phase-8]
+    role: primary
+    max_parallel_instances: 1
+exception_handling:
+  phase_failure:
+    action: retry_then_escalate
+    escalation_target: orchestrator
+    max_retries: 3
+  agent_unavailable:
+    action: substitute_and_continue
+    substitute_agent: fullstack-engineer
+  quality_gate_blocked:
+    action: auto_fix_then_pause
+    auto_fix_agents: [fullstack-engineer, desktop-developer]

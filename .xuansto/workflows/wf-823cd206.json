@@ -1,0 +1,48 @@
+{
+  "workflow_id": "wf-823cd206",
+  "workflow": "sdd-tdd-fast",
+  "project_path": "C:\\Users\\86156\\AppData\\Local\\Temp\\pytest-of-86156\\pytest-580\\test_workflow_snapshots_action0",
+  "status": "running",
+  "current_phase": 0,
+  "started_at": "2026-05-20T22:47:45.195794",
+  "completed_phases": [],
+  "phase_definitions": [
+    {
+      "id": 0,
+      "name": "设计+测试",
+      "gates": [
+        "DESIGN-SYSTEM-COMPLETE",
+        "TEST-FIRST"
+      ],
+      "agents": [
+        "design-reviewer",
+        "tdd-agent"
+      ]
+    },
+    {
+      "id": 1,
+      "name": "实现+验证",
+      "gates": [
+        "TEST-PASS",
+        "GATE-007",
+        "GATE-011"
+      ],
+      "agents": [
+        "coder",
+        "integrator"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "发布",
+      "gates": [
+        "GATE-013",
+        "DESKTOP-BUILD"
+      ],
+      "agents": [
+        "devops",
+        "desktop-builder"
+      ]
+    }
+  ]
+}

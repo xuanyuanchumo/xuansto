@@ -1,0 +1,81 @@
+[project]
+name = "xuansto-mcp-server"
+version = "3.5.0"
+description = "Xuansto Skill MCP Server - 13 atomic tools + 6 resources for autonomous development orchestration"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+    { name = "skiller-team" },
+]
+keywords = ["mcp", "xuansto", "sdd", "tdd", "multi-agent", "orchestration", "quality-gates"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Testing",
+]
+dependencies = [
+    "mcp[cli]>=1.0.0",
+    "pydantic>=2.0.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+full = [
+    "chromadb>=0.4.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.20.0",
+    "openai>=1.0.0",
+    "sentence-transformers>=2.0.0",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "pytest-cov>=4.0",
+]
+
+[project.scripts]
+xuansto-mcp = "xuansto_mcp.server:main"
+xuansto-cli = "xuansto_mcp.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/skiller-team/xuansto-mcp-server"
+Repository = "https://github.com/skiller-team/xuansto-mcp-server"
+Issues = "https://github.com/skiller-team/xuansto-mcp-server/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/xuansto_mcp"]
+
+[tool.hatch.build.targets.wheel.shared-data]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "SIM"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+exclude = ["data/scripts", "data/references"]

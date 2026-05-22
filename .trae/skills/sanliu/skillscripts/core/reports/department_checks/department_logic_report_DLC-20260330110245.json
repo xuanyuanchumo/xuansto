@@ -1,0 +1,368 @@
+{
+  "report_id": "DLC-20260330110245",
+  "generated_at": "2026-03-30T11:02:45.446382",
+  "total_checks": 18,
+  "passed": 16,
+  "failed": 0,
+  "warnings": 2,
+  "skipped": 0,
+  "overall_status": "warning",
+  "results": [
+    {
+      "check_id": "LIBU-001",
+      "check_name": "Agent分配检查",
+      "ministry": "libu",
+      "status": "pass",
+      "severity": "high",
+      "message": "Agent分配合理",
+      "details": {
+        "agents_count": 2,
+        "tasks_count": 2,
+        "assignments_count": 2
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:02:45.446157"
+    },
+    {
+      "check_id": "LIBU-002",
+      "check_name": "技能匹配检查",
+      "ministry": "libu",
+      "status": "pass",
+      "severity": "medium",
+      "message": "技能匹配良好",
+      "details": {
+        "required_skills": [
+          "python",
+          "vue",
+          "postgresql"
+        ],
+        "available_skills": [
+          "python",
+          "vue",
+          "postgresql",
+          "redis"
+        ]
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:02:45.446185"
+    },
+    {
+      "check_id": "LIBU-003",
+      "check_name": "负载均衡检查",
+      "ministry": "libu",
+      "status": "pass",
+      "severity": "medium",
+      "message": "负载均衡良好，平均负载: 55.0%",
+      "details": {
+        "avg_load": 0.55,
+        "max_load": 0.6,
+        "min_load": 0.5
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:02:45.446202"
+    },
+    {
+      "check_id": "HUBU-001",
+      "check_name": "环境配置检查",
+      "ministry": "hubu",
+      "status": "pass",
+      "severity": "high",
+      "message": "环境配置完整",
+      "details": {
+        "environments": [
+          "development",
+          "testing",
+          "production"
+        ]
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:02:45.446214"
+    },
+    {
+      "check_id": "HUBU-002",
+      "check_name": "资源分配检查",
+      "ministry": "hubu",
+      "status": "pass",
+      "severity": "high",
+      "message": "资源分配合理",
+      "details": {
+        "cpu_usage": "10/16",
+        "memory_usage": "20/32"
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:02:45.446221"
+    },
+    {
+      "check_id": "HUBU-003",
+      "check_name": "依赖管理检查",
+      "ministry": "hubu",
+      "status": "pass",
+      "severity": "medium",
+      "message": "依赖管理正常",
+      "details": {
+        "dependencies_count": 2
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:02:45.446226"
+    },
+    {
+      "check_id": "LIIBU-001",
+      "check_name": "编码规范检查",
+      "ministry": "liibu",
+      "status": "pass",
+      "severity": "high",
+      "message": "编码规范合规",
+      "details": {
+        "standards": [
+          "naming",
+          "formatting",
+          "documentation",
+          "error_handling"
+        ]
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:02:45.446232"
+    },
+    {
+      "check_id": "LIIBU-002",
+      "check_name": "文档完整性检查",
+      "ministry": "liibu",
+      "status": "warning",
+      "severity": "medium",
+      "message": "文档存在建议: 文档覆盖率建议提升: 85%",
+      "details": {
+        "warnings": [
+          "文档覆盖率建议提升: 85%"
+        ]
+      },
+      "recommendations": [
+        "更新过期文档"
+      ],
+      "timestamp": "2026-03-30T11:02:45.446238"
+    },
+    {
+      "check_id": "LIIBU-003",
+      "check_name": "审查流程检查",
+      "ministry": "liibu",
+      "status": "pass",
+      "severity": "medium",
+      "message": "审查流程正常",
+      "details": {
+        "total_reviews": 2,
+        "pending": 0,
+        "approved": 2
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:02:45.446245"
+    },
+    {
+      "check_id": "BINGBU-001",
+      "check_name": "测试先行原则检查",
+      "ministry": "bingbu",
+      "status": "pass",
+      "severity": "high",
+      "message": "测试先行原则执行良好",
+      "details": {
+        "features_checked": 2
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:02:45.446251"
+    },
+    {
+      "check_id": "BINGBU-002",
+      "check_name": "测试覆盖率检查",
+      "ministry": "bingbu",
+      "status": "warning",
+      "severity": "medium",
+      "message": "测试覆盖率存在建议: 单元测试覆盖率建议提升: 85%",
+      "details": {
+        "warnings": [
+          "单元测试覆盖率建议提升: 85%"
+        ]
+      },
+      "recommendations": [
+        "补充测试用例"
+      ],
+      "timestamp": "2026-03-30T11:02:45.446256"
+    },
+    {
+      "check_id": "BINGBU-003",
+      "check_name": "测试质量检查",
+      "ministry": "bingbu",
+      "status": "pass",
+      "severity": "medium",
+      "message": "测试质量良好",
+      "details": {
+        "tests_count": 2,
+        "flaky_count": 0,
+        "slow_count": 0
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:02:45.446262"
+    },
+    {
+      "check_id": "GONGBU-001",
+      "check_name": "代码实现检查",
+      "ministry": "gongbu",
+      "status": "pass",
+      "severity": "high",
+      "message": "代码实现完整",
+      "details": {
+        "modules_count": 2
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:02:45.446268"
+    },
+    {
+      "check_id": "GONGBU-002",
+      "check_name": "代码质量检查",
+      "ministry": "gongbu",
+      "status": "pass",
+      "severity": "medium",
+      "message": "代码质量良好",
+      "details": {
+        "tech_debt_hours": 5
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:02:45.446272"
+    },
+    {
+      "check_id": "GONGBU-003",
+      "check_name": "绿阶段完成检查",
+      "ministry": "gongbu",
+      "status": "pass",
+      "severity": "high",
+      "message": "绿阶段完成，所有测试通过",
+      "details": {
+        "tests_passed": 2
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:02:45.446278"
+    },
+    {
+      "check_id": "XINGBU-001",
+      "check_name": "重构必要性检查",
+      "ministry": "xingbu",
+      "status": "pass",
+      "severity": "medium",
+      "message": "代码结构良好，无需紧急重构",
+      "details": {
+        "candidates_count": 0
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:02:45.446284"
+    },
+    {
+      "check_id": "XINGBU-002",
+      "check_name": "蓝阶段完成检查",
+      "ministry": "xingbu",
+      "status": "pass",
+      "severity": "high",
+      "message": "蓝阶段完成，代码质量提升",
+      "details": {
+        "improvements": [
+          "提取公共方法",
+          "优化查询性能"
+        ]
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:02:45.446289"
+    },
+    {
+      "check_id": "XINGBU-003",
+      "check_name": "优化机会检查",
+      "ministry": "xingbu",
+      "status": "pass",
+      "severity": "medium",
+      "message": "代码优化良好",
+      "details": {
+        "suggestions_count": 2
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:02:45.446294"
+    }
+  ],
+  "by_ministry": {
+    "libu": {
+      "total": 3,
+      "passed": 3,
+      "failed": 0,
+      "warnings": 0
+    },
+    "hubu": {
+      "total": 3,
+      "passed": 3,
+      "failed": 0,
+      "warnings": 0
+    },
+    "liibu": {
+      "total": 3,
+      "passed": 2,
+      "failed": 0,
+      "warnings": 1
+    },
+    "bingbu": {
+      "total": 3,
+      "passed": 2,
+      "failed": 0,
+      "warnings": 1
+    },
+    "xingbu": {
+      "total": 3,
+      "passed": 3,
+      "failed": 0,
+      "warnings": 0
+    },
+    "gongbu": {
+      "total": 3,
+      "passed": 3,
+      "failed": 0,
+      "warnings": 0
+    }
+  },
+  "summary": {
+    "by_ministry": {
+      "libu": {
+        "total": 3,
+        "passed": 3,
+        "failed": 0,
+        "warnings": 0
+      },
+      "hubu": {
+        "total": 3,
+        "passed": 3,
+        "failed": 0,
+        "warnings": 0
+      },
+      "liibu": {
+        "total": 3,
+        "passed": 2,
+        "failed": 0,
+        "warnings": 1
+      },
+      "bingbu": {
+        "total": 3,
+        "passed": 2,
+        "failed": 0,
+        "warnings": 1
+      },
+      "xingbu": {
+        "total": 3,
+        "passed": 3,
+        "failed": 0,
+        "warnings": 0
+      },
+      "gongbu": {
+        "total": 3,
+        "passed": 3,
+        "failed": 0,
+        "warnings": 0
+      }
+    },
+    "critical_issues": [],
+    "recommendations": [
+      "更新过期文档",
+      "补充测试用例"
+    ]
+  }
+}

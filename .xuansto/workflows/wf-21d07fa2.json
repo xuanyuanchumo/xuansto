@@ -1,0 +1,11 @@
+{
+  "workflow_id": "wf-21d07fa2",
+  "workflow": "sdd-tdd-full",
+  "project_path": ".",
+  "status": "running",
+  "current_phase": 1,
+  "started_at": "2026-05-21T12:43:05.354431+00:00",
+  "completed_phases": [
+    0
+  ]
+}

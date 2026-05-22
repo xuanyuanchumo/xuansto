@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "xuansto-mcp-server": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/skiller-team/xuansto-mcp-server",
+        "xuansto-mcp"
+      ]
+    }
+  }
+}

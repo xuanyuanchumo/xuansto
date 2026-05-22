@@ -1,0 +1,232 @@
+# Universal DevOps v5.0 - 默认配置
+# ===================================
+
+# 技能基本信息
+skill:
+  name: universal-devops
+  version: "5.0"
+  architecture: "三省六部二十四司 + 双模运行架构"
+
+# 三省配置
+provinces:
+  zhongshusheng:
+    name: "中书省"
+    role: "决策层"
+    bureaus:
+      - requirements_bureau
+      - architecture_bureau
+      - standards_bureau
+      - review_bureau
+
+  menxiasheng:
+    name: "门下省"
+    role: "审核层"
+    bureaus:
+      - code_review_bureau
+      - testing_bureau
+      - quality_monitor_bureau
+      - compliance_bureau
+
+  shangshusheng:
+    name: "尚书省"
+    role: "执行层"
+    departments:
+      libu:
+        name: "吏部"
+        sis:
+          - agent_dispatch_si
+          - role_management_si
+          - skill_matching_si
+          - coordination_si
+      hubu:
+        name: "户部"
+        sis:
+          - environment_config_si
+          - dependency_mgmt_si
+          - resource_optimization_si
+          - infrastructure_si
+      libu2:
+        name: "礼部"
+        sis:
+          - documentation_si
+          - template_management_si
+          - knowledge_base_si
+          - standardization_si
+      bingbu:
+        name: "兵部"
+        sis:
+          - tdd_execution_si
+          - test_framework_si
+          - coverage_analysis_si
+          - regression_testing_si
+      gongbu:
+        name: "工部"
+        sis:
+          - code_generation_si
+          - uiux_design_si
+          - database_design_si
+          - api_design_si
+      xingbu:
+        name: "刑部"
+        sis:
+          - bug_fixing_si
+          - refactoring_si
+          - self_evolution_si
+          - version_control_si
+
+# 融合引擎配置
+fusion_engine:
+  sdd_tdd:
+    enabled: true
+    spec_parser: "pipeline/sdd_spec_parser.py"
+    tdd_executor: "pipeline/tdd_executor.py"
+    verifier: "pipeline/closed_loop_verifier.py"
+    feedback_loops:
+      max_iterations: 5
+      convergence_threshold: 0.95
+
+# 输出目录配置
+output:
+  base_dir: "docs"
+  subdirs:
+    - requirements
+    - architecture
+    - api
+    - database
+    - testing
+    - reviews
+    - deployment
+    - iteration
+    - monitoring
+    - logs
+
+# 日志配置
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/universal-devops.log"
+
+# 双模运行架构配置（v5.0新增）
+dual_mode:
+  enabled: true
+  
+  automated:
+    description: "自动化模式 - 脚本驱动，确定性执行"
+    entry_point: "skillscripts/main.py"
+    trigger_prefix: ["run", "execute", "python"]
+    
+  autonomous:
+    description: "自主模式 - AI Agent驱动，智能决策"
+    enabled: true
+    aof_framework_enabled: true
+    config_file: "configs/autonomous_config.yaml"
+    
+  hybrid:
+    description: "混合模式 - 自动+自主结合"
+    enabled: true
+    auto_switch_threshold:
+      creativity_score: 0.6   # 创造性评分高于此值切换到自主模式
+      uncertainty_score: 0.5  # 不确定性评分高于此值切换到自主模式
+
+# AOF框架配置（v5.0新增）
+aof_framework:
+  perception_layer:
+    enabled: true
+    context_scanning_depth: "medium"  # shallow / medium / deep
+    risk_signal_detection: true
+    
+  decision_layer:
+    enabled: true
+    mode_selection_strategy: "adaptive"  # always_automated / always_autonomous / adaptive
+    risk_assessment_model: "threshold_based"
+    
+  execution_layer:
+    enabled: true
+    max_concurrent_operations: 3
+    intermediate_result_validation: true
+    auto_rollback_on_failure: true
+    
+  feedback_learning_layer:
+    enabled: true
+    result_evaluation: true
+    experience_accumulation: true
+    model_parameter_tuning: false  # 默认关闭，需手动开启
+
+# 元技能层配置（v5.0新增）
+meta_skill:
+  config_file: "configs/meta_skill_config.yaml"
+  enabled: true
+
+# === Harness Engineering 集成 (v5.1 新增) ===
+harness_integration:
+  enabled: true
+  config_file: harness_config.yaml
+  modules:
+    - ci
+    - cd
+    - feature_flags
+    - cost_optimizer
+    - sre
+    - security_orchestrator
+    - chaos_experimenter
+
+# === Agency-Agent Bridge (v5.1 新增) ===
+agency_bridge:
+  enabled: true
+  config_file: agency_bridge_config.yaml
+  agency_agents_path: "../agency-agents"
+  collaboration_mode_supported: true
+
+# ========== Universal DevOps v6.0 新增配置段 ==========
+
+# 四维度输出防线（引用独立配置文件或内联覆盖）
+output_defense:
+  config_file: "configs/output_defense_config.yaml"
+  enabled: true
+  # 可在此处覆盖全局设置
+  override: {}
+
+# 多Agent资源协调器MARC
+resource_coordinator:
+  config_file: "configs/marc_config.yaml"
+  enabled: true
+  override: {}
+
+# 平台适配层
+platform:
+  config_file: "configs/platform_config.yaml"
+  current_platform: "auto-detect"  # auto-detect/powershell/bash
+  override: {}
+
+# 开源理念深度融合
+open_source_philosophy:
+  config_file: "configs/philosophy_config.yaml"
+  enabled_opencode_transparency: true
+  enabled_openclaude_orchestrator: true
+  enabled_clawcode_sdd_tdd: true
+  override: {}
+
+# Skill标准化与评估
+skill_standardization:
+  enabled: true
+  trigger_eval_query_set: "configs/eval_queries.json"
+  benchmark_history_file: "data/benchmark_history.json"
+  report_output_dir: "reports/eval/"
+  eval_metrics_targets:
+    trigger_accuracy: ">85%"
+    output_quality_score: ">4.0/5.0"
+    task_completion_rate: ">90%"
+    avg_response_time: "<30s"
+
+# Secrets Manager 配置（v6.0 新增）
+secrets_manager:
+  enabled: true
+  config_file: "configs/secrets_config.yaml"
+  auto_load: true
+  audit_enabled: true
+  detection_enabled: true
+  template_generation_enabled: true
+  integration:
+    rule_validation_engine: true
+    marc_resource_coordinator: true
+    fallback_recovery: false

@@ -1,0 +1,36 @@
+quality_gate:
+  coverage:
+    line_coverage_min: 95
+    branch_coverage_min: 90
+    function_coverage_min: 98
+
+  defects:
+    critical_max: 0
+    severe_max: 2
+    warning_max: 10
+
+  security:
+    owasp_high_risk_max: 0
+    dependency_vulnerability_max: 0
+
+  performance:
+    response_time_max_ms: 1000
+    memory_usage_max_mb: 512
+
+  documentation:
+    format_compliance_min: 99.5
+    encoding_correctness: 100
+
+  code_quality:
+    complexity_max: 10
+    duplication_max_percent: 3
+    max_line_length: 120
+
+  testing:
+    unit_test_pass_rate_min: 100
+    integration_test_pass_rate_min: 98
+    e2e_test_pass_rate_min: 95
+
+  build:
+    build_time_max_seconds: 300
+    artifact_size_max_mb: 500

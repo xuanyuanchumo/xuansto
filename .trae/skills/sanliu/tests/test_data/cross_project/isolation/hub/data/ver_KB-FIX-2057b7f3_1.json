@@ -1,0 +1,27 @@
+{
+  "version_id": "ver_KB-FIX-2057b7f3_1",
+  "knowledge_id": "KB-FIX-2057b7f3",
+  "version_number": 1,
+  "content_hash": "759f2e576914b243a764f06e588c7880",
+  "changes": [
+    "初始版本"
+  ],
+  "created_at": "2026-04-01T17:28:42.463877",
+  "created_by": "system",
+  "metadata_snapshot": {
+    "knowledge_id": "KB-FIX-2057b7f3",
+    "title": "项目1专用知识",
+    "category": "fix_pattern",
+    "tags": [
+      "project1",
+      "private"
+    ],
+    "created_at": "2026-04-01T17:28:42.463308",
+    "updated_at": "2026-04-01T17:28:42.463308",
+    "version": 1,
+    "author": "system",
+    "source_project": "isolation-proj-1",
+    "checksum": "759f2e576914b243a764f06e588c7880",
+    "custom_fields": {}
+  }
+}

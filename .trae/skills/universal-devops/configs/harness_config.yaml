@@ -1,0 +1,168 @@
+# Harness Engineering 集成配置 v5.1
+ci:
+  build_tool: auto_detect  # auto_detect | github_actions | gitlab_ci | jenkins | azure_pipelines
+  cache_strategy:
+    dependency_cache: true
+    layer_caching: true
+    cache_ttl_hours: 168
+    estimated_time_reduction_pct: 70
+  parallel_stages:
+    enabled: true
+    max_parallel: 4
+    dag_dependency_analysis: true
+  quality_gates:
+    pre_commit:
+      - lint
+      - format_check
+      - secrets_scan
+    build:
+      - unit_test
+      - dependency_vulnerability_scan
+      - license_check
+    post_build:
+      - integration_test
+      - coverage_threshold: 80
+  output_format: yaml  # yaml | json | hcl
+
+cd:
+  default_strategy: canary  # canary | blue_green | rolling
+  canary:
+    initial_percentage: 5
+    increment_percentage: 10
+    max_percentage: 100
+    metric_window_minutes: 5
+    auto_promote_on_success: true
+    rollback_on_failure: true
+  blue_green:
+    health_check_path: /health
+    health_check_timeout_seconds: 30
+    traffic_switch_mode: dns  # dns | load_balancer | service_mesh
+    rollback_instantaneous: true
+  rolling:
+    batch_size_percentage: 25
+    cooldown_seconds: 60
+    grace_period_seconds: 30
+  health_check:
+    enabled: true
+    endpoint: /health
+    interval_seconds: 10
+    failure_threshold: 3
+    success_threshold: 2
+
+feature_flags:
+  storage: local  # local | remote_api
+  rollout_strategies:
+    percentage:
+      min_step: 1
+      max_step: 50
+    user_attributes:
+      supported_attrs: [user_id, role, tier, region, cohort]
+    geo_location:
+      supported_regions: [us-eu, us-west, eu-central, ap-southeast]
+  ab_test:
+    enabled: true
+    min_sample_size: 1000
+    significance_level: 0.05
+  stale_flag_days: 90
+
+cost_optimization:
+  enabled: true
+  analysis_schedule: daily
+  resource_types:
+    - compute
+    - storage
+    - network
+    - database
+  right_sizing:
+    cpu_utilization_min: 20
+    cpu_utilization_max: 80
+    memory_utilization_min: 30
+    memory_utilization_max: 85
+  waste_detection:
+    idle_instance_hours: 24
+    unattached_volume_days: 7
+    old_snapshot_days: 30
+    unused_lb_days: 7
+  budget_alerts:
+    monthly_budget_usd: 1000
+    warning_threshold_pct: 70
+    critical_threshold_pct: 90
+
+sre:
+  slo_templates:
+    availability:
+      target: 0.999
+      measurement_window: 30d
+      alert_burn_rate_threshold: 14.4  # ~2 errors/day for 99.9% SLO
+      error_budget_reset: monthly
+    latency:
+      target_p99_ms: 200
+      target_p95_ms: 100
+      measurement_window: 7d
+    throughput:
+      target_rps: 1000
+      measurement_window: 1d
+    error_rate:
+      target: 0.01  # 1%
+      measurement_window: 7d
+  error_budget:
+    tracking_enabled: true
+    burn_rate_alert_levels:
+      - factor: 2.0
+        severity: warning
+      - factor: 14.4
+        severity: critical
+    change_freeze_threshold_pct: 5  # freeze changes when <5% budget remaining
+  alerting:
+    notification_channels: [slack, email, pagerduty]
+    escalation_policy: on_call
+
+security:
+  stages:
+    pre_commit:
+      enabled: true
+      tools: [secrets_scanner, lint_security_rules]
+      fail_on: critical, high
+    build:
+      enabled: true
+      tools: [sca_dependency_scan]
+      cvss_threshold: 7
+    test:
+      enabled: true
+      sast_enabled: true
+      dast_enabled: false  # optional, enable for production
+      tools: [bandit, semgrep, trivy_fs]
+    deploy:
+      enabled: true
+      container_scan: true
+      iac_security: true
+      tools: [trivy_image, checkov, tfsec]
+    post_deploy:
+      enabled: false  # optional, enable for production
+      rasp_enabled: false
+  prioritization:
+    cvss_weight: 0.4
+    exploitability_weight: 0.3
+    business_impact_weight: 0.3
+
+chaos:
+  enabled: false  # disabled by default, enable per-environment
+  experiment_types:
+    latency_injection:
+      default_delay_ms: 1000
+      max_delay_ms: 10000
+      affected_endpoints: ["*"]
+    service_crash:
+      graceful_shutdown: true
+      recovery_timeout_seconds: 300
+    network_partition:
+      partition_duration_seconds: 60
+      affected_services: []
+    resource_exhaustion:
+      target_resource: cpu
+      utilization_target_pct: 95
+  safety_controls:
+    blast_radius: limited
+    automatic_rollback: true
+    manual_approval_required: true
+    production_blacklist: true

@@ -1,0 +1,30 @@
+{
+  "exported_at": "2026-04-01T16:07:06.225302",
+  "total_count": 1,
+  "storage_type": "sqlite",
+  "items": [
+    {
+      "knowledge_id": "KB-FIX-3df7b107",
+      "knowledge_type": "fix_pattern",
+      "title": "导出测试知识",
+      "content": "用于测试导出功能",
+      "tags": [
+        "export",
+        "test"
+      ],
+      "category": "",
+      "subcategory": "",
+      "metadata": {},
+      "created_at": "2026-04-01T16:07:06.204005",
+      "updated_at": "2026-04-01T16:07:06.204005",
+      "version": 1,
+      "status": "active",
+      "confidence_score": 0,
+      "usage_count": 0,
+      "success_rate": 0,
+      "source": "",
+      "related_ids": [],
+      "examples": []
+    }
+  ]
+}

@@ -1,0 +1,2413 @@
+{
+  "summary": {
+    "total_tests": 6,
+    "passed_tests": 6,
+    "failed_tests": 0,
+    "pass_rate": "100.0%"
+  },
+  "results": [
+    {
+      "test": "脚本路径注册表初始化",
+      "status": "PASS",
+      "details": {
+        "total_scripts": 233,
+        "categories": {
+          "core": 48,
+          "analysis": 46,
+          "optimization": 21,
+          "test": 21,
+          "pipeline": 21,
+          "learning": 5,
+          "auto_repair": 5,
+          "iteration": 4,
+          "requirements": 10,
+          "sdd_tdd": 6,
+          "monitoring": 5,
+          "utils": 41
+        },
+        "scripts": {
+          "core/agent_selector.py": {
+            "name": "agent_selector.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/agent_selector.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/assign_agent.py": {
+            "name": "assign_agent.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/assign_agent.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/auto_iterator.py": {
+            "name": "auto_iterator.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/auto_iterator.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/auto_optimizer.py": {
+            "name": "auto_optimizer.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/auto_optimizer.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/check_environment.py": {
+            "name": "check_environment.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/check_environment.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/continuous_evolution_controller.py": {
+            "name": "continuous_evolution_controller.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/continuous_evolution_controller.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/cross_project_knowledge_sharing.py": {
+            "name": "cross_project_knowledge_sharing.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/cross_project_knowledge_sharing.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/department_logic_checker.py": {
+            "name": "department_logic_checker.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/department_logic_checker.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/docker_manager.py": {
+            "name": "docker_manager.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/docker_manager.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/evolution_alert.py": {
+            "name": "evolution_alert.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/evolution_alert.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/evolution_config_manager.py": {
+            "name": "evolution_config_manager.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/evolution_config_manager.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/evolution_cycle_executor.py": {
+            "name": "evolution_cycle_executor.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/evolution_cycle_executor.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/external_skill_integrator.py": {
+            "name": "external_skill_integrator.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/external_skill_integrator.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/health_check.py": {
+            "name": "health_check.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/health_check.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/init_db.py": {
+            "name": "init_db.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/init_db.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/performance_optimizer.py": {
+            "name": "performance_optimizer.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/performance_optimizer.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/problem_detector.py": {
+            "name": "problem_detector.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/problem_detector.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/project_registration_manager.py": {
+            "name": "project_registration_manager.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/project_registration_manager.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/project_registry.py": {
+            "name": "project_registry.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/project_registry.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/project_type_adapter.py": {
+            "name": "project_type_adapter.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/project_type_adapter.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/provincial_coordinator.py": {
+            "name": "provincial_coordinator.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/provincial_coordinator.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/provincial_logic_checker.py": {
+            "name": "provincial_logic_checker.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/provincial_logic_checker.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/query_status.py": {
+            "name": "query_status.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/query_status.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/record_skill_call.py": {
+            "name": "record_skill_call.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/record_skill_call.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/script_base.py": {
+            "name": "script_base.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/script_base.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/script_interface_standard.py": {
+            "name": "script_interface_standard.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/script_interface_standard.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/script_registry.py": {
+            "name": "script_registry.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/script_registry.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/sdd_parser.py": {
+            "name": "sdd_parser.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/sdd_parser.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/sdd_spec_parser.py": {
+            "name": "sdd_spec_parser.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/sdd_spec_parser.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/self_iteration_enhanced.py": {
+            "name": "self_iteration_enhanced.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/self_iteration_enhanced.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/self_iteration_integration.py": {
+            "name": "self_iteration_integration.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/self_iteration_integration.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/service_dependency_manager.py": {
+            "name": "service_dependency_manager.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/service_dependency_manager.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/skill_auto_repairer.py": {
+            "name": "skill_auto_repairer.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/skill_auto_repairer.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/skill_call_chain_checker.py": {
+            "name": "skill_call_chain_checker.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/skill_call_chain_checker.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/skill_call_chain_validator.py": {
+            "name": "skill_call_chain_validator.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/skill_call_chain_validator.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/skill_content_change_detector.py": {
+            "name": "skill_content_change_detector.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/skill_content_change_detector.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/skill_content_monitor.py": {
+            "name": "skill_content_monitor.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/skill_content_monitor.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/skill_doc_updater.py": {
+            "name": "skill_doc_updater.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/skill_doc_updater.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/skill_evolution_knowledge.py": {
+            "name": "skill_evolution_knowledge.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/skill_evolution_knowledge.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/skill_evolution_manager.py": {
+            "name": "skill_evolution_manager.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/skill_evolution_manager.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/skill_health_assessor.py": {
+            "name": "skill_health_assessor.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/skill_health_assessor.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/skill_health_checker.py": {
+            "name": "skill_health_checker.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/skill_health_checker.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/start_services.py": {
+            "name": "start_services.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/start_services.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/stop_services.py": {
+            "name": "stop_services.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/stop_services.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/subskill_doc_updater.py": {
+            "name": "subskill_doc_updater.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/subskill_doc_updater.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/subskill_manager.py": {
+            "name": "subskill_manager.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/subskill_manager.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/unified_script_entry.py": {
+            "name": "unified_script_entry.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/unified_script_entry.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "core/version_iterator.py": {
+            "name": "version_iterator.py",
+            "category": "core",
+            "relative_path": "skillscripts/core/version_iterator.py",
+            "description": "核心功能脚本",
+            "tags": [
+              "core"
+            ],
+            "dependencies": []
+          },
+          "analysis/ai_code_analyzer.py": {
+            "name": "ai_code_analyzer.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/ai_code_analyzer.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/analyze_composable.py": {
+            "name": "analyze_composable.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/analyze_composable.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/analyze_core_nesting.py": {
+            "name": "analyze_core_nesting.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/analyze_core_nesting.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/analyze_frontend_nesting.py": {
+            "name": "analyze_frontend_nesting.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/analyze_frontend_nesting.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/anomaly_detector.py": {
+            "name": "anomaly_detector.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/anomaly_detector.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/api_consistency_validator.py": {
+            "name": "api_consistency_validator.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/api_consistency_validator.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/architecture_check.py": {
+            "name": "architecture_check.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/architecture_check.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/auto_fix_suggestion_system.py": {
+            "name": "auto_fix_suggestion_system.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/auto_fix_suggestion_system.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/backend_module_analyzer.py": {
+            "name": "backend_module_analyzer.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/backend_module_analyzer.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/check_coverage.py": {
+            "name": "check_coverage.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/check_coverage.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/code_problem_scanner.py": {
+            "name": "code_problem_scanner.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/code_problem_scanner.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/code_quality_validator.py": {
+            "name": "code_quality_validator.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/code_quality_validator.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/code_review_automation.py": {
+            "name": "code_review_automation.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/code_review_automation.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/component_dependency_analyzer.py": {
+            "name": "component_dependency_analyzer.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/component_dependency_analyzer.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/coverage_analyzer.py": {
+            "name": "coverage_analyzer.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/coverage_analyzer.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/coverage_monitor.py": {
+            "name": "coverage_monitor.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/coverage_monitor.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/data_flow_analyzer.py": {
+            "name": "data_flow_analyzer.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/data_flow_analyzer.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/department_logic_checker.py": {
+            "name": "department_logic_checker.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/department_logic_checker.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/dependency_analyzer.py": {
+            "name": "dependency_analyzer.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/dependency_analyzer.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/design_pattern_checker.py": {
+            "name": "design_pattern_checker.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/design_pattern_checker.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/detect_frontend_long_functions.py": {
+            "name": "detect_frontend_long_functions.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/detect_frontend_long_functions.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/detect_long_functions.py": {
+            "name": "detect_long_functions.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/detect_long_functions.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/enhanced_log_analyzer.py": {
+            "name": "enhanced_log_analyzer.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/enhanced_log_analyzer.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/frontend_component_analyzer.py": {
+            "name": "frontend_component_analyzer.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/frontend_component_analyzer.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/integrated_log_analyzer.py": {
+            "name": "integrated_log_analyzer.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/integrated_log_analyzer.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/intelligent_code_smell_detector.py": {
+            "name": "intelligent_code_smell_detector.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/intelligent_code_smell_detector.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/issue_awareness_engine.py": {
+            "name": "issue_awareness_engine.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/issue_awareness_engine.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/issue_classifier.py": {
+            "name": "issue_classifier.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/issue_classifier.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/issue_locator.py": {
+            "name": "issue_locator.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/issue_locator.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/issue_tracker.py": {
+            "name": "issue_tracker.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/issue_tracker.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/knowledge_base.py": {
+            "name": "knowledge_base.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/knowledge_base.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/knowledge_learning_system.py": {
+            "name": "knowledge_learning_system.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/knowledge_learning_system.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/learning_engine.py": {
+            "name": "learning_engine.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/learning_engine.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/log_analyzer.py": {
+            "name": "log_analyzer.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/log_analyzer.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/log_correlation_analyzer.py": {
+            "name": "log_correlation_analyzer.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/log_correlation_analyzer.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/nesting_analyzer.py": {
+            "name": "nesting_analyzer.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/nesting_analyzer.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/performance_detector.py": {
+            "name": "performance_detector.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/performance_detector.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/provincial_logic_checker.py": {
+            "name": "provincial_logic_checker.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/provincial_logic_checker.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/quality_trend_analyzer.py": {
+            "name": "quality_trend_analyzer.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/quality_trend_analyzer.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/recommendation_engine.py": {
+            "name": "recommendation_engine.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/recommendation_engine.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/script_similarity_analyzer.py": {
+            "name": "script_similarity_analyzer.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/script_similarity_analyzer.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/simple_nesting_check.py": {
+            "name": "simple_nesting_check.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/simple_nesting_check.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/skill_call_chain_checker.py": {
+            "name": "skill_call_chain_checker.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/skill_call_chain_checker.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/solid_principle_checker.py": {
+            "name": "solid_principle_checker.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/solid_principle_checker.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/subskill_optimizer.py": {
+            "name": "subskill_optimizer.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/subskill_optimizer.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "analysis/tech_debt_tracker.py": {
+            "name": "tech_debt_tracker.py",
+            "category": "analysis",
+            "relative_path": "skillscripts/analysis/tech_debt_tracker.py",
+            "description": "代码分析脚本",
+            "tags": [
+              "analysis"
+            ],
+            "dependencies": []
+          },
+          "optimization/architecture_optimizer.py": {
+            "name": "architecture_optimizer.py",
+            "category": "optimization",
+            "relative_path": "skillscripts/optimization/architecture_optimizer.py",
+            "description": "代码优化脚本",
+            "tags": [
+              "optimization"
+            ],
+            "dependencies": []
+          },
+          "optimization/architecture_optimizer_enhanced.py": {
+            "name": "architecture_optimizer_enhanced.py",
+            "category": "optimization",
+            "relative_path": "skillscripts/optimization/architecture_optimizer_enhanced.py",
+            "description": "代码优化脚本",
+            "tags": [
+              "optimization"
+            ],
+            "dependencies": []
+          },
+          "optimization/auto_fixer.py": {
+            "name": "auto_fixer.py",
+            "category": "optimization",
+            "relative_path": "skillscripts/optimization/auto_fixer.py",
+            "description": "代码优化脚本",
+            "tags": [
+              "optimization"
+            ],
+            "dependencies": []
+          },
+          "optimization/code_quality_fixers.py": {
+            "name": "code_quality_fixers.py",
+            "category": "optimization",
+            "relative_path": "skillscripts/optimization/code_quality_fixers.py",
+            "description": "代码优化脚本",
+            "tags": [
+              "optimization"
+            ],
+            "dependencies": []
+          },
+          "optimization/code_quality_optimizer_enhanced.py": {
+            "name": "code_quality_optimizer_enhanced.py",
+            "category": "optimization",
+            "relative_path": "skillscripts/optimization/code_quality_optimizer_enhanced.py",
+            "description": "代码优化脚本",
+            "tags": [
+              "optimization"
+            ],
+            "dependencies": []
+          },
+          "optimization/error_detector_enhanced.py": {
+            "name": "error_detector_enhanced.py",
+            "category": "optimization",
+            "relative_path": "skillscripts/optimization/error_detector_enhanced.py",
+            "description": "代码优化脚本",
+            "tags": [
+              "optimization"
+            ],
+            "dependencies": []
+          },
+          "optimization/fix_rollback_manager.py": {
+            "name": "fix_rollback_manager.py",
+            "category": "optimization",
+            "relative_path": "skillscripts/optimization/fix_rollback_manager.py",
+            "description": "代码优化脚本",
+            "tags": [
+              "optimization"
+            ],
+            "dependencies": []
+          },
+          "optimization/fix_strategy_extension.py": {
+            "name": "fix_strategy_extension.py",
+            "category": "optimization",
+            "relative_path": "skillscripts/optimization/fix_strategy_extension.py",
+            "description": "代码优化脚本",
+            "tags": [
+              "optimization"
+            ],
+            "dependencies": []
+          },
+          "optimization/fix_strategy_library.py": {
+            "name": "fix_strategy_library.py",
+            "category": "optimization",
+            "relative_path": "skillscripts/optimization/fix_strategy_library.py",
+            "description": "代码优化脚本",
+            "tags": [
+              "optimization"
+            ],
+            "dependencies": []
+          },
+          "optimization/fix_strategy_library_enhanced.py": {
+            "name": "fix_strategy_library_enhanced.py",
+            "category": "optimization",
+            "relative_path": "skillscripts/optimization/fix_strategy_library_enhanced.py",
+            "description": "代码优化脚本",
+            "tags": [
+              "optimization"
+            ],
+            "dependencies": []
+          },
+          "optimization/fix_validator.py": {
+            "name": "fix_validator.py",
+            "category": "optimization",
+            "relative_path": "skillscripts/optimization/fix_validator.py",
+            "description": "代码优化脚本",
+            "tags": [
+              "optimization"
+            ],
+            "dependencies": []
+          },
+          "optimization/fix_verification_enhanced.py": {
+            "name": "fix_verification_enhanced.py",
+            "category": "optimization",
+            "relative_path": "skillscripts/optimization/fix_verification_enhanced.py",
+            "description": "代码优化脚本",
+            "tags": [
+              "optimization"
+            ],
+            "dependencies": []
+          },
+          "optimization/optimization_evaluation_system.py": {
+            "name": "optimization_evaluation_system.py",
+            "category": "optimization",
+            "relative_path": "skillscripts/optimization/optimization_evaluation_system.py",
+            "description": "代码优化脚本",
+            "tags": [
+              "optimization"
+            ],
+            "dependencies": []
+          },
+          "optimization/optimization_report_generator.py": {
+            "name": "optimization_report_generator.py",
+            "category": "optimization",
+            "relative_path": "skillscripts/optimization/optimization_report_generator.py",
+            "description": "代码优化脚本",
+            "tags": [
+              "optimization"
+            ],
+            "dependencies": []
+          },
+          "optimization/optimization_validator.py": {
+            "name": "optimization_validator.py",
+            "category": "optimization",
+            "relative_path": "skillscripts/optimization/optimization_validator.py",
+            "description": "代码优化脚本",
+            "tags": [
+              "optimization"
+            ],
+            "dependencies": []
+          },
+          "optimization/performance_optimizer_enhanced.py": {
+            "name": "performance_optimizer_enhanced.py",
+            "category": "optimization",
+            "relative_path": "skillscripts/optimization/performance_optimizer_enhanced.py",
+            "description": "代码优化脚本",
+            "tags": [
+              "optimization"
+            ],
+            "dependencies": []
+          },
+          "optimization/problem_detector_extension.py": {
+            "name": "problem_detector_extension.py",
+            "category": "optimization",
+            "relative_path": "skillscripts/optimization/problem_detector_extension.py",
+            "description": "代码优化脚本",
+            "tags": [
+              "optimization"
+            ],
+            "dependencies": []
+          },
+          "optimization/refactoring_suggestion_generator.py": {
+            "name": "refactoring_suggestion_generator.py",
+            "category": "optimization",
+            "relative_path": "skillscripts/optimization/refactoring_suggestion_generator.py",
+            "description": "代码优化脚本",
+            "tags": [
+              "optimization"
+            ],
+            "dependencies": []
+          },
+          "optimization/refactoring_validator.py": {
+            "name": "refactoring_validator.py",
+            "category": "optimization",
+            "relative_path": "skillscripts/optimization/refactoring_validator.py",
+            "description": "代码优化脚本",
+            "tags": [
+              "optimization"
+            ],
+            "dependencies": []
+          },
+          "optimization/systematic_optimizer.py": {
+            "name": "systematic_optimizer.py",
+            "category": "optimization",
+            "relative_path": "skillscripts/optimization/systematic_optimizer.py",
+            "description": "代码优化脚本",
+            "tags": [
+              "optimization"
+            ],
+            "dependencies": []
+          },
+          "optimization/unified_optimization_manager.py": {
+            "name": "unified_optimization_manager.py",
+            "category": "optimization",
+            "relative_path": "skillscripts/optimization/unified_optimization_manager.py",
+            "description": "代码优化脚本",
+            "tags": [
+              "optimization"
+            ],
+            "dependencies": []
+          },
+          "test/comprehensive_test_runner.py": {
+            "name": "comprehensive_test_runner.py",
+            "category": "test",
+            "relative_path": "skillscripts/test/comprehensive_test_runner.py",
+            "description": "测试相关脚本",
+            "tags": [
+              "test"
+            ],
+            "dependencies": []
+          },
+          "test/correlated_failure_analyzer.py": {
+            "name": "correlated_failure_analyzer.py",
+            "category": "test",
+            "relative_path": "skillscripts/test/correlated_failure_analyzer.py",
+            "description": "测试相关脚本",
+            "tags": [
+              "test"
+            ],
+            "dependencies": []
+          },
+          "test/coverage_monitor.py": {
+            "name": "coverage_monitor.py",
+            "category": "test",
+            "relative_path": "skillscripts/test/coverage_monitor.py",
+            "description": "测试相关脚本",
+            "tags": [
+              "test"
+            ],
+            "dependencies": []
+          },
+          "test/database_test_enhancer.py": {
+            "name": "database_test_enhancer.py",
+            "category": "test",
+            "relative_path": "skillscripts/test/database_test_enhancer.py",
+            "description": "测试相关脚本",
+            "tags": [
+              "test"
+            ],
+            "dependencies": []
+          },
+          "test/e2e_test_enhancer.py": {
+            "name": "e2e_test_enhancer.py",
+            "category": "test",
+            "relative_path": "skillscripts/test/e2e_test_enhancer.py",
+            "description": "测试相关脚本",
+            "tags": [
+              "test"
+            ],
+            "dependencies": []
+          },
+          "test/failure_pattern_learner.py": {
+            "name": "failure_pattern_learner.py",
+            "category": "test",
+            "relative_path": "skillscripts/test/failure_pattern_learner.py",
+            "description": "测试相关脚本",
+            "tags": [
+              "test"
+            ],
+            "dependencies": []
+          },
+          "test/generate_test_report.py": {
+            "name": "generate_test_report.py",
+            "category": "test",
+            "relative_path": "skillscripts/test/generate_test_report.py",
+            "description": "测试相关脚本",
+            "tags": [
+              "test"
+            ],
+            "dependencies": []
+          },
+          "test/green_phase_generator.py": {
+            "name": "green_phase_generator.py",
+            "category": "test",
+            "relative_path": "skillscripts/test/green_phase_generator.py",
+            "description": "测试相关脚本",
+            "tags": [
+              "test"
+            ],
+            "dependencies": []
+          },
+          "test/integration_test_enhancer.py": {
+            "name": "integration_test_enhancer.py",
+            "category": "test",
+            "relative_path": "skillscripts/test/integration_test_enhancer.py",
+            "description": "测试相关脚本",
+            "tags": [
+              "test"
+            ],
+            "dependencies": []
+          },
+          "test/intelligent_test_generator.py": {
+            "name": "intelligent_test_generator.py",
+            "category": "test",
+            "relative_path": "skillscripts/test/intelligent_test_generator.py",
+            "description": "测试相关脚本",
+            "tags": [
+              "test"
+            ],
+            "dependencies": []
+          },
+          "test/intelligent_test_selector.py": {
+            "name": "intelligent_test_selector.py",
+            "category": "test",
+            "relative_path": "skillscripts/test/intelligent_test_selector.py",
+            "description": "测试相关脚本",
+            "tags": [
+              "test"
+            ],
+            "dependencies": []
+          },
+          "test/performance_benchmark_test.py": {
+            "name": "performance_benchmark_test.py",
+            "category": "test",
+            "relative_path": "skillscripts/test/performance_benchmark_test.py",
+            "description": "测试相关脚本",
+            "tags": [
+              "test"
+            ],
+            "dependencies": []
+          },
+          "test/performance_test_enhancer.py": {
+            "name": "performance_test_enhancer.py",
+            "category": "test",
+            "relative_path": "skillscripts/test/performance_test_enhancer.py",
+            "description": "测试相关脚本",
+            "tags": [
+              "test"
+            ],
+            "dependencies": []
+          },
+          "test/regression_test.py": {
+            "name": "regression_test.py",
+            "category": "test",
+            "relative_path": "skillscripts/test/regression_test.py",
+            "description": "测试相关脚本",
+            "tags": [
+              "test"
+            ],
+            "dependencies": []
+          },
+          "test/sdd_test_generator.py": {
+            "name": "sdd_test_generator.py",
+            "category": "test",
+            "relative_path": "skillscripts/test/sdd_test_generator.py",
+            "description": "测试相关脚本",
+            "tags": [
+              "test"
+            ],
+            "dependencies": []
+          },
+          "test/sdd_test_generator_enhanced.py": {
+            "name": "sdd_test_generator_enhanced.py",
+            "category": "test",
+            "relative_path": "skillscripts/test/sdd_test_generator_enhanced.py",
+            "description": "测试相关脚本",
+            "tags": [
+              "test"
+            ],
+            "dependencies": []
+          },
+          "test/security_scanner.py": {
+            "name": "security_scanner.py",
+            "category": "test",
+            "relative_path": "skillscripts/test/security_scanner.py",
+            "description": "测试相关脚本",
+            "tags": [
+              "test"
+            ],
+            "dependencies": []
+          },
+          "test/test_failure_diagnostician.py": {
+            "name": "test_failure_diagnostician.py",
+            "category": "test",
+            "relative_path": "skillscripts/test/test_failure_diagnostician.py",
+            "description": "测试相关脚本",
+            "tags": [
+              "test"
+            ],
+            "dependencies": []
+          },
+          "test/test_report_generator.py": {
+            "name": "test_report_generator.py",
+            "category": "test",
+            "relative_path": "skillscripts/test/test_report_generator.py",
+            "description": "测试相关脚本",
+            "tags": [
+              "test"
+            ],
+            "dependencies": []
+          },
+          "test/ui_validation_intelligence.py": {
+            "name": "ui_validation_intelligence.py",
+            "category": "test",
+            "relative_path": "skillscripts/test/ui_validation_intelligence.py",
+            "description": "测试相关脚本",
+            "tags": [
+              "test"
+            ],
+            "dependencies": []
+          },
+          "test/unit_test_enhancer.py": {
+            "name": "unit_test_enhancer.py",
+            "category": "test",
+            "relative_path": "skillscripts/test/unit_test_enhancer.py",
+            "description": "测试相关脚本",
+            "tags": [
+              "test"
+            ],
+            "dependencies": []
+          },
+          "pipeline/automated_pipeline.py": {
+            "name": "automated_pipeline.py",
+            "category": "pipeline",
+            "relative_path": "skillscripts/pipeline/automated_pipeline.py",
+            "description": "流水线脚本",
+            "tags": [
+              "pipeline"
+            ],
+            "dependencies": []
+          },
+          "pipeline/automated_pipeline_orchestrator.py": {
+            "name": "automated_pipeline_orchestrator.py",
+            "category": "pipeline",
+            "relative_path": "skillscripts/pipeline/automated_pipeline_orchestrator.py",
+            "description": "流水线脚本",
+            "tags": [
+              "pipeline"
+            ],
+            "dependencies": []
+          },
+          "pipeline/closed_loop_verifier.py": {
+            "name": "closed_loop_verifier.py",
+            "category": "pipeline",
+            "relative_path": "skillscripts/pipeline/closed_loop_verifier.py",
+            "description": "流水线脚本",
+            "tags": [
+              "pipeline"
+            ],
+            "dependencies": []
+          },
+          "pipeline/code_review_automation.py": {
+            "name": "code_review_automation.py",
+            "category": "pipeline",
+            "relative_path": "skillscripts/pipeline/code_review_automation.py",
+            "description": "流水线脚本",
+            "tags": [
+              "pipeline"
+            ],
+            "dependencies": []
+          },
+          "pipeline/doc_generator.py": {
+            "name": "doc_generator.py",
+            "category": "pipeline",
+            "relative_path": "skillscripts/pipeline/doc_generator.py",
+            "description": "流水线脚本",
+            "tags": [
+              "pipeline"
+            ],
+            "dependencies": []
+          },
+          "pipeline/incremental_doc_generator.py": {
+            "name": "incremental_doc_generator.py",
+            "category": "pipeline",
+            "relative_path": "skillscripts/pipeline/incremental_doc_generator.py",
+            "description": "流水线脚本",
+            "tags": [
+              "pipeline"
+            ],
+            "dependencies": []
+          },
+          "pipeline/intelligent_test_selector.py": {
+            "name": "intelligent_test_selector.py",
+            "category": "pipeline",
+            "relative_path": "skillscripts/pipeline/intelligent_test_selector.py",
+            "description": "流水线脚本",
+            "tags": [
+              "pipeline"
+            ],
+            "dependencies": []
+          },
+          "pipeline/pipeline_intelligence.py": {
+            "name": "pipeline_intelligence.py",
+            "category": "pipeline",
+            "relative_path": "skillscripts/pipeline/pipeline_intelligence.py",
+            "description": "流水线脚本",
+            "tags": [
+              "pipeline"
+            ],
+            "dependencies": []
+          },
+          "pipeline/sdd_api_doc_generator.py": {
+            "name": "sdd_api_doc_generator.py",
+            "category": "pipeline",
+            "relative_path": "skillscripts/pipeline/sdd_api_doc_generator.py",
+            "description": "流水线脚本",
+            "tags": [
+              "pipeline"
+            ],
+            "dependencies": []
+          },
+          "pipeline/sdd_cli.py": {
+            "name": "sdd_cli.py",
+            "category": "pipeline",
+            "relative_path": "skillscripts/pipeline/sdd_cli.py",
+            "description": "流水线脚本",
+            "tags": [
+              "pipeline"
+            ],
+            "dependencies": []
+          },
+          "pipeline/sdd_code_generator.py": {
+            "name": "sdd_code_generator.py",
+            "category": "pipeline",
+            "relative_path": "skillscripts/pipeline/sdd_code_generator.py",
+            "description": "流水线脚本",
+            "tags": [
+              "pipeline"
+            ],
+            "dependencies": []
+          },
+          "pipeline/sdd_spec_parser.py": {
+            "name": "sdd_spec_parser.py",
+            "category": "pipeline",
+            "relative_path": "skillscripts/pipeline/sdd_spec_parser.py",
+            "description": "流水线脚本",
+            "tags": [
+              "pipeline"
+            ],
+            "dependencies": []
+          },
+          "pipeline/sdd_spec_parser_enhanced.py": {
+            "name": "sdd_spec_parser_enhanced.py",
+            "category": "pipeline",
+            "relative_path": "skillscripts/pipeline/sdd_spec_parser_enhanced.py",
+            "description": "流水线脚本",
+            "tags": [
+              "pipeline"
+            ],
+            "dependencies": []
+          },
+          "pipeline/sdd_tdd_cycle.py": {
+            "name": "sdd_tdd_cycle.py",
+            "category": "pipeline",
+            "relative_path": "skillscripts/pipeline/sdd_tdd_cycle.py",
+            "description": "流水线脚本",
+            "tags": [
+              "pipeline"
+            ],
+            "dependencies": []
+          },
+          "pipeline/sdd_tdd_integrator.py": {
+            "name": "sdd_tdd_integrator.py",
+            "category": "pipeline",
+            "relative_path": "skillscripts/pipeline/sdd_tdd_integrator.py",
+            "description": "流水线脚本",
+            "tags": [
+              "pipeline"
+            ],
+            "dependencies": []
+          },
+          "pipeline/skill_creator_integration.py": {
+            "name": "skill_creator_integration.py",
+            "category": "pipeline",
+            "relative_path": "skillscripts/pipeline/skill_creator_integration.py",
+            "description": "流水线脚本",
+            "tags": [
+              "pipeline"
+            ],
+            "dependencies": []
+          },
+          "pipeline/tdd_blue_refactoring_pipeline.py": {
+            "name": "tdd_blue_refactoring_pipeline.py",
+            "category": "pipeline",
+            "relative_path": "skillscripts/pipeline/tdd_blue_refactoring_pipeline.py",
+            "description": "流水线脚本",
+            "tags": [
+              "pipeline"
+            ],
+            "dependencies": []
+          },
+          "pipeline/tdd_feedback_analyzer.py": {
+            "name": "tdd_feedback_analyzer.py",
+            "category": "pipeline",
+            "relative_path": "skillscripts/pipeline/tdd_feedback_analyzer.py",
+            "description": "流水线脚本",
+            "tags": [
+              "pipeline"
+            ],
+            "dependencies": []
+          },
+          "pipeline/ui_ux_integration.py": {
+            "name": "ui_ux_integration.py",
+            "category": "pipeline",
+            "relative_path": "skillscripts/pipeline/ui_ux_integration.py",
+            "description": "流水线脚本",
+            "tags": [
+              "pipeline"
+            ],
+            "dependencies": []
+          },
+          "pipeline/ui_validation_intelligence.py": {
+            "name": "ui_validation_intelligence.py",
+            "category": "pipeline",
+            "relative_path": "skillscripts/pipeline/ui_validation_intelligence.py",
+            "description": "流水线脚本",
+            "tags": [
+              "pipeline"
+            ],
+            "dependencies": []
+          },
+          "pipeline/verify_enhancements.py": {
+            "name": "verify_enhancements.py",
+            "category": "pipeline",
+            "relative_path": "skillscripts/pipeline/verify_enhancements.py",
+            "description": "流水线脚本",
+            "tags": [
+              "pipeline"
+            ],
+            "dependencies": []
+          },
+          "learning/auto_learner.py": {
+            "name": "auto_learner.py",
+            "category": "learning",
+            "relative_path": "skillscripts/learning/auto_learner.py",
+            "description": "学习和知识管理脚本",
+            "tags": [
+              "learning"
+            ],
+            "dependencies": []
+          },
+          "learning/best_practice_extractor.py": {
+            "name": "best_practice_extractor.py",
+            "category": "learning",
+            "relative_path": "skillscripts/learning/best_practice_extractor.py",
+            "description": "学习和知识管理脚本",
+            "tags": [
+              "learning"
+            ],
+            "dependencies": []
+          },
+          "learning/knowledge_application_engine.py": {
+            "name": "knowledge_application_engine.py",
+            "category": "learning",
+            "relative_path": "skillscripts/learning/knowledge_application_engine.py",
+            "description": "学习和知识管理脚本",
+            "tags": [
+              "learning"
+            ],
+            "dependencies": []
+          },
+          "learning/knowledge_updater.py": {
+            "name": "knowledge_updater.py",
+            "category": "learning",
+            "relative_path": "skillscripts/learning/knowledge_updater.py",
+            "description": "学习和知识管理脚本",
+            "tags": [
+              "learning"
+            ],
+            "dependencies": []
+          },
+          "learning/pattern_recognizer.py": {
+            "name": "pattern_recognizer.py",
+            "category": "learning",
+            "relative_path": "skillscripts/learning/pattern_recognizer.py",
+            "description": "学习和知识管理脚本",
+            "tags": [
+              "learning"
+            ],
+            "dependencies": []
+          },
+          "auto_repair/auto_repair_system.py": {
+            "name": "auto_repair_system.py",
+            "category": "auto_repair",
+            "relative_path": "skillscripts/auto_repair/auto_repair_system.py",
+            "description": "自动修复脚本",
+            "tags": [
+              "auto_repair"
+            ],
+            "dependencies": []
+          },
+          "auto_repair/auto_repair_workflow.py": {
+            "name": "auto_repair_workflow.py",
+            "category": "auto_repair",
+            "relative_path": "skillscripts/auto_repair/auto_repair_workflow.py",
+            "description": "自动修复脚本",
+            "tags": [
+              "auto_repair"
+            ],
+            "dependencies": []
+          },
+          "auto_repair/fix_executor.py": {
+            "name": "fix_executor.py",
+            "category": "auto_repair",
+            "relative_path": "skillscripts/auto_repair/fix_executor.py",
+            "description": "自动修复脚本",
+            "tags": [
+              "auto_repair"
+            ],
+            "dependencies": []
+          },
+          "auto_repair/fix_strategy.py": {
+            "name": "fix_strategy.py",
+            "category": "auto_repair",
+            "relative_path": "skillscripts/auto_repair/fix_strategy.py",
+            "description": "自动修复脚本",
+            "tags": [
+              "auto_repair"
+            ],
+            "dependencies": []
+          },
+          "auto_repair/issue_detector.py": {
+            "name": "issue_detector.py",
+            "category": "auto_repair",
+            "relative_path": "skillscripts/auto_repair/issue_detector.py",
+            "description": "自动修复脚本",
+            "tags": [
+              "auto_repair"
+            ],
+            "dependencies": []
+          },
+          "iteration/enhanced_version_iterator.py": {
+            "name": "enhanced_version_iterator.py",
+            "category": "iteration",
+            "relative_path": "skillscripts/iteration/enhanced_version_iterator.py",
+            "description": "迭代相关脚本",
+            "tags": [
+              "iteration"
+            ],
+            "dependencies": []
+          },
+          "iteration/iteration_effect_evaluator.py": {
+            "name": "iteration_effect_evaluator.py",
+            "category": "iteration",
+            "relative_path": "skillscripts/iteration/iteration_effect_evaluator.py",
+            "description": "迭代相关脚本",
+            "tags": [
+              "iteration"
+            ],
+            "dependencies": []
+          },
+          "iteration/iteration_trigger_system.py": {
+            "name": "iteration_trigger_system.py",
+            "category": "iteration",
+            "relative_path": "skillscripts/iteration/iteration_trigger_system.py",
+            "description": "迭代相关脚本",
+            "tags": [
+              "iteration"
+            ],
+            "dependencies": []
+          },
+          "iteration/self_improvement_cycle.py": {
+            "name": "self_improvement_cycle.py",
+            "category": "iteration",
+            "relative_path": "skillscripts/iteration/self_improvement_cycle.py",
+            "description": "迭代相关脚本",
+            "tags": [
+              "iteration"
+            ],
+            "dependencies": []
+          },
+          "requirements/business_rule_extractor.py": {
+            "name": "business_rule_extractor.py",
+            "category": "requirements",
+            "relative_path": "skillscripts/requirements/business_rule_extractor.py",
+            "description": "需求管理脚本",
+            "tags": [
+              "requirements"
+            ],
+            "dependencies": []
+          },
+          "requirements/business_rule_recognizer.py": {
+            "name": "business_rule_recognizer.py",
+            "category": "requirements",
+            "relative_path": "skillscripts/requirements/business_rule_recognizer.py",
+            "description": "需求管理脚本",
+            "tags": [
+              "requirements"
+            ],
+            "dependencies": []
+          },
+          "requirements/requirement_change_impact_analyzer.py": {
+            "name": "requirement_change_impact_analyzer.py",
+            "category": "requirements",
+            "relative_path": "skillscripts/requirements/requirement_change_impact_analyzer.py",
+            "description": "需求管理脚本",
+            "tags": [
+              "requirements"
+            ],
+            "dependencies": []
+          },
+          "requirements/requirement_parser.py": {
+            "name": "requirement_parser.py",
+            "category": "requirements",
+            "relative_path": "skillscripts/requirements/requirement_parser.py",
+            "description": "需求管理脚本",
+            "tags": [
+              "requirements"
+            ],
+            "dependencies": []
+          },
+          "requirements/requirement_spec_generator.py": {
+            "name": "requirement_spec_generator.py",
+            "category": "requirements",
+            "relative_path": "skillscripts/requirements/requirement_spec_generator.py",
+            "description": "需求管理脚本",
+            "tags": [
+              "requirements"
+            ],
+            "dependencies": []
+          },
+          "requirements/requirement_trace_manager.py": {
+            "name": "requirement_trace_manager.py",
+            "category": "requirements",
+            "relative_path": "skillscripts/requirements/requirement_trace_manager.py",
+            "description": "需求管理脚本",
+            "tags": [
+              "requirements"
+            ],
+            "dependencies": []
+          },
+          "requirements/rule_library_manager.py": {
+            "name": "rule_library_manager.py",
+            "category": "requirements",
+            "relative_path": "skillscripts/requirements/rule_library_manager.py",
+            "description": "需求管理脚本",
+            "tags": [
+              "requirements"
+            ],
+            "dependencies": []
+          },
+          "requirements/rule_validator.py": {
+            "name": "rule_validator.py",
+            "category": "requirements",
+            "relative_path": "skillscripts/requirements/rule_validator.py",
+            "description": "需求管理脚本",
+            "tags": [
+              "requirements"
+            ],
+            "dependencies": []
+          },
+          "requirements/trace_matrix_visualizer.py": {
+            "name": "trace_matrix_visualizer.py",
+            "category": "requirements",
+            "relative_path": "skillscripts/requirements/trace_matrix_visualizer.py",
+            "description": "需求管理脚本",
+            "tags": [
+              "requirements"
+            ],
+            "dependencies": []
+          },
+          "requirements/trace_report_generator.py": {
+            "name": "trace_report_generator.py",
+            "category": "requirements",
+            "relative_path": "skillscripts/requirements/trace_report_generator.py",
+            "description": "需求管理脚本",
+            "tags": [
+              "requirements"
+            ],
+            "dependencies": []
+          },
+          "sdd_tdd/enhanced_spec_parser.py": {
+            "name": "enhanced_spec_parser.py",
+            "category": "sdd_tdd",
+            "relative_path": "skillscripts/sdd_tdd/enhanced_spec_parser.py",
+            "description": "SDD/TDD 相关脚本",
+            "tags": [
+              "sdd_tdd"
+            ],
+            "dependencies": []
+          },
+          "sdd_tdd/sdd_tdd_integration.py": {
+            "name": "sdd_tdd_integration.py",
+            "category": "sdd_tdd",
+            "relative_path": "skillscripts/sdd_tdd/sdd_tdd_integration.py",
+            "description": "SDD/TDD 相关脚本",
+            "tags": [
+              "sdd_tdd"
+            ],
+            "dependencies": []
+          },
+          "sdd_tdd/spec_completeness_validator.py": {
+            "name": "spec_completeness_validator.py",
+            "category": "sdd_tdd",
+            "relative_path": "skillscripts/sdd_tdd/spec_completeness_validator.py",
+            "description": "SDD/TDD 相关脚本",
+            "tags": [
+              "sdd_tdd"
+            ],
+            "dependencies": []
+          },
+          "sdd_tdd/spec_to_code_generator.py": {
+            "name": "spec_to_code_generator.py",
+            "category": "sdd_tdd",
+            "relative_path": "skillscripts/sdd_tdd/spec_to_code_generator.py",
+            "description": "SDD/TDD 相关脚本",
+            "tags": [
+              "sdd_tdd"
+            ],
+            "dependencies": []
+          },
+          "sdd_tdd/spec_to_test_mapper.py": {
+            "name": "spec_to_test_mapper.py",
+            "category": "sdd_tdd",
+            "relative_path": "skillscripts/sdd_tdd/spec_to_test_mapper.py",
+            "description": "SDD/TDD 相关脚本",
+            "tags": [
+              "sdd_tdd"
+            ],
+            "dependencies": []
+          },
+          "sdd_tdd/tdd_cycle_executor.py": {
+            "name": "tdd_cycle_executor.py",
+            "category": "sdd_tdd",
+            "relative_path": "skillscripts/sdd_tdd/tdd_cycle_executor.py",
+            "description": "SDD/TDD 相关脚本",
+            "tags": [
+              "sdd_tdd"
+            ],
+            "dependencies": []
+          },
+          "monitoring/coverage_monitor.py": {
+            "name": "coverage_monitor.py",
+            "category": "monitoring",
+            "relative_path": "skillscripts/monitoring/coverage_monitor.py",
+            "description": "监控脚本",
+            "tags": [
+              "monitoring"
+            ],
+            "dependencies": []
+          },
+          "monitoring/dashboard.py": {
+            "name": "dashboard.py",
+            "category": "monitoring",
+            "relative_path": "skillscripts/monitoring/dashboard.py",
+            "description": "监控脚本",
+            "tags": [
+              "monitoring"
+            ],
+            "dependencies": []
+          },
+          "monitoring/quality_trend_analyzer.py": {
+            "name": "quality_trend_analyzer.py",
+            "category": "monitoring",
+            "relative_path": "skillscripts/monitoring/quality_trend_analyzer.py",
+            "description": "监控脚本",
+            "tags": [
+              "monitoring"
+            ],
+            "dependencies": []
+          },
+          "monitoring/realtime_monitor.py": {
+            "name": "realtime_monitor.py",
+            "category": "monitoring",
+            "relative_path": "skillscripts/monitoring/realtime_monitor.py",
+            "description": "监控脚本",
+            "tags": [
+              "monitoring"
+            ],
+            "dependencies": []
+          },
+          "monitoring/tech_debt_tracker.py": {
+            "name": "tech_debt_tracker.py",
+            "category": "monitoring",
+            "relative_path": "skillscripts/monitoring/tech_debt_tracker.py",
+            "description": "监控脚本",
+            "tags": [
+              "monitoring"
+            ],
+            "dependencies": []
+          },
+          "utils/agent_call_history.py": {
+            "name": "agent_call_history.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/agent_call_history.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/benchmark_updater.py": {
+            "name": "benchmark_updater.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/benchmark_updater.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/check_dependencies.py": {
+            "name": "check_dependencies.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/check_dependencies.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/check_db_connection.py": {
+            "name": "check_db_connection.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/check_db_connection.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/doc_change_tracker.py": {
+            "name": "doc_change_tracker.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/doc_change_tracker.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/doc_updater.py": {
+            "name": "doc_updater.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/doc_updater.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/doc_version_manager.py": {
+            "name": "doc_version_manager.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/doc_version_manager.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/document_auto_generator.py": {
+            "name": "document_auto_generator.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/document_auto_generator.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/document_version_manager.py": {
+            "name": "document_version_manager.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/document_version_manager.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/enhanced_doc_version_manager.py": {
+            "name": "enhanced_doc_version_manager.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/enhanced_doc_version_manager.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/enhanced_path_config_manager.py": {
+            "name": "enhanced_path_config_manager.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/enhanced_path_config_manager.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/enhanced_report_version_manager.py": {
+            "name": "enhanced_report_version_manager.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/enhanced_report_version_manager.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/evolution_manager.py": {
+            "name": "evolution_manager.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/evolution_manager.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/evolution_report_generator.py": {
+            "name": "evolution_report_generator.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/evolution_report_generator.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/file_classification_manager.py": {
+            "name": "file_classification_manager.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/file_classification_manager.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/history_tracker.py": {
+            "name": "history_tracker.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/history_tracker.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/init_test_data.py": {
+            "name": "init_test_data.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/init_test_data.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/interface_validator.py": {
+            "name": "interface_validator.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/interface_validator.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/iteration_coordinator.py": {
+            "name": "iteration_coordinator.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/iteration_coordinator.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/knowledge_manager.py": {
+            "name": "knowledge_manager.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/knowledge_manager.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/path_config_manager.py": {
+            "name": "path_config_manager.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/path_config_manager.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/priority_evaluator.py": {
+            "name": "priority_evaluator.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/priority_evaluator.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/report_generator.py": {
+            "name": "report_generator.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/report_generator.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/report_version_manager.py": {
+            "name": "report_version_manager.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/report_version_manager.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/script_classification_manager.py": {
+            "name": "script_classification_manager.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/script_classification_manager.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/script_dependency_manager.py": {
+            "name": "script_dependency_manager.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/script_dependency_manager.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/script_integrator.py": {
+            "name": "script_integrator.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/script_integrator.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/script_utils.py": {
+            "name": "script_utils.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/script_utils.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/self_healer.py": {
+            "name": "self_healer.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/self_healer.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/self_improver.py": {
+            "name": "self_improver.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/self_improver.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/self_iterate.py": {
+            "name": "self_iterate.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/self_iterate.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/self_iteration_rollback.py": {
+            "name": "self_iteration_rollback.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/self_iteration_rollback.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/self_optimizer.py": {
+            "name": "self_optimizer.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/self_optimizer.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/skill_caller.py": {
+            "name": "skill_caller.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/skill_caller.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/skill_content_updater.py": {
+            "name": "skill_content_updater.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/skill_content_updater.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/skill_doc_path_validator.py": {
+            "name": "skill_doc_path_validator.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/skill_doc_path_validator.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/skill_registry.py": {
+            "name": "skill_registry.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/skill_registry.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/temp_file_manager.py": {
+            "name": "temp_file_manager.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/temp_file_manager.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/validate_path_config.py": {
+            "name": "validate_path_config.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/validate_path_config.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/validate_specs.py": {
+            "name": "validate_specs.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/validate_specs.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          },
+          "utils/version_manager.py": {
+            "name": "version_manager.py",
+            "category": "utils",
+            "relative_path": "skillscripts/utils/version_manager.py",
+            "description": "工具脚本",
+            "tags": [
+              "utils"
+            ],
+            "dependencies": []
+          }
+        },
+        "initialized": true
+      }
+    },
+    {
+      "test": "脚本路径获取方法",
+      "status": "PASS",
+      "details": {
+        "core": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\core",
+        "analysis": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\analysis",
+        "optimization": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\optimization",
+        "test": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\test",
+        "pipeline": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\pipeline",
+        "learning": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\learning",
+        "auto_repair": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\auto_repair",
+        "iteration": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\iteration",
+        "requirements": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\requirements",
+        "sdd_tdd": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\sdd_tdd",
+        "monitoring": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\monitoring",
+        "utils": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils"
+      }
+    },
+    {
+      "test": "脚本搜索功能",
+      "status": "PASS",
+      "details": {
+        "core_scripts_count": 48,
+        "search_results_count": 9
+      }
+    },
+    {
+      "test": "脚本验证功能",
+      "status": "PASS",
+      "details": {
+        "total_scripts": 233,
+        "existing_scripts": 233,
+        "missing_scripts": 0
+      }
+    },
+    {
+      "test": "动态路径解析功能",
+      "status": "PASS",
+      "details": {
+        "test_paths_count": 4
+      }
+    },
+    {
+      "test": "get_all_paths 包含脚本路径",
+      "status": "PASS",
+      "details": {
+        "script_paths_count": 12
+      }
+    }
+  ]
+}

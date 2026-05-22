@@ -1,0 +1,158 @@
+# 四维度输出防线配置 (4D Output Defense Configuration)
+
+# 第一维度：提示词工程层配置
+prompt_engineering:
+  enabled: true
+  
+  templates:
+    cot_template_path: "templates/prompts/cot_template.md"
+    react_template_path: "templates/prompts/react_template.md"
+    tot_template_path: "templates/prompts/tot_template.md"
+  
+  few_shot:
+    enabled: true
+    max_examples: 3
+    auto_select: true  # 根据任务类型自动选择示例
+    
+  context_window:
+    max_tokens: 128000
+    reserve_ratio: 0.1  # 保留10%给输出
+    truncation_strategy: "keep_important"  # keep_head/keep_tail/keep_important
+    
+  role_consistency:
+    enabled: true
+    tolerance_threshold: 0.7  # 相似度阈值
+    warning_on_drift: true
+
+# 第二维度：原生能力约束层配置
+capability_guard:
+  enabled: true
+  
+  permissions:
+    whitelist_mode: true  # 白名单模式（默认只允许列表中的工具）
+    allowed_tools:
+      - "read_file"
+      - "write_file"
+      - "search_files"
+      - "run_command"
+      - "web_fetch"
+      - "web_search"
+    blocked_tools:
+      - "execute_arbitrary_code"
+      - "access_sensitive_data"
+      
+  rate_limiting:
+    algorithm: "token_bucket"  # token_bucket/sliding_window/fixed_window
+    api_calls_per_minute: 60
+    file_operations_per_minute: 30
+    command_executions_per_minute: 15
+    
+  sandbox:
+    allowed_paths:
+      - "./"  # 项目根目录及子目录
+      - "/tmp/"  # 临时目录
+    forbidden_patterns:
+      - ".."  # 禁止路径穿越
+      - "/etc/passwd"
+      - "/etc/shadow"
+      - "C:\\Windows\\System32\\config\\"
+    max_file_size_mb: 100
+      
+  command_security:
+    block_dangerous_commands: true
+    dangerous_command_patterns:
+      - "rm -rf /"
+      - "rm -rf \\"
+      - "DROP DATABASE"
+      - "TRUNCATE TABLE"
+      - "FORMAT C:"
+      - ":(){ :|:& };:"  # Fork bomb
+      - "chmod 777 /"
+      - "wget.*\\|.*sh"  # 远程脚本注入
+    require_confirmation_for:
+      - "DELETE"
+      - "DROP"
+      - "TRUNCATE"
+      - "FORMAT"
+
+# 第三维度：规则校验层配置
+rule_validation:
+  enabled: true
+  
+  schema_validation:
+    json_schema_strict: true
+    yaml_structure_check: true
+    markdown_heading_hierarchy: true
+    
+  code_style:
+    python:
+      enabled: true
+      max_line_length: 120
+      max_complexity: 10
+      max_function_length: 50
+    javascript:
+      enabled: true
+      semi: true
+      quotes: "single"
+      indent: 2
+    typescript:
+      enabled: true
+      strict: true
+      no_any: true
+      
+  security_checks:
+    hardcoded_secrets:
+      enabled: true
+      patterns:
+        - "(?i)(password|passwd|pwd)\\s*[:=]\\s*[\"'][^\"']+[\"']"
+        - "(?i)(api_key|apikey|api-key)\\s*[:=]\\s*[\"'][^\"']+[\"']"
+        - "(?i)(secret|token)\\s*[:=]\\s*[\"'][^\"']+[\"']"
+    sql_injection:
+      enabled: true
+      patterns:
+        - "\\b(SELECT|INSERT|UPDATE|DELETE)\\b.+\\b(FROM|INTO|WHERE)\\b.*\\+"  # 字符串拼接
+    xss_vectors:
+      enabled: true
+      patterns:
+        - "<script[^>]*>.*</script>"
+        - "javascript:\\s*"
+        
+  document_integrity:
+    required_sections: []  # 由具体任务动态指定
+    check_links: true
+    check_image_references: true
+
+# 第四维度：兜底恢复机制配置
+fallback_recovery:
+  enabled: true
+  
+  degradation_levels:
+    - level: "FULL"
+      description: "完整输出"
+      conditions: {quality_score: ">=4.0", all_validations_passed: true}
+    - level: "SIMPLIFIED"
+      description: "精简版输出（移除可选部分）"
+      conditions: {quality_score: ">=3.0", critical_sections_present: true}
+    - level: "SKELETON"
+      description: "骨架结构（仅保留核心框架）"
+      conditions: {quality_score: ">=2.0", basic_structure_valid: true}
+    - level: "ERROR"
+      description: "错误提示+改进建议"
+      conditions: {quality_score: "<2.0"}
+      
+  retry:
+    max_attempts: 3
+    backoff_strategy: "exponential"  # exponential/linear/fixed
+    initial_delay_seconds: 0.1
+    max_delay_seconds: 5.0
+    context_compression_ratio: 0.2  # 每次重试压缩20%上下文
+    
+  rollback:
+    enable_git_checkpoint: true
+    enable_file_snapshot: true
+    snapshot_retention_hours: 24
+    
+  human_intervention:
+    auto_request: true
+    request_threshold: 2  # 连续失败2次后请求人工介入
+    intervention_request_template: "templates/human_intervention_request.md"

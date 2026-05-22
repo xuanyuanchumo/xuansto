@@ -1,0 +1,19 @@
+# 先忽略整个 .trae 目录
+.trae/*
+
+# 但重新包含 skills 目录（为了继续往里精确控制）
+!.trae/skills/
+
+# 在 skills 里除 xuansto-skill 外全部忽略
+.trae/skills/*
+!.trae/skills/xuansto-skill/
+
+.trae/skills/xuansto-skill/.knowledge/temp-scripts/*
+!.trae/skills/xuansto-skill/.knowledge/temp-scripts/.gitkeep
+.trae/skills/xuansto-skill/.knowledge/script-errors/*
+!.trae/skills/xuansto-skill/.knowledge/script-errors/.gitkeep
+
+.venv/
+副本/
+docs/
+__pycache__/

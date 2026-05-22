@@ -1,0 +1,24 @@
+{
+  "project_root": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\universal-devops",
+  "exported_at": "2026-04-02T21:38:21.011531",
+  "paths": {
+    "CONFIGS_DIR": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\universal-devops\\configs",
+    "CORE_DIR": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\universal-devops\\skillscripts\\core",
+    "DOCS_DIR": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\universal-devops\\docs",
+    "OUTPUT_API": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\universal-devops\\output\\api",
+    "OUTPUT_ARCHITECTURE": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\universal-devops\\output\\architecture",
+    "OUTPUT_DATABASE": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\universal-devops\\output\\database",
+    "OUTPUT_DEPLOYMENT": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\universal-devops\\output\\deployment",
+    "OUTPUT_DIR": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\universal-devops\\output",
+    "OUTPUT_ITERATION": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\universal-devops\\output\\iteration",
+    "OUTPUT_LOGS": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\universal-devops\\output\\logs",
+    "OUTPUT_MONITORING": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\universal-devops\\output\\monitoring",
+    "OUTPUT_REQUIREMENTS": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\universal-devops\\output\\requirements",
+    "OUTPUT_REVIEWS": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\universal-devops\\output\\reviews",
+    "OUTPUT_TESTING": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\universal-devops\\output\\testing",
+    "SCRIPTS_DIR": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\universal-devops\\skillscripts",
+    "SKILL_ROOT": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\universal-devops",
+    "SUBSKILLS_DIR": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\universal-devops\\subskills",
+    "TEMPLATES_DIR": "D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\universal-devops\\templates"
+  }
+}

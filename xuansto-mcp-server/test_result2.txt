@@ -1,0 +1,17 @@
+........................................................................ [ 10%]
+........................................................................ [ 20%]
+........................................................................ [ 30%]
+........................................................................ [ 41%]
+........................................................................ [ 51%]
+........................................................................ [ 61%]
+........................................................................ [ 71%]
+.................................................s.s.sss.......s........ [ 82%]
+............................................F.......F................... [ 92%]
+.....................................................                    [100%]
+=========================== short test summary info ===========================
+FAILED tests/test_v341_fixes.py::test_ensure_index_connection_closed_on_exception - PermissionError: [WinError 5] 拒绝访问。: '\\tmp\\fake'
+FAILED tests/test_v35_production.py::TestSnapshotCompressed::test_snapshot_saved_as_gzip - AssertionError: Expected .json.gz file at C:\Users\86156\AppData\Local\Temp\pytest-of-86156\pytest-646\test_snapshot_saved_as_gzip0\.xuansto\workflow_snapshots\wf-test1234_phase1_1779361975.json.json.gz
+assert False
+ +  where False = exists()
+ +    where exists = WindowsPath('C:/Users/86156/AppData/Local/Temp/pytest-of-86156/pytest-646/test_snapshot_saved_as_gzip0/.xuansto/workflow_snapshots/wf-test1234_phase1_1779361975.json.json.gz').exists
+2 failed, 693 passed, 6 skipped in 288.86s (0:04:48)

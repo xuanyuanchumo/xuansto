@@ -1,0 +1,266 @@
+{
+  "report_title": "三省六部技能永久自演化增强功能测试报告",
+  "generated_at": "2026-04-01T17:27:01.348112",
+  "summary": {
+    "total_tests": 22,
+    "passed": 14,
+    "failed": 8,
+    "success_rate": 63.64
+  },
+  "test_results": [
+    {
+      "test_name": "skill_evolution_manager_init",
+      "passed": true,
+      "message": "SkillEvolutionManager 初始化成功",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.181303"
+    },
+    {
+      "test_name": "skill_content_change_detector",
+      "passed": true,
+      "message": "检测到 1 个文件变化",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.246286"
+    },
+    {
+      "test_name": "skill_evolution_knowledge",
+      "passed": true,
+      "message": "知识积累成功，总事件数: 1",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.248211"
+    },
+    {
+      "test_name": "evolution_trigger_mechanism",
+      "passed": true,
+      "message": "触发条件数量: 4",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.249714"
+    },
+    {
+      "test_name": "enhanced_path_config_manager_init",
+      "passed": false,
+      "message": "初始化失败: cannot import name 'reset_instance' from 'enhanced_path_config_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\enhanced_path_config_manager.py)",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.270583"
+    },
+    {
+      "test_name": "path_resolution",
+      "passed": false,
+      "message": "路径解析失败: cannot import name 'reset_instance' from 'enhanced_path_config_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\enhanced_path_config_manager.py)",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.272724"
+    },
+    {
+      "test_name": "env_override",
+      "passed": false,
+      "message": "环境变量覆盖失败: cannot import name 'reset_instance' from 'enhanced_path_config_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\enhanced_path_config_manager.py)",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.273622"
+    },
+    {
+      "test_name": "path_validation",
+      "passed": false,
+      "message": "路径验证失败: cannot import name 'reset_instance' from 'enhanced_path_config_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\enhanced_path_config_manager.py)",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.274349"
+    },
+    {
+      "test_name": "subskill_manager_discovery",
+      "passed": false,
+      "message": "子技能发现失败: cannot import name 'reset_instance' from 'subskill_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\core\\subskill_manager.py)",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.285679"
+    },
+    {
+      "test_name": "subskill_parser",
+      "passed": true,
+      "message": "解析成功: parser_test, 版本: 2.0.0",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.287753"
+    },
+    {
+      "test_name": "script_registry",
+      "passed": true,
+      "message": "脚本注册成功: test_script",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.296655"
+    },
+    {
+      "test_name": "cross_type_call",
+      "passed": true,
+      "message": "跨类型调用成功: 7d1d4689",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.301280"
+    },
+    {
+      "test_name": "call_chain_trace",
+      "passed": true,
+      "message": "调用链追踪成功，共 3 个调用",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.301815"
+    },
+    {
+      "test_name": "heartbeat_info_creation",
+      "passed": true,
+      "message": "HeartbeatInfo 创建成功: HB-20260401120000",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.320816"
+    },
+    {
+      "test_name": "evolution_controller_heartbeat",
+      "passed": true,
+      "message": "控制器状态获取成功: IDLE",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.322648"
+    },
+    {
+      "test_name": "heartbeat_send",
+      "passed": true,
+      "message": "心跳发送成功: HB-20260401172701",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.326461"
+    },
+    {
+      "test_name": "heartbeat_info_retrieval",
+      "passed": true,
+      "message": "心跳信息获取功能正常（控制器未运行时返回 None）",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.328191"
+    },
+    {
+      "test_name": "heartbeat_persistence",
+      "passed": true,
+      "message": "心跳持久化成功: STATE-20260401172701",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.337537"
+    },
+    {
+      "test_name": "backend_api_response",
+      "passed": false,
+      "message": "API 响应测试失败: No module named 'skill_evolution_api'",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.339850"
+    },
+    {
+      "test_name": "websocket_manager",
+      "passed": false,
+      "message": "WebSocket 管理器测试失败: No module named 'skill_evolution_api'",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.341762"
+    },
+    {
+      "test_name": "evolution_history",
+      "passed": false,
+      "message": "演化历史测试失败: No module named 'skill_evolution_api'",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.343584"
+    },
+    {
+      "test_name": "frontend_component_structure",
+      "passed": true,
+      "message": "前端组件结构正常，找到 2 个组件",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.344589"
+    }
+  ],
+  "failed_tests": [
+    {
+      "test_name": "enhanced_path_config_manager_init",
+      "passed": false,
+      "message": "初始化失败: cannot import name 'reset_instance' from 'enhanced_path_config_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\enhanced_path_config_manager.py)",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.270583"
+    },
+    {
+      "test_name": "path_resolution",
+      "passed": false,
+      "message": "路径解析失败: cannot import name 'reset_instance' from 'enhanced_path_config_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\enhanced_path_config_manager.py)",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.272724"
+    },
+    {
+      "test_name": "env_override",
+      "passed": false,
+      "message": "环境变量覆盖失败: cannot import name 'reset_instance' from 'enhanced_path_config_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\enhanced_path_config_manager.py)",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.273622"
+    },
+    {
+      "test_name": "path_validation",
+      "passed": false,
+      "message": "路径验证失败: cannot import name 'reset_instance' from 'enhanced_path_config_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\enhanced_path_config_manager.py)",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.274349"
+    },
+    {
+      "test_name": "subskill_manager_discovery",
+      "passed": false,
+      "message": "子技能发现失败: cannot import name 'reset_instance' from 'subskill_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\core\\subskill_manager.py)",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.285679"
+    },
+    {
+      "test_name": "backend_api_response",
+      "passed": false,
+      "message": "API 响应测试失败: No module named 'skill_evolution_api'",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.339850"
+    },
+    {
+      "test_name": "websocket_manager",
+      "passed": false,
+      "message": "WebSocket 管理器测试失败: No module named 'skill_evolution_api'",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.341762"
+    },
+    {
+      "test_name": "evolution_history",
+      "passed": false,
+      "message": "演化历史测试失败: No module named 'skill_evolution_api'",
+      "details": {},
+      "timestamp": "2026-04-01T17:27:01.343584"
+    }
+  ],
+  "recommendations": [
+    {
+      "test_name": "enhanced_path_config_manager_init",
+      "issue": "初始化失败: cannot import name 'reset_instance' from 'enhanced_path_config_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\enhanced_path_config_manager.py)",
+      "suggestion": "检查 enhanced_path_config_manager_init 相关模块的实现和依赖关系"
+    },
+    {
+      "test_name": "path_resolution",
+      "issue": "路径解析失败: cannot import name 'reset_instance' from 'enhanced_path_config_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\enhanced_path_config_manager.py)",
+      "suggestion": "检查 path_resolution 相关模块的实现和依赖关系"
+    },
+    {
+      "test_name": "env_override",
+      "issue": "环境变量覆盖失败: cannot import name 'reset_instance' from 'enhanced_path_config_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\enhanced_path_config_manager.py)",
+      "suggestion": "检查 env_override 相关模块的实现和依赖关系"
+    },
+    {
+      "test_name": "path_validation",
+      "issue": "路径验证失败: cannot import name 'reset_instance' from 'enhanced_path_config_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\enhanced_path_config_manager.py)",
+      "suggestion": "检查 path_validation 相关模块的实现和依赖关系"
+    },
+    {
+      "test_name": "subskill_manager_discovery",
+      "issue": "子技能发现失败: cannot import name 'reset_instance' from 'subskill_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\core\\subskill_manager.py)",
+      "suggestion": "检查 subskill_manager_discovery 相关模块的实现和依赖关系"
+    },
+    {
+      "test_name": "backend_api_response",
+      "issue": "API 响应测试失败: No module named 'skill_evolution_api'",
+      "suggestion": "检查 backend_api_response 相关模块的实现和依赖关系"
+    },
+    {
+      "test_name": "websocket_manager",
+      "issue": "WebSocket 管理器测试失败: No module named 'skill_evolution_api'",
+      "suggestion": "检查 websocket_manager 相关模块的实现和依赖关系"
+    },
+    {
+      "test_name": "evolution_history",
+      "issue": "演化历史测试失败: No module named 'skill_evolution_api'",
+      "suggestion": "检查 evolution_history 相关模块的实现和依赖关系"
+    }
+  ]
+}

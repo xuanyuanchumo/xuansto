@@ -1,0 +1,252 @@
+{
+  "report_id": "PLC-20260330110121",
+  "generated_at": "2026-03-30T11:01:21.570122",
+  "total_checks": 12,
+  "passed": 11,
+  "failed": 0,
+  "warnings": 1,
+  "skipped": 0,
+  "overall_status": "warning",
+  "results": [
+    {
+      "check_id": "ZSS-001",
+      "check_name": "决策完整性检查",
+      "province": "zhongshusheng",
+      "status": "pass",
+      "severity": "high",
+      "message": "决策数据完整，所有必需字段均已提供",
+      "details": {
+        "checked_fields": [
+          "requirement_analysis",
+          "architecture_design",
+          "sdd_specification",
+          "acceptance_tests",
+          "priority_ranking"
+        ]
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:01:21.569463"
+    },
+    {
+      "check_id": "ZSS-002",
+      "check_name": "SDD规范有效性检查",
+      "province": "zhongshusheng",
+      "status": "pass",
+      "severity": "high",
+      "message": "SDD规范定义完整有效",
+      "details": {
+        "interfaces_count": 2
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:01:21.569549"
+    },
+    {
+      "check_id": "ZSS-003",
+      "check_name": "架构可行性检查",
+      "province": "zhongshusheng",
+      "status": "pass",
+      "severity": "high",
+      "message": "架构设计可行，无潜在问题",
+      "details": {
+        "components": [
+          "frontend",
+          "backend",
+          "database"
+        ]
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:01:21.569560"
+    },
+    {
+      "check_id": "ZSS-004",
+      "check_name": "优先级一致性检查",
+      "province": "zhongshusheng",
+      "status": "pass",
+      "severity": "medium",
+      "message": "任务优先级设置合理一致",
+      "details": {
+        "tasks_count": 2
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:01:21.569576"
+    },
+    {
+      "check_id": "MXS-001",
+      "check_name": "审议完整性检查",
+      "province": "menxiasheng",
+      "status": "pass",
+      "severity": "high",
+      "message": "所有审议项目已完成并通过",
+      "details": {
+        "reviews": [
+          "requirement_review",
+          "architecture_review",
+          "test_coverage_review",
+          "compliance_review"
+        ]
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:01:21.569607"
+    },
+    {
+      "check_id": "MXS-002",
+      "check_name": "测试覆盖率检查",
+      "province": "menxiasheng",
+      "status": "warning",
+      "severity": "medium",
+      "message": "测试覆盖率存在建议: 单元测试覆盖率建议提升: 85%",
+      "details": {
+        "warnings": [
+          "单元测试覆盖率建议提升: 85%"
+        ]
+      },
+      "recommendations": [
+        "继续提升测试覆盖率"
+      ],
+      "timestamp": "2026-03-30T11:01:21.569617"
+    },
+    {
+      "check_id": "MXS-003",
+      "check_name": "合规性检查",
+      "province": "menxiasheng",
+      "status": "pass",
+      "severity": "high",
+      "message": "所有合规性检查通过",
+      "details": {
+        "checks_passed": true
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:01:21.569623"
+    },
+    {
+      "check_id": "MXS-004",
+      "check_name": "质量门禁检查",
+      "province": "menxiasheng",
+      "status": "pass",
+      "severity": "high",
+      "message": "所有质量门禁通过",
+      "details": {
+        "gates_count": 2
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:01:21.569629"
+    },
+    {
+      "check_id": "SSS-001",
+      "check_name": "执行计划有效性检查",
+      "province": "shangshusheng",
+      "status": "pass",
+      "severity": "high",
+      "message": "执行计划有效",
+      "details": {
+        "stages_count": 2
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:01:21.569636"
+    },
+    {
+      "check_id": "SSS-002",
+      "check_name": "TDD循环完整性检查",
+      "province": "shangshusheng",
+      "status": "pass",
+      "severity": "high",
+      "message": "TDD循环完整且正确执行",
+      "details": {
+        "cycles_count": 1
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:01:21.569643"
+    },
+    {
+      "check_id": "SSS-003",
+      "check_name": "六部协调检查",
+      "province": "shangshusheng",
+      "status": "pass",
+      "severity": "high",
+      "message": "六部协调正常",
+      "details": {
+        "ministries_checked": [
+          "libu",
+          "hubu",
+          "liibu",
+          "bingbu",
+          "xingbu",
+          "gongbu"
+        ]
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:01:21.569652"
+    },
+    {
+      "check_id": "SSS-004",
+      "check_name": "进度追踪检查",
+      "province": "shangshusheng",
+      "status": "pass",
+      "severity": "medium",
+      "message": "进度追踪正常，完成率: 40.0%",
+      "details": {
+        "total_tasks": 10,
+        "completed_tasks": 4,
+        "progress_rate": 40.0
+      },
+      "recommendations": [],
+      "timestamp": "2026-03-30T11:01:21.569669"
+    }
+  ],
+  "flow_results": [
+    {
+      "from_province": "zhongshusheng",
+      "to_province": "menxiasheng",
+      "flow_type": "decision_to_review",
+      "status": "pass",
+      "message": "中书省到门下省信息流转正常",
+      "data_integrity": true,
+      "timestamp": "2026-03-30T11:01:21.569678"
+    },
+    {
+      "from_province": "menxiasheng",
+      "to_province": "shangshusheng",
+      "flow_type": "review_to_execution",
+      "status": "pass",
+      "message": "门下省到尚书省信息流转正常",
+      "data_integrity": true,
+      "timestamp": "2026-03-30T11:01:21.569684"
+    },
+    {
+      "from_province": "shangshusheng",
+      "to_province": "zhongshusheng",
+      "flow_type": "completion_feedback",
+      "status": "pass",
+      "message": "执行完成，反馈正常",
+      "data_integrity": true,
+      "timestamp": "2026-03-30T11:01:21.569689"
+    }
+  ],
+  "summary": {
+    "by_province": {
+      "zhongshusheng": {
+        "total": 4,
+        "passed": 4,
+        "failed": 0,
+        "warnings": 0
+      },
+      "menxiasheng": {
+        "total": 4,
+        "passed": 3,
+        "failed": 0,
+        "warnings": 1
+      },
+      "shangshusheng": {
+        "total": 4,
+        "passed": 4,
+        "failed": 0,
+        "warnings": 0
+      }
+    },
+    "critical_issues": [],
+    "flow_integrity": true,
+    "recommendations": [
+      "继续提升测试覆盖率"
+    ]
+  }
+}

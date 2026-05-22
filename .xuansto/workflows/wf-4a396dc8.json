@@ -1,0 +1,134 @@
+{
+  "workflow_id": "wf-4a396dc8",
+  "workflow": "sdd-tdd-full",
+  "project_path": ".",
+  "status": "aborted",
+  "current_phase": 0,
+  "started_at": "2026-05-21T04:22:59.141506+00:00",
+  "completed_phases": [],
+  "phase_definitions": [
+    {
+      "id": 0,
+      "name": "初始化",
+      "gates": [
+        "DESIGN-SYSTEM-COMPLETE",
+        "ANTI-PATTERN-CHECK",
+        "DESIGN-REVIEW"
+      ],
+      "agents": [
+        "design-reviewer",
+        "anti-pattern-checker"
+      ]
+    },
+    {
+      "id": 1,
+      "name": "需求分析",
+      "gates": [
+        "BRAINSTORM-COMPLETE",
+        "GATE-001",
+        "GATE-002"
+      ],
+      "agents": [
+        "brainstormer",
+        "requirement-analyst"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "架构设计",
+      "gates": [
+        "PLAN-ATOMIC",
+        "GATE-003",
+        "GATE-004"
+      ],
+      "agents": [
+        "architect",
+        "planner"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "测试先行",
+      "gates": [
+        "TEST-FIRST"
+      ],
+      "agents": [
+        "tdd-agent"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "代码实现",
+      "gates": [
+        "SUBAGENT-REVIEW",
+        "REVIEW-CONFIDENCE",
+        "GATE-007",
+        "TEST-PASS",
+        "GATE-009",
+        "FILE-ENCODING"
+      ],
+      "agents": [
+        "coder",
+        "reviewer"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "集成验证",
+      "gates": [
+        "PLAYWRIGHT-E2E-PASS",
+        "GATE-011",
+        "GATE-012",
+        "AI-PENTEST",
+        "SPEC-CONSISTENCY"
+      ],
+      "agents": [
+        "integrator",
+        "security-tester"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "部署运维",
+      "gates": [
+        "GATE-013",
+        "GATE-014",
+        "INFRA-HEALTH",
+        "UX-ACCEPTANCE"
+      ],
+      "agents": [
+        "devops",
+        "infra-checker"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "重构优化",
+      "gates": [
+        "SIMPLIFICATION-BEHAVIOR",
+        "CHESTERTON-FENCE",
+        "GATE-015"
+      ],
+      "agents": [
+        "refactorer",
+        "simplifier"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "桌面发布",
+      "gates": [
+        "DESKTOP-BUILD",
+        "DESKTOP-SIGN",
+        "DESKTOP-UPDATE",
+        "DESKTOP-CROSS",
+        "IPC-CONTRACT"
+      ],
+      "agents": [
+        "desktop-builder",
+        "signer"
+      ]
+    }
+  ],
+  "aborted_at": "2026-05-21T04:22:59.210656+00:00"
+}

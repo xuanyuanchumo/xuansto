@@ -1,0 +1,56 @@
+{
+  "workflow_id": "wf-60a178f1",
+  "phase": 1,
+  "timestamp": 1779320286.656189,
+  "time_iso": "2026-05-21T07:38:06",
+  "state": {
+    "workflow_id": "wf-60a178f1",
+    "workflow": "sdd-tdd-fast",
+    "project_path": ".",
+    "status": "running",
+    "current_phase": 1,
+    "started_at": "2026-05-21T07:38:06.615632",
+    "completed_phases": [
+      0
+    ],
+    "phase_definitions": [
+      {
+        "id": 0,
+        "name": "设计+测试",
+        "gates": [
+          "DESIGN-SYSTEM-COMPLETE",
+          "TEST-FIRST"
+        ],
+        "agents": [
+          "design-reviewer",
+          "tdd-agent"
+        ]
+      },
+      {
+        "id": 1,
+        "name": "实现+验证",
+        "gates": [
+          "TEST-PASS",
+          "GATE-007",
+          "GATE-011"
+        ],
+        "agents": [
+          "coder",
+          "integrator"
+        ]
+      },
+      {
+        "id": 2,
+        "name": "发布",
+        "gates": [
+          "GATE-013",
+          "DESKTOP-BUILD"
+        ],
+        "agents": [
+          "devops",
+          "desktop-builder"
+        ]
+      }
+    ]
+  }
+}

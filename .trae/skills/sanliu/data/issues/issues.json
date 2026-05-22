@@ -1,0 +1,44 @@
+{
+  "issues": [
+    {
+      "issue_id": "ISS-5656FA91",
+      "title": "示例问题：登录功能异常",
+      "description": "用户反馈无法正常登录系统",
+      "category": "bug",
+      "priority": "high",
+      "status": "closed",
+      "created_at": "2026-03-31T16:14:54.025498",
+      "updated_at": "2026-03-31T16:14:54.033623",
+      "assignee": "开发团队",
+      "reporter": "测试团队",
+      "project_id": "",
+      "department_id": "",
+      "labels": [
+        "登录",
+        "认证"
+      ],
+      "tags": [],
+      "related_issues": [],
+      "blocked_by": [],
+      "blocks": [],
+      "resolution": "fixed",
+      "resolution_notes": "修复了登录验证逻辑",
+      "resolved_at": "2026-03-31T16:14:54.031897",
+      "resolved_by": "开发团队",
+      "closed_at": "2026-03-31T16:14:54.033623",
+      "closed_by": "测试团队",
+      "due_date": null,
+      "estimated_hours": 0.0,
+      "actual_hours": 0.0,
+      "environment": "",
+      "steps_to_reproduce": "",
+      "expected_behavior": "",
+      "actual_behavior": "",
+      "attachments": [],
+      "references": [],
+      "metrics": {}
+    }
+  ],
+  "last_updated": "2026-03-31T16:14:54.033887",
+  "total_count": 1
+}

@@ -1,0 +1,27 @@
+{
+  "version_id": "ver_search-item-0_1",
+  "knowledge_id": "search-item-0",
+  "version_number": 1,
+  "content_hash": "2df165e61de8b9c675abb6a5c4eee460",
+  "changes": [
+    "初始版本"
+  ],
+  "created_at": "2026-04-01T17:28:42.515586",
+  "created_by": "system",
+  "metadata_snapshot": {
+    "knowledge_id": "search-item-0",
+    "title": "搜索测试代码模式 0",
+    "category": "code_pattern",
+    "tags": [
+      "search",
+      "test"
+    ],
+    "created_at": "2026-04-01T17:28:42.514781",
+    "updated_at": "2026-04-01T17:28:42.514781",
+    "version": 1,
+    "author": "system",
+    "source_project": "default",
+    "checksum": "2df165e61de8b9c675abb6a5c4eee460",
+    "custom_fields": {}
+  }
+}

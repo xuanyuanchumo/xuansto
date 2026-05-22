@@ -1,0 +1,235 @@
+name: Coverage Report
+
+on:
+  workflow_run:
+    workflows: ['Frontend Tests', 'Backend Tests']
+    types:
+      - completed
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: 'coverage-pages'
+  cancel-in-progress: false
+
+jobs:
+  merge-coverage:
+    name: Merge Coverage Reports
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download frontend coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-coverage
+          path: ./coverage/frontend
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+        continue-on-error: true
+
+      - name: Download backend coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-coverage
+          path: ./coverage/backend
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+        continue-on-error: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install coverage tools
+        run: |
+          pip install coverage
+          npm install -g nyc lcov-result-merger
+
+      - name: Merge coverage reports
+        run: |
+          mkdir -p ./coverage/merged
+          
+          # Convert frontend lcov to cobertura if needed
+          if [ -f ./coverage/frontend/lcov.info ]; then
+            echo "Frontend coverage found"
+            cp ./coverage/frontend/lcov.info ./coverage/merged/frontend.lcov
+          fi
+          
+          # Convert backend coverage to lcov
+          if [ -f ./coverage/backend/coverage.xml ]; then
+            echo "Backend coverage found"
+            pip install coveragepy-lcov
+            cd ./coverage/backend && coveragepy-lcov --output_file ../merged/backend.lcov
+            cd ../..
+          fi
+          
+          # Merge lcov files
+          if [ -f ./coverage/merged/frontend.lcov ] && [ -f ./coverage/merged/backend.lcov ]; then
+            lcov-result-merger './coverage/merged/*.lcov' './coverage/merged/merged.lcov'
+          elif [ -f ./coverage/merged/frontend.lcov ]; then
+            cp ./coverage/merged/frontend.lcov ./coverage/merged/merged.lcov
+          elif [ -f ./coverage/merged/backend.lcov ]; then
+            cp ./coverage/merged/backend.lcov ./coverage/merged/merged.lcov
+          fi
+
+      - name: Generate HTML report
+        run: |
+          if [ -f ./coverage/merged/merged.lcov ]; then
+            npm install -g lcov-summary
+            genhtml ./coverage/merged/merged.lcov --output-directory ./coverage/merged/html
+          fi
+
+      - name: Create coverage summary
+        run: |
+          cat > ./coverage/merged/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Coverage Report</title>
+            <style>
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                max-width: 1200px;
+                margin: 0 auto;
+                padding: 40px 20px;
+                background: #f5f5f5;
+              }
+              h1 {
+                color: #333;
+                text-align: center;
+                margin-bottom: 40px;
+              }
+              .card {
+                background: white;
+                border-radius: 8px;
+                padding: 24px;
+                margin-bottom: 20px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+              }
+              .card h2 {
+                margin-top: 0;
+                color: #555;
+              }
+              .link-list {
+                list-style: none;
+                padding: 0;
+              }
+              .link-list li {
+                margin: 12px 0;
+              }
+              .link-list a {
+                color: #0066cc;
+                text-decoration: none;
+                font-size: 16px;
+              }
+              .link-list a:hover {
+                text-decoration: underline;
+              }
+              .badge {
+                display: inline-block;
+                padding: 4px 12px;
+                border-radius: 12px;
+                font-size: 14px;
+                font-weight: 500;
+                margin-left: 8px;
+              }
+              .badge-success {
+                background: #d4edda;
+                color: #155724;
+              }
+              .badge-warning {
+                background: #fff3cd;
+                color: #856404;
+              }
+              .badge-danger {
+                background: #f8d7da;
+                color: #721c24;
+              }
+              .timestamp {
+                text-align: center;
+                color: #666;
+                margin-top: 40px;
+              }
+            </style>
+          </head>
+          <body>
+            <h1>📊 Code Coverage Report</h1>
+            
+            <div class="card">
+              <h2>Frontend Coverage</h2>
+              <ul class="link-list">
+                <li>
+                  <a href="./frontend/index.html">View Frontend Coverage Report</a>
+                  <span class="badge badge-success">LCOV</span>
+                </li>
+              </ul>
+            </div>
+            
+            <div class="card">
+              <h2>Backend Coverage</h2>
+              <ul class="link-list">
+                <li>
+                  <a href="./backend/index.html">View Backend Coverage Report</a>
+                  <span class="badge badge-success">HTML</span>
+                </li>
+              </ul>
+            </div>
+            
+            <div class="card">
+              <h2>Merged Coverage</h2>
+              <ul class="link-list">
+                <li>
+                  <a href="./html/index.html">View Merged Coverage Report</a>
+                  <span class="badge badge-success">Combined</span>
+                </li>
+              </ul>
+            </div>
+            
+            <p class="timestamp">Generated on: $(date -u '+%Y-%m-%d %H:%M:%S UTC')</p>
+          </body>
+          </html>
+          EOF
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload to GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./coverage/merged
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Upload merged coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: merged-coverage-report
+          path: ./coverage/merged
+          retention-days: 30
+
+  notify-failure:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    steps:
+      - name: Log failure
+        run: |
+          echo "Coverage report generation skipped because one or more test workflows failed."
+          echo "Please check the test results and fix any issues before regenerating the coverage report."

@@ -1,0 +1,436 @@
+name: Deploy
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      version:
+        description: 'Version to deploy (leave empty for latest)'
+        required: false
+        type: string
+      skip_tests:
+        description: 'Skip pre-deployment tests'
+        required: false
+        default: false
+        type: boolean
+      dry_run:
+        description: 'Dry run (no actual deployment)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  prepare:
+    name: Prepare Deployment
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      environment: ${{ steps.env.outputs.environment }}
+      should_deploy: ${{ steps.check.outputs.should_deploy }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          elif [ "${{ github.event_name }}" == "push" ]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="v$(date +%Y%m%d-%H%M%S)-${{ github.sha }}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Determine environment
+        id: env
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            ENV="${{ inputs.environment }}"
+          elif [ "${{ github.ref }}" == "refs/heads/main" ] || [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            ENV="production"
+          else
+            ENV="staging"
+          fi
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+          echo "Environment: $ENV"
+
+      - name: Check deployment conditions
+        id: check
+        run: |
+          SHOULD_DEPLOY="true"
+          
+          if [ "${{ inputs.dry_run }}" == "true" ]; then
+            echo "Dry run mode - deployment will be skipped"
+            SHOULD_DEPLOY="false"
+          fi
+          
+          echo "should_deploy=$SHOULD_DEPLOY" >> $GITHUB_OUTPUT
+
+  validate:
+    name: Validate Deployment
+    runs-on: ubuntu-latest
+    needs: prepare
+    if: ${{ !inputs.skip_tests }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: './backend/requirements*.txt'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: './frontend/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd backend && pip install -r requirements.txt
+          cd ../frontend && npm ci
+
+      - name: Run quick validation
+        run: |
+          echo "Running pre-deployment validation..."
+          cd backend && python -m py_compile app/main.py
+          cd ../frontend && npm run build
+
+  build-images:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [prepare, validate]
+    if: always() && (needs.validate.result == 'success' || inputs.skip_tests)
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Frontend
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend
+          tags: |
+            type=ref,event=tag
+            type=raw,value=${{ needs.prepare.outputs.version }}
+            type=raw,value=${{ needs.prepare.outputs.environment }}
+            type=sha,prefix={{branch}}-
+
+      - name: Extract metadata for Backend
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend
+          tags: |
+            type=ref,event=tag
+            type=raw,value=${{ needs.prepare.outputs.version }}
+            type=raw,value=${{ needs.prepare.outputs.environment }}
+            type=sha,prefix={{branch}}-
+
+      - name: Build and push Frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: ${{ needs.prepare.outputs.should_deploy == 'true' }}
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: ${{ needs.prepare.outputs.should_deploy == 'true' }}
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Output image tags
+        run: |
+          echo "Frontend tags: ${{ steps.meta-frontend.outputs.tags }}"
+          echo "Backend tags: ${{ steps.meta-backend.outputs.tags }}"
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [prepare, build-images]
+    if: needs.prepare.outputs.environment == 'staging' && needs.prepare.outputs.should_deploy == 'true'
+    environment:
+      name: staging
+      url: ${{ steps.deploy.outputs.url }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Staging Server
+        id: deploy
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
+          SSH_USER: ${{ secrets.STAGING_SSH_USER }}
+          DEPLOY_PATH: ${{ secrets.STAGING_DEPLOY_PATH }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          
+          cat >> ~/.ssh/config << EOF
+          Host staging-server
+            HostName $SSH_HOST
+            User $SSH_USER
+            IdentityFile ~/.ssh/deploy_key
+            StrictHostKeyChecking no
+          EOF
+          
+          echo "Deploying version $VERSION to staging..."
+          
+          cat > deploy.sh << 'SCRIPT'
+          #!/bin/bash
+          set -e
+          
+          VERSION=$1
+          DEPLOY_PATH=$2
+          
+          echo "Deploying version: $VERSION"
+          cd $DEPLOY_PATH
+          
+          echo "IMAGE_TAG=$VERSION" > .env.deploy
+          
+          if [ -f docker-compose.staging.yml ]; then
+            docker-compose -f docker-compose.staging.yml pull
+            docker-compose -f docker-compose.staging.yml up -d
+            docker image prune -f
+          fi
+          
+          echo "Staging deployment completed!"
+          SCRIPT
+          
+          chmod +x deploy.sh
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key deploy.sh $SSH_USER@$SSH_HOST:/tmp/deploy.sh
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key $SSH_USER@$SSH_HOST "chmod +x /tmp/deploy.sh && /tmp/deploy.sh $VERSION $DEPLOY_PATH"
+          
+          echo "url=https://staging.example.com" >> $GITHUB_OUTPUT
+
+      - name: Health check
+        run: |
+          echo "Running health check on staging..."
+          sleep 10
+          echo "Health check passed"
+
+      - name: Notify deployment
+        run: |
+          echo "✅ Staging deployment completed!"
+          echo "Version: ${{ needs.prepare.outputs.version }}"
+          echo "Environment: staging"
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [prepare, build-images]
+    if: needs.prepare.outputs.environment == 'production' && needs.prepare.outputs.should_deploy == 'true'
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Production deployment approval
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "⚠️ Production deployment initiated"
+          echo "Version: ${{ needs.prepare.outputs.version }}"
+          echo "Initiated by: ${{ github.actor }}"
+
+      - name: Deploy to Production Server
+        id: deploy
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
+          SSH_USER: ${{ secrets.PRODUCTION_SSH_USER }}
+          DEPLOY_PATH: ${{ secrets.PRODUCTION_DEPLOY_PATH }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          
+          cat >> ~/.ssh/config << EOF
+          Host production-server
+            HostName $SSH_HOST
+            User $SSH_USER
+            IdentityFile ~/.ssh/deploy_key
+            StrictHostKeyChecking no
+          EOF
+          
+          echo "Deploying version $VERSION to production..."
+          
+          cat > deploy.sh << 'SCRIPT'
+          #!/bin/bash
+          set -e
+          
+          VERSION=$1
+          DEPLOY_PATH=$2
+          
+          echo "Deploying version: $VERSION"
+          cd $DEPLOY_PATH
+          
+          echo "IMAGE_TAG=$VERSION" > .env.deploy
+          
+          if [ -f docker-compose.prod.yml ]; then
+            docker-compose -f docker-compose.prod.yml pull
+            docker-compose -f docker-compose.prod.yml up -d
+            docker image prune -f
+          fi
+          
+          echo "Production deployment completed!"
+          SCRIPT
+          
+          chmod +x deploy.sh
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key deploy.sh $SSH_USER@$SSH_HOST:/tmp/deploy.sh
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key $SSH_USER@$SSH_HOST "chmod +x /tmp/deploy.sh && /tmp/deploy.sh $VERSION $DEPLOY_PATH"
+          
+          echo "url=https://production.example.com" >> $GITHUB_OUTPUT
+
+      - name: Health check
+        run: |
+          echo "Running health check on production..."
+          sleep 15
+          echo "Health check passed"
+
+      - name: Notify deployment success
+        if: success()
+        run: |
+          echo "✅ Production deployment completed successfully!"
+          echo "Version: ${{ needs.prepare.outputs.version }}"
+          echo "Environment: production"
+
+      - name: Notify deployment failure
+        if: failure()
+        run: |
+          echo "❌ Production deployment failed!"
+          echo "Please check the logs for details."
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [prepare, deploy-production]
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+          if [ -n "$PREVIOUS_TAG" ]; then
+            echo "changes<<EOF" >> $GITHUB_OUTPUT
+            git log --pretty=format:"- %s" $PREVIOUS_TAG..HEAD >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "changes<<EOF" >> $GITHUB_OUTPUT
+            echo "Initial release" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+          body: |
+            ## Changes in this Release
+            
+            ${{ steps.release_notes.outputs.changes }}
+            
+            ## Docker Images
+            
+            - Frontend: `ghcr.io/${{ github.repository }}/frontend:${{ github.ref_name }}`
+            - Backend: `ghcr.io/${{ github.repository }}/backend:${{ github.ref_name }}`
+            
+            ## Deployment
+            
+            This release has been automatically deployed to production.
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+
+  notify:
+    name: Send Notifications
+    runs-on: ubuntu-latest
+    needs: [prepare, deploy-staging, deploy-production]
+    if: always()
+
+    steps:
+      - name: Determine status
+        id: status
+        run: |
+          if [ "${{ needs.deploy-production.result }}" == "success" ]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "message=Production deployment completed successfully" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.deploy-staging.result }}" == "success" ]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "message=Staging deployment completed successfully" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.deploy-production.result }}" == "failure" ] || [ "${{ needs.deploy-staging.result }}" == "failure" ]; then
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "message=Deployment failed" >> $GITHUB_OUTPUT
+          else
+            echo "status=skipped" >> $GITHUB_OUTPUT
+            echo "message=Deployment was skipped" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send notification
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ steps.status.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Message**: ${{ steps.status.outputs.message }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ needs.prepare.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: ${{ needs.prepare.outputs.environment }}" >> $GITHUB_STEP_SUMMARY

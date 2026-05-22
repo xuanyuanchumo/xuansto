@@ -1,0 +1,123 @@
+apiVersion: sdd/v1
+kind: EntitySpec
+metadata:
+  id: USER-001
+  name: User
+  version: 1.0.0
+  namespace: auth
+  description: 用户实体定义
+
+spec:
+  description: 系统用户实体，包含用户基本信息和认证信息
+  
+  attributes:
+    - name: id
+      type: bigint
+      required: true
+      unique: true
+      description: 用户唯一标识符
+      
+    - name: username
+      type: string
+      required: true
+      unique: true
+      description: 用户名
+      constraints:
+        minLength: 3
+        maxLength: 50
+        pattern: "^[a-zA-Z0-9_]+$"
+        
+    - name: email
+      type: string
+      required: true
+      unique: true
+      description: 用户邮箱
+      constraints:
+        format: email
+        
+    - name: password
+      type: string
+      required: true
+      description: 用户密码（加密存储）
+      constraints:
+        minLength: 8
+        maxLength: 128
+        
+    - name: age
+      type: integer
+      required: false
+      description: 用户年龄
+      constraints:
+        minimum: 0
+        maximum: 150
+        
+    - name: status
+      type: enum
+      required: true
+      description: 用户状态
+      enumValues:
+        - active
+        - inactive
+        - suspended
+        - deleted
+      default: active
+      
+    - name: createdAt
+      type: datetime
+      required: true
+      description: 创建时间
+      
+    - name: updatedAt
+      type: datetime
+      required: false
+      description: 更新时间
+
+  constraints:
+    - name: unique_username_email
+      type: validation
+      description: 用户名和邮箱必须唯一
+      condition: "username != email"
+      
+    - name: password_complexity
+      type: validation
+      description: 密码复杂度要求
+      condition: "password.length >= 8 and contains(password, digit) and contains(password, letter)"
+
+  conditionalRules:
+    - id: CR-001
+      name: age_verification
+      condition: "age >= 18"
+      then:
+        action: "allow_registration"
+        message: "用户已成年，允许注册"
+      else:
+        action: "require_parent_consent"
+        message: "用户未成年，需要监护人同意"
+      description: 年龄验证规则
+      priority: 1
+      
+    - id: CR-002
+      name: account_status_check
+      condition: "status == 'active'"
+      then:
+        action: "allow_login"
+        message: "账户状态正常，允许登录"
+      else:
+        action: "deny_login"
+        message: "账户状态异常，拒绝登录"
+      description: 账户状态检查规则
+      priority: 2
+      dependencies:
+        - user_repository
+        - auth_service
+
+  relationships:
+    - name: roles
+      target: Role
+      type: many_to_many
+      description: 用户角色关系
+      
+    - name: profile
+      target: UserProfile
+      type: one_to_one
+      description: 用户档案关系

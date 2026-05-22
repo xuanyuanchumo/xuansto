@@ -1,0 +1,335 @@
+# Universal DevOps v5.0 - 质量门禁配置
+# =====================================
+
+# 质量门禁阶段定义
+gates:
+  pre_commit:
+    name: "提交前检查"
+    enabled: true
+    checks:
+      - name: "lint_check"
+        description: "代码风格检查"
+        required: true
+        tools: ["eslint", "pylint", "golangci-lint"]
+        
+      - name: "unit_test_fast"
+        description: "快速单元测试"
+        required: true
+        timeout: 120
+        min_pass_rate: 100
+        
+      - name: "security_scan_quick"
+        description: "快速安全扫描"
+        required: false
+        tools: ["bandit", "njsscan"]
+
+  pre_merge:
+    name: "合并前检查"
+    enabled: true
+    checks:
+      - name: "full_unit_test"
+        description: "完整单元测试"
+        required: true
+        min_pass_rate: 100
+        
+      - name: "integration_test"
+        description: "集成测试"
+        required: true
+        min_pass_rate: 100
+        
+      - name: "code_coverage_check"
+        description: "代码覆盖率检查"
+        required: true
+        thresholds:
+          line_coverage: 80
+          branch_coverage: 70
+          
+      - name: "documentation_update_check"
+        description: "文档更新检查"
+        required: false
+
+  pre_release:
+    name: "发布前检查"
+    enabled: true
+    checks:
+      - name: "e2e_test"
+        description: "端到端测试"
+        required: true
+        min_pass_rate: 100
+        
+      - name: "performance_test"
+        description: "性能测试"
+        required: true
+        thresholds:
+          p99_latency_ms: 200
+          cpu_usage_percent: 80
+          memory_usage_percent: 85
+          
+      - name: "security_audit_full"
+        description: "完整安全审计"
+        required: true
+        tools: ["snyk", "trivy", "owasp-zap"]
+        max_critical_vulns: 0
+        max_high_vulns: 5
+        
+      - name: "compliance_check"
+        description: "合规性检查"
+        required: true
+        
+      - name: "regression_test_full"
+        description: "全量回归测试"
+        required: true
+        min_pass_rate: 100
+
+  post_release:
+    name: "发布后监控"
+    enabled: true
+    checks:
+      - name: "production_monitoring"
+        description: "生产环境监控"
+        required: true
+        duration_hours: 24
+        
+      - name: "error_tracking"
+        description: "错误追踪"
+        required: true
+        error_rate_threshold: 0.01
+        
+      - name: "user_feedback_collection"
+        description: "用户反馈收集"
+        required: false
+
+# 六维质量指标配置
+quality_dimensions:
+  code_quality:
+    name: "代码质量"
+    metrics:
+      complexity:
+        name: "圈复杂度"
+        threshold: "<10"
+        weight: 0.25
+      duplication:
+        name: "代码重复率"
+        threshold: "<3%"
+        weight: 0.25
+      maintainability:
+        name: "可维护性指数"
+        threshold: ">65"
+        weight: 0.25
+      technical_debt:
+        name: "技术债务"
+        threshold: "<5min/line"
+        weight: 0.25
+
+  testing_quality:
+    name: "测试质量"
+    metrics:
+      coverage:
+        name: "行覆盖率"
+        threshold: ">80%"
+        weight: 0.3
+      pass_rate:
+        name: "通过率"
+        threshold: "100%"
+        weight: 0.3
+      flaky_tests:
+        name: "不稳定测试"
+        threshold: "<2"
+        weight: 0.2
+      test_efficiency:
+        name: "测试效率"
+        threshold: ">90%"
+        weight: 0.2
+
+  documentation_quality:
+    name: "文档质量"
+    metrics:
+      completeness:
+        name: "完整性"
+        threshold: ">90%"
+        weight: 0.3
+      accuracy:
+        name: "准确性"
+        threshold: ">95%"
+        weight: 0.3
+      timeliness:
+        name: "时效性"
+        threshold: "<7days"
+        weight: 0.2
+      accessibility:
+        name: "可访问性"
+        threshold: "100%"
+        weight: 0.2
+
+  performance_quality:
+    name: "性能质量"
+    metrics:
+      response_time:
+        name: "响应时间(P99)"
+        threshold: "<200ms"
+        weight: 0.3
+      throughput:
+        name: "吞吐量"
+        threshold: ">1000req/s"
+        weight: 0.25
+      resource_usage:
+        name: "资源使用率"
+        threshold: "<80%"
+        weight: 0.25
+      scalability:
+        name: "可扩展性"
+        threshold: "线性"
+        weight: 0.2
+
+  security_quality:
+    name: "安全质量"
+    metrics:
+      vulnerabilities:
+        name: "漏洞数量"
+        critical: 0
+        high: "<5"
+        medium: "<20"
+        weight: 0.35
+      dependencies:
+        name: "依赖安全"
+        outdated: "<10%"
+        known_vulns: 0
+        weight: 0.35
+      secrets:
+        name: "密钥泄露"
+        threshold: 0
+        weight: 0.3
+
+  compliance_quality:
+    name: "合规质量"
+    metrics:
+      license_compliance:
+        name: "许可证合规"
+        threshold: "100%"
+        weight: 0.3
+      api_contract:
+        name: "API契约合规"
+        threshold: "100%"
+        weight: 0.3
+      coding_standards:
+        name: "编码规范符合度"
+        threshold: ">95%"
+        weight: 0.2
+      process_adherence:
+        name: "流程遵循度"
+        threshold: ">90%"
+        weight: 0.2
+
+# 告警规则
+alerts:
+  channels:
+    - type: "console"
+      enabled: true
+    - type: "file"
+      path: "logs/alerts.log"
+    - type: "webhook"
+      url: ""  # 配置Webhook URL
+      
+  severity_levels:
+    - critical
+    - high
+    - medium
+    - low
+    - info
+    
+  escalation:
+    critical:
+      notify_immediately: true
+      auto_block_merge: true
+    high:
+      notify_within_minutes: 15
+      require_comment: true
+
+# 自主干预门禁规则（v5.0新增）
+autonomous_gates:
+  pre_autonomous_action:
+    name: "自主操作前置检查"
+    enabled: true
+    checks:
+      - name: "risk_assessment"
+        description: "操作风险评估"
+        required: true
+        max_allowed_risk_level: "high"  # high以上需人工审批
+        
+      - name: "backup_checkpoint"
+        description: "备份检查点创建"
+        required: true
+        backup_methods: ["git_stash", "file_copy"]
+        
+      - name: "scope_validation"
+        description: "操作范围验证"
+        required: true
+        max_files: 20
+        max_lines_changed: 500
+        
+      - name: "destructive_operation_check"
+        description: "破坏性操作检测"
+        required: true
+        blocked_patterns:
+          - "rm -rf"
+          - "DROP TABLE"
+          - "DROP DATABASE"
+          - "DELETE WHERE"  # 无WHERE条件的DELETE
+          - "TRUNCATE"
+          
+  during_autonomous_action:
+    name: "自主操作执行中监控"
+    enabled: true
+    checks:
+      - name: "operation_progress_monitor"
+        description: "操作进度监控"
+        timeout_minutes: 30
+        progress_report_interval_seconds: 60
+        
+      - name: "intermediate_result_validation"
+        description: "中间结果验证"
+        required: true
+        validation_points: ["after_read", "before_write", "after_modify"]
+        
+      - name: "user_interruption_handler"
+        description: "用户中断处理"
+        required: true
+        interrupt_signals: ["stop", "cancel", "中止", "Ctrl+C"]
+        
+  post_autonomous_action:
+    name: "自主操作后置检查"
+    enabled: true
+    checks:
+      - name: "result_verification"
+        description: "结果验证"
+        required: true
+        verification_methods: ["diff_review", "test_re_run", "lint_check"]
+        
+      - name: "audit_log_entry"
+        description: "审计日志记录"
+        required: true
+        log_fields: ["timestamp", "action", "files_affected", "risk_level", "decision_rationale", "outcome"]
+        
+      - name: "rollback_availability_check"
+        description: "回滚可用性确认"
+        required: true
+        rollback_method: "git_checkout"
+        
+  autonomous_mode_transition:
+    name: "自主模式切换门禁"
+    enabled: true
+    rules:
+      - from: "automated"
+        to: "autonomous"
+        condition: "creativity_score > 0.6 OR uncertainty_score > 0.5"
+        requires_confirmation: true
+        
+      - from: "autonomous"
+        to: "automated"
+        condition: "task_completed OR user_request"
+        requires_confirmation: false
+        
+      - from: "hybrid"
+        to: "full_autonomous"
+        condition: "trust_score > 0.8 AND project_age > 7days"
+        requires_confirmation: true

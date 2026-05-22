@@ -1,0 +1,6 @@
+# xuansto-mcp-server 配置文件
+# 留空使用默认值，填写覆盖默认配置
+
+# gate_scripts: {}
+# gates_by_phase: {}
+# hook_scripts: {}

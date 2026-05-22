@@ -1,0 +1,16 @@
+{
+  "agent-2c932163": {
+    "agent_id": "agent-2c932163",
+    "agent_type": "Backend",
+    "capabilities": [
+      "python"
+    ],
+    "status": "idle",
+    "task": "",
+    "created_at": 1779378152.874071,
+    "history": [],
+    "last_active_at": "2026-05-21T15:42:32.874070+00:00",
+    "task_count": 0,
+    "total_duration_ms": 0
+  }
+}

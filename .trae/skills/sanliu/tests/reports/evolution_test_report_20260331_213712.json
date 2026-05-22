@@ -1,0 +1,231 @@
+{
+  "report_title": "三省六部技能永久自演化增强功能测试报告",
+  "generated_at": "2026-03-31T21:37:12.636754",
+  "summary": {
+    "total_tests": 17,
+    "passed": 9,
+    "failed": 8,
+    "success_rate": 52.94
+  },
+  "test_results": [
+    {
+      "test_name": "skill_evolution_manager_init",
+      "passed": true,
+      "message": "SkillEvolutionManager 初始化成功",
+      "details": {},
+      "timestamp": "2026-03-31T21:37:12.504989"
+    },
+    {
+      "test_name": "skill_content_change_detector",
+      "passed": true,
+      "message": "检测到 1 个文件变化",
+      "details": {},
+      "timestamp": "2026-03-31T21:37:12.560916"
+    },
+    {
+      "test_name": "skill_evolution_knowledge",
+      "passed": true,
+      "message": "知识积累成功，总事件数: 1",
+      "details": {},
+      "timestamp": "2026-03-31T21:37:12.564127"
+    },
+    {
+      "test_name": "evolution_trigger_mechanism",
+      "passed": true,
+      "message": "触发条件数量: 4",
+      "details": {},
+      "timestamp": "2026-03-31T21:37:12.565673"
+    },
+    {
+      "test_name": "enhanced_path_config_manager_init",
+      "passed": false,
+      "message": "初始化失败: cannot import name 'reset_instance' from 'enhanced_path_config_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\enhanced_path_config_manager.py)",
+      "details": {},
+      "timestamp": "2026-03-31T21:37:12.590783"
+    },
+    {
+      "test_name": "path_resolution",
+      "passed": false,
+      "message": "路径解析失败: cannot import name 'reset_instance' from 'enhanced_path_config_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\enhanced_path_config_manager.py)",
+      "details": {},
+      "timestamp": "2026-03-31T21:37:12.592409"
+    },
+    {
+      "test_name": "env_override",
+      "passed": false,
+      "message": "环境变量覆盖失败: cannot import name 'reset_instance' from 'enhanced_path_config_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\enhanced_path_config_manager.py)",
+      "details": {},
+      "timestamp": "2026-03-31T21:37:12.593057"
+    },
+    {
+      "test_name": "path_validation",
+      "passed": false,
+      "message": "路径验证失败: cannot import name 'reset_instance' from 'enhanced_path_config_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\enhanced_path_config_manager.py)",
+      "details": {},
+      "timestamp": "2026-03-31T21:37:12.593928"
+    },
+    {
+      "test_name": "subskill_manager_discovery",
+      "passed": false,
+      "message": "子技能发现失败: cannot import name 'reset_instance' from 'subskill_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\core\\subskill_manager.py)",
+      "details": {},
+      "timestamp": "2026-03-31T21:37:12.607147"
+    },
+    {
+      "test_name": "subskill_parser",
+      "passed": true,
+      "message": "解析成功: parser_test, 版本: 2.0.0",
+      "details": {},
+      "timestamp": "2026-03-31T21:37:12.609056"
+    },
+    {
+      "test_name": "script_registry",
+      "passed": true,
+      "message": "脚本注册成功: test_script",
+      "details": {},
+      "timestamp": "2026-03-31T21:37:12.619219"
+    },
+    {
+      "test_name": "cross_type_call",
+      "passed": true,
+      "message": "跨类型调用成功: 63ff8e75",
+      "details": {},
+      "timestamp": "2026-03-31T21:37:12.624470"
+    },
+    {
+      "test_name": "call_chain_trace",
+      "passed": true,
+      "message": "调用链追踪成功，共 3 个调用",
+      "details": {},
+      "timestamp": "2026-03-31T21:37:12.625015"
+    },
+    {
+      "test_name": "backend_api_response",
+      "passed": false,
+      "message": "API 响应测试失败: No module named 'skill_evolution_api'",
+      "details": {},
+      "timestamp": "2026-03-31T21:37:12.629000"
+    },
+    {
+      "test_name": "websocket_manager",
+      "passed": false,
+      "message": "WebSocket 管理器测试失败: No module named 'skill_evolution_api'",
+      "details": {},
+      "timestamp": "2026-03-31T21:37:12.630870"
+    },
+    {
+      "test_name": "evolution_history",
+      "passed": false,
+      "message": "演化历史测试失败: No module named 'skill_evolution_api'",
+      "details": {},
+      "timestamp": "2026-03-31T21:37:12.632555"
+    },
+    {
+      "test_name": "frontend_component_structure",
+      "passed": true,
+      "message": "前端组件结构正常，找到 2 个组件",
+      "details": {},
+      "timestamp": "2026-03-31T21:37:12.633621"
+    }
+  ],
+  "failed_tests": [
+    {
+      "test_name": "enhanced_path_config_manager_init",
+      "passed": false,
+      "message": "初始化失败: cannot import name 'reset_instance' from 'enhanced_path_config_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\enhanced_path_config_manager.py)",
+      "details": {},
+      "timestamp": "2026-03-31T21:37:12.590783"
+    },
+    {
+      "test_name": "path_resolution",
+      "passed": false,
+      "message": "路径解析失败: cannot import name 'reset_instance' from 'enhanced_path_config_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\enhanced_path_config_manager.py)",
+      "details": {},
+      "timestamp": "2026-03-31T21:37:12.592409"
+    },
+    {
+      "test_name": "env_override",
+      "passed": false,
+      "message": "环境变量覆盖失败: cannot import name 'reset_instance' from 'enhanced_path_config_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\enhanced_path_config_manager.py)",
+      "details": {},
+      "timestamp": "2026-03-31T21:37:12.593057"
+    },
+    {
+      "test_name": "path_validation",
+      "passed": false,
+      "message": "路径验证失败: cannot import name 'reset_instance' from 'enhanced_path_config_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\enhanced_path_config_manager.py)",
+      "details": {},
+      "timestamp": "2026-03-31T21:37:12.593928"
+    },
+    {
+      "test_name": "subskill_manager_discovery",
+      "passed": false,
+      "message": "子技能发现失败: cannot import name 'reset_instance' from 'subskill_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\core\\subskill_manager.py)",
+      "details": {},
+      "timestamp": "2026-03-31T21:37:12.607147"
+    },
+    {
+      "test_name": "backend_api_response",
+      "passed": false,
+      "message": "API 响应测试失败: No module named 'skill_evolution_api'",
+      "details": {},
+      "timestamp": "2026-03-31T21:37:12.629000"
+    },
+    {
+      "test_name": "websocket_manager",
+      "passed": false,
+      "message": "WebSocket 管理器测试失败: No module named 'skill_evolution_api'",
+      "details": {},
+      "timestamp": "2026-03-31T21:37:12.630870"
+    },
+    {
+      "test_name": "evolution_history",
+      "passed": false,
+      "message": "演化历史测试失败: No module named 'skill_evolution_api'",
+      "details": {},
+      "timestamp": "2026-03-31T21:37:12.632555"
+    }
+  ],
+  "recommendations": [
+    {
+      "test_name": "enhanced_path_config_manager_init",
+      "issue": "初始化失败: cannot import name 'reset_instance' from 'enhanced_path_config_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\enhanced_path_config_manager.py)",
+      "suggestion": "检查 enhanced_path_config_manager_init 相关模块的实现和依赖关系"
+    },
+    {
+      "test_name": "path_resolution",
+      "issue": "路径解析失败: cannot import name 'reset_instance' from 'enhanced_path_config_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\enhanced_path_config_manager.py)",
+      "suggestion": "检查 path_resolution 相关模块的实现和依赖关系"
+    },
+    {
+      "test_name": "env_override",
+      "issue": "环境变量覆盖失败: cannot import name 'reset_instance' from 'enhanced_path_config_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\enhanced_path_config_manager.py)",
+      "suggestion": "检查 env_override 相关模块的实现和依赖关系"
+    },
+    {
+      "test_name": "path_validation",
+      "issue": "路径验证失败: cannot import name 'reset_instance' from 'enhanced_path_config_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\enhanced_path_config_manager.py)",
+      "suggestion": "检查 path_validation 相关模块的实现和依赖关系"
+    },
+    {
+      "test_name": "subskill_manager_discovery",
+      "issue": "子技能发现失败: cannot import name 'reset_instance' from 'subskill_manager' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\core\\subskill_manager.py)",
+      "suggestion": "检查 subskill_manager_discovery 相关模块的实现和依赖关系"
+    },
+    {
+      "test_name": "backend_api_response",
+      "issue": "API 响应测试失败: No module named 'skill_evolution_api'",
+      "suggestion": "检查 backend_api_response 相关模块的实现和依赖关系"
+    },
+    {
+      "test_name": "websocket_manager",
+      "issue": "WebSocket 管理器测试失败: No module named 'skill_evolution_api'",
+      "suggestion": "检查 websocket_manager 相关模块的实现和依赖关系"
+    },
+    {
+      "test_name": "evolution_history",
+      "issue": "演化历史测试失败: No module named 'skill_evolution_api'",
+      "suggestion": "检查 evolution_history 相关模块的实现和依赖关系"
+    }
+  ]
+}

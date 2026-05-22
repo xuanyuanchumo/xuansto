@@ -1,0 +1,27 @@
+{
+  "version_id": "ver_sync-kb-001_1",
+  "knowledge_id": "sync-kb-001",
+  "version_number": 1,
+  "content_hash": "02e9f141ae2d438b2f98fd3883e8513d",
+  "changes": [
+    "初始版本"
+  ],
+  "created_at": "2026-04-01T17:28:42.491474",
+  "created_by": "system",
+  "metadata_snapshot": {
+    "knowledge_id": "sync-kb-001",
+    "title": "同步测试知识",
+    "category": "best_practice",
+    "tags": [
+      "sync",
+      "test"
+    ],
+    "created_at": "2026-04-01T17:28:42.490525",
+    "updated_at": "2026-04-01T17:28:42.490525",
+    "version": 1,
+    "author": "system",
+    "source_project": "default",
+    "checksum": "02e9f141ae2d438b2f98fd3883e8513d",
+    "custom_fields": {}
+  }
+}

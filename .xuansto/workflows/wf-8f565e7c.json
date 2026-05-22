@@ -1,0 +1,10 @@
+{
+  "workflow_id": "wf-8f565e7c",
+  "workflow": "sdd-tdd-full",
+  "project_path": ".",
+  "status": "aborted",
+  "current_phase": 0,
+  "started_at": "2026-05-20T14:10:27.535717",
+  "completed_phases": [],
+  "aborted_at": "2026-05-20T14:10:27.552757"
+}

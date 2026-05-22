@@ -1,0 +1,728 @@
+{
+  "start_time": "2026-03-31T19:42:34.599836",
+  "end_time": "2026-03-31T19:42:42.716749",
+  "total_tests": 63,
+  "passed": 22,
+  "failed": 41,
+  "skipped": 0,
+  "pass_rate": "34.9%",
+  "results": [
+    {
+      "test_name": "模块导入测试",
+      "module": "永久演化模式",
+      "passed": false,
+      "message": "模块导入失败: No module named 'skillscripts'",
+      "duration": 0.052816152572631836,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "配置测试",
+      "module": "永久演化模式",
+      "passed": false,
+      "message": "配置测试失败: No module named 'skillscripts'",
+      "duration": 0.004113197326660156,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "状态管理测试",
+      "module": "永久演化模式",
+      "passed": false,
+      "message": "状态测试失败: No module named 'skillscripts'",
+      "duration": 0.00407099723815918,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "控制器初始化测试",
+      "module": "永久演化模式",
+      "passed": false,
+      "message": "控制器初始化失败: No module named 'skillscripts'",
+      "duration": 0.0060901641845703125,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "心跳机制测试",
+      "module": "永久演化模式",
+      "passed": false,
+      "message": "心跳测试失败: No module named 'skillscripts'",
+      "duration": 0.004739999771118164,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "状态持久化测试",
+      "module": "永久演化模式",
+      "passed": false,
+      "message": "状态持久化测试失败: No module named 'skillscripts'",
+      "duration": 0.004481315612792969,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "优雅停止测试",
+      "module": "永久演化模式",
+      "passed": false,
+      "message": "优雅停止测试失败: No module named 'skillscripts'",
+      "duration": 0.007706880569458008,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "演化周期测试",
+      "module": "永久演化模式",
+      "passed": false,
+      "message": "演化周期测试失败: No module named 'skillscripts'",
+      "duration": 0.008826494216918945,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "恢复机制测试",
+      "module": "永久演化模式",
+      "passed": false,
+      "message": "恢复机制测试失败: No module named 'skillscripts'",
+      "duration": 0.007495880126953125,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "模块导入测试",
+      "module": "跨项目服务",
+      "passed": false,
+      "message": "模块导入失败: No module named 'skillscripts'",
+      "duration": 0.0054395198822021484,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "项目注册测试",
+      "module": "跨项目服务",
+      "passed": false,
+      "message": "项目注册测试失败: No module named 'skillscripts'",
+      "duration": 0.0042650699615478516,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "项目隔离测试",
+      "module": "跨项目服务",
+      "passed": false,
+      "message": "项目隔离测试失败: No module named 'skillscripts'",
+      "duration": 0.004425048828125,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "知识共享测试",
+      "module": "跨项目服务",
+      "passed": false,
+      "message": "知识共享测试失败: No module named 'skillscripts'",
+      "duration": 0.0047190189361572266,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "权限控制测试",
+      "module": "跨项目服务",
+      "passed": false,
+      "message": "权限控制测试失败: No module named 'skillscripts'",
+      "duration": 0.00501251220703125,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "知识同步测试",
+      "module": "跨项目服务",
+      "passed": false,
+      "message": "知识同步测试失败: No module named 'skillscripts'",
+      "duration": 0.004730701446533203,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "项目注销测试",
+      "module": "跨项目服务",
+      "passed": false,
+      "message": "项目注销测试失败: No module named 'skillscripts'",
+      "duration": 0.005404233932495117,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "跨项目搜索测试",
+      "module": "跨项目服务",
+      "passed": false,
+      "message": "跨项目搜索测试失败: No module named 'skillscripts'",
+      "duration": 0.006845712661743164,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "模块导入测试",
+      "module": "统一脚本接口",
+      "passed": false,
+      "message": "模块导入失败: No module named 'skillscripts'",
+      "duration": 0.00675654411315918,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "脚本发现测试",
+      "module": "统一脚本接口",
+      "passed": false,
+      "message": "脚本发现测试失败: No module named 'skillscripts'",
+      "duration": 0.006432771682739258,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "脚本元数据测试",
+      "module": "统一脚本接口",
+      "passed": false,
+      "message": "脚本元数据测试失败: No module named 'skillscripts'",
+      "duration": 0.007887125015258789,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "脚本注册表测试",
+      "module": "统一脚本接口",
+      "passed": false,
+      "message": "脚本注册表测试失败: No module named 'skillscripts'",
+      "duration": 0.008693695068359375,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "依赖解析测试",
+      "module": "统一脚本接口",
+      "passed": false,
+      "message": "依赖解析测试失败: No module named 'skillscripts'",
+      "duration": 0.009450435638427734,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "脚本执行测试",
+      "module": "统一脚本接口",
+      "passed": false,
+      "message": "脚本执行测试失败: No module named 'skillscripts'",
+      "duration": 0.005844593048095703,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "执行日志测试",
+      "module": "统一脚本接口",
+      "passed": false,
+      "message": "执行日志测试失败: No module named 'skillscripts'",
+      "duration": 0.0067293643951416016,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "脚本验证测试",
+      "module": "统一脚本接口",
+      "passed": false,
+      "message": "脚本验证测试失败: No module named 'skillscripts'",
+      "duration": 0.005321979522705078,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "脚本分类测试",
+      "module": "统一脚本接口",
+      "passed": false,
+      "message": "脚本分类测试失败: No module named 'skillscripts'",
+      "duration": 0.004899740219116211,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "脚本搜索测试",
+      "module": "统一脚本接口",
+      "passed": false,
+      "message": "脚本搜索测试失败: No module named 'skillscripts'",
+      "duration": 0.005416154861450195,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "模块导入测试",
+      "module": "文档自动生成",
+      "passed": false,
+      "message": "模块导入失败: cannot import name 'DocumentAutoGenerator' from 'utils.document_auto_generator' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\document_auto_generator.py)",
+      "duration": 0.436657190322876,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "报告配置测试",
+      "module": "文档自动生成",
+      "passed": false,
+      "message": "报告配置测试失败: cannot import name 'ReportConfig' from 'utils.document_auto_generator' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\document_auto_generator.py)",
+      "duration": 2.2411346435546875e-05,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "生成器初始化测试",
+      "module": "文档自动生成",
+      "passed": false,
+      "message": "生成器初始化失败: cannot import name 'DocumentAutoGenerator' from 'utils.document_auto_generator' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\document_auto_generator.py)",
+      "duration": 1.2636184692382812e-05,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "报告生成测试",
+      "module": "文档自动生成",
+      "passed": false,
+      "message": "报告生成测试失败: cannot import name 'DocumentAutoGenerator' from 'utils.document_auto_generator' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\document_auto_generator.py)",
+      "duration": 1.1920928955078125e-05,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "API文档生成测试",
+      "module": "文档自动生成",
+      "passed": false,
+      "message": "API文档生成测试失败: cannot import name 'DocumentAutoGenerator' from 'utils.document_auto_generator' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\document_auto_generator.py)",
+      "duration": 2.47955322265625e-05,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "变更日志生成测试",
+      "module": "文档自动生成",
+      "passed": false,
+      "message": "变更日志生成测试失败: cannot import name 'DocumentAutoGenerator' from 'utils.document_auto_generator' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\document_auto_generator.py)",
+      "duration": 2.1457672119140625e-05,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "Markdown格式化测试",
+      "module": "文档自动生成",
+      "passed": false,
+      "message": "Markdown格式化测试失败: cannot import name 'DocumentAutoGenerator' from 'utils.document_auto_generator' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\document_auto_generator.py)",
+      "duration": 1.71661376953125e-05,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "HTML格式化测试",
+      "module": "文档自动生成",
+      "passed": false,
+      "message": "HTML格式化测试失败: cannot import name 'DocumentAutoGenerator' from 'utils.document_auto_generator' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\document_auto_generator.py)",
+      "duration": 1.8358230590820312e-05,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "模板渲染测试",
+      "module": "文档自动生成",
+      "passed": false,
+      "message": "模板渲染测试失败: cannot import name 'DocumentAutoGenerator' from 'utils.document_auto_generator' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\document_auto_generator.py)",
+      "duration": 4.601478576660156e-05,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "文档导出测试",
+      "module": "文档自动生成",
+      "passed": false,
+      "message": "文档导出测试失败: cannot import name 'DocumentAutoGenerator' from 'utils.document_auto_generator' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\utils\\document_auto_generator.py)",
+      "duration": 1.621246337890625e-05,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "后端模块导入测试",
+      "module": "监控仪表板",
+      "passed": true,
+      "message": "后端模块导入成功",
+      "duration": 6.246018409729004,
+      "details": {
+        "router_type": "APIRouter"
+      },
+      "error": null
+    },
+    {
+      "test_name": "API端点测试",
+      "module": "监控仪表板",
+      "passed": true,
+      "message": "API端点检查成功",
+      "duration": 2.3365020751953125e-05,
+      "details": {
+        "routes_count": 8,
+        "routes": [
+          {
+            "path": "/status",
+            "methods": [
+              "GET"
+            ]
+          },
+          {
+            "path": "/history",
+            "methods": [
+              "GET"
+            ]
+          },
+          {
+            "path": "/trends",
+            "methods": [
+              "GET"
+            ]
+          },
+          {
+            "path": "/metrics/summary",
+            "methods": [
+              "GET"
+            ]
+          },
+          {
+            "path": "/trigger",
+            "methods": [
+              "POST"
+            ]
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "test_name": "WebSocket端点测试",
+      "module": "监控仪表板",
+      "passed": true,
+      "message": "WebSocket端点测试成功",
+      "duration": 0.004918336868286133,
+      "details": {
+        "ws_routes": [
+          "/status",
+          "/notifications/{user_id}"
+        ],
+        "has_manager": true,
+        "manager_methods": [
+          "connect",
+          "disconnect",
+          "broadcast"
+        ]
+      },
+      "error": null
+    },
+    {
+      "test_name": "连接管理器测试",
+      "module": "监控仪表板",
+      "passed": false,
+      "message": "连接管理器测试失败: cannot import name 'ConnectionState' from 'app.api.ws' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\backend\\app\\api\\ws.py)",
+      "duration": 5.269050598144531e-05,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "通知类型测试",
+      "module": "监控仪表板",
+      "passed": true,
+      "message": "通知类型测试成功",
+      "duration": 5.1975250244140625e-05,
+      "details": {
+        "notification_types": [
+          "status_change",
+          "task_assigned",
+          "milestone_completed"
+        ],
+        "entity_types": [
+          "project",
+          "task",
+          "milestone"
+        ]
+      },
+      "error": null
+    },
+    {
+      "test_name": "心跳机制测试",
+      "module": "监控仪表板",
+      "passed": true,
+      "message": "心跳机制测试成功",
+      "duration": 2.2411346435546875e-05,
+      "details": {
+        "heartbeat_interval": 30,
+        "heartbeat_timeout": 60,
+        "has_heartbeat_monitor": true,
+        "has_update_heartbeat": true
+      },
+      "error": null
+    },
+    {
+      "test_name": "前端组件测试",
+      "module": "监控仪表板",
+      "passed": true,
+      "message": "前端组件存在",
+      "duration": 0.001107931137084961,
+      "details": {
+        "file_exists": true,
+        "has_template": true,
+        "has_script": true,
+        "has_style": true
+      },
+      "error": null
+    },
+    {
+      "test_name": "前端组合式函数测试",
+      "module": "监控仪表板",
+      "passed": true,
+      "message": "前端组合式函数存在",
+      "duration": 0.0010292530059814453,
+      "details": {
+        "file_exists": true,
+        "has_connect": true,
+        "has_disconnect": true,
+        "has_state": true
+      },
+      "error": null
+    },
+    {
+      "test_name": "前端API模块测试",
+      "module": "监控仪表板",
+      "passed": true,
+      "message": "前端API模块存在",
+      "duration": 0.0011916160583496094,
+      "details": {
+        "file_exists": true,
+        "has_get": true,
+        "has_post": true
+      },
+      "error": null
+    },
+    {
+      "test_name": "演化状态模型测试",
+      "module": "监控仪表板",
+      "passed": false,
+      "message": "演化状态模型测试失败: EnumType.__call__() got an unexpected keyword argument 'status'",
+      "duration": 2.0742416381835938e-05,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "趋势数据模型测试",
+      "module": "监控仪表板",
+      "passed": false,
+      "message": "趋势数据模型测试失败: cannot import name 'TrendData' from 'app.api.evolution_monitor' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\backend\\app\\api\\evolution_monitor.py)",
+      "duration": 2.7894973754882812e-05,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "告警模型测试",
+      "module": "监控仪表板",
+      "passed": false,
+      "message": "告警模型测试失败: cannot import name 'Alert' from 'app.api.evolution_monitor' (D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\backend\\app\\api\\evolution_monitor.py)",
+      "duration": 1.8596649169921875e-05,
+      "details": {},
+      "error": null
+    },
+    {
+      "test_name": "模块导入测试",
+      "module": "知识库功能",
+      "passed": true,
+      "message": "模块导入成功",
+      "duration": 0.15593218803405762,
+      "details": {
+        "classes": [
+          "KnowledgeBase",
+          "KnowledgeItem",
+          "KnowledgeType",
+          "KnowledgeStatus",
+          "StorageType",
+          "SearchMode"
+        ]
+      },
+      "error": null
+    },
+    {
+      "test_name": "知识项创建测试",
+      "module": "知识库功能",
+      "passed": true,
+      "message": "知识项创建测试成功",
+      "duration": 0.0001800060272216797,
+      "details": {
+        "knowledge_id": "KB-TEST-001",
+        "type": "fix_pattern",
+        "tags_count": 3,
+        "serialization": "成功"
+      },
+      "error": null
+    },
+    {
+      "test_name": "知识库初始化测试",
+      "module": "知识库功能",
+      "passed": true,
+      "message": "知识库初始化测试成功",
+      "duration": 0.05990433692932129,
+      "details": {
+        "storage_type": "sqlite",
+        "initialized": true
+      },
+      "error": null
+    },
+    {
+      "test_name": "知识存储测试",
+      "module": "知识库功能",
+      "passed": true,
+      "message": "知识存储测试成功",
+      "duration": 0.052475690841674805,
+      "details": {
+        "added_knowledge_id": "KB-BES-5198ce72",
+        "retrieved_title": "代码审查最佳实践"
+      },
+      "error": null
+    },
+    {
+      "test_name": "知识检索测试",
+      "module": "知识库功能",
+      "passed": true,
+      "message": "知识检索测试成功",
+      "duration": 0.11250019073486328,
+      "details": {
+        "search_query": "空指针",
+        "results_count": 2,
+        "search_mode": "keyword"
+      },
+      "error": null
+    },
+    {
+      "test_name": "知识更新测试",
+      "module": "知识库功能",
+      "passed": true,
+      "message": "知识更新测试成功",
+      "duration": 0.06909036636352539,
+      "details": {
+        "knowledge_id": "KB-DIA-7412c11d",
+        "updated_content": "分析性能瓶颈，使用性能分析工具",
+        "confidence": 0.9
+      },
+      "error": null
+    },
+    {
+      "test_name": "知识删除测试",
+      "module": "知识库功能",
+      "passed": true,
+      "message": "知识删除测试成功",
+      "duration": 0.06097602844238281,
+      "details": {
+        "deleted_knowledge_id": "KB-COD-3c9b5a1f",
+        "deletion_result": true
+      },
+      "error": null
+    },
+    {
+      "test_name": "知识导入导出测试",
+      "module": "知识库功能",
+      "passed": true,
+      "message": "知识导入导出测试成功",
+      "duration": 0.12189126014709473,
+      "details": {
+        "export_file_exists": true,
+        "import_stats": {
+          "total": 1,
+          "imported": 1,
+          "skipped": 0,
+          "updated": 0,
+          "errors": []
+        }
+      },
+      "error": null
+    },
+    {
+      "test_name": "知识统计测试",
+      "module": "知识库功能",
+      "passed": true,
+      "message": "知识统计测试成功",
+      "duration": 0.10473775863647461,
+      "details": {
+        "total_knowledge": 5,
+        "by_type": {
+          "fix_pattern": 3,
+          "best_practice": 2
+        }
+      },
+      "error": null
+    },
+    {
+      "test_name": "跨项目知识管理器测试",
+      "module": "知识库功能",
+      "passed": true,
+      "message": "跨项目知识管理器测试成功",
+      "duration": 0.043961286544799805,
+      "details": {
+        "project_id": "test-proj-001",
+        "has_knowledge_base": true
+      },
+      "error": null
+    },
+    {
+      "test_name": "知识索引管理器测试",
+      "module": "知识库功能",
+      "passed": true,
+      "message": "知识索引管理器测试成功",
+      "duration": 0.08149409294128418,
+      "details": {
+        "index_stats": {
+          "fulltext_words": 12,
+          "total_indexed_items": 3,
+          "tag_count": 4,
+          "semantic_indexed": 0,
+          "project_count": 0
+        }
+      },
+      "error": null
+    },
+    {
+      "test_name": "知识更新管理器测试",
+      "module": "知识库功能",
+      "passed": true,
+      "message": "知识更新管理器测试成功",
+      "duration": 0.07579517364501953,
+      "details": {
+        "batch_id": "BATCH-20260331194242-c4ca42",
+        "apply_result": {
+          "success": true,
+          "applied": [
+            "update-mgr-test"
+          ],
+          "failed": [],
+          "rolled_back": false
+        }
+      },
+      "error": null
+    },
+    {
+      "test_name": "知识学习测试",
+      "module": "知识库功能",
+      "passed": true,
+      "message": "知识学习测试成功",
+      "duration": 0.0744788646697998,
+      "details": {
+        "usage_count": 3,
+        "success_rate": 0.6666666666666666
+      },
+      "error": null
+    },
+    {
+      "test_name": "知识版本控制测试",
+      "module": "知识库功能",
+      "passed": true,
+      "message": "知识版本控制测试成功",
+      "duration": 0.1152348518371582,
+      "details": {
+        "version_count": 3,
+        "has_versions": true
+      },
+      "error": null
+    }
+  ]
+}

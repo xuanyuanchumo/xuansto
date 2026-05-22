@@ -1,0 +1,69 @@
+{
+  "report_id": "e2e_report_1775052983",
+  "generated_at": "2026-04-01T22:16:23.242831",
+  "summary": {
+    "total_suites": 4,
+    "total_tests": 45,
+    "total_passed": 35,
+    "total_failed": 10,
+    "overall_success_rate": 77.77777777777779,
+    "total_duration_seconds": 111.37
+  },
+  "suites": [
+    {
+      "suite_name": "技能自演化流程测试",
+      "passed": 12,
+      "failed": 0,
+      "total": 12,
+      "success_rate": 100.0,
+      "duration_seconds": 41.11,
+      "status": "success"
+    },
+    {
+      "suite_name": "技能内容自动修复流程测试",
+      "passed": 10,
+      "failed": 0,
+      "total": 10,
+      "success_rate": 100.0,
+      "duration_seconds": 17.08,
+      "status": "success"
+    },
+    {
+      "suite_name": "技能演化知识积累流程测试",
+      "passed": 4,
+      "failed": 7,
+      "total": 11,
+      "success_rate": 36.36363636363637,
+      "duration_seconds": 14.08,
+      "status": "partial_failure"
+    },
+    {
+      "suite_name": "前后端实时监控流程测试",
+      "passed": 9,
+      "failed": 3,
+      "total": 12,
+      "success_rate": 75.0,
+      "duration_seconds": 39.1,
+      "status": "partial_failure"
+    }
+  ],
+  "issues_found": [
+    {
+      "suite": "技能演化知识积累流程测试",
+      "type": "test_failures",
+      "severity": "medium",
+      "description": "有 7 个测试失败"
+    },
+    {
+      "suite": "前后端实时监控流程测试",
+      "type": "test_failures",
+      "severity": "medium",
+      "description": "有 3 个测试失败"
+    }
+  ],
+  "recommendations": [
+    "建议检查失败的测试用例，修复相关问题",
+    "建议重点关注 技能演化知识积累流程测试 测试套件，成功率较低",
+    "建议重点关注 前后端实时监控流程测试 测试套件，成功率较低"
+  ]
+}

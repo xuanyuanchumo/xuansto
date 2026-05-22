@@ -1,0 +1,325 @@
+{
+  "test_summary": {
+    "test_name": "三省六部技能持续演化系统集成测试",
+    "start_time": "2026-03-31T17:35:27.658429",
+    "end_time": "2026-03-31T17:35:28.974411",
+    "duration_seconds": 1.315982,
+    "total_tests": 30,
+    "passed_tests": 25,
+    "failed_tests": 5,
+    "overall_pass_rate": 83.33,
+    "status": "通过"
+  },
+  "module_reports": [
+    {
+      "module_name": "演化控制器 (continuous_evolution_controller)",
+      "total_tests": 5,
+      "passed_tests": 5,
+      "failed_tests": 0,
+      "pass_rate": 100.0,
+      "module_status": "正常",
+      "results": [
+        {
+          "module_name": "演化控制器 (continuous_evolution_controller)",
+          "test_type": "模块导入",
+          "passed": true,
+          "message": "模块导入成功",
+          "details": "所有核心类和枚举导入成功",
+          "duration_ms": 135.62870025634766
+        },
+        {
+          "module_name": "演化控制器 (continuous_evolution_controller)",
+          "test_type": "类实例化",
+          "passed": true,
+          "message": "核心类实例化成功",
+          "details": "EvolutionController, EvolutionStateMachine, TaskQueue, EvolutionScheduler 实例化成功",
+          "duration_ms": 0.308990478515625
+        },
+        {
+          "module_name": "演化控制器 (continuous_evolution_controller)",
+          "test_type": "状态机测试",
+          "passed": true,
+          "message": "状态机转换测试通过",
+          "details": "IDLE -> SCANNING 转换成功",
+          "duration_ms": 0.0095367431640625
+        },
+        {
+          "module_name": "演化控制器 (continuous_evolution_controller)",
+          "test_type": "任务队列测试",
+          "passed": true,
+          "message": "任务队列测试通过",
+          "details": "push/pop 操作正常",
+          "duration_ms": 0.014066696166992188
+        },
+        {
+          "module_name": "演化控制器 (continuous_evolution_controller)",
+          "test_type": "方法调用测试",
+          "passed": true,
+          "message": "控制器方法测试通过",
+          "details": "get_status() 返回正确: {'running': False, 'current_state': 'IDLE', 'current_cycle': None, 'queue_size': 0, 'total_cycles': 0, 'total_reports': 0, 'next_scheduled_time': None}",
+          "duration_ms": 0.3044605255126953
+        }
+      ]
+    },
+    {
+      "module_name": "问题感知系统 (issue_awareness_engine)",
+      "total_tests": 4,
+      "passed_tests": 4,
+      "failed_tests": 0,
+      "pass_rate": 100.0,
+      "module_status": "正常",
+      "results": [
+        {
+          "module_name": "问题感知系统 (issue_awareness_engine)",
+          "test_type": "模块导入",
+          "passed": true,
+          "message": "模块导入成功",
+          "details": "所有核心类和枚举导入成功",
+          "duration_ms": 5.647420883178711
+        },
+        {
+          "module_name": "问题感知系统 (issue_awareness_engine)",
+          "test_type": "类实例化",
+          "passed": true,
+          "message": "核心类实例化成功",
+          "details": "IssueAwarenessEngine 和所有检测器实例化成功",
+          "duration_ms": 0.7860660552978516
+        },
+        {
+          "module_name": "问题感知系统 (issue_awareness_engine)",
+          "test_type": "数据类测试",
+          "passed": true,
+          "message": "数据类测试通过",
+          "details": "CodeLocation 和 DetectedIssue 序列化正常",
+          "duration_ms": 0.022172927856445312
+        },
+        {
+          "module_name": "问题感知系统 (issue_awareness_engine)",
+          "test_type": "检测器测试",
+          "passed": true,
+          "message": "检测器方法测试通过",
+          "details": "检测到 1 个问题",
+          "duration_ms": 6.256818771362305
+        }
+      ]
+    },
+    {
+      "module_name": "自动修复引擎 (auto_fixer)",
+      "total_tests": 4,
+      "passed_tests": 4,
+      "failed_tests": 0,
+      "pass_rate": 100.0,
+      "module_status": "正常",
+      "results": [
+        {
+          "module_name": "自动修复引擎 (auto_fixer)",
+          "test_type": "模块导入",
+          "passed": true,
+          "message": "模块导入成功",
+          "details": "所有核心类和枚举导入成功",
+          "duration_ms": 79.16855812072754
+        },
+        {
+          "module_name": "自动修复引擎 (auto_fixer)",
+          "test_type": "类实例化",
+          "passed": true,
+          "message": "核心类实例化成功",
+          "details": "AutoFixer 和 SyntaxErrorFixer 实例化成功",
+          "duration_ms": 0.05412101745605469
+        },
+        {
+          "module_name": "自动修复引擎 (auto_fixer)",
+          "test_type": "数据类测试",
+          "passed": true,
+          "message": "数据类测试通过",
+          "details": "FixAction 序列化正常",
+          "duration_ms": 0.00667572021484375
+        },
+        {
+          "module_name": "自动修复引擎 (auto_fixer)",
+          "test_type": "修复器测试",
+          "passed": true,
+          "message": "语法修复器测试通过",
+          "details": "检测到 2 个语法问题",
+          "duration_ms": 7.159709930419922
+        }
+      ]
+    },
+    {
+      "module_name": "持续学习模块 (learning_engine)",
+      "total_tests": 4,
+      "passed_tests": 3,
+      "failed_tests": 1,
+      "pass_rate": 75.0,
+      "module_status": "异常",
+      "results": [
+        {
+          "module_name": "持续学习模块 (learning_engine)",
+          "test_type": "模块导入",
+          "passed": true,
+          "message": "模块导入成功",
+          "details": "所有核心类和枚举导入成功",
+          "duration_ms": 34.11698341369629
+        },
+        {
+          "module_name": "持续学习模块 (learning_engine)",
+          "test_type": "类实例化",
+          "passed": true,
+          "message": "核心类实例化成功",
+          "details": "LearningEngine 和所有组件实例化成功",
+          "duration_ms": 2.1829605102539062
+        },
+        {
+          "module_name": "持续学习模块 (learning_engine)",
+          "test_type": "数据类测试",
+          "passed": true,
+          "message": "数据类测试通过",
+          "details": "LearningCase 创建成功",
+          "duration_ms": 0.023365020751953125
+        },
+        {
+          "module_name": "持续学习模块 (learning_engine)",
+          "test_type": "学习方法测试",
+          "passed": false,
+          "message": "测试失败: LearningCase.__init__() got an unexpected keyword argument 'applied_pattern'. Did you mean 'applied_patterns'?",
+          "details": "Traceback (most recent call last):\n  File \"D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\integration_test.py\", line 84, in _run_test\n    result = test_func()\n  File \"D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\integration_test.py\", line 398, in test_learning_methods\n    result = engine.learn_from_failure(\n        context={\"error_type\": \"TypeError\", \"file\": \"test.py\"},\n        outcome=\"fixed\",\n        feedback=\"添加了类型检查\"\n    )\n  File \"D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\skillscripts\\analysis\\learning_engine.py\", line 1247, in learn_from_failure\n    case = LearningCase(\n        case_id=self._generate_case_id(),\n    ...<6 lines>...\n        applied_pattern=applied_pattern\n    )\nTypeError: LearningCase.__init__() got an unexpected keyword argument 'applied_pattern'. Did you mean 'applied_patterns'?\n",
+          "duration_ms": 1.0647773742675781
+        }
+      ]
+    },
+    {
+      "module_name": "监控仪表板 (evolution_monitor)",
+      "total_tests": 4,
+      "passed_tests": 0,
+      "failed_tests": 4,
+      "pass_rate": 0.0,
+      "module_status": "异常",
+      "results": [
+        {
+          "module_name": "监控仪表板 (evolution_monitor)",
+          "test_type": "模块导入",
+          "passed": false,
+          "message": "测试失败: attempted relative import with no known parent package",
+          "details": "Traceback (most recent call last):\n  File \"D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\integration_test.py\", line 84, in _run_test\n    result = test_func()\n  File \"D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\integration_test.py\", line 431, in test_import\n    from evolution_monitor import (\n    ...<5 lines>...\n    )\n  File \"D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\backend\\app\\api\\evolution_monitor.py\", line 12, in <module>\n    from ..models.base import get_db\nImportError: attempted relative import with no known parent package\n",
+          "duration_ms": 1022.3286151885986
+        },
+        {
+          "module_name": "监控仪表板 (evolution_monitor)",
+          "test_type": "枚举类测试",
+          "passed": false,
+          "message": "测试失败: attempted relative import with no known parent package",
+          "details": "Traceback (most recent call last):\n  File \"D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\integration_test.py\", line 84, in _run_test\n    result = test_func()\n  File \"D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\integration_test.py\", line 447, in test_enums\n    from evolution_monitor import EvolutionStatus, EvolutionType, EvolutionStage\n  File \"D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\backend\\app\\api\\evolution_monitor.py\", line 12, in <module>\n    from ..models.base import get_db\nImportError: attempted relative import with no known parent package\n",
+          "duration_ms": 0.7305145263671875
+        },
+        {
+          "module_name": "监控仪表板 (evolution_monitor)",
+          "test_type": "连接管理器测试",
+          "passed": false,
+          "message": "测试失败: attempted relative import with no known parent package",
+          "details": "Traceback (most recent call last):\n  File \"D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\integration_test.py\", line 84, in _run_test\n    result = test_func()\n  File \"D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\integration_test.py\", line 456, in test_connection_manager\n    from evolution_monitor import EvolutionConnectionManager, EvolutionStatus\n  File \"D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\backend\\app\\api\\evolution_monitor.py\", line 12, in <module>\n    from ..models.base import get_db\nImportError: attempted relative import with no known parent package\n",
+          "duration_ms": 0.6856918334960938
+        },
+        {
+          "module_name": "监控仪表板 (evolution_monitor)",
+          "test_type": "响应模型测试",
+          "passed": false,
+          "message": "测试失败: attempted relative import with no known parent package",
+          "details": "Traceback (most recent call last):\n  File \"D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\integration_test.py\", line 84, in _run_test\n    result = test_func()\n  File \"D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\integration_test.py\", line 469, in test_response_models\n    from evolution_monitor import EvolutionStatusResponse\n  File \"D:\\Projects\\TraeProjects\\skiller\\.trae\\skills\\sanliu\\backend\\app\\api\\evolution_monitor.py\", line 12, in <module>\n    from ..models.base import get_db\nImportError: attempted relative import with no known parent package\n",
+          "duration_ms": 0.5896091461181641
+        }
+      ]
+    },
+    {
+      "module_name": "报告生成器 (evolution_report_generator)",
+      "total_tests": 5,
+      "passed_tests": 5,
+      "failed_tests": 0,
+      "pass_rate": 100.0,
+      "module_status": "正常",
+      "results": [
+        {
+          "module_name": "报告生成器 (evolution_report_generator)",
+          "test_type": "模块导入",
+          "passed": true,
+          "message": "模块导入成功",
+          "details": "所有核心类和枚举导入成功",
+          "duration_ms": 6.969928741455078
+        },
+        {
+          "module_name": "报告生成器 (evolution_report_generator)",
+          "test_type": "类实例化",
+          "passed": true,
+          "message": "核心类实例化成功",
+          "details": "EvolutionReportGenerator 实例化成功",
+          "duration_ms": 0.6425380706787109
+        },
+        {
+          "module_name": "报告生成器 (evolution_report_generator)",
+          "test_type": "数据类测试",
+          "passed": true,
+          "message": "数据类测试通过",
+          "details": "EvolutionRecord 序列化正常",
+          "duration_ms": 0.009059906005859375
+        },
+        {
+          "module_name": "报告生成器 (evolution_report_generator)",
+          "test_type": "报告生成测试",
+          "passed": true,
+          "message": "报告生成测试通过",
+          "details": "生成报告ID: RPT-DAILY-20260331173528",
+          "duration_ms": 0.5385875701904297
+        },
+        {
+          "module_name": "报告生成器 (evolution_report_generator)",
+          "test_type": "对比报告测试",
+          "passed": true,
+          "message": "对比报告测试通过",
+          "details": "评估结果: positive",
+          "duration_ms": 0.5867481231689453
+        }
+      ]
+    },
+    {
+      "module_name": "模块集成测试",
+      "total_tests": 4,
+      "passed_tests": 4,
+      "failed_tests": 0,
+      "pass_rate": 100.0,
+      "module_status": "正常",
+      "results": [
+        {
+          "module_name": "模块集成测试",
+          "test_type": "控制器-问题感知集成",
+          "passed": true,
+          "message": "演化控制器与问题感知系统集成测试通过",
+          "details": "两个模块可以同时实例化",
+          "duration_ms": 0.278472900390625
+        },
+        {
+          "module_name": "模块集成测试",
+          "test_type": "学习-报告集成",
+          "passed": true,
+          "message": "学习引擎与报告生成器集成测试通过",
+          "details": "两个模块可以同时实例化",
+          "duration_ms": 1.0361671447753906
+        },
+        {
+          "module_name": "模块集成测试",
+          "test_type": "修复-学习集成",
+          "passed": true,
+          "message": "自动修复器与学习引擎集成测试通过",
+          "details": "两个模块可以同时实例化",
+          "duration_ms": 0.7033348083496094
+        },
+        {
+          "module_name": "模块集成测试",
+          "test_type": "完整流水线集成",
+          "passed": true,
+          "message": "完整流水线集成测试通过",
+          "details": "所有核心模块可以同时实例化并协同工作",
+          "duration_ms": 0.9839534759521484
+        }
+      ]
+    }
+  ]
+}
