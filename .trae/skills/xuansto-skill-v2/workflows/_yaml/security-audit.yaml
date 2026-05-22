@@ -1,0 +1,194 @@
+metadata:
+  name: 安全审计与合规验证工作流
+  version: "3.2.0"
+  description: 安全审计合规验证与Agentic安全工作流
+  platform: all
+  min_agents: 2
+  max_agents: 5
+phases:
+  - id: phase-1
+    name: 审计规划
+    order: 1
+    optional: false
+    trigger_condition: 用户请求安全审计或定期安全检查
+    agents:
+      primary: [security-auditor]
+      supporting: []
+    inputs:
+      - name: 审计范围定义
+        type: document
+        required: true
+      - name: 系统架构文档
+        type: document
+        required: true
+    outputs:
+      - name: 审计计划书
+        type: document
+        validation: 审计范围和重点明确
+    quality_gates:
+      - gate_id: GATE-001
+        blocking: true
+        pass_criteria: 审计范围和重点明确
+    timeout_minutes: 60
+    retry:
+      max_attempts: 2
+      backoff: fixed
+  - id: phase-2
+    name: 代码安全审查
+    order: 2
+    optional: false
+    trigger_condition: 审计规划完成
+    agents:
+      primary: [security-auditor]
+      supporting: [code-reviewer]
+    inputs:
+      - name: 审计计划书
+        type: document
+        required: true
+        source_phase: phase-1
+    outputs:
+      - name: 代码安全审查报告
+        type: document
+        validation: 高风险代码已识别
+    quality_gates:
+      - gate_id: GATE-012
+        blocking: true
+        pass_criteria: 代码安全审查完成
+    timeout_minutes: 120
+    retry:
+      max_attempts: 2
+      backoff: fixed
+  - id: phase-3
+    name: 漏洞扫描
+    order: 3
+    optional: false
+    trigger_condition: 代码安全审查完成
+    agents:
+      primary: [security-auditor]
+      supporting: []
+    inputs:
+      - name: 代码安全审查报告
+        type: document
+        required: true
+        source_phase: phase-2
+    outputs:
+      - name: 漏洞扫描报告
+        type: document
+        validation: 漏洞已分类和评级
+    quality_gates:
+      - gate_id: GATE-012
+        blocking: true
+        pass_criteria: 漏洞扫描完成且已分类
+    timeout_minutes: 90
+    retry:
+      max_attempts: 2
+      backoff: fixed
+  - id: phase-4
+    name: 渗透测试
+    order: 4
+    optional: false
+    trigger_condition: 漏洞扫描完成
+    agents:
+      primary: [penetration-tester, security-auditor]
+      supporting: []
+    inputs:
+      - name: 漏洞扫描报告
+        type: document
+        required: true
+        source_phase: phase-3
+    outputs:
+      - name: 渗透测试报告
+        type: document
+        validation: 关键漏洞已验证
+    quality_gates:
+      - gate_id: AI-PENTEST
+        blocking: true
+        pass_criteria: 渗透测试完成
+    timeout_minutes: 120
+    retry:
+      max_attempts: 2
+      backoff: fixed
+  - id: phase-5
+    name: 合规检查
+    order: 5
+    optional: false
+    trigger_condition: 渗透测试完成
+    agents:
+      primary: [compliance-officer, security-auditor]
+      supporting: []
+    inputs:
+      - name: 渗透测试报告
+        type: document
+        required: true
+        source_phase: phase-4
+    outputs:
+      - name: 合规检查报告
+        type: document
+        validation: 合规状态已评估
+    quality_gates:
+      - gate_id: GATE-012
+        blocking: true
+        pass_criteria: 合规检查完成
+    timeout_minutes: 90
+    retry:
+      max_attempts: 2
+      backoff: fixed
+  - id: phase-6
+    name: 报告与整改
+    order: 6
+    optional: false
+    trigger_condition: 合规检查完成
+    agents:
+      primary: [security-auditor, compliance-officer]
+      supporting: []
+    inputs:
+      - name: 合规检查报告
+        type: document
+        required: true
+        source_phase: phase-5
+    outputs:
+      - name: 安全审计总报告
+        type: document
+        validation: 报告完整且整改建议明确
+      - name: 整改跟踪清单
+        type: document
+        validation: 整改项已分配责任人
+    quality_gates:
+      - gate_id: DOC-COMPLETENESS
+        blocking: true
+        pass_criteria: 审计报告完整
+      - gate_id: GATE-012
+        blocking: true
+        pass_criteria: 无P0/P1安全问题
+    timeout_minutes: 60
+    retry:
+      max_attempts: 2
+      backoff: fixed
+agent_matrix:
+  security-auditor:
+    phases: [phase-1, phase-2, phase-3, phase-4, phase-5, phase-6]
+    role: primary
+    max_parallel_instances: 1
+  code-reviewer:
+    phases: [phase-2]
+    role: supporting
+    max_parallel_instances: 1
+  penetration-tester:
+    phases: [phase-4]
+    role: primary
+    max_parallel_instances: 1
+  compliance-officer:
+    phases: [phase-5, phase-6]
+    role: primary
+    max_parallel_instances: 1
+exception_handling:
+  phase_failure:
+    action: retry_then_escalate
+    escalation_target: orchestrator
+    max_retries: 3
+  agent_unavailable:
+    action: substitute_and_continue
+    substitute_agent: security-auditor
+  quality_gate_blocked:
+    action: auto_fix_then_pause
+    auto_fix_agents: [security-auditor, penetration-tester]

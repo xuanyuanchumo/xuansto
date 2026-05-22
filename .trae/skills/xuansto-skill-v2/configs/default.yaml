@@ -1,0 +1,394 @@
+# ============================================================
+# Xuansto Skill - 默认配置文件
+# 多Agent自主开发编排器 | SDD+TDD融合系统
+# ============================================================
+
+# -----------------------------------------------------------
+# 编排器核心配置
+# 控制Agent调度、超时、重试策略及Agent合并规则
+# -----------------------------------------------------------
+orchestrator:
+  max_concurrent_agents: 3  # 单任务最大并发Agent数（任务级并发）
+  system_parallel_capacity: 10  # 系统级并行容量上限（所有活跃任务可同时运行的Agent总数）
+  task_timeout_minutes: 60  # 单任务超时时间（分钟）
+  retry_policy:
+    max_retries: 3          # 最大重试次数
+    backoff: exponential    # 退避策略：exponential=指数退避
+  lean_mode: false          # 精简模式开关，开启后减少Agent数量
+  lean_mode_threshold:
+    max_files: 50           # 精简模式文件数阈值
+    max_modules: 10         # 精简模式模块数阈值
+  agent_merge_policy:
+    enabled: true           # 是否启用Agent合并策略
+    auto_activate: true     # 是否自动激活合并
+    merge_rules:
+      - agents: [security-tester, ai-penetration-tester]
+        condition: project_scale < medium
+        description: 安全测试与AI渗透测试合并
+      - agents: [integration-tester, e2e-tester]
+        condition: project_scale < medium
+        description: 集成测试与E2E测试合并
+      - agents: [documentation-engineer, specification-keeper]
+        condition: project_scale < medium
+        description: 文档工程师与规格管理员合并
+      - agents: [cicd-specialist, devops-engineer]
+        condition: project_scale < small
+        description: CI/CD专员与DevOps工程师合并
+      - agents: [desktop-developer, frontend-developer]
+        condition: desktop_framework == electron
+        description: Electron项目桌面开发者与前端开发者合并
+      - agents: [desktop-tester, e2e-tester]
+        condition: desktop_test_complexity < medium
+        description: 桌面测试简单时与E2E测试合并
+      - agents: [build-release-engineer, cicd-specialist]
+        condition: project_scale < small
+        description: 小型项目构建发布与CI/CD合并
+      - agents: [knowledge-manager, learning-specialist]
+        condition: project_scale < medium
+        description: 知识管理器与学习专员合并
+      - agents: [quality-monitor, progress-tracker]
+        condition: project_scale < medium
+        description: 质量监控与进度追踪合并
+
+# -----------------------------------------------------------
+# 质量门禁配置
+# 控制测试覆盖率阈值及门禁绕过策略
+# -----------------------------------------------------------
+quality_gates:
+  enforcement: strict               # 执行模式：strict=严格模式
+  bypass_requires_approval: true    # 绕过门禁是否需要审批
+  coverage_threshold:
+    unit: 80                        # 单元测试覆盖率阈值(%)
+    integration: 70                 # 集成测试覆盖率阈值(%)
+    high_risk_modules: 90           # 高风险模块覆盖率阈值(%)
+
+# -----------------------------------------------------------
+# 通信协议配置
+# Agent间通信协议、加密及超时设置
+# -----------------------------------------------------------
+communication:
+  protocol: "A2A/v1.1"             # Agent间通信协议：A2A/v1.1=Agent-to-Agent v1.1
+  mcp_compatible: true              # 是否兼容MCP协议（MCP spec 2025-03-26）
+  encryption: tls1.3                # 通信加密方式
+  message_timeout_seconds: 30       # 消息超时时间（秒）
+
+# -----------------------------------------------------------
+# 桌面应用配置
+# 支持的桌面框架、目标平台、代码签名及安装包格式
+# -----------------------------------------------------------
+desktop:
+  frameworks: [electron, tauri, flutter]  # 支持的桌面框架
+  target_platforms: [win, macos, linux]   # 目标平台
+  code_signing: required                  # 代码签名要求：required=必须
+  auto_update: enabled                    # 自动更新：enabled=启用
+  installer_formats:
+    win: [nsis, msi]                      # Windows安装包格式
+    macos: [dmg]                          # macOS安装包格式
+    linux: [deb, appimage]                # Linux安装包格式
+
+# -----------------------------------------------------------
+# 日志配置
+# 日志级别、格式、保留策略及链路追踪
+# -----------------------------------------------------------
+logging:
+  level: info               # 日志级别：debug/info/warn/error
+  format: json              # 日志格式：json/text
+  retention_days: 30        # 日志保留天数
+  trace_enabled: true       # 是否启用链路追踪
+
+# -----------------------------------------------------------
+# 知识库配置
+# 通用知识同步、工作区知识追踪及经验提取
+# -----------------------------------------------------------
+knowledge_base:
+  general:
+    auto_sync: true         # 是否自动同步通用知识库
+    sync_interval: weekly   # 同步频率：daily/weekly/monthly
+  workspace:
+    auto_update: true       # 是否自动更新工作区知识
+    track_changes: true     # 是否追踪变更
+  experience:
+    auto_extract: true      # 是否自动提取经验
+    review_required: true   # 经验提取是否需要人工审核
+    min_confidence: 0.8     # 经验提取最低置信度
+
+# -----------------------------------------------------------
+# 安全配置
+# OWASP检查、渗透测试、SAST扫描、依赖扫描及Agentic安全扫描
+# -----------------------------------------------------------
+security:
+  # OWASP Top 10 传统Web应用安全检查
+  owasp_top10_enabled: true
+  # OWASP Agentic Top 10 针对AI Agent的安全检查
+  owasp_agentic_top10_enabled: true
+  # 渗透测试开关
+  penetration_test_enabled: true
+  # 静态应用安全测试(SAST)开关
+  sast_enabled: true
+  # 依赖漏洞扫描开关
+  dependency_scan_enabled: true
+  # 漏洞阻断阈值：P0(危急)/P1(高危)/P2(中危)，达到此级别则阻断
+  vulnerability_threshold: "P2"
+  # Agentic安全扫描频率：daily/weekly/on_demand
+  agentic_security_scan_interval: "daily"
+
+# -----------------------------------------------------------
+# 可观测性配置
+# 指标采集、告警通道、监控端点及链路追踪
+# -----------------------------------------------------------
+observability:
+  # 指标采集间隔（秒）
+  metrics_collection_interval_seconds: 60
+  # 告警通道：log=日志输出，webhook=Webhook推送
+  alert_channels: ["log", "webhook"]
+  # Webhook推送地址（为空则不推送）
+  webhook_url: ""
+  # 是否启用监控端点（/metrics, /health等）
+  monitoring_endpoints_enabled: true
+  # 是否启用分布式链路追踪
+  trace_enabled: true
+  # 日志/指标保留天数
+  log_retention_days: 30
+
+# -----------------------------------------------------------
+# 成本优化配置
+# 模型选择策略、Token预算、上下文裁剪及降级策略
+# -----------------------------------------------------------
+cost_optimization:
+  # 模型选择策略：complexity_based=根据任务复杂度自动选择
+  # lightweight(轻量级) / standard(标准) / heavyweight(重量级)
+  model_selection_strategy: "complexity_based"
+  # 每个任务的Token预算上限
+  token_budget_per_task: 50000
+  # 是否启用上下文裁剪（自动裁剪低相关性上下文）
+  context_pruning_enabled: true
+  # 知识检索Top-K（从知识库检索的最相关条目数）
+  knowledge_top_k: 5
+  # 并行转串行降级阈值：Token使用量超过预算的80%时降级为串行执行
+  parallel_to_serial_threshold: 0.8
+
+# -----------------------------------------------------------
+# 平台检测配置
+# 自动检测项目类型(Web/Desktop)的规则与优先级
+# -----------------------------------------------------------
+platform_detection:
+  # 是否启用自动平台检测
+  auto_detect: true
+  # 检测优先级：从高到低依次尝试
+  # explicit_declaration=显式声明 > dependency_analysis=依赖分析 >
+  # structure_analysis=结构分析 > default_web=默认Web
+  priority: ["explicit_declaration", "dependency_analysis", "structure_analysis", "default_web"]
+  # Web项目指示器：匹配任一则判定为Web平台
+  web_indicators:
+    - "package.json with react/vue/angular"
+    - "next.config.js"
+    - "vite.config.ts"
+  # 桌面项目指示器：匹配任一则判定为Desktop平台
+  desktop_indicators:
+    - "package.json with electron"
+    - "src-tauri directory"
+    - "electron-builder.yml"
+  # 无法检测时的默认平台
+  default_platform: "web"
+
+# -----------------------------------------------------------
+# 人机协作配置
+# 断点触发条件、审批超时及自动继续策略
+# -----------------------------------------------------------
+human_collaboration:
+  # 验收失败时是否触发断点（false=自动重试修复，true=等待人工介入）
+  breakpoint_on_acceptance_failure: false
+  # 验收失败自动重试最大次数（仅当breakpoint_on_acceptance_failure=false时生效）
+  acceptance_auto_retry_max: 3
+  # 规格漂移严重时是否触发断点（false=自动处理，true=等待人工介入）
+  # 低/中影响漂移始终自动处理；高影响漂移由此开关控制
+  breakpoint_on_spec_drift_high: false
+  # 高影响规格漂移自动处理策略（rollback=回滚到上一版本，adapt=自动适配新规格）
+  spec_drift_high_auto_strategy: adapt
+  # 安全关键操作时是否触发断点（false=自动执行+记录审计日志，true=等待人工介入）
+  # 注意：生产环境部署和密钥操作仍需人工确认（security_hard_gate）
+  breakpoint_on_security_critical: false
+  # 安全操作自动执行时的审计日志级别
+  security_auto_audit_level: verbose
+  # 迭代卡住时是否触发断点（false=自动重启迭代，true=等待人工介入）
+  breakpoint_on_iteration_stuck: false
+  # 迭代卡住自动恢复策略（restart=重启当前Phase，fallback=降级到上一Phase，replan=重新规划）
+  iteration_stuck_auto_strategy: replan
+  # 审批超时时间（分钟），超时后根据auto_proceed_on_timeout决定行为
+  approval_timeout_minutes: 5
+  # 审批超时后是否自动继续（false=一直等待，true=超时后自动放行）
+  auto_proceed_on_timeout: true
+  # 自主循环模式（autonomous=全自动，supervised=关键点暂停，manual=每步确认）
+  loop_mode: autonomous
+  # 自主循环中是否跳过人工评审门禁（当置信度>=阈值时自动通过）
+  auto_pass_review_on_confidence: 0.85
+  # 安全硬门禁（即使autonomous模式也必须人工确认的操作）
+  security_hard_gates:
+    - production_deploy
+    - secret_key_rotation
+    - database_schema_destructive_change
+
+# -----------------------------------------------------------
+# 知识层配置 (v3.0)
+# 知识库服务管理、经验提取、Token优化
+# -----------------------------------------------------------
+knowledge_layer:
+  knowledge_manager:
+    auto_sync: true
+    sync_interval: 300
+    index_rebuild_threshold: 100
+  learning_specialist:
+    auto_extract: true
+    min_confidence: 0.8
+    dedup_threshold: 0.95
+  token_optimizer:
+    budget_enforcement: strict
+    compression_trigger: 0.8
+    tes_scoring_enabled: true
+
+# -----------------------------------------------------------
+# 监控层配置 (v3.0)
+# 质量监控、进度追踪、决策日志
+# -----------------------------------------------------------
+monitoring_layer:
+  quality_monitor:
+    gate_check_interval: 60
+    degradation_alert: true
+    trend_analysis_window: 7
+  progress_tracker:
+    milestone_tracking: true
+    blocker_detection: true
+    escalation_timeout: 30
+  decision_logger:
+    auto_log: true
+    adr_index_maintenance: true
+    audit_retention_days: 90
+
+# -----------------------------------------------------------
+# Karpathy准则配置
+# 编码最佳实践合规率、检查开关及增量实现参数
+# -----------------------------------------------------------
+karpathy_guidelines:
+  # 合规率阈值：低于此值触发警告（0.0-1.0）
+  compliance_threshold: 0.9
+  # "先思考再编码"检查开关
+  think_before_coding_check: true
+  # "简洁优先"检查开关
+  simplicity_first_check: true
+  # "外科手术式变更"检查开关（只改必要的代码）
+  surgical_changes_check: true
+  # "目标驱动执行"检查开关
+  goal_driven_execution_check: true
+  # 增量实现最大重试次数
+  incremental_max_retries: 3
+  # 达到最大重试次数后是否重置增量状态
+  incremental_reset_on_max_retries: true
+
+# -----------------------------------------------------------
+# 脚本执行配置
+# Python/Node/PowerShell运行时、超时、沙箱与临时目录管理
+# -----------------------------------------------------------
+script_execution:
+  python_runtime: "python3"
+  node_runtime: "node"
+  powershell_runtime: "pwsh"
+  timeout_py_js_seconds: 120
+  timeout_ps_seconds: 300
+  sandbox_enabled: true
+  temp_script_dir: ".knowledge/temp-scripts"
+  error_log_dir: ".knowledge/script-errors"
+  cleanup_on_completion: true
+  shell_script_allowed: false
+
+# -----------------------------------------------------------
+# 编码配置
+# 文件编码、BOM、行尾与提交检查策略
+# -----------------------------------------------------------
+encoding:
+  default: "UTF-8"
+  no_bom: true
+  line_ending: "LF"
+  python_coding_declaration: forbidden
+  check_on_commit: true
+
+# -----------------------------------------------------------
+# Token优化配置
+# Token预算门禁、压缩策略及消耗日志
+# -----------------------------------------------------------
+token_optimization:
+  budget: 100000                    # 默认Token预算上限
+  warn_threshold: 0.8               # 警告阈值：Token使用率达80%时触发压缩
+  block_threshold: 1.0              # 阻断阈值：Token使用率达100%时强制降级
+  compression_level: semantic       # 压缩级别：lossless/semantic/selective
+  logging:
+    enabled: true                   # 是否启用Token消耗日志
+    output: ".knowledge/token-usage" # 日志输出目录
+    granularity: task               # 日志粒度：task/phase/agent
+
+# -----------------------------------------------------------
+# 循环控制配置 (v3.0)
+# 迭代循环上限、停滞检测、完成承诺及自动归档
+# -----------------------------------------------------------
+# loop 配置已移至 .skill-config.yaml（运行时配置优先）
+
+# -----------------------------------------------------------
+# 规划文件配置 (v3.0)
+# 缓存目录、自动归档、双动作规则及三击协议
+# -----------------------------------------------------------
+# planning_files 配置已移至 .skill-config.yaml（运行时配置优先）
+
+# -----------------------------------------------------------
+# 审查配置 (v3.0)
+# 置信度阈值、多视角审查及子Agent列表
+# -----------------------------------------------------------
+review:
+  confidence_threshold: 80
+  multi_perspective: true
+  sub_agents:
+    - compliance-reviewer
+    - bug-scanner
+    - history-analyzer
+    - comment-verifier
+    - specification-keeper
+
+# -----------------------------------------------------------
+# 简化配置 (v3.0)
+# Chesterton栅栏原则、行为等价验证及去重参数
+# -----------------------------------------------------------
+simplification:
+  chesterton_fence: true
+  behavior_equivalence: true
+  max_nesting_depth: 3
+  min_duplicate_occurrences: 3
+
+# -----------------------------------------------------------
+# Web应用测试配置 (v3.0)
+# 默认浏览器、服务器超时、视觉回归阈值及控制台错误级别
+# -----------------------------------------------------------
+webapp_testing:
+  default_browser: chromium
+  server_timeout: 30
+  visual_regression_threshold: 0.001
+  console_error_level: error
+
+# on_demand_loading 配置已移至 .skill-config.yaml（运行时配置优先）
+
+# knowledge_service 配置已移至 .skill-config.yaml（运行时配置优先）
+
+# 知识库搜索降级策略（Token降级策略见 .skill-config.yaml）
+degradation:
+  l1:
+    name: normal
+    description: 全功能可用，hybrid搜索
+    search_strategy: hybrid
+  l2:
+    name: local_semantic
+    description: 本地语义搜索，API embedding不可用
+    search_strategy: hybrid
+  l3:
+    name: bm25_only
+    description: 仅关键词搜索，向量引擎不可用
+    search_strategy: keyword_only
+  recovery:
+    check_interval_seconds: 30
+    auto_recover: true

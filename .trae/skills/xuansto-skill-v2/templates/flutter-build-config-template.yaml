@@ -1,0 +1,173 @@
+framework: flutter
+platforms:
+  - win
+  - mac
+  - linux
+app:
+  name: "MyApp"
+  productName: "My Application"
+  appId: "com.example.myapp"
+  version: "1.0.0"
+  buildNumber: 1
+  copyright: "Copyright © 2024 Example Corp"
+  category: "Utility"
+  description: "A cross-platform desktop application built with Flutter"
+flutter:
+  sdkVersion: "3.24.0"
+  useFvm: true
+  buildMode: release
+  obfuscate: true
+  splitDebugInfo: "debug-info"
+  treeShakeIcons: true
+  dartDefines:
+    FLUTTER_DESKTOP: "true"
+build:
+  windows:
+    command: "flutter build windows --release"
+    outputDir: "build/windows/x64/runner/Release"
+    executable: "my_app.exe"
+    arch: ["x64"]
+  macos:
+    command: "flutter build macos --release"
+    outputDir: "build/macos/Build/Products/Release"
+    bundleName: "My Application.app"
+    arch: ["universal"]
+  linux:
+    command: "flutter build linux --release"
+    outputDir: "build/linux/x64/release/bundle"
+    executable: "my_app"
+    arch: ["x64"]
+packaging:
+  windows:
+    msix:
+      enabled: true
+      displayName: "My Application"
+      publisherDisplayName: "Example Corp"
+      identityName: "com.example.myapp"
+      msixVersion: "1.0.0.0"
+      logoPath: "assets/logo.png"
+      capabilities: ["internetClient", "documentsLibrary"]
+      installMode: "perUser"
+      store: false
+    innoSetup:
+      enabled: true
+      scriptPath: "installer.iss"
+      outputDir: "release/windows"
+      outputBaseFilename: "MyApp-Setup-1.0.0"
+      compression: "lzma2"
+      solidCompression: true
+      architecturesAllowed: "x64compatible"
+      architecturesInstallIn64BitMode: "x64compatible"
+  macos:
+    dmg:
+      enabled: true
+      volumeName: "My Application"
+      windowPosition: [200, 120]
+      windowSize: [600, 400]
+      iconSize: 100
+      appPosition: [175, 190]
+      dropLinkPosition: [425, 190]
+      outputFilename: "MyApp-1.0.0.dmg"
+    appStore:
+      enabled: false
+      appCategory: "public.app-category.utilities"
+      minimumSystemVersion: "10.14"
+      sandbox: true
+      entitlements: ["com.apple.security.app-sandbox", "com.apple.security.network.client", "com.apple.security.files.user-selected.read-only"]
+  linux:
+    deb:
+      enabled: true
+      packageName: "myapp"
+      packageVersion: "1.0.0"
+      architecture: "amd64"
+      maintainer: "Example Corp <dev@example.com>"
+      description: "My Application - A cross-platform desktop application"
+      depends: ["libgtk-3-0", "libblkid1", "liblzma5", "libglu1-mesa"]
+      outputFilename: "myapp_1.0.0_amd64.deb"
+    rpm:
+      enabled: false
+      packageName: "myapp"
+      packageVersion: "1.0.0"
+      release: "1"
+      license: "Proprietary"
+      requires: ["gtk3", "libblkid", "xz-libs"]
+      outputFilename: "myapp-1.0.0-1.x86_64.rpm"
+    appImage:
+      enabled: true
+      appId: "com.example.myapp"
+      appName: "My Application"
+      icon: "myapp"
+      arch: "x86_64"
+      outputFilename: "MyApp-1.0.0-x86_64.AppImage"
+      updateInfo: "gh-releases-zsync|example|myapp|latest|MyApp-*x86_64.AppImage.zsync"
+signing:
+  enabled: false
+  windows:
+    type: "authenticode"
+    certPath: "./certs/windows.pfx"
+    certPasswordEnv: "WINDOWS_CERT_PASSWORD"
+    publisherName: "Example Corp"
+    timestampServer: "http://timestamp.digicert.com"
+    signingHashAlgorithms: ["sha256"]
+  macos:
+    type: "developer-id"
+    identity: "Developer ID Application: Example Corp (TEAMID)"
+    entitlements: "./certs/entitlements.mac.plist"
+    entitlementsInherit: "./certs/entitlements.mac.plist"
+    hardenedRuntime: true
+    notarize:
+      enabled: true
+      teamId: "TEAMID"
+      appleId: "dev@example.com"
+      appleIdPasswordEnv: "APPLE_ID_PASSWORD"
+    minimumSystemVersion: "10.14"
+  linux:
+    type: "gpg"
+    gpgKey: "./certs/linux.gpg"
+    gpgPassphraseEnv: "LINUX_GPG_PASSPHRASE"
+    gpgKey_id: "DEADBEEF"
+autoUpdate:
+  enabled: true
+  provider: "github"
+  owner: "example"
+  repo: "myapp"
+  channel: "latest"
+  url: ""
+  checkInterval: "4h"
+  downloadStrategy: "prompt"
+  installStrategy: "restart"
+  rollbackEnabled: true
+  maxRollbackVersions: 3
+  channels:
+    stable:
+      url: "https://updates.example.com/stable"
+      priority: 1
+    beta:
+      url: "https://updates.example.com/beta"
+      priority: 2
+    alpha:
+      url: "https://updates.example.com/alpha"
+      priority: 3
+output:
+  dir: "release"
+  clean: true
+  artifacts:
+    - platform: "win"
+      patterns: ["*.msix", "*.exe", "*.zip"]
+    - platform: "mac"
+      patterns: ["*.dmg", "*.zip", "*.app"]
+    - platform: "linux"
+      patterns: ["*.deb", "*.rpm", "*.AppImage"]
+ci:
+  githubActions:
+    enabled: false
+    windowsRunner: "windows-latest"
+    macosRunner: "macos-latest"
+    linuxRunner: "ubuntu-latest"
+    flutterVersion: "3.24.0"
+    javaVersion: "17"
+  cache:
+    enabled: true
+    pubCache: true
+    gradleCache: false
+    cocoaPodsCache: true

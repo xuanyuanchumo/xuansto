@@ -1,0 +1,210 @@
+metadata:
+  name: Playwright Webapp自动化测试工作流
+  version: "3.2.0"
+  description: Playwright驱动的Web应用自动化测试工作流，覆盖评估、准备、侦察、行动、验证五个阶段
+  platform: all
+  min_agents: 2
+  max_agents: 4
+phases:
+  - id: phase-eval
+    name: 评估
+    order: 1
+    optional: false
+    trigger_condition: 用户请求Webapp自动化测试或Playwright测试
+    agents:
+      primary: [e2e-tester, test-architect]
+      supporting: []
+    inputs:
+      - name: 测试目标
+        type: document
+        required: true
+      - name: 测试范围
+        type: document
+        required: false
+    outputs:
+      - name: 测试策略文档
+        type: document
+        validation: 测试目标已分类
+      - name: 目标分类结果
+        type: document
+        validation: 分类为静态HTML/动态Webapp/已运行服务
+      - name: 浏览器配置
+        type: config
+        validation: 浏览器类型已确认
+    quality_gates:
+      - gate_id: GATE-001
+        blocking: true
+        pass_criteria: 测试目标已分类（静态HTML/动态Webapp/已运行服务）
+    timeout_minutes: 30
+    retry:
+      max_attempts: 2
+      backoff: exponential
+  - id: phase-prepare
+    name: 准备
+    order: 2
+    optional: false
+    trigger_condition: 评估完成
+    agents:
+      primary: [e2e-tester, devops-engineer]
+      supporting: []
+    inputs:
+      - name: 测试策略文档
+        type: document
+        required: true
+      - name: 服务器启动命令
+        type: config
+        required: false
+    outputs:
+      - name: 服务器就绪确认
+        type: document
+        validation: 服务器启动成功或环境配置完成
+      - name: 环境配置文档
+        type: document
+        validation: Playwright浏览器已安装
+    quality_gates:
+      - gate_id: GATE-005
+        blocking: true
+        pass_criteria: 服务器启动成功或环境配置完成
+    timeout_minutes: 60
+    retry:
+      max_attempts: 3
+      backoff: exponential
+  - id: phase-recon
+    name: 侦察
+    order: 3
+    optional: false
+    trigger_condition: 准备完成
+    agents:
+      primary: [e2e-tester]
+      supporting: []
+    inputs:
+      - name: 目标URL
+        type: url
+        required: true
+    outputs:
+      - name: 页面截图
+        type: image
+        validation: 截图已捕获
+      - name: 元素发现报告
+        type: json
+        validation: 页面元素已识别
+      - name: 控制台日志报告
+        type: json
+        validation: 日志已捕获
+      - name: 选择器映射表
+        type: document
+        validation: 关键元素选择器已记录
+    quality_gates:
+      - gate_id: GATE-011
+        blocking: true
+        pass_criteria: 页面已导航且networkidle
+      - gate_id: elements_identified
+        blocking: true
+        pass_criteria: 页面元素已识别
+    timeout_minutes: 30
+    retry:
+      max_attempts: 2
+      backoff: fixed
+  - id: phase-action
+    name: 行动
+    order: 4
+    optional: false
+    trigger_condition: 侦察完成
+    agents:
+      primary: [e2e-tester]
+      supporting: []
+    inputs:
+      - name: 选择器映射表
+        type: document
+        required: true
+      - name: 测试用例
+        type: document
+        required: true
+    outputs:
+      - name: 测试操作日志
+        type: log
+        validation: 操作已执行
+      - name: 操作截图
+        type: image
+        validation: 关键步骤已截图
+      - name: 中间状态验证结果
+        type: json
+        validation: 验证点已检查
+    quality_gates:
+      - gate_id: TEST-PASS
+        blocking: true
+        pass_criteria: 测试操作已执行
+    timeout_minutes: 60
+    retry:
+      max_attempts: 2
+      backoff: fixed
+  - id: phase-verify
+    name: 验证
+    order: 5
+    optional: false
+    trigger_condition: 行动完成
+    agents:
+      primary: [e2e-tester, qa-engineer]
+      supporting: []
+    inputs:
+      - name: 测试操作日志
+        type: log
+        required: true
+      - name: 基线截图
+        type: image
+        required: false
+    outputs:
+      - name: E2E测试报告
+        type: document
+        validation: Playwright E2E测试全部通过+无超时
+      - name: 视觉回归报告
+        type: json
+        validation: 截屏对比无回归
+      - name: 控制台验证报告
+        type: json
+        validation: 无error级别日志
+      - name: 可访问性报告
+        type: document
+        validation: WCAG合规
+    quality_gates:
+      - gate_id: PLAYWRIGHT-E2E-PASS
+        blocking: true
+        pass_criteria: Playwright E2E测试全部通过+无超时
+      - gate_id: VISUAL-REGRESSION-PASS
+        blocking: false
+        pass_criteria: 截屏对比无回归(阈值<0.1%)
+      - gate_id: CONSOLE-ERROR-FREE
+        blocking: false
+        pass_criteria: 浏览器控制台无error级别日志
+    timeout_minutes: 60
+    retry:
+      max_attempts: 2
+      backoff: exponential
+agent_matrix:
+  e2e-tester:
+    phases: [phase-eval, phase-prepare, phase-recon, phase-action, phase-verify]
+    role: primary
+    max_parallel_instances: 1
+  test-architect:
+    phases: [phase-eval]
+    role: primary
+    max_parallel_instances: 1
+  devops-engineer:
+    phases: [phase-prepare]
+    role: primary
+    max_parallel_instances: 1
+  qa-engineer:
+    phases: [phase-verify]
+    role: primary
+    max_parallel_instances: 1
+exception_handling:
+  phase_failure:
+    action: retry_then_escalate
+    escalation_target: orchestrator
+    max_retries: 3
+  agent_unavailable:
+    action: substitute_and_continue
+    substitute_agent: e2e-tester
+  quality_gate_blocked:
+    action: auto_fix_then_pause
+    auto_fix_agents: [e2e-tester, devops-engineer]

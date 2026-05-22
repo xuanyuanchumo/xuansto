@@ -1,17 +1,33 @@
-# 先忽略整个 .trae 目录
 .trae/*
 
-# 但重新包含 skills 目录（为了继续往里精确控制）
 !.trae/skills/
 
-# 在 skills 里除 xuansto-skill 外全部忽略
 .trae/skills/*
 !.trae/skills/xuansto-skill/
+!.trae/skills/xuansto-skill-v2/
 
 .trae/skills/xuansto-skill/.knowledge/temp-scripts/*
 !.trae/skills/xuansto-skill/.knowledge/temp-scripts/.gitkeep
 .trae/skills/xuansto-skill/.knowledge/script-errors/*
 !.trae/skills/xuansto-skill/.knowledge/script-errors/.gitkeep
+
+.trae/skills/xuansto-skill-v2/.knowledge/temp-scripts/*
+!.trae/skills/xuansto-skill-v2/.knowledge/temp-scripts/.gitkeep
+.trae/skills/xuansto-skill-v2/.knowledge/script-errors/*
+!.trae/skills/xuansto-skill-v2/.knowledge/script-errors/.gitkeep
+
+xuansto-mcp-server/.venv/
+xuansto-mcp-server/.venv2/
+xuansto-mcp-server/dist/
+xuansto-mcp-server/build/
+xuansto-mcp-server/.mypy_cache/
+xuansto-mcp-server/.pytest_cache/
+xuansto-mcp-server/.ruff_cache/
+xuansto-mcp-server/.xuansto/
+xuansto-mcp-server/__pycache__/
+xuansto-mcp-server/*.egg-info/
+xuansto-mcp-server/test_result*.txt
+xuansto-mcp-server/test_final.txt
 
 .venv/
 副本/

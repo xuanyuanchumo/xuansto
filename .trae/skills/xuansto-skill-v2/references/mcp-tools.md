@@ -1,0 +1,912 @@
+# MCP工具详细参考
+
+> 本文件由SKILL.md按需加载，不需要时不会占用上下文
+
+## skill_analyze
+
+分析技能项目结构，提取YAML元数据、目录结构、Agent注册表、脚本依赖和验证问题。
+
+**参数：**
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| skill_path | str | 必填 | 技能根目录路径 |
+| include_scripts | bool | True | 是否分析scripts目录 |
+| include_agents | bool | True | 是否分析agents目录 |
+| depth | str | "basic" | 分析深度: basic 或 full |
+
+**完整返回值JSON Schema：**
+```json
+{
+  "status": "success",
+  "data": {
+    "metadata": {
+      "name": "xuansto-skill-v2",
+      "version": "7.0.0",
+      "agents_summary": "13 layers / 57 agents (via MCP v2)",
+      "tags": ["xuansto", "multi-agent", "sdd", "tdd"]
+    },
+    "structure": {
+      "root": "/path/to/skill",
+      "directories": ["references", "scripts", "agents"],
+      "file_count": 72,
+      "total_lines": 15420
+    },
+    "agents": {
+      "total": 57,
+      "layers": 13,
+      "by_layer": {
+        "orchestration": 3,
+        "product": 4,
+        "design": 4,
+        "engineering": 6
+      }
+    },
+    "dependencies": {
+      "mcp_server": "xuansto-mcp-server>=3.5.0",
+      "scripts": ["knowledge-server.py", "skill-test.py", "agentic-security-scanner.py"],
+      "python_version": ">=3.10"
+    },
+    "issues": [
+      {
+        "severity": "WARN",
+        "code": "MISSING_SCRIPT",
+        "message": "Script not found: scripts/context-compressor.py",
+        "path": "scripts/context-compressor.py"
+      }
+    ]
+  },
+  "metadata": {
+    "tool": "skill_analyze",
+    "latency_ms": 234,
+    "degraded": false
+  }
+}
+```
+
+**错误码定义：**
+| 错误码 | 说明 | 处理建议 |
+|--------|------|----------|
+| INVALID_INPUT | skill_path为空或不存在 | 检查路径是否正确 |
+| NOT_FOUND | 技能目录不存在 | 确认skill_path指向有效目录 |
+| PARSE_ERROR | YAML元数据解析失败 | 检查SKILL.md的frontmatter格式 |
+| DEGRADED | 降级模式执行 | 检查MCP Server连接 |
+| TIMEOUT | 分析超时(depth=full时可能) | 改用depth="basic"或缩小分析范围 |
+
+**降级脚本路径：** `scripts/skill-test.py --analyze`
+
+**调用示例：**
+```
+调用: skill_analyze(skill_path="/path/to/project", depth="full", include_agents=True)
+响应: {status: "success", data: {metadata: {...}, structure: {file_count: 72, ...}, agents: {total: 57}, issues: []}, ...}
+```
+
+## knowledge_search
+
+三层知识库混合检索引擎。支持retrieve/inject/precipitate三种操作。
+
+**参数：**
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| action | str | "retrieve" | 操作类型: retrieve, inject, precipitate |
+| query | str\|None | None | 搜索查询文本 |
+| top_k | int | 5 | 返回结果数量上限(1-50) |
+| search_type | str | "hybrid" | 搜索策略: hybrid, semantic_only, keyword_only |
+| scope | str\|None | None | 限定搜索范围: general, workspace, experience |
+| min_confidence | float | 0.0 | 最低置信度阈值(0.0-1.0) |
+| content | str\|None | None | 注入的知识内容(inject时使用) |
+| knowledge_type | str | "general" | 知识类型(inject时使用): general, workspace, experience |
+| metadata | dict\|None | None | 附加元数据(inject时使用) |
+| pattern_ids | list\|None | None | 模式ID列表(precipitate时使用) |
+
+**降级链：** ChromaDB → SQLite FTS5 → keyword_fallback
+
+**完整返回值JSON Schema：**
+```json
+{
+  "status": "success",
+  "data": {
+    "results": [
+      {
+        "id": "kb-001",
+        "content": "React项目初始化最佳实践：使用Vite...",
+        "source": "experience/react-init.md",
+        "confidence": 0.92,
+        "metadata": {
+          "category": "project-init",
+          "tags": ["react", "vite", "typescript"],
+          "created_at": "2025-01-15"
+        }
+      }
+    ],
+    "total_matches": 12,
+    "search_type_used": "hybrid",
+    "degraded": false
+  },
+  "metadata": {
+    "tool": "knowledge_search",
+    "latency_ms": 89,
+    "degraded": false
+  }
+}
+```
+
+**错误码定义：**
+| 错误码 | 说明 | 处理建议 |
+|--------|------|----------|
+| INVALID_INPUT | query为空或top_k超出范围 | 检查参数类型和范围 |
+| NO_RESULTS | 无匹配结果 | 扩大搜索范围或降低min_confidence |
+| DB_UNAVAILABLE | ChromaDB不可用 | 自动降级到SQLite FTS5 |
+| DEGRADED | 降级模式执行(关键词检索) | 检查ChromaDB服务状态 |
+| TIMEOUT | 检索超时 | 减少top_k或简化query |
+
+**降级脚本路径：** `scripts/knowledge-server.py --search`
+
+**调用示例：**
+```
+调用: knowledge_search(query="React项目初始化最佳实践", top_k=5, search_type="hybrid", scope="experience")
+响应: {status: "success", data: {results: [{id: "kb-001", content: "...", confidence: 0.92}], total_matches: 12, search_type_used: "hybrid"}, ...}
+```
+
+## quality_gate_check
+
+54项质量门禁检查。
+
+**参数：**
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| gate_ids | list\|None | None | 要检查的门禁ID列表，为空则检查全部 |
+| phase | str\|None | None | 按阶段过滤门禁(0-8) |
+| project_path | str | "." | 项目根目录路径 |
+| severity_filter | str | "all" | 严重级别过滤: all, BLOCK, WARN |
+| force_refresh | bool | False | 强制刷新缓存，忽略文件哈希缓存 |
+
+**阶段映射：**
+- Phase 0: DESIGN-SYSTEM-COMPLETE, ANTI-PATTERN-CHECK
+- Phase 4: GATE-007, TEST-PASS, FILE-ENCODING
+- Phase 5: AI-PENTEST, SPEC-CONSISTENCY
+- Phase 7: SIMPLIFICATION-BEHAVIOR, GATE-015
+
+**完整返回值JSON Schema：**
+```json
+{
+  "status": "success",
+  "data": {
+    "gates_checked": 6,
+    "gates_passed": 5,
+    "gates_failed": 1,
+    "results": [
+      {
+        "gate_id": "TEST-PASS",
+        "status": "PASS",
+        "severity": "BLOCK",
+        "message": "All 42 tests passed. Coverage: 87.3%",
+        "details": {
+          "total_tests": 42,
+          "passed": 42,
+          "failed": 0,
+          "coverage_pct": 87.3
+        }
+      },
+      {
+        "gate_id": "FILE-ENCODING",
+        "status": "FAIL",
+        "severity": "BLOCK",
+        "message": "2 files have BOM markers",
+        "details": {
+          "offending_files": ["src/utils.ts", "src/config.ts"],
+          "issue": "UTF-8 BOM detected"
+        }
+      }
+    ],
+    "phase": "4",
+    "can_proceed": false
+  },
+  "metadata": {
+    "tool": "quality_gate_check",
+    "latency_ms": 156,
+    "degraded": false
+  }
+}
+```
+
+**错误码定义：**
+| 错误码 | 说明 | 处理建议 |
+|--------|------|----------|
+| INVALID_INPUT | gate_ids格式错误或phase超出范围 | 检查参数类型和范围 |
+| NOT_FOUND | 指定的gate_id不存在 | 检查门禁ID拼写 |
+| GATE_BLOCKED | 存在BLOCK级别门禁失败 | 根据失败详情修复后重新检查 |
+| DEGRADED | 降级模式执行 | 检查MCP Server连接 |
+| PROJECT_NOT_FOUND | project_path无效 | 确认项目路径正确 |
+
+**降级脚本路径：** `scripts/skill-test.py --gate`
+
+**调用示例：**
+```
+调用: quality_gate_check(gate_ids=["TEST-PASS", "FILE-ENCODING"], project_path="/path/to/project")
+响应: {status: "success", data: {gates_checked: 2, gates_passed: 1, gates_failed: 1, results: [{gate_id: "TEST-PASS", status: "PASS", ...}, {gate_id: "FILE-ENCODING", status: "FAIL", ...}], can_proceed: false}, ...}
+```
+
+## spec_drift_detect
+
+规格文档与代码实现偏差检测。
+
+**参数：**
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| spec_dir | str | ".trae/specs" | 规格文档目录 |
+| src_dir | str | "." | 源代码目录 |
+
+**完整返回值JSON Schema：**
+```json
+{
+  "status": "success",
+  "data": {
+    "total_specs": 8,
+    "drifts_detected": 2,
+    "drifts": [
+      {
+        "spec_file": "user-auth.md",
+        "spec_requirement": "密码必须包含大小写字母+数字+特殊字符",
+        "implementation": "src/auth/validator.ts",
+        "drift_type": "MISMATCH",
+        "severity": "HIGH",
+        "description": "实现中缺少特殊字符验证",
+        "suggestion": "在validator.ts中添加特殊字符正则检查"
+      }
+    ],
+    "coverage_pct": 75.0
+  },
+  "metadata": {
+    "tool": "spec_drift_detect",
+    "latency_ms": 312,
+    "degraded": false
+  }
+}
+```
+
+**错误码定义：**
+| 错误码 | 说明 | 处理建议 |
+|--------|------|----------|
+| INVALID_INPUT | spec_dir或src_dir不存在 | 检查目录路径 |
+| NO_SPECS | 规格目录为空 | 确认规格文档已编写 |
+| PARSE_ERROR | 规格文档解析失败 | 检查规格文档格式 |
+| DEGRADED | 降级模式执行 | 检查MCP Server连接 |
+| TIMEOUT | 检测超时(大型项目) | 缩小src_dir范围 |
+
+**降级脚本路径：** `scripts/spec-drift-detector.py`
+
+**调用示例：**
+```
+调用: spec_drift_detect(spec_dir=".trae/specs", src_dir="src")
+响应: {status: "success", data: {total_specs: 8, drifts_detected: 2, drifts: [{spec_file: "user-auth.md", drift_type: "MISMATCH", severity: "HIGH", ...}], coverage_pct: 75.0}, ...}
+```
+
+## security_scan
+
+OWASP Agentic Top 10 + 依赖漏洞扫描。
+
+**参数：**
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| target | str | "." | 目标扫描目录 |
+| severity_threshold | str | "medium" | 最低报告严重级别: critical, high, medium, low |
+| include_agentic | bool | True | 是否包含OWASP Agentic Top 10检查 |
+| include_dependency | bool | True | 是否包含依赖漏洞扫描 |
+
+**完整返回值JSON Schema：**
+```json
+{
+  "status": "success",
+  "data": {
+    "total_findings": 5,
+    "by_severity": {
+      "critical": 0,
+      "high": 1,
+      "medium": 3,
+      "low": 1
+    },
+    "findings": [
+      {
+        "id": "SEC-001",
+        "title": "SQL注入风险",
+        "severity": "high",
+        "category": "OWASP-A03",
+        "file": "src/db/query.ts",
+        "line": 42,
+        "description": "使用字符串拼接构建SQL查询",
+        "remediation": "使用参数化查询替代字符串拼接",
+        "references": ["https://owasp.org/Top10/A03_2021-Injection/"]
+      }
+    ],
+    "agentic_findings": 1,
+    "dependency_findings": 2,
+    "scan_duration_ms": 1847
+  },
+  "metadata": {
+    "tool": "security_scan",
+    "latency_ms": 1847,
+    "degraded": false
+  }
+}
+```
+
+**错误码定义：**
+| 错误码 | 说明 | 处理建议 |
+|--------|------|----------|
+| INVALID_INPUT | target路径无效或severity_threshold错误 | 检查参数类型和范围 |
+| NOT_FOUND | 扫描目标不存在 | 确认target路径正确 |
+| SCAN_ERROR | 扫描引擎内部错误 | 重试或检查目标文件完整性 |
+| DEGRADED | 降级模式执行(内嵌扫描) | 检查MCP Server连接 |
+| TIMEOUT | 扫描超时(大型项目) | 缩小target范围或提高severity_threshold |
+
+**降级脚本路径：** `scripts/agentic-security-scanner.py`
+
+**调用示例：**
+```
+调用: security_scan(target="src", severity_threshold="medium", include_agentic=True, include_dependency=True)
+响应: {status: "success", data: {total_findings: 5, by_severity: {critical: 0, high: 1, medium: 3, low: 1}, findings: [{id: "SEC-001", title: "SQL注入风险", severity: "high", ...}], ...}, ...}
+```
+
+## code_simplify
+
+代码简化分析。
+
+**参数：**
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| target | str | 必填 | 目标文件或目录路径 |
+| scope | str | "recent" | 扫描范围: file, dir, recent |
+| include_dedup | bool | True | 是否包含重复代码检测 |
+
+**完整返回值JSON Schema：**
+```json
+{
+  "status": "success",
+  "data": {
+    "total_suggestions": 8,
+    "by_type": {
+      "dead_code": 3,
+      "duplication": 2,
+      "complexity": 2,
+      "naming": 1
+    },
+    "suggestions": [
+      {
+        "id": "SIMP-001",
+        "type": "dead_code",
+        "file": "src/utils/helpers.ts",
+        "line_start": 45,
+        "line_end": 52,
+        "description": "未使用的函数 processLegacyData",
+        "safety": "SAFE",
+        "action": "删除整个函数",
+        "estimated_reduction": 8
+      },
+      {
+        "id": "SIMP-002",
+        "type": "duplication",
+        "files": ["src/auth/validator.ts", "src/user/validator.ts"],
+        "description": "重复的邮箱验证逻辑",
+        "safety": "SAFE",
+        "action": "提取为共享工具函数",
+        "estimated_reduction": 15
+      }
+    ],
+    "total_lines_reducible": 42,
+    "safe_count": 6,
+    "caution_count": 2
+  },
+  "metadata": {
+    "tool": "code_simplify",
+    "latency_ms": 567,
+    "degraded": false
+  }
+}
+```
+
+**错误码定义：**
+| 错误码 | 说明 | 处理建议 |
+|--------|------|----------|
+| INVALID_INPUT | target路径无效或scope错误 | 检查参数类型和范围 |
+| NOT_FOUND | 目标文件/目录不存在 | 确认target路径正确 |
+| PARSE_ERROR | 代码解析失败 | 检查文件语法是否正确 |
+| DEGRADED | 降级模式执行(内嵌simplify+dedup) | 检查MCP Server连接 |
+| TIMEOUT | 分析超时(大型目录) | 改用scope="file"或缩小target |
+
+**降级脚本路径：** `scripts/code-simplifier.py`
+
+**调用示例：**
+```
+调用: code_simplify(target="src/utils", scope="dir", include_dedup=True)
+响应: {status: "success", data: {total_suggestions: 8, by_type: {dead_code: 3, duplication: 2, ...}, suggestions: [{id: "SIMP-001", type: "dead_code", safety: "SAFE", ...}], ...}, ...}
+```
+
+## session_manage
+
+会话状态管理。
+
+**参数：**
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| action | str | 必填 | 操作类型: save, load, list, detect, verify, track, restore |
+| completed_tasks | list\|None | None | 已完成任务列表(save时使用) |
+| pending_tasks | list\|None | None | 未完成任务列表(save/track时使用) |
+| decisions | list\|None | None | 关键决策列表(save/track时使用) |
+| experience | list\|None | None | 经验沉淀列表(save时使用) |
+| error_log | list\|None | None | 错误日志(detect时使用) |
+| pattern_path | str\|None | None | 模式文件路径(verify时使用) |
+| success | bool | True | 验证是否成功(verify时使用) |
+| current_phase | int\|None | None | 当前阶段编号(track时使用) |
+| current_task | str\|None | None | 当前任务描述(track时使用) |
+
+**完整返回值JSON Schema：**
+```json
+{
+  "status": "success",
+  "data": {
+    "action": "save",
+    "session_id": "sess-20250122-001",
+    "saved_at": "2025-01-22T14:30:00Z",
+    "state": {
+      "current_phase": 4,
+      "workflow_id": "wf-001",
+      "completed_tasks": ["task-1", "task-2"],
+      "pending_tasks": ["task-3", "task-4"],
+      "decisions": [
+        {
+          "id": "ADR-001",
+          "title": "选择React作为前端框架",
+          "rationale": "团队经验+生态成熟",
+          "timestamp": "2025-01-22T10:00:00Z"
+        }
+      ],
+      "experience": [
+        {
+          "category": "project-init",
+          "content": "Vite+React+TS组合初始化效率高",
+          "confidence": 0.85
+        }
+      ]
+    }
+  },
+  "metadata": {
+    "tool": "session_manage",
+    "latency_ms": 45,
+    "degraded": false
+  }
+}
+```
+
+**错误码定义：**
+| 错误码 | 说明 | 处理建议 |
+|--------|------|----------|
+| INVALID_INPUT | action不在允许列表中 | 使用save/load/list/detect/verify |
+| NOT_FOUND | 会话不存在(load) | 确认session_id正确 |
+| SAVE_ERROR | 会话保存失败 | 检查磁盘空间和权限 |
+| VERIFY_FAILED | 模式验证失败 | 检查pattern_path和success参数 |
+| DEGRADED | 降级模式执行(内存临时状态) | 检查MCP Server连接 |
+
+**降级脚本路径：** `scripts/init-session.py` (save/init) / `scripts/session-catchup.py` (load/detect/restore) / `scripts/session-persist.py` (save/load/list 兜底)
+
+**调用示例：**
+```
+调用: session_manage(action="save", completed_tasks=["task-1", "task-2"], pending_tasks=["task-3"], decisions=[{"id": "ADR-001", "title": "选择React"}])
+响应: {status: "success", data: {action: "save", session_id: "sess-20250122-001", state: {current_phase: 4, completed_tasks: ["task-1", "task-2"], ...}}, ...}
+
+调用: session_manage(action="load")
+响应: {status: "success", data: {action: "load", session_id: "sess-20250122-001", state: {current_phase: 4, workflow_id: "wf-001", ...}}, ...}
+```
+
+## workflow_dispatch
+
+工作流调度：启动/查询/中止工作流执行。
+
+**参数：**
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| action | str | 必填 | 操作类型: start, status, abort, phase, recover, snapshots |
+| workflow | str\|None | None | 工作流名称(start时使用): sdd-tdd-full, sdd-tdd-medium, sdd-tdd-fast等 |
+| project_path | str | "." | 项目根目录路径(start时使用) |
+| workflow_id | str\|None | None | 工作流实例ID(status/abort/phase/recover/snapshots时使用) |
+| phase_action | str\|None | None | 阶段操作(phase时使用): advance, current |
+| snapshot_phase | int\|None | None | 恢复到指定阶段的快照(recover时使用) |
+
+**完整返回值JSON Schema：**
+```json
+{
+  "status": "success",
+  "data": {
+    "action": "start",
+    "workflow_id": "wf-20250122-001",
+    "workflow_name": "sdd-tdd-full",
+    "current_phase": 0,
+    "phases": [
+      {"phase": 0, "name": "初始化", "status": "IN_PROGRESS"},
+      {"phase": 1, "name": "需求分析", "status": "PENDING"},
+      {"phase": 2, "name": "架构设计", "status": "PENDING"},
+      {"phase": 3, "name": "测试先行", "status": "PENDING"},
+      {"phase": 4, "name": "代码实现", "status": "PENDING"},
+      {"phase": 5, "name": "测试验证", "status": "PENDING"},
+      {"phase": 6, "name": "验收确认", "status": "PENDING"},
+      {"phase": 7, "name": "持续重构", "status": "PENDING"},
+      {"phase": 8, "name": "部署交付", "status": "PENDING"}
+    ],
+    "started_at": "2025-01-22T14:00:00Z"
+  },
+  "metadata": {
+    "tool": "workflow_dispatch",
+    "latency_ms": 78,
+    "degraded": false
+  }
+}
+```
+
+**错误码定义：**
+| 错误码 | 说明 | 处理建议 |
+|--------|------|----------|
+| INVALID_INPUT | action不在允许列表中或workflow名称无效 | 使用start/status/abort |
+| NOT_FOUND | workflow_id不存在(status/abort) | 确认workflow_id正确 |
+| ALREADY_RUNNING | 已有工作流在运行(start) | 先abort当前工作流或使用status查询 |
+| ABORT_FAILED | 工作流中止失败 | 检查工作流状态后重试 |
+| DEGRADED | 降级模式执行(内联Phase推进) | 检查MCP Server连接 |
+
+**降级脚本路径：** `scripts/project-initializer.py` (start) / 内联Phase推进（status/abort，无独立脚本）
+
+**调用示例：**
+```
+调用: workflow_dispatch(action="start", workflow="sdd-tdd-full", project_path="/path/to/project")
+响应: {status: "success", data: {action: "start", workflow_id: "wf-20250122-001", current_phase: 0, phases: [...], ...}, ...}
+
+调用: workflow_dispatch(action="status", workflow_id="wf-20250122-001")
+响应: {status: "success", data: {action: "status", workflow_id: "wf-20250122-001", current_phase: 4, ...}, ...}
+
+调用: workflow_dispatch(action="abort", workflow_id="wf-20250122-001")
+响应: {status: "success", data: {action: "abort", workflow_id: "wf-20250122-001", aborted_at: "2025-01-22T15:00:00Z"}, ...}
+```
+
+## agent_status
+
+Agent状态查询：列出全部Agent、按Phase查询、查询单个Agent详情。
+
+**参数：**
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| action | str | 必填 | 操作类型: list, by_phase, detail, create, match, assign, release, instance_status, destroy, schedule |
+| phase | int\|None | None | 按阶段查询Agent(by_phase时使用, 0-8) |
+| agent_name | str\|None | None | Agent名称(detail时使用) |
+| agent_type | str\|None | None | Agent类型(create) |
+| capabilities | list\|None | None | 能力列表(create/match) |
+| agent_id | str\|None | None | Agent实例ID(assign/release/instance_status/destroy) |
+| task | str\|None | None | 任务描述(assign) |
+
+**完整返回值JSON Schema：**
+```json
+{
+  "status": "success",
+  "data": {
+    "action": "by_phase",
+    "phase": 4,
+    "agents": [
+      {
+        "name": "Backend Developer",
+        "layer": "engineering",
+        "status": "AVAILABLE",
+        "capabilities": ["API开发", "数据库操作", "业务逻辑实现"],
+        "assigned_tasks": 2,
+        "completed_tasks": 1,
+        "definition_file": "agents/backend-developer.md"
+      },
+      {
+        "name": "Frontend Developer",
+        "layer": "engineering",
+        "status": "BUSY",
+        "capabilities": ["UI组件开发", "状态管理", "样式实现"],
+        "assigned_tasks": 3,
+        "completed_tasks": 0,
+        "definition_file": "agents/frontend-developer.md"
+      }
+    ],
+    "total_agents": 7,
+    "available_count": 5
+  },
+  "metadata": {
+    "tool": "agent_status",
+    "latency_ms": 23,
+    "degraded": false
+  }
+}
+```
+
+**错误码定义：**
+| 错误码 | 说明 | 处理建议 |
+|--------|------|----------|
+| INVALID_INPUT | action不在允许列表中或phase超出范围 | 使用list/by_phase/detail，phase范围0-8 |
+| NOT_FOUND | agent_name不存在 | 检查Agent名称拼写 |
+| DEGRADED | 降级模式执行(静态注册表查询) | 检查MCP Server连接 |
+
+**降级脚本路径：** 静态注册表查询 / `scripts/skill-test.py --agents` (兜底)
+
+**调用示例：**
+```
+调用: agent_status(action="list")
+响应: {status: "success", data: {action: "list", agents: [{name: "Orchestrator", layer: "orchestration", ...}, ...], total_agents: 57}, ...}
+
+调用: agent_status(action="by_phase", phase=4)
+响应: {status: "success", data: {action: "by_phase", phase: 4, agents: [{name: "Backend Developer", status: "AVAILABLE", ...}], total_agents: 7}, ...}
+
+调用: agent_status(action="detail", agent_name="Security Auditor")
+响应: {status: "success", data: {action: "detail", agent: {name: "Security Auditor", layer: "security", capabilities: [...], definition_file: "agents/security-auditor.md"}}, ...}
+```
+
+## hook_manage
+
+Hook管理：列出Hook配置、执行指定Hook。
+
+**参数：**
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| action | str | 必填 | 操作类型: list, execute |
+| profile | str | "standard" | Hook配置级别: minimal, standard, strict |
+| hook_name | str\|None | None | Hook名称(execute时使用) |
+| context | dict\|None | None | 执行上下文(execute时使用) |
+
+**完整返回值JSON Schema：**
+```json
+{
+  "status": "success",
+  "data": {
+    "action": "list",
+    "profile": "standard",
+    "hooks": [
+      {
+        "name": "PhaseEnter",
+        "trigger": "phase_transition",
+        "pre_callbacks": ["validate_phase_prerequisites"],
+        "post_callbacks": ["notify_agents", "preload_resources"],
+        "enabled": true
+      },
+      {
+        "name": "GatePass",
+        "trigger": "gate_check_pass",
+        "pre_callbacks": [],
+        "post_callbacks": ["quality_gate_check"],
+        "enabled": true
+      },
+      {
+        "name": "GateFail",
+        "trigger": "gate_check_fail",
+        "pre_callbacks": [],
+        "post_callbacks": ["log_failure", "suggest_fix"],
+        "enabled": true
+      },
+      {
+        "name": "SessionStart",
+        "trigger": "session_init",
+        "pre_callbacks": [],
+        "post_callbacks": ["session_manage(load)"],
+        "enabled": true
+      },
+      {
+        "name": "SessionStop",
+        "trigger": "session_end",
+        "pre_callbacks": [],
+        "post_callbacks": ["session_manage(save)"],
+        "enabled": true
+      }
+    ],
+    "total_hooks": 6,
+    "enabled_count": 6
+  },
+  "metadata": {
+    "tool": "hook_manage",
+    "latency_ms": 12,
+    "degraded": false
+  }
+}
+```
+
+**错误码定义：**
+| 错误码 | 说明 | 处理建议 |
+|--------|------|----------|
+| INVALID_INPUT | action不在允许列表中或profile无效 | 使用list/execute，profile: minimal/standard/strict |
+| NOT_FOUND | hook_name不存在 | 检查Hook名称拼写 |
+| EXECUTION_ERROR | Hook执行失败 | 检查context参数；Hook失败不阻塞主流程 |
+| DEGRADED | 降级模式执行(内联Hook执行) | 检查MCP Server连接 |
+
+**降级脚本路径：** `scripts/check-encoding.py` (encoding-check) / `scripts/token-budget-guard.py` (token-budget-check) / `scripts/session-persist.py` (session-save) / 内联Hook执行（list，无独立脚本）
+
+**调用示例：**
+```
+调用: hook_manage(action="list", profile="standard")
+响应: {status: "success", data: {action: "list", profile: "standard", hooks: [{name: "PhaseEnter", trigger: "phase_transition", enabled: true, ...}, ...], total_hooks: 6}, ...}
+
+调用: hook_manage(action="execute", hook_name="PhaseEnter", context={"from_phase": 3, "to_phase": 4})
+响应: {status: "success", data: {action: "execute", hook_name: "PhaseEnter", result: "completed", pre_callbacks_result: ["prerequisites_ok"], post_callbacks_result: ["agents_notified", "resources_preloaded"]}, ...}
+```
+
+## resource_load_status
+
+渐进式加载状态管理：查询资源加载状态、预加载指定Phase资源。
+
+**参数：**
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| action | str | 必填 | 操作类型: status, preload, cache, clear_cache, loading_progress |
+| phase | int\|None | None | 目标阶段(0-8) |
+| resource_ids | list\|None | None | 指定资源ID列表 |
+| resource_uris | list\|None | None | 资源URI列表(preload时使用) |
+| priority | str | "normal" | 预加载优先级(preload时使用): critical, normal, background |
+| batch_mode | bool | False | 是否批量预加载模式(preload时使用)，批量模式并发加载多个资源 |
+
+**完整返回值JSON Schema：**
+```json
+{
+  "status": "success",
+  "data": {
+    "action": "preload",
+    "phase": 4,
+    "resources": [
+      {
+        "id": "ref-mcp-tools",
+        "type": "reference",
+        "path": "references/mcp-tools.md",
+        "status": "LOADED",
+        "size_kb": 12.5
+      },
+      {
+        "id": "ref-workflow-phases",
+        "type": "reference",
+        "path": "references/workflow-phases.md",
+        "status": "LOADED",
+        "size_kb": 8.3
+      },
+      {
+        "id": "agent-registry",
+        "type": "agent",
+        "path": "xuansto://references/agent-registry",
+        "status": "LOADED",
+        "size_kb": 45.2
+      }
+    ],
+    "total_resources": 3,
+    "loaded_count": 3,
+    "total_size_kb": 66.0,
+    "token_budget_used": 3200,
+    "token_budget_remaining": 76800
+  },
+  "metadata": {
+    "tool": "resource_load_status",
+    "latency_ms": 34,
+    "degraded": false
+  }
+}
+```
+
+**错误码定义：**
+| 错误码 | 说明 | 处理建议 |
+|--------|------|----------|
+| INVALID_INPUT | action不在允许列表中或phase超出范围 | 使用status/preload，phase范围0-8 |
+| NOT_FOUND | resource_ids中包含不存在的资源 | 检查资源ID拼写 |
+| LOAD_ERROR | 资源加载失败 | 检查资源文件是否存在 |
+| TOKEN_BUDGET_EXCEEDED | Token预算不足 | 使用context_compress压缩或减少加载量 |
+| DEGRADED | 降级模式执行(内联状态检查) | 检查MCP Server连接 |
+
+**降级脚本路径：** 内联状态检查（无独立脚本，直接读取文件系统）
+
+**调用示例：**
+```
+调用: resource_load_status(action="status")
+响应: {status: "success", data: {action: "status", resources: [{id: "ref-mcp-tools", status: "LOADED", ...}], token_budget_used: 3200, ...}, ...}
+
+调用: resource_load_status(action="preload", phase=4, resource_ids=["ref-mcp-tools", "agent-registry"])
+响应: {status: "success", data: {action: "preload", phase: 4, resources: [{id: "ref-mcp-tools", status: "LOADED", ...}], total_resources: 2, ...}, ...}
+```
+
+## context_compress
+
+上下文压缩：支持semantic/selective/lossless三种策略。
+
+**参数：**
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| content | str | 必填 | 待压缩的文本内容 |
+| strategy | str | "semantic" | 压缩策略: semantic, selective, lossless |
+| target_tokens | int | 2000 | 目标Token数量(100-50000) |
+| preserve_sections | list\|None | None | 必须保留的章节标题列表 |
+
+**完整返回值JSON Schema：**
+```json
+{
+  "status": "success",
+  "data": {
+    "original_tokens": 8500,
+    "compressed_tokens": 1950,
+    "compression_ratio": 0.23,
+    "strategy_used": "semantic",
+    "compressed_content": "## 项目摘要\n\n技术栈: React+TypeScript+Vite\n当前Phase: 4(代码实现)\n已完成: 初始化→需求→架构→测试先行\n关键决策: ADR-001(React选型), ADR-002(Monorepo)\n待完成: 用户认证模块, 数据看板模块\n...",
+    "preserved_sections": ["关键决策", "待完成任务"],
+    "quality_score": 0.91
+  },
+  "metadata": {
+    "tool": "context_compress",
+    "latency_ms": 234,
+    "degraded": false
+  }
+}
+```
+
+**错误码定义：**
+| 错误码 | 说明 | 处理建议 |
+|--------|------|----------|
+| INVALID_INPUT | content为空或strategy无效 | 检查参数类型和范围 |
+| TARGET_TOO_SMALL | target_tokens过小无法保留关键信息 | 增大target_tokens或使用preserve_sections |
+| COMPRESSION_FAILED | 压缩过程失败 | 改用lossless策略 |
+| DEGRADED | 降级模式执行 | 检查MCP Server连接 |
+| TIMEOUT | 压缩超时(内容过长) | 减少content长度或使用selective策略 |
+
+**降级脚本路径：** `scripts/context-compressor.py`
+
+**调用示例：**
+```
+调用: context_compress(content="...(8500 tokens of session summary)...", strategy="semantic", target_tokens=2000, preserve_sections=["关键决策", "待完成任务"])
+响应: {status: "success", data: {original_tokens: 8500, compressed_tokens: 1950, compression_ratio: 0.23, strategy_used: "semantic", compressed_content: "## 项目摘要\n...", quality_score: 0.91}, ...}
+```
+
+## server_health
+
+服务器健康检查。
+
+**参数：** 无
+
+**完整返回值JSON Schema：**
+```json
+{
+  "status": "success",
+  "data": {
+    "server_status": "HEALTHY",
+    "version": "3.5.0",
+    "uptime_seconds": 86400,
+    "tools_available": 13,
+    "tools_status": {
+      "skill_analyze": "OK",
+      "knowledge_search": "OK",
+      "quality_gate_check": "OK",
+      "spec_drift_detect": "OK",
+      "security_scan": "OK",
+      "code_simplify": "OK",
+      "session_manage": "OK",
+      "workflow_dispatch": "OK",
+      "agent_status": "OK",
+      "hook_manage": "OK",
+      "resource_load_status": "OK",
+      "context_compress": "OK",
+      "server_health": "OK"
+    },
+    "memory_usage_mb": 128.5,
+    "active_workflows": 1,
+    "active_sessions": 2,
+    "last_check": "2025-01-22T14:30:00Z"
+  },
+  "metadata": {
+    "tool": "server_health",
+    "latency_ms": 5,
+    "degraded": false
+  }
+}
+```
+
+**错误码定义：**
+| 错误码 | 说明 | 处理建议 |
+|--------|------|----------|
+| UNAVAILABLE | MCP Server不可用 | 检查xuansto-mcp-server进程和配置 |
+| TIMEOUT | 健康检查超时 | 检查Server负载和网络连接 |
+| PARTIAL_DEGRADATION | 部分工具不可用 | 查看tools_status确认哪些工具降级 |
+| VERSION_MISMATCH | Server版本不兼容 | 更新xuansto-mcp-server到>=3.5.0 |
+
+**降级脚本路径：** `scripts/health-checker.py`
+
+**调用示例：**
+```
+调用: server_health()
+响应: {status: "success", data: {server_status: "HEALTHY", version: "3.5.0", tools_available: 13, tools_status: {skill_analyze: "OK", ...}, memory_usage_mb: 128.5, ...}, ...}
+```
