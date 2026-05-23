@@ -1,14 +1,10 @@
 ---
-name: TechnicalWriter
-emoji: 📝
+name: Technical Writer
 description: 技术文档编写与维护
-color: yellow
-tools:
-  - Read
-  - Grep
-  - SearchCodebase
-model: standard
-services:
+phase: [1, 6]
+layer: 产品
+model_routing: standard
+capabilities:
   - documentation
   - api-docs
   - readme

@@ -1,16 +1,10 @@
 ---
-name: BackendDeveloper
-emoji: 🔧
+name: Backend Developer
 description: 后端代码与API开发
-color: emerald
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: standard
-services:
+phase: [4]
+layer: 工程
+model_routing: standard
+capabilities:
   - api
   - middleware
   - business-logic

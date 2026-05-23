@@ -1,16 +1,10 @@
 ---
-name: Dba
-emoji: 🗄️
+name: DBA
 description: 数据库运维与性能调优
-color: yellow
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: standard
-services:
+phase: [4, 8]
+layer: 数据
+model_routing: standard
+capabilities:
   - slow-query
   - execution-plan
   - backup

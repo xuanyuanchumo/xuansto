@@ -1,14 +1,10 @@
 ---
-name: ProductManager
-emoji: 📋
+name: Product Manager
 description: 需求澄清与用户故事编写
-color: green
-tools:
-  - Read
-  - Grep
-  - SearchCodebase
-model: deep
-services:
+phase: [1, 6]
+layer: 产品
+model_routing: standard
+capabilities:
   - requirements
   - user-stories
   - acceptance-criteria

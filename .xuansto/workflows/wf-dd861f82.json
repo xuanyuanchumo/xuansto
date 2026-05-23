@@ -1,0 +1,222 @@
+{
+  "workflow_id": "wf-dd861f82",
+  "workflow": "sdd-tdd-fast",
+  "project_path": "C:\\Users\\86156\\AppData\\Local\\Temp\\pytest-of-86156\\pytest-660\\test_workflow_snapshots_action0",
+  "status": "running",
+  "current_phase": 0,
+  "started_at": "2026-05-22T14:21:32.107014+00:00",
+  "completed_phases": [],
+  "phase_definitions": [
+    {
+      "id": "phase-1",
+      "name": "快速需求",
+      "order": 1,
+      "optional": false,
+      "trigger_condition": "用户请求快速开发或小型任务",
+      "agents": {
+        "primary": [
+          "fullstack-engineer"
+        ],
+        "supporting": []
+      },
+      "inputs": [
+        {
+          "name": "用户需求描述",
+          "type": "document",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "简化需求文档",
+          "type": "document",
+          "validation": "核心功能点明确"
+        },
+        {
+          "name": "实现方案说明",
+          "type": "document",
+          "validation": "实现方案可行"
+        }
+      ],
+      "quality_gates": [
+        {
+          "gate_id": "GATE-001",
+          "blocking": true,
+          "pass_criteria": "核心功能点明确"
+        },
+        {
+          "gate_id": "GATE-002",
+          "blocking": true,
+          "pass_criteria": "实现方案可行"
+        }
+      ],
+      "timeout_minutes": 60,
+      "retry": {
+        "max_attempts": 2,
+        "backoff": "fixed"
+      }
+    },
+    {
+      "id": "phase-2",
+      "name": "TDD快速开发",
+      "order": 2,
+      "optional": false,
+      "trigger_condition": "快速需求完成",
+      "agents": {
+        "primary": [
+          "fullstack-engineer",
+          "unit-tester"
+        ],
+        "supporting": []
+      },
+      "inputs": [
+        {
+          "name": "简化需求文档",
+          "type": "document",
+          "required": true,
+          "source_phase": "phase-1"
+        },
+        {
+          "name": "实现方案说明",
+          "type": "document",
+          "required": true,
+          "source_phase": "phase-1"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "源代码",
+          "type": "code",
+          "validation": "核心测试通过"
+        },
+        {
+          "name": "核心测试用例",
+          "type": "code",
+          "validation": "覆盖率>=60%"
+        }
+      ],
+      "quality_gates": [
+        {
+          "gate_id": "TEST-PASS",
+          "blocking": true,
+          "pass_criteria": "核心测试用例通过"
+        },
+        {
+          "gate_id": "GATE-005",
+          "blocking": true,
+          "pass_criteria": "代码覆盖率>=60%"
+        }
+      ],
+      "timeout_minutes": 120,
+      "retry": {
+        "max_attempts": 3,
+        "backoff": "exponential"
+      }
+    },
+    {
+      "id": "phase-3",
+      "name": "快速审查",
+      "order": 3,
+      "optional": false,
+      "trigger_condition": "TDD快速开发完成",
+      "agents": {
+        "primary": [
+          "code-reviewer",
+          "fullstack-engineer"
+        ],
+        "supporting": []
+      },
+      "inputs": [
+        {
+          "name": "源代码",
+          "type": "code",
+          "required": true,
+          "source_phase": "phase-2"
+        },
+        {
+          "name": "核心测试用例",
+          "type": "code",
+          "required": true,
+          "source_phase": "phase-2"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "审查反馈",
+          "type": "document"
+        },
+        {
+          "name": "修复确认",
+          "type": "document"
+        }
+      ],
+      "quality_gates": [
+        {
+          "gate_id": "GATE-009",
+          "blocking": true,
+          "pass_criteria": "无严重问题且核心逻辑正确"
+        },
+        {
+          "gate_id": "GATE-007",
+          "blocking": true,
+          "pass_criteria": "代码风格和规范检查通过"
+        }
+      ],
+      "timeout_minutes": 30,
+      "retry": {
+        "max_attempts": 2,
+        "backoff": "fixed"
+      }
+    },
+    {
+      "id": "phase-4",
+      "name": "快速验证",
+      "order": 4,
+      "optional": false,
+      "trigger_condition": "快速审查通过",
+      "agents": {
+        "primary": [
+          "fullstack-engineer"
+        ],
+        "supporting": []
+      },
+      "inputs": [
+        {
+          "name": "审查通过的代码",
+          "type": "code",
+          "required": true,
+          "source_phase": "phase-3"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "验证结果",
+          "type": "document",
+          "validation": "功能符合预期"
+        },
+        {
+          "name": "交付确认",
+          "type": "document",
+          "validation": "演化闭环完成"
+        }
+      ],
+      "quality_gates": [
+        {
+          "gate_id": "GATE-011",
+          "blocking": true,
+          "pass_criteria": "功能符合预期"
+        },
+        {
+          "gate_id": "GATE-015",
+          "blocking": true,
+          "pass_criteria": "演化闭环完成"
+        }
+      ],
+      "timeout_minutes": 30,
+      "retry": {
+        "max_attempts": 2,
+        "backoff": "fixed"
+      }
+    }
+  ]
+}

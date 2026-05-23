@@ -1,19 +1,13 @@
 ---
-name: QualityMonitor
-emoji: 📈
+name: Quality Monitor
 description: 质量指标监控与告警
-color: teal
-tools:
-  - Read
-  - Grep
-  - RunCommand
-model: fast
-services:
+phase: [0, 5]
+layer: 监控
+model_routing: fast
+capabilities:
   - quality-metrics
   - alerting
   - trend-analysis
-priority: P2
-layer: monitoring
 ---
 
 # 📈 Quality Monitor

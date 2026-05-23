@@ -1,16 +1,10 @@
 ---
-name: NativeModuleDeveloper
-emoji: ⚙️
+name: Native Module Developer
 description: 原生模块开发与系统API封装
-color: red
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: standard
-services:
+phase: [4]
+layer: 跨平台
+model_routing: deep
+capabilities:
   - n-api
   - rust-ffi
   - native-dialogs

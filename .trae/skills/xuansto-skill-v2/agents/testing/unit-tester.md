@@ -1,16 +1,10 @@
 ---
-name: UnitTester
-emoji: 🧪
+name: Unit Tester
 description: 单元测试编写与执行
-color: green
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: standard
-services:
+phase: [3, 4]
+layer: 测试
+model_routing: fast
+capabilities:
   - pytest
   - jest
   - go-test

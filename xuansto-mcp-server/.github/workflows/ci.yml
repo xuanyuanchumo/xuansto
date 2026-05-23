@@ -7,10 +7,57 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  lint-format:
+    name: Lint + Format
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: uv pip install -e ".[dev]" --system
+      - name: Ruff check
+        run: ruff check src/
+      - name: Ruff format check
+        run: ruff format --check src/
+
+  schema-validation:
+    name: Schema Validation
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: uv pip install -e ".[dev]" --system
+      - name: Validate Pydantic models
+        run: python -c "from xuansto_mcp.models.schemas import *; print('All Pydantic models valid')"
+      - name: Validate YAML configs
+        run: python -c "import yaml; from pathlib import Path; [yaml.safe_load(p.read_text(encoding='utf-8')) for p in Path('src/xuansto_mcp/data').rglob('*.yaml') if p.name != '.gitkeep']; print('All YAML configs valid')"
+      - name: Validate JSON schemas
+        run: python -c "import json; from pathlib import Path; [json.loads(p.read_text(encoding='utf-8')) for p in Path('spec-locks').glob('*.json')]; print('All JSON schemas valid')"
+      - name: Validate spec-locks against code
+        run: pytest tests/test_compatibility/ -v -k "schema" --tb=short
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
@@ -22,15 +69,64 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: uv pip install -e ".[dev]" --system
-      - name: Run tests
-        run: pytest --tb=short -q
-      - name: Run ruff check
-        run: ruff check src/
-      - name: Run mypy
-        run: mypy src/ --ignore-missing-imports || true
+      - name: Run unit tests with coverage
+        run: pytest tests/ --ignore=tests/test_mcp_protocol.py --ignore=tests/test_compatibility/ -v --cov=xuansto_mcp --cov-report=term-missing --tb=short -q
+      - name: Upload coverage
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: .coverage
+
+  integration-tests:
+    name: Integration Tests
+    needs: [lint-format, unit-tests]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: uv pip install -e ".[dev]" --system
+      - name: Run integration tests
+        run: pytest tests/test_integration.py tests/test_compatibility/ -v --tb=short
+
+  e2e-verification:
+    name: E2E Verification
+    needs: [integration-tests]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: uv pip install -e ".[dev]" --system
+      - name: Run MCP protocol E2E tests
+        run: pytest tests/test_mcp_protocol.py -v --tb=short
+      - name: Run deployment verification
+        run: python scripts/verify_deployment.py
 
   build:
-    needs: test
+    name: Build Package
+    needs: [e2e-verification]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

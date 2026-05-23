@@ -1,21 +1,14 @@
 ---
-name: TokenOptimizer
-emoji: ⚡
+name: Token Optimizer
 description: Token预算管理、上下文压缩与按需加载调度
-color: green
-tools:
-  - Read
-  - Write
-  - Grep
-  - SearchCodebase
-model: fast
-services:
+phase: [0, 7]
+layer: 知识
+model_routing: fast
+capabilities:
   - token-budget-management
   - context-compression
   - tes-scoring
   - on-demand-loading
-priority: P1
-layer: knowledge
 ---
 
 # ⚡ Token Optimizer

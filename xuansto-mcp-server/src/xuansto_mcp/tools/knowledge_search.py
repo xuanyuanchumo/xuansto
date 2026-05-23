@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import math
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,8 +21,15 @@ from ..core.config import (
     PATTERNS_DIR,
     REFERENCES_DIR,
 )
-from ..core.errors import make_error_response, make_success_response
+from ..core.errors import make_error_response, make_success_response, ERR_VALIDATION
 from ..core.logging_config import get_logger
+from ..core.search_engine import (
+    SearchResult,
+    get_search_engine,
+    ChromaDBSearchEngine,
+    SimpleSearchEngine,
+    SQLiteFTSSearchEngine,
+)
 from ..core.validator import validate_input
 from ..models.schemas import KnowledgeSearchInput
 
@@ -490,31 +496,39 @@ def register(mcp: FastMCP) -> None:
             if action == "inject":
                 _ensure_knowledge_index()
                 if not content:
-                    return make_error_response(ValueError("inject action requires content parameter"))
+                    return make_error_response(ValueError("inject action requires content parameter"), error_code=ERR_VALIDATION)
                 result = _inject_knowledge(content, knowledge_type, metadata)
                 return make_success_response(data=result)
 
             if action == "precipitate":
                 _ensure_knowledge_index()
                 if not pattern_ids:
-                    return make_error_response(ValueError("precipitate action requires pattern_ids parameter"))
+                    return make_error_response(ValueError("precipitate action requires pattern_ids parameter"), error_code=ERR_VALIDATION)
                 result = _precipitate_experience(pattern_ids)
                 return make_success_response(data=result)
 
             if not query:
-                return make_error_response(ValueError("retrieve action requires query parameter"))
+                return make_error_response(ValueError("retrieve action requires query parameter"), error_code=ERR_VALIDATION)
             _ensure_knowledge_index()
-            chroma_result: dict[str, Any] | None = None
+
             if search_type in ("hybrid", "semantic_only"):
-                chroma_result = _chromadb_search(query, top_k, scope, min_confidence)
-                if chroma_result and chroma_result["total"] > 0:
-                    return make_success_response(data=chroma_result, degradation_level="chromadb")
-            if search_type in ("hybrid", "keyword_only") or (search_type == "semantic_only" and (chroma_result is None or chroma_result["total"] == 0)):
-                sqlite_result = _sqlite_search(query, top_k, scope, min_confidence)
-                if sqlite_result and sqlite_result["total"] > 0:
-                    return make_success_response(data=sqlite_result, degradation_level="sqlite_fts5")
-            keyword_result = _keyword_fallback_search(query, top_k, scope)
-            return make_success_response(data=keyword_result, degradation_level="keyword_fallback")
+                chroma_engine = get_search_engine("chromadb")
+                chroma_results = chroma_engine.search(query, top_k, {"scope": scope, "min_confidence": min_confidence})
+                if chroma_results:
+                    items = [{"source": r.source, "content": r.content, "match_type": r.match_type, "relevance": r.relevance} for r in chroma_results]
+                    return make_success_response(data={"results": items, "total": len(items), "strategy": "chromadb_semantic"}, degradation_level="chromadb")
+
+            if search_type in ("hybrid", "keyword_only") or (search_type == "semantic_only" and not chroma_results):
+                sqlite_engine = get_search_engine("sqlite_fts5")
+                sqlite_results = sqlite_engine.search(query, top_k, {"scope": scope, "min_confidence": min_confidence})
+                if sqlite_results:
+                    items = [{"source": r.source, "content": r.content, "match_type": r.match_type, "relevance": r.relevance} for r in sqlite_results]
+                    return make_success_response(data={"results": items, "total": len(items), "strategy": "sqlite_fts5_bm25"}, degradation_level="sqlite_fts5")
+
+            simple_engine = get_search_engine("simple")
+            simple_results = simple_engine.search(query, top_k, {"scope": scope})
+            items = [{"source": r.source, "content": r.content, "match_type": r.match_type, "relevance": r.relevance} for r in simple_results]
+            return make_success_response(data={"results": items, "total": len(items), "strategy": "keyword_tfidf"}, degradation_level="keyword_fallback")
         except Exception as e:
             logger.error("knowledge_search error: %s", e)
             return make_error_response(e)

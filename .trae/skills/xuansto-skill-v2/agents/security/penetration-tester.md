@@ -1,15 +1,10 @@
 ---
-name: PenetrationTester
-emoji: 🔓
+name: Penetration Tester
 description: 渗透测试与漏洞验证
-color: red
-tools:
-  - Read
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: deep
-services:
+phase: [5]
+layer: 安全
+model_routing: deep
+capabilities:
   - auth-bypass
   - privilege-escalation
   - injection

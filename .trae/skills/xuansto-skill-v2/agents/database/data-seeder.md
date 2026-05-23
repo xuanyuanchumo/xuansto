@@ -1,15 +1,10 @@
 ---
-name: DataSeeder
-emoji: 🌱
+name: Data Seeder
 description: 测试数据生成与管理
-color: green
-tools:
-  - Read
-  - Write
-  - Grep
-  - SearchCodebase
-model: fast
-services:
+phase: [4]
+layer: 数据
+model_routing: fast
+capabilities:
   - seed-scripts
   - data-factory
   - anonymization

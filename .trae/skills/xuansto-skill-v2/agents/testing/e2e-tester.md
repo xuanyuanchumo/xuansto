@@ -1,16 +1,10 @@
 ---
-name: E2ETester
-emoji: 🌐
+name: E2E Tester
 description: 端到端测试与用户流程验证
-color: green
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: standard
-services:
+phase: [5]
+layer: 测试
+model_routing: standard
+capabilities:
   - playwright
   - cypress
   - user-flow

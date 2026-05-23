@@ -5,6 +5,16 @@ from typing import Any
 from pydantic import BaseModel, Field, ConfigDict
 
 
+class DisclosureTransition(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    from_phase: str = Field(description="源阶段名称")
+    to_phase: str = Field(description="目标阶段名称")
+    started_at: str | None = Field(default=None, description="转换开始时间(ISO8601)")
+    completed_at: str | None = Field(default=None, description="转换完成时间(ISO8601)")
+    resources_affected: list[str] = Field(default_factory=list, description="受影响的资源ID列表")
+    status: str = Field(default="pending", description="转换状态: pending/in_progress/completed/failed")
+
+
 class SkillAnalyzeInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     skill_path: str = Field(description="技能根目录路径")
@@ -102,12 +112,19 @@ class HookManageInput(BaseModel):
 
 class ResourceLoadStatusInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: str = Field(description="操作类型: status, preload, cache, clear_cache, loading_progress")
-    phase: int | None = Field(default=None, ge=0, le=8, description="目标阶段(0-8)")
+    action: str = Field(description="操作类型: status, preload, cache, clear_cache, loading_progress, token_report")
+    phase: int | None = Field(default=None, ge=0, le=3, description="目标加载阶段(0-3): 0=骨架, 1=功能, 2=增强, 3=完整")
     resource_ids: list[str] | None = Field(default=None, description="指定资源ID列表")
     resource_uris: list[str] | None = Field(default=None, description="资源URI列表(preload时使用)")
     priority: str = Field(default="normal", description="预加载优先级(preload时使用): critical, normal, background")
     batch_mode: bool = Field(default=False, description="是否批量预加载模式(preload时使用)，批量模式并发加载多个资源")
+    auto_upgrade: bool = Field(default=False, description="自动升级阶段(preload时使用)，当Token预算超限时自动推进到下一阶段")
+
+
+class ServerHealthInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    action: str = Field(default="check", description="操作类型: check, negotiate_version")
+    client_version: str | None = Field(default=None, description="客户端API版本(negotiate_version时使用)")
 
 
 class ContextCompressInput(BaseModel):
@@ -116,3 +133,44 @@ class ContextCompressInput(BaseModel):
     strategy: str = Field(default="semantic", description="压缩策略: semantic, selective, lossless")
     target_tokens: int = Field(default=2000, ge=100, le=50000, description="目标Token数量")
     preserve_sections: list[str] | None = Field(default=None, description="必须保留的章节标题列表")
+
+
+class DecisionLogInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    action: str = Field(description="操作类型: log, query, export")
+    title: str | None = Field(default=None, description="决策标题(log时使用)")
+    description: str | None = Field(default=None, description="决策描述(log时使用)")
+    context: str | None = Field(default=None, description="决策上下文(log时使用)")
+    alternatives: list[str] | None = Field(default=None, description="备选方案列表(log时使用)")
+    decision: str | None = Field(default=None, description="最终决策(log时使用)")
+    rationale: str | None = Field(default=None, description="决策理由(log时使用)")
+    impact: str | None = Field(default=None, description="影响范围(log时使用)")
+    decided_by: str | None = Field(default=None, description="决策者(log时使用)")
+    keyword: str | None = Field(default=None, description="搜索关键词(query时使用)")
+    tag: str | None = Field(default=None, description="标签过滤(query时使用)")
+    date_from: str | None = Field(default=None, description="起始日期(ISO8601, query/export时使用)")
+    date_to: str | None = Field(default=None, description="截止日期(ISO8601, query/export时使用)")
+    limit: int = Field(default=20, ge=1, le=100, description="返回数量上限(query时使用)")
+    format: str = Field(default="json", description="导出格式(export时使用): json, markdown")
+
+
+class TokenBudgetInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    action: str = Field(description="操作类型: status, set_budget, recommend, report")
+    total_budget: int | None = Field(default=None, ge=1000, description="总Token预算(set_budget时使用)")
+    phase_allocations: dict[str, int] | None = Field(default=None, description="阶段分配(set_budget时使用)")
+    project_size: str | None = Field(default=None, description="项目规模(recommend时使用): small, medium, large")
+    complexity: str | None = Field(default=None, description="复杂度(recommend时使用): low, medium, high")
+    team_size: int | None = Field(default=None, ge=1, le=50, description="团队人数(recommend时使用)")
+    period: str = Field(default="session", description="报告周期(report时使用): daily, weekly, session")
+
+
+class ProjectInitInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    action: str = Field(description="操作类型: create, validate, detect_stack")
+    name: str | None = Field(default=None, description="项目名称(create时使用)")
+    description: str | None = Field(default=None, description="项目描述(create时使用)")
+    stack: list[str] | None = Field(default=None, description="技术栈列表(create时使用)")
+    template: str | None = Field(default=None, description="项目模板(create时使用)")
+    directory: str | None = Field(default=None, description="项目目录(create时使用)")
+    project_path: str | None = Field(default=None, description="项目路径(validate/detect_stack时使用)")

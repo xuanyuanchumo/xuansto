@@ -1,15 +1,10 @@
 ---
-name: AIPenetrationTester
-emoji: 🤖
+name: AI Penetration Tester
 description: AI驱动自主渗透测试
-color: red
-tools:
-  - Read
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: deep
-services:
+phase: [5]
+layer: 测试
+model_routing: deep
+capabilities:
   - ai-pentest
   - multi-agent-recon
   - exploit-chain

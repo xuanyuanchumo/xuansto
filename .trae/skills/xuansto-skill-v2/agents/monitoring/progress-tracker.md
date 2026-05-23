@@ -1,19 +1,13 @@
 ---
-name: ProgressTracker
-emoji: 📊
+name: Progress Tracker
 description: 任务进度追踪与报告
-color: teal
-tools:
-  - Read
-  - Grep
-  - RunCommand
-model: fast
-services:
+phase: [0, 6]
+layer: 监控
+model_routing: fast
+capabilities:
   - progress-tracking
   - milestone-management
   - status-reporting
-priority: P2
-layer: monitoring
 ---
 
 # 📊 Progress Tracker

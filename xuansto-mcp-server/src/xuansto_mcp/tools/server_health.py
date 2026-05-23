@@ -8,10 +8,12 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from ..core.config import DATA_DIR, SKILL_ROOT, WORK_DIR, KNOWLEDGE_CHROMA_PATH
-from ..core.errors import make_success_response
+from ..core.config import DATA_DIR, SKILL_ROOT, WORK_DIR, KNOWLEDGE_CHROMA_PATH, MCP_API_VERSION, MCP_MIN_SUPPORTED_VERSION, API_CHANGELOG
+from ..core.errors import make_success_response, make_error_response, ERR_VALIDATION
 from ..core import atomic_write
 from ..core.logging_config import get_logger
+from ..core.validator import validate_input
+from ..models.schemas import ServerHealthInput
 
 _START_TIME = time.time()
 
@@ -194,6 +196,47 @@ def _calculate_percentile(values: list[float], percentile: float) -> float:
     return round(result, 1)
 
 
+def _negotiate_api_version(client_version: str) -> dict[str, Any]:
+    server_major = MCP_API_VERSION.split(".")[0]
+    server_minor = MCP_API_VERSION.split(".")[1]
+    min_major = MCP_MIN_SUPPORTED_VERSION.split(".")[0]
+    try:
+        client_parts = client_version.split(".")
+        client_major = client_parts[0]
+        client_minor = int(client_parts[1]) if len(client_parts) > 1 else 0
+    except (ValueError, IndexError):
+        return {
+            "compatible": False,
+            "negotiated_version": MCP_API_VERSION,
+            "server_version": MCP_API_VERSION,
+            "min_supported_version": MCP_MIN_SUPPORTED_VERSION,
+            "reason": "invalid_client_version",
+        }
+    if client_major == server_major:
+        return {
+            "compatible": True,
+            "negotiated_version": MCP_API_VERSION,
+            "server_version": MCP_API_VERSION,
+            "min_supported_version": MCP_MIN_SUPPORTED_VERSION,
+            "reason": "major_version_match",
+        }
+    if client_major == min_major:
+        return {
+            "compatible": True,
+            "negotiated_version": MCP_MIN_SUPPORTED_VERSION,
+            "server_version": MCP_API_VERSION,
+            "min_supported_version": MCP_MIN_SUPPORTED_VERSION,
+            "reason": "min_supported_match",
+        }
+    return {
+        "compatible": False,
+        "negotiated_version": MCP_API_VERSION,
+        "server_version": MCP_API_VERSION,
+        "min_supported_version": MCP_MIN_SUPPORTED_VERSION,
+        "reason": "major_version_mismatch",
+    }
+
+
 def register(mcp: FastMCP) -> None:
     @mcp.tool(
         annotations=ToolAnnotations(
@@ -203,11 +246,20 @@ def register(mcp: FastMCP) -> None:
             openWorldHint=False,
         )
     )
-    async def server_health() -> dict[str, Any]:
-        """MCP Server 健康检查：返回服务器状态、版本、运行时间、配置路径和工具统计。"""
-        logger.info("server_health called: health check")
+    async def server_health(action: str = "check", client_version: str | None = None) -> dict[str, Any]:
+        """MCP Server 健康检查：返回服务器状态、版本、运行时间、配置路径和工具统计。支持API版本协商。"""
+        validated, val_err = validate_input(ServerHealthInput, action=action, client_version=client_version)
+        if val_err:
+            return val_err
+        logger.info("server_health called: action=%s", action)
         from .. import __version__
         from ..server import _REGISTERED_TOOL_NAMES, _REGISTERED_RESOURCE_NAMES
+
+        if action == "negotiate_version":
+            if not client_version:
+                return make_error_response(ValueError("negotiate_version操作需要client_version参数"), error_code=ERR_VALIDATION)
+            return make_success_response(_negotiate_api_version(client_version))
+
         from .workflow_dispatch import _load_all_workflows, _cleanup_all_snapshots
 
         active_workflows = len(_load_all_workflows())
@@ -232,12 +284,16 @@ def register(mcp: FastMCP) -> None:
                 }
             degradation_snapshot = dict(_DEGRADATION_COUNTS)
         chromadb_health = _check_chromadb_health()
+        tools_count = len(_REGISTERED_TOOL_NAMES) if _REGISTERED_TOOL_NAMES else 13
+        resources_count = len(_REGISTERED_RESOURCE_NAMES) if _REGISTERED_RESOURCE_NAMES else 7
         return make_success_response({
             "status": "healthy",
             "version": __version__,
+            "api_version": MCP_API_VERSION,
+            "api_changelog": API_CHANGELOG,
             "uptime_seconds": round(time.time() - _START_TIME, 1),
-            "tools_count": len(_REGISTERED_TOOL_NAMES),
-            "resources_count": len(_REGISTERED_RESOURCE_NAMES),
+            "tools_count": tools_count,
+            "resources_count": resources_count,
             "active_workflows": active_workflows,
             "snapshot_cleanup": {
                 "workflows_checked": len(snapshot_cleanup),

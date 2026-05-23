@@ -1,14 +1,10 @@
 ---
-name: DocReviewer
-emoji: 📋
+name: Doc Reviewer
 description: 文档质量审查与一致性检查
-color: amber
-tools:
-  - Read
-  - Grep
-  - SearchCodebase
-model: fast
-services:
+phase: [6]
+layer: 质量
+model_routing: fast
+capabilities:
   - doc-review
   - consistency-check
   - quality-assessment

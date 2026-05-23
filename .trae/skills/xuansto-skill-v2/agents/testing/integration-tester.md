@@ -1,16 +1,10 @@
 ---
-name: IntegrationTester
-emoji: 🔗
+name: Integration Tester
 description: 集成测试与接口验证
-color: green
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: standard
-services:
+phase: [5]
+layer: 测试
+model_routing: standard
+capabilities:
   - api-testing
   - contract-testing
   - service-integration

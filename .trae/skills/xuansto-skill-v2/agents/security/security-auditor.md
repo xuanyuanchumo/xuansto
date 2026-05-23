@@ -1,15 +1,10 @@
 ---
-name: SecurityAuditor
-emoji: 🛡️
+name: Security Auditor
 description: 安全审计与风险评估
-color: red
-tools:
-  - Read
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: deep
-services:
+phase: [5]
+layer: 安全
+model_routing: deep
+capabilities:
   - security-audit
   - risk-assessment
   - compliance-check

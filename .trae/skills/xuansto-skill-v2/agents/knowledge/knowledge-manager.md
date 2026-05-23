@@ -1,20 +1,13 @@
 ---
-name: KnowledgeManager
-emoji: 📖
+name: Knowledge Manager
 description: 知识检索、索引管理与知识库维护
-color: green
-tools:
-  - Read
-  - Write
-  - Grep
-  - SearchCodebase
-model: fast
-services:
+phase: [0, 1]
+layer: 知识
+model_routing: standard
+capabilities:
   - knowledge-retrieval
   - indexing
   - knowledge-base
-priority: P1
-layer: knowledge
 ---
 
 # 📖 Knowledge Manager

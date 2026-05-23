@@ -19,6 +19,10 @@ min_version: 1.0.0
 license: MIT
 ---
 
+> ⚠️ **DEPRECATED**: This skill (v1) is deprecated and will be removed in a future release. Please migrate to `xuansto-skill-v2` (v8.0.0) + `xuansto-mcp-server` (v4.0.0). See migration guide in `docs/plan/v-comparison.md`.
+
+---
+
 # Xuansto Skill v5.0.0
 
 > 57 Agents/13层 | 54 Gates | 27 Cmds | 9 Phase | 15 WF | 49 Scripts | 72+ Refs

@@ -1,15 +1,10 @@
 ---
-name: FrontendStylist
-emoji: 💅
+name: Frontend Stylist
 description: 设计稿转代码与样式实现
-color: pink
-tools:
-  - Read
-  - Write
-  - Grep
-  - SearchCodebase
-model: standard
-services:
+phase: [4]
+layer: 设计
+model_routing: standard
+capabilities:
   - css
   - responsive
   - animation

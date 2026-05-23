@@ -1,20 +1,14 @@
 ---
 name: Orchestrator
-emoji: 🎯
 description: 任务编排与Agent调度中心
-color: blue
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: deep
-services:
-- orchestration
-- coordination
-- platform-detection
-- conflict-resolution
+phase: [0, 1, 2]
+layer: 编排
+model_routing: deep
+capabilities:
+  - orchestration
+  - coordination
+  - platform-detection
+  - conflict-resolution
 ---
 
 # 🎯 Orchestrator

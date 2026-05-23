@@ -6,13 +6,15 @@ import sys
 from pathlib import Path
 from typing import Any, Callable, cast
 
-from .config import SCRIPTS_DIR
-from .errors import XuanstoMCPError, make_error_response, make_success_response
+from .config import SCRIPTS_DIR, DATA_DIR
+from .errors import XuanstoMCPError, make_error_response, make_success_response, ERR_INTERNAL
 from .logging_config import get_logger
 
 logger = get_logger("degradation")
 
 MCP_AVAILABLE = True
+
+_FALLBACK_CONFIG_PATH = DATA_DIR / "fallback_config.yaml"
 
 
 def check_mcp_available() -> bool:
@@ -98,7 +100,7 @@ def _fallback_error(tool: str, code: str, message: str) -> dict[str, Any]:
         code=code,
         message=message,
         details={"tool": tool, "source": "fallback"},
-    ))
+    ), error_code=ERR_INTERNAL)
 
 
 def _standardize_result(
@@ -111,7 +113,7 @@ def _standardize_result(
             code=result.get("code", "UNKNOWN_ERROR"),
             message=result.get("message", "未知错误"),
             details={"tool": tool, "source": "fallback"},
-        ))
+        ), error_code=ERR_INTERNAL)
     data = result.get("data", {})
     if not isinstance(data, dict):
         data = {"result": data}
@@ -360,6 +362,48 @@ def server_health_fallback(**kwargs: Any) -> dict[str, Any]:
     return _fallback_success("server_health", {"status": "degraded", "mcp_available": False})
 
 
+def fallback_decision_log(action: str, **kwargs: Any) -> dict[str, Any]:
+    logger.warning("Tool %s using fallback", "decision_log")
+    script_result = run_script_fallback(
+        "decision-log.py",
+        args=["--action", action, "--format", "json"],
+        timeout=30,
+    )
+    if not script_result.get("error"):
+        return _standardize_result(script_result, "decision_log")
+    from ..tools.decision_log import _inline_decision_log
+    inline_result = _inline_decision_log(action, **kwargs)
+    return _fallback_success("decision_log", inline_result, degradation_level="inline")
+
+
+def fallback_token_budget(action: str, **kwargs: Any) -> dict[str, Any]:
+    logger.warning("Tool %s using fallback", "token_budget")
+    script_result = run_script_fallback(
+        "token-budget-guard.py",
+        args=["--action", action, "--format", "json"],
+        timeout=30,
+    )
+    if not script_result.get("error"):
+        return _standardize_result(script_result, "token_budget")
+    from ..tools.token_budget import _inline_token_budget
+    inline_result = _inline_token_budget(action, **kwargs)
+    return _fallback_success("token_budget", inline_result, degradation_level="inline")
+
+
+def fallback_project_init(action: str, **kwargs: Any) -> dict[str, Any]:
+    logger.warning("Tool %s using fallback", "project_init")
+    script_result = run_script_fallback(
+        "project-initializer.py",
+        args=["--action", action, "--format", "json"],
+        timeout=30,
+    )
+    if not script_result.get("error"):
+        return _standardize_result(script_result, "project_init")
+    from ..tools.project_init import _inline_project_init
+    inline_result = _inline_project_init(action, **kwargs)
+    return _fallback_success("project_init", inline_result, degradation_level="inline")
+
+
 FALLBACK_MAP = {
     "skill_analyze": skill_analyze_fallback,
     "knowledge_search": knowledge_search_fallback,
@@ -374,11 +418,64 @@ FALLBACK_MAP = {
     "resource_load_status": resource_load_status_fallback,
     "context_compress": context_compress_fallback,
     "server_health": server_health_fallback,
+    "decision_log": fallback_decision_log,
+    "token_budget": fallback_token_budget,
+    "project_init": fallback_project_init,
+}
+
+_INLINE_FALLBACK_MAP = {
+    "quality_gate_fallback": quality_gate_fallback,
+    "spec_drift_fallback": spec_drift_fallback,
+    "security_scan_fallback": security_scan_fallback,
+    "code_simplify_fallback": code_simplify_fallback,
+    "workflow_dispatch_fallback": workflow_dispatch_fallback,
+    "agent_status_fallback": agent_status_fallback,
+    "hook_manage_fallback": hook_manage_fallback,
+    "resource_load_status_fallback": resource_load_status_fallback,
+    "server_health_fallback": server_health_fallback,
 }
 
 
+def _load_fallback_config_from_yaml() -> dict[str, Any] | None:
+    if not _FALLBACK_CONFIG_PATH.exists():
+        return None
+    try:
+        import yaml
+        raw = yaml.safe_load(_FALLBACK_CONFIG_PATH.read_text(encoding="utf-8"))
+        if isinstance(raw, dict) and "fallback_map" in raw:
+            return raw["fallback_map"]
+    except Exception as exc:
+        logger.warning("Failed to load fallback config from YAML: %s", exc)
+    return None
+
+
+def _build_fallback_map_from_yaml(yaml_config: dict[str, Any]) -> dict[str, Callable[..., Any]]:
+    built: dict[str, Callable[..., Any]] = {}
+    for tool_name, entry in yaml_config.items():
+        inline_name = entry.get("inline") if isinstance(entry, dict) else None
+        if inline_name and inline_name in _INLINE_FALLBACK_MAP:
+            built[tool_name] = _INLINE_FALLBACK_MAP[inline_name]
+        elif tool_name in FALLBACK_MAP:
+            built[tool_name] = FALLBACK_MAP[tool_name]
+    return built
+
+
+def _resolve_fallback_map() -> dict[str, Callable[..., Any]]:
+    yaml_config = _load_fallback_config_from_yaml()
+    if yaml_config is not None:
+        merged = _build_fallback_map_from_yaml(yaml_config)
+        for tool_name, fn in FALLBACK_MAP.items():
+            if tool_name not in merged:
+                merged[tool_name] = fn
+        return merged
+    return dict(FALLBACK_MAP)
+
+
+_RESOLVED_FALLBACK_MAP: dict[str, Callable[..., Any]] = _resolve_fallback_map()
+
+
 def get_fallback(tool_name: str) -> Callable[..., Any] | None:
-    fn = FALLBACK_MAP.get(tool_name)
+    fn = _RESOLVED_FALLBACK_MAP.get(tool_name)
     if fn:
         return cast(Callable[..., Any], fn)
     logger.warning("No fallback function for tool: %s", tool_name)

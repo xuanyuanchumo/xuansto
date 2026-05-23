@@ -1,15 +1,10 @@
 ---
-name: UXDesigner
-emoji: 🎯
+name: UX Designer
 description: 交互设计与用户体验优化
-color: pink
-tools:
-  - Read
-  - Write
-  - Grep
-  - SearchCodebase
-model: standard
-services:
+phase: [2]
+layer: 设计
+model_routing: standard
+capabilities:
   - interaction-design
   - user-research
   - accessibility

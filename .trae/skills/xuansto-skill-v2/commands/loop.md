@@ -35,21 +35,41 @@ workflow: sdd-tdd-full
 
 ## 降级策略
 
-| MCP工具 | 降级方式 | 降级脚本/操作 |
-|---------|----------|---------------|
-| skill_analyze | 脚本调用 | python scripts/skill-test.py --analyze |
-| knowledge_search | 脚本调用 | python scripts/knowledge-server.py --search [query] |
-| quality_gate_check | 脚本调用 | python scripts/skill-test.py --gate [gate_id] |
-| spec_drift_detect | 脚本调用 | python scripts/spec-drift-detector.py |
-| security_scan | 脚本调用 | python scripts/agentic-security-scanner.py |
-| code_simplify | 脚本调用 | python scripts/code-simplifier.py |
-| session_manage | 脚本调用 | python scripts/init-session.py / session-catchup.py |
-| workflow_dispatch | 内联执行 | 内联阶段推进 |
-| agent_status | 静态查询 | 静态注册表查找 |
-| hook_manage | 内联执行 | 内联钩子执行 |
-| resource_load_status | 内联执行 | 内联状态检查 |
-| context_compress | 脚本调用 | python scripts/context-compressor.py |
-| server_health | 脚本调用 | python scripts/health-checker.py |
+/loop 采用逐步降级策略，按 Step 1→2→3 顺序尝试，每步失败自动进入下一步：
+
+### 逐步降级链
+
+| Step | 策略 | 说明 | 适用工具 |
+|------|------|------|----------|
+| 1 | MCP完整调用 | 调用MCP工具完整参数，获取结构化JSON结果 | 全部13个MCP工具 |
+| 2 | MCP简化调用 | 调用MCP工具精简参数（省略可选参数、降低depth/top_k等），仅获取核心结果 | skill_analyze(depth=basic), knowledge_search(top_k=3, search_type=keyword_only), quality_gate_check(仅检查BLOCK级别), security_scan(severity_threshold=high), code_simplify(scope=file) |
+| 3 | 脚本降级调用 | 使用Python脚本替代，结果包装为与MCP相同的JSON结构 | 全部有降级脚本的工具 |
+
+### 各工具降级详情
+
+| MCP工具 | Step 1: MCP完整 | Step 2: MCP简化 | Step 3: 脚本降级 |
+|---------|-----------------|-----------------|------------------|
+| skill_analyze | depth=full, include_agents=True | depth=basic, include_agents=False | scripts/skill-test.py --analyze |
+| knowledge_search | top_k=5, search_type=hybrid | top_k=3, search_type=keyword_only | scripts/knowledge-server.py --search [query] |
+| quality_gate_check | 全部门禁检查 | 仅BLOCK级别门禁 | scripts/skill-test.py --gate [gate_id] |
+| spec_drift_detect | 完整漂移检测 | 仅MISMATCH级别漂移 | scripts/spec-drift-detector.py |
+| security_scan | severity_threshold=medium, include_agentic=True | severity_threshold=high, include_agentic=False | scripts/agentic-security-scanner.py |
+| code_simplify | scope=dir, include_dedup=True | scope=file, include_dedup=False | scripts/code-simplifier.py |
+| session_manage | 完整参数save/load | 仅save/load核心字段 | scripts/init-session.py / scripts/session-catchup.py |
+| workflow_dispatch | 完整工作流调度 | 仅phase=current+advance | 内联阶段推进 |
+| agent_status | action=list, by_phase | action=list(省略by_phase) | 静态注册表查找 |
+| hook_manage | action=list+execute | action=list(跳过execute) | 内联钩子执行 |
+| resource_load_status | action=preload+status | action=status(跳过preload) | 内联状态检查 |
+| context_compress | strategy=semantic | strategy=selective | scripts/context-compressor.py |
+| server_health | 完整健康检查 | — | scripts/health-checker.py |
+
+### 降级判定规则
+
+1. Step 1 失败条件：MCP工具返回错误码(DEGRADED/TIMEOUT/UNAVAILABLE)或调用超时(>30秒)
+2. Step 2 失败条件：MCP简化调用仍返回错误或超时(>15秒)
+3. Step 3 为最终兜底：脚本调用失败则记录错误并跳过该工具，继续执行下一阶段
+4. 降级不可逆：一旦进入Step 2/3，同一工具在本轮循环中不再尝试更高级别
+5. 降级事件记录：写入 session_manage(action=save) 的 decisions 字段
 
 ## 涉及Agent
 

@@ -1,0 +1,82 @@
+fallback_map:
+  skill_analyze:
+    scripts:
+      - script: skill-test.py
+        args: ["--analyze", "--path", "{skill_path}", "--format", "json"]
+        timeout: 30
+      - script: skill-test.py
+        args: ["--path", "{skill_path}", "--format", "json"]
+        timeout: 30
+  knowledge_search:
+    scripts:
+      - script: knowledge-server.py
+        args: ["--search", "--query", "{query}", "--format", "json"]
+        timeout: 30
+      - script: knowledge-server.py
+        args: ["search", "--query", "{query}", "--format", "json"]
+        timeout: 30
+  quality_gate_check:
+    scripts:
+      - script: skill-test.py
+        args: ["--gate", "--format", "json"]
+        timeout: 30
+    inline: quality_gate_fallback
+  spec_drift_detect:
+    scripts:
+      - script: spec-drift-detector.py
+        args: ["--spec-dir", "{spec_dir}", "--src-dir", "{src_dir}", "--format", "json"]
+        timeout: 60
+    inline: spec_drift_fallback
+  security_scan:
+    scripts:
+      - script: agentic-security-scanner.py
+        args: ["--target", "{target}", "--severity-threshold", "{severity_threshold}", "--format", "json"]
+        timeout: 120
+    inline: security_scan_fallback
+  code_simplify:
+    scripts:
+      - script: code-simplifier.py
+        args: ["--target", "{target}", "--scope", "{scope}", "--format", "json"]
+        timeout: 60
+    inline: code_simplify_fallback
+  session_manage:
+    scripts:
+      - script: init-session.py
+        args: ["--action", "{action}", "--format", "json"]
+        timeout: 15
+        actions: ["save", "init"]
+      - script: session-catchup.py
+        args: ["--action", "{action}", "--format", "json"]
+        timeout: 15
+        actions: ["load", "detect", "restore"]
+      - script: session-persist.py
+        args: ["{action}"]
+        timeout: 15
+  workflow_dispatch:
+    scripts:
+      - script: project-initializer.py
+        args: ["--format", "json"]
+        timeout: 30
+        actions: ["start"]
+    inline: workflow_dispatch_fallback
+  agent_status:
+    scripts:
+      - script: skill-test.py
+        args: ["--agents", "--format", "json"]
+        timeout: 30
+    inline: agent_status_fallback
+  hook_manage:
+    inline: hook_manage_fallback
+  resource_load_status:
+    inline: resource_load_status_fallback
+  context_compress:
+    scripts:
+      - script: context-compressor.py
+        args: ["--strategy", "{strategy}", "--format", "json"]
+        timeout: 30
+  server_health:
+    scripts:
+      - script: health-checker.py
+        args: ["--format", "json"]
+        timeout: 15
+    inline: server_health_fallback

@@ -1,0 +1,89 @@
+{
+  "version": "1.0",
+  "description": "Expected degradation behavior baselines for the xuansto-mcp-server",
+  "degradation_levels": {
+    "none": {
+      "description": "All services available, no degradation",
+      "indicators": {
+        "degradation_level": null,
+        "chromadb_available": true,
+        "scripts_available": true
+      }
+    },
+    "inline": {
+      "description": "Script-based checks degraded to inline implementations",
+      "indicators": {
+        "degradation_level": "inline",
+        "source": "inline",
+        "features": "Reduced accuracy, no external tool integration"
+      }
+    },
+    "sqlite_fts5": {
+      "description": "ChromaDB unavailable, using SQLite FTS5 for search",
+      "indicators": {
+        "degradation_level": "sqlite_fts5",
+        "strategy": "sqlite_fts5_bm25",
+        "features": "Keyword-based search only, no semantic understanding"
+      }
+    },
+    "keyword_fallback": {
+      "description": "Both ChromaDB and SQLite FTS5 unavailable, using keyword search",
+      "indicators": {
+        "degradation_level": "keyword_fallback",
+        "strategy": "keyword_tfidf",
+        "features": "Basic keyword matching only, no relevance scoring"
+      }
+    }
+  },
+  "tool_degradation_chains": {
+    "knowledge_search": {
+      "full": "chromadb_semantic",
+      "fallback_1": "sqlite_fts5_bm25",
+      "fallback_2": "keyword_tfidf",
+      "trigger": "ChromaDB ImportError or connection failure"
+    },
+    "security_scan": {
+      "full": "script_execution",
+      "fallback": "inline_agentic_scan",
+      "trigger": "Script not found or execution error"
+    },
+    "quality_gate_check": {
+      "full": "script_execution",
+      "fallback": "inline_check",
+      "trigger": "Script not found"
+    },
+    "hook_manage": {
+      "full": "script_execution",
+      "fallback": "inline_logic",
+      "trigger": "Script not found"
+    }
+  },
+  "degradation_tracking": {
+    "mechanism": "DEGRADATION_COUNTS dictionary in server_health module",
+    "persistence": "degradation_stats.json in WORK_DIR",
+    "recovery": "Automatic recovery when service becomes available again (e.g., ChromDB health check clears degradation count)"
+  },
+  "chromadb_degradation": {
+    "key": "chromadb_unavailable",
+    "behavior": "When degradation count > 0, semantic search is skipped entirely",
+    "recovery": "ChromaDB health check resets count to 0 on successful connection"
+  },
+  "hook_interception": {
+    "pre_hook_blocking": {
+      "description": "Pre-hooks can block tool execution by returning status='block'",
+      "affected_tools": ["code_simplify", "security_scan", "spec_drift_detect", "workflow_dispatch"],
+      "block_hooks": ["security-block"]
+    },
+    "post_hook_modification": {
+      "description": "Post-hooks can modify tool results or log decisions",
+      "affected_tools": ["workflow_dispatch", "session_manage"],
+      "post_hooks": ["decision-log-persist"]
+    }
+  },
+  "expected_behavior": {
+    "security_scan_without_chromadb": "Returns inline scan results with degradation_level='inline'",
+    "knowledge_search_without_chromadb": "Falls back to SQLite FTS5, then keyword search",
+    "hook_without_script": "Falls back to inline hook logic",
+    "quality_gate_without_script": "Falls back to inline check or marks as SKIP"
+  }
+}

@@ -15,9 +15,10 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core import atomic_write
-from ..core.config import SCRIPTS_DIR, GATE_SCRIPTS_MAP, QUALITY_GATES_PHASE_MAP, DATA_DIR
+from ..core.config import SCRIPTS_DIR, GATE_SCRIPTS_MAP, QUALITY_GATES_PHASE_MAP, WORK_DIR
 from ..core.errors import make_error_response, make_success_response
 from ..core.logging_config import get_logger
+from ..core.notifications import notify
 from ..core.validator import validate_input
 from ..models.schemas import QualityGateCheckInput
 
@@ -914,7 +915,7 @@ _SKIP_HASH_DIRS = frozenset({
 _file_hash_cache: dict[str, dict[str, str]] = {}
 _file_mtime_cache: dict[str, dict[str, float]] = {}
 _hash_cache_lock = threading.Lock()
-_HASH_CACHE_PATH = DATA_DIR / ".xuansto" / "file_hashes.json"
+_HASH_CACHE_PATH = WORK_DIR / "file_hashes.json"
 
 
 def _load_persistent_hash_cache() -> None:
@@ -1194,6 +1195,10 @@ def register(mcp: FastMCP) -> None:
         passed = sum(1 for c in checks if c["status"] == "PASS")
         failed = sum(1 for c in checks if c["status"] == "FAIL")
         blocked = any(c["status"] == "FAIL" for c in checks)
+
+        if blocked:
+            failed_ids = [c["gate_id"] for c in checks if c["status"] == "FAIL"]
+            notify(f"Quality gates blocked: {failed_ids}", "warning")
 
         _save_gate_cache(project_path, {
             "file_hashes": current_hashes,

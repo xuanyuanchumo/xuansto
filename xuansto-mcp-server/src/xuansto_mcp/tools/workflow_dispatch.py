@@ -14,10 +14,11 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from ..core.config import DATA_DIR, QUALITY_GATES_PHASE_MAP, SKILL_ROOT, WORK_DIR, WORKFLOWS_DIR
-from ..core.errors import XuanstoMCPError, make_error_response, make_success_response
+from ..core.config import QUALITY_GATES_PHASE_MAP, SKILL_ROOT, WORK_DIR, WORKFLOWS_DIR, _resolve_skill_file
+from ..core.errors import XuanstoMCPError, make_error_response, make_success_response, ERR_VALIDATION, ERR_NOT_FOUND, ERR_INTERNAL
 from ..core import atomic_write
 from ..core.logging_config import get_logger
+from ..core.notifications import notify
 from ..core.validator import validate_input
 from ..models.schemas import WorkflowDispatchInput
 from .quality_gate_check import INLINE_CHECKS
@@ -36,7 +37,7 @@ def _get_snapshot_cleanup_config() -> dict[str, Any]:
         return _SNAPSHOT_CLEANUP_CONFIG
     try:
         import yaml
-        config_path = SKILL_ROOT / ".xuansto-config.yaml"
+        config_path = _resolve_skill_file(".xuansto-config.yaml")
         if config_path.exists():
             raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
             _SNAPSHOT_CLEANUP_CONFIG = {
@@ -153,8 +154,6 @@ def _list_workflows() -> list[dict[str, Any]]:
 def _parse_workflow_definition(workflow_name: str) -> dict[str, Any] | None:
     workflow_path = WORKFLOWS_DIR / f"{workflow_name}.md"
     if not workflow_path.exists():
-        workflow_path = DATA_DIR / "workflows" / f"{workflow_name}.md"
-    if not workflow_path.exists():
         return None
     content = workflow_path.read_text(encoding="utf-8")
     if not content.startswith("---"):
@@ -192,6 +191,7 @@ def _start_workflow(workflow: str, project_path: str) -> dict[str, Any]:
         _ACTIVE_WORKFLOWS[workflow_id] = entry
     _persist_workflow(workflow_id, entry)
     _persist_active_workflows()
+    notify(f"Workflow {workflow} started: {workflow_id}", "info")
     return entry
 
 def _get_workflow_status(workflow_id: str) -> dict[str, Any]:
@@ -217,6 +217,7 @@ def _abort_workflow(workflow_id: str) -> dict[str, Any]:
     entry["aborted_at"] = datetime.now(timezone.utc).isoformat()
     _persist_workflow(workflow_id, entry)
     _persist_active_workflows()
+    notify(f"Workflow aborted: {workflow_id}", "warning")
     return entry
 
 def _advance_phase(workflow_id: str) -> dict[str, Any]:
@@ -260,6 +261,11 @@ def _advance_phase(workflow_id: str) -> dict[str, Any]:
         gates_passed = len(failed_gates) == 0
 
         if not gates_passed:
+            failed_ids = [g.get("gate_id", "") for g in failed_gates]
+            notify(
+                f"Phase {PHASE_NAMES.get(current_phase, current_phase)} gates failed for {workflow_id}: {failed_ids}",
+                "warning",
+            )
             suggestions = []
             for check in gates_checked:
                 if check.get("status") == "FAIL" and check.get("suggestion"):
@@ -297,6 +303,13 @@ def _advance_phase(workflow_id: str) -> dict[str, Any]:
             active_state = _ACTIVE_WORKFLOWS.get(workflow_id, state)
         _persist_active_workflows()
         _save_snapshot(workflow_id, active_state, project_path)
+        if new_phase > 8:
+            notify(f"Workflow completed: {workflow_id}", "info")
+        else:
+            notify(
+                f"Phase advanced: {PHASE_NAMES.get(previous_phase, previous_phase)} -> {PHASE_NAMES.get(new_phase, new_phase)} ({workflow_id})",
+                "info",
+            )
         return {
             "workflow_id": workflow_id,
             "previous_phase": previous_phase,
@@ -521,7 +534,7 @@ def register(mcp: FastMCP) -> None:
         logger.info("workflow_dispatch called: action=%s", action)
         if action == "start":
             if not workflow:
-                return make_error_response(ValueError("start操作需要workflow参数"))
+                return make_error_response(ValueError("start操作需要workflow参数"), error_code=ERR_VALIDATION)
             result = _start_workflow(workflow, project_path)
             if result.get("error"):
                 return result
@@ -541,16 +554,16 @@ def register(mcp: FastMCP) -> None:
             return make_success_response(result)
         elif action == "abort":
             if not workflow_id:
-                return make_error_response(ValueError("abort操作需要workflow_id参数"))
+                return make_error_response(ValueError("abort操作需要workflow_id参数"), error_code=ERR_VALIDATION)
             result = _abort_workflow(workflow_id)
             if result.get("error"):
                 return result
             return make_success_response(result)
         elif action == "phase":
             if not workflow_id:
-                return make_error_response(ValueError("phase操作需要workflow_id参数"))
+                return make_error_response(ValueError("phase操作需要workflow_id参数"), error_code=ERR_VALIDATION)
             if not phase_action:
-                return make_error_response(ValueError("phase操作需要phase_action参数: advance, current"))
+                return make_error_response(ValueError("phase操作需要phase_action参数: advance, current"), error_code=ERR_VALIDATION)
             if phase_action == "advance":
                 result = _advance_phase(workflow_id)
                 if result.get("error"):
@@ -562,13 +575,13 @@ def register(mcp: FastMCP) -> None:
                     return result
                 return make_success_response(result)
             else:
-                return make_error_response(ValueError(f"未知phase_action: {phase_action}，支持: advance, current"))
+                return make_error_response(ValueError(f"未知phase_action: {phase_action}，支持: advance, current"), error_code=ERR_VALIDATION)
         elif action == "recover":
             if not workflow_id or workflow_id.strip() == "":
-                return make_error_response(ValueError("workflow_id不能为空"))
+                return make_error_response(ValueError("workflow_id不能为空"), error_code=ERR_VALIDATION)
             snapshot = _load_latest_snapshot(workflow_id, project_path, snapshot_phase)
             if snapshot is None:
-                return make_error_response(XuanstoMCPError("RECOVER_FAILED", f"No snapshot found for workflow {workflow_id}"))
+                return make_error_response(XuanstoMCPError("RECOVER_FAILED", f"No snapshot found for workflow {workflow_id}"), error_code=ERR_INTERNAL)
             state = snapshot.get("state", {})
             with _workflows_lock:
                 if workflow_id and workflow_id in _ACTIVE_WORKFLOWS:
@@ -591,4 +604,4 @@ def register(mcp: FastMCP) -> None:
                 "total": len(snapshots),
             })
         else:
-            return make_error_response(ValueError(f"未知操作: {action}，支持: start, status, abort, phase"))
+            return make_error_response(ValueError(f"未知操作: {action}，支持: start, status, abort, phase"), error_code=ERR_VALIDATION)

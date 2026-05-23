@@ -1,14 +1,10 @@
 ---
-name: HistoryAnalyzer
-emoji: 📜
+name: History Analyzer
 description: 变更历史分析与模式识别
-color: amber
-tools:
-  - Read
-  - Grep
-  - SearchCodebase
-model: fast
-services:
+phase: [5, 7]
+layer: 质量
+model_routing: standard
+capabilities:
   - change-analysis
   - pattern-recognition
   - regression-detection

@@ -9,7 +9,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core.config import SESSION_DIR, PATTERNS_DIR
-from ..core.errors import make_error_response, make_success_response
+from ..core.errors import make_error_response, make_success_response, ERR_VALIDATION
 from ..core.logging_config import get_logger
 from ..core.validator import validate_input
 from ..models.schemas import SessionManageInput
@@ -246,11 +246,11 @@ def register(mcp: FastMCP) -> None:
             return make_success_response(_detect_patterns(error_log))
         elif action == "verify":
             if not pattern_path:
-                return make_error_response(ValueError("verify操作需要pattern_path参数"))
+                return make_error_response(ValueError("verify操作需要pattern_path参数"), error_code=ERR_VALIDATION)
             return make_success_response(_verify_pattern(pattern_path, success))
         elif action == "track":
             return make_success_response(_track_session(current_phase, current_task, decisions, pending_tasks))
         elif action == "restore":
             return make_success_response(_restore_session())
         else:
-            return make_error_response(ValueError(f"未知操作: {action}，支持: save, load, list, detect, verify, track, restore"))
+            return make_error_response(ValueError(f"未知操作: {action}，支持: save, load, list, detect, verify, track, restore"), error_code=ERR_VALIDATION)

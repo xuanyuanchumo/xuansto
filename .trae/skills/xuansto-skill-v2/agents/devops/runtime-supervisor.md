@@ -1,16 +1,10 @@
 ---
-name: RuntimeSupervisor
-emoji: 💓
+name: Runtime Supervisor
 description: Agent运行时健康监控
-color: pink
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: deep
-services:
+phase: [8]
+layer: DevOps
+model_routing: standard
+capabilities:
   - health-check
   - checkpoint-recovery
   - scaling

@@ -1,0 +1,229 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "xuansto://spec-locks/tool-parameter-schemas",
+  "title": "ToolParameterSchemas",
+  "description": "Combined JSON Schema for all 16 xuansto-mcp-server tool parameter validations",
+  "definitions": {
+    "SkillAnalyzeInput": {
+      "type": "object",
+      "required": ["skill_path"],
+      "properties": {
+        "skill_path": {"type": "string", "description": "技能根目录路径"},
+        "include_scripts": {"type": "boolean", "default": true, "description": "是否分析scripts目录"},
+        "include_agents": {"type": "boolean", "default": true, "description": "是否分析agents目录"},
+        "depth": {"type": "string", "enum": ["basic", "full"], "default": "basic", "description": "分析深度"}
+      },
+      "additionalProperties": false
+    },
+    "KnowledgeSearchInput": {
+      "type": "object",
+      "properties": {
+        "action": {"type": "string", "enum": ["retrieve", "inject", "precipitate"], "default": "retrieve"},
+        "query": {"type": ["string", "null"]},
+        "top_k": {"type": "integer", "minimum": 1, "maximum": 50, "default": 5},
+        "search_type": {"type": "string", "enum": ["hybrid", "semantic_only", "keyword_only"], "default": "hybrid"},
+        "scope": {"type": ["string", "null"], "enum": ["general", "workspace", "experience", null]},
+        "min_confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0, "default": 0.0},
+        "content": {"type": ["string", "null"]},
+        "knowledge_type": {"type": "string", "enum": ["general", "workspace", "experience"], "default": "general"},
+        "metadata": {"type": ["object", "null"], "additionalProperties": {}},
+        "pattern_ids": {"type": ["array", "null"], "items": {"type": "string"}}
+      },
+      "additionalProperties": false
+    },
+    "QualityGateCheckInput": {
+      "type": "object",
+      "properties": {
+        "gate_ids": {"type": ["array", "null"], "items": {"type": "string"}},
+        "phase": {"type": ["string", "null"]},
+        "project_path": {"type": "string", "default": "."},
+        "severity_filter": {"type": "string", "enum": ["all", "BLOCK", "WARN"], "default": "all"},
+        "force_refresh": {"type": "boolean", "default": false}
+      },
+      "additionalProperties": false
+    },
+    "SpecDriftDetectInput": {
+      "type": "object",
+      "properties": {
+        "spec_dir": {"type": "string", "default": ".trae/specs"},
+        "src_dir": {"type": "string", "default": "."}
+      },
+      "additionalProperties": false
+    },
+    "SecurityScanInput": {
+      "type": "object",
+      "properties": {
+        "target": {"type": "string", "default": "."},
+        "severity_threshold": {"type": "string", "enum": ["critical", "high", "medium", "low"], "default": "medium"},
+        "include_agentic": {"type": "boolean", "default": true},
+        "include_dependency": {"type": "boolean", "default": true}
+      },
+      "additionalProperties": false
+    },
+    "CodeSimplifyInput": {
+      "type": "object",
+      "required": ["target"],
+      "properties": {
+        "target": {"type": "string"},
+        "scope": {"type": "string", "enum": ["file", "dir", "recent"], "default": "recent"},
+        "include_dedup": {"type": "boolean", "default": true}
+      },
+      "additionalProperties": false
+    },
+    "SessionManageInput": {
+      "type": "object",
+      "required": ["action"],
+      "properties": {
+        "action": {"type": "string", "enum": ["save", "load", "list", "detect", "verify", "track", "restore"]},
+        "completed_tasks": {"type": ["array", "null"], "items": {"type": "string"}},
+        "pending_tasks": {"type": ["array", "null"], "items": {"type": "string"}},
+        "decisions": {"type": ["array", "null"], "items": {"type": "string"}},
+        "experience": {"type": ["array", "null"], "items": {"type": "string"}},
+        "error_log": {"type": ["array", "null"], "items": {"type": "string"}},
+        "pattern_path": {"type": ["string", "null"]},
+        "success": {"type": "boolean", "default": true},
+        "current_phase": {"type": ["integer", "null"], "minimum": 0},
+        "current_task": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "WorkflowDispatchInput": {
+      "type": "object",
+      "required": ["action"],
+      "properties": {
+        "action": {"type": "string", "enum": ["start", "status", "abort", "phase", "recover", "snapshots"]},
+        "workflow": {"type": ["string", "null"]},
+        "project_path": {"type": "string", "default": "."},
+        "workflow_id": {"type": ["string", "null"]},
+        "phase_action": {"type": ["string", "null"], "enum": ["advance", "current", null]},
+        "snapshot_phase": {"type": ["integer", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "AgentStatusInput": {
+      "type": "object",
+      "required": ["action"],
+      "properties": {
+        "action": {"type": "string", "enum": ["list", "by_phase", "detail", "create", "match", "assign", "release", "instance_status", "destroy", "schedule"]},
+        "phase": {"type": ["integer", "null"], "minimum": 0, "maximum": 8},
+        "agent_name": {"type": ["string", "null"]},
+        "agent_type": {"type": ["string", "null"]},
+        "capabilities": {"type": ["array", "null"], "items": {"type": "string"}},
+        "agent_id": {"type": ["string", "null"]},
+        "task": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "HookManageInput": {
+      "type": "object",
+      "required": ["action"],
+      "properties": {
+        "action": {"type": "string", "enum": ["list", "execute"]},
+        "profile": {"type": "string", "enum": ["minimal", "standard", "strict"], "default": "standard"},
+        "hook_name": {"type": ["string", "null"]},
+        "context": {"type": ["object", "null"], "additionalProperties": {}}
+      },
+      "additionalProperties": false
+    },
+    "ResourceLoadStatusInput": {
+      "type": "object",
+      "required": ["action"],
+      "properties": {
+        "action": {"type": "string", "enum": ["status", "preload", "cache", "clear_cache", "loading_progress", "token_report"]},
+        "phase": {"type": ["integer", "null"], "minimum": 0, "maximum": 8},
+        "resource_ids": {"type": ["array", "null"], "items": {"type": "string"}},
+        "resource_uris": {"type": ["array", "null"], "items": {"type": "string"}},
+        "priority": {"type": "string", "enum": ["critical", "normal", "background"], "default": "normal"},
+        "batch_mode": {"type": "boolean", "default": false}
+      },
+      "additionalProperties": false
+    },
+    "ServerHealthInput": {
+      "type": "object",
+      "properties": {
+        "action": {"type": "string", "enum": ["check", "negotiate_version"], "default": "check"},
+        "client_version": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "ContextCompressInput": {
+      "type": "object",
+      "required": ["content"],
+      "properties": {
+        "content": {"type": "string"},
+        "strategy": {"type": "string", "enum": ["semantic", "selective", "lossless"], "default": "semantic"},
+        "target_tokens": {"type": "integer", "minimum": 100, "maximum": 50000, "default": 2000},
+        "preserve_sections": {"type": ["array", "null"], "items": {"type": "string"}}
+      },
+      "additionalProperties": false
+    },
+    "DecisionLogInput": {
+      "type": "object",
+      "required": ["action"],
+      "properties": {
+        "action": {"type": "string", "enum": ["log", "query", "export"]},
+        "title": {"type": ["string", "null"]},
+        "description": {"type": ["string", "null"]},
+        "context": {"type": ["string", "null"]},
+        "alternatives": {"type": ["array", "null"], "items": {"type": "string"}},
+        "decision": {"type": ["string", "null"]},
+        "rationale": {"type": ["string", "null"]},
+        "impact": {"type": ["string", "null"]},
+        "decided_by": {"type": ["string", "null"]},
+        "keyword": {"type": ["string", "null"]},
+        "tag": {"type": ["string", "null"]},
+        "date_from": {"type": ["string", "null"]},
+        "date_to": {"type": ["string", "null"]},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20},
+        "format": {"type": "string", "enum": ["json", "markdown"], "default": "json"}
+      },
+      "additionalProperties": false
+    },
+    "TokenBudgetInput": {
+      "type": "object",
+      "required": ["action"],
+      "properties": {
+        "action": {"type": "string", "enum": ["status", "set_budget", "recommend", "report"]},
+        "total_budget": {"type": ["integer", "null"], "minimum": 1000},
+        "phase_allocations": {"type": ["object", "null"], "additionalProperties": {"type": "integer"}},
+        "project_size": {"type": ["string", "null"], "enum": ["small", "medium", "large", null]},
+        "complexity": {"type": ["string", "null"], "enum": ["low", "medium", "high", null]},
+        "team_size": {"type": ["integer", "null"], "minimum": 1, "maximum": 50},
+        "period": {"type": "string", "enum": ["daily", "weekly", "session"], "default": "session"}
+      },
+      "additionalProperties": false
+    },
+    "ProjectInitInput": {
+      "type": "object",
+      "required": ["action"],
+      "properties": {
+        "action": {"type": "string", "enum": ["create", "validate", "detect_stack"]},
+        "name": {"type": ["string", "null"]},
+        "description": {"type": ["string", "null"]},
+        "stack": {"type": ["array", "null"], "items": {"type": "string"}},
+        "template": {"type": ["string", "null"]},
+        "directory": {"type": ["string", "null"]},
+        "project_path": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    }
+  },
+  "tool_schemas": {
+    "skill_analyze": {"$ref": "#/definitions/SkillAnalyzeInput"},
+    "knowledge_search": {"$ref": "#/definitions/KnowledgeSearchInput"},
+    "quality_gate_check": {"$ref": "#/definitions/QualityGateCheckInput"},
+    "spec_drift_detect": {"$ref": "#/definitions/SpecDriftDetectInput"},
+    "security_scan": {"$ref": "#/definitions/SecurityScanInput"},
+    "code_simplify": {"$ref": "#/definitions/CodeSimplifyInput"},
+    "session_manage": {"$ref": "#/definitions/SessionManageInput"},
+    "workflow_dispatch": {"$ref": "#/definitions/WorkflowDispatchInput"},
+    "agent_status": {"$ref": "#/definitions/AgentStatusInput"},
+    "hook_manage": {"$ref": "#/definitions/HookManageInput"},
+    "resource_load_status": {"$ref": "#/definitions/ResourceLoadStatusInput"},
+    "server_health": {"$ref": "#/definitions/ServerHealthInput"},
+    "context_compress": {"$ref": "#/definitions/ContextCompressInput"},
+    "decision_log": {"$ref": "#/definitions/DecisionLogInput"},
+    "token_budget": {"$ref": "#/definitions/TokenBudgetInput"},
+    "project_init": {"$ref": "#/definitions/ProjectInitInput"}
+  }
+}

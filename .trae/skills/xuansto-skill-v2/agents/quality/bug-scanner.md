@@ -1,14 +1,10 @@
 ---
-name: BugScanner
-emoji: 🐛
+name: Bug Scanner
 description: 静态Bug扫描与模式检测
-color: amber
-tools:
-  - Read
-  - Grep
-  - SearchCodebase
-model: fast
-services:
+phase: [5]
+layer: 质量
+model_routing: fast
+capabilities:
   - static-analysis
   - pattern-detection
   - bug-classification

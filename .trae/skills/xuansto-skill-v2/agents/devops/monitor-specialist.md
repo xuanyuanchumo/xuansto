@@ -1,16 +1,10 @@
 ---
-name: MonitorSpecialist
-emoji: 📈
+name: Monitor Specialist
 description: 应用监控与日志聚合
-color: cyan
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: deep
-services:
+phase: [8]
+layer: DevOps
+model_routing: fast
+capabilities:
   - prometheus
   - sentry
   - elk

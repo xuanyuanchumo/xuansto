@@ -1,16 +1,10 @@
 ---
-name: CiCdSpecialist
-emoji: 🔄
+name: CI/CD Specialist
 description: 流水线配置与自动化构建
-color: orange
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: standard
-services:
+phase: [8]
+layer: DevOps
+model_routing: standard
+capabilities:
   - github-actions
   - gitlab-ci
   - multi-env

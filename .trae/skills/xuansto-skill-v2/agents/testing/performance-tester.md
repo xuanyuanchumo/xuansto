@@ -1,16 +1,10 @@
 ---
-name: PerformanceTester
-emoji: ⚡
+name: Performance Tester
 description: 性能测试与负载验证
-color: green
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: standard
-services:
+phase: [5]
+layer: 测试
+model_routing: standard
+capabilities:
   - k6
   - locust
   - load-testing

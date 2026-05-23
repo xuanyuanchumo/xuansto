@@ -1,16 +1,10 @@
 ---
-name: DesktopTester
-emoji: 🖥️
+name: Desktop Tester
 description: 桌面应用测试与平台验证
-color: green
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: standard
-services:
+phase: [5]
+layer: 测试
+model_routing: standard
+capabilities:
   - electron-testing
   - tauri-testing
   - platform-verify

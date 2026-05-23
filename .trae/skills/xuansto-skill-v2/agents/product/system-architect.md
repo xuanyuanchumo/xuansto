@@ -1,14 +1,10 @@
 ---
-name: SystemArchitect
-emoji: 🏗️
+name: System Architect
 description: 系统架构设计与技术选型
-color: purple
-tools:
-  - Read
-  - Grep
-  - SearchCodebase
-model: deep
-services:
+phase: [2]
+layer: 产品
+model_routing: deep
+capabilities:
   - architecture
   - adr
   - tech-selection

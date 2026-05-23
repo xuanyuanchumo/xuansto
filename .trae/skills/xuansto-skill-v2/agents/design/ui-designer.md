@@ -1,15 +1,10 @@
 ---
-name: UIDesigner
-emoji: 🎨
+name: UI Designer
 description: 视觉设计与设计系统建立
-color: pink
-tools:
-  - Read
-  - Write
-  - Grep
-  - SearchCodebase
-model: standard
-services:
+phase: [2]
+layer: 设计
+model_routing: standard
+capabilities:
   - visual-design
   - design-system
   - design-tokens

@@ -1,0 +1,684 @@
+{
+  "workflow_id": "wf-4894dde4",
+  "workflow": "sdd-tdd-full",
+  "project_path": ".",
+  "status": "running",
+  "current_phase": 0,
+  "started_at": "2026-05-22T14:21:26.248899+00:00",
+  "completed_phases": [],
+  "phase_definitions": [
+    {
+      "id": "phase-0",
+      "name": "UX/UI设计",
+      "order": 0,
+      "optional": false,
+      "trigger_condition": "项目启动且需要UI/UX设计",
+      "agents": {
+        "primary": [
+          "ux-designer",
+          "ui-designer"
+        ],
+        "supporting": [
+          "product-manager",
+          "frontend-stylist",
+          "desktop-ui-adapter"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "产品需求概述",
+          "type": "document",
+          "required": true
+        },
+        {
+          "name": "用户画像",
+          "type": "document",
+          "required": true
+        },
+        {
+          "name": "业务目标",
+          "type": "document",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "UX研究报告",
+          "type": "document",
+          "validation": "用户旅程完整"
+        },
+        {
+          "name": "高保真设计稿",
+          "type": "document",
+          "validation": "设计评审通过"
+        },
+        {
+          "name": "桌面窗口布局规范",
+          "type": "document",
+          "validation": "窗口尺寸适配方案明确"
+        },
+        {
+          "name": "系统菜单结构图",
+          "type": "document",
+          "validation": "菜单结构合理"
+        },
+        {
+          "name": "交互说明文档",
+          "type": "document"
+        }
+      ],
+      "quality_gates": [
+        {
+          "gate_id": "DESIGN-REVIEW",
+          "blocking": true,
+          "pass_criteria": "设计评审通过且设计令牌与技术栈兼容"
+        },
+        {
+          "gate_id": "DESIGN-ACCESSIBILITY",
+          "blocking": true,
+          "pass_criteria": "可访问性无A级违规"
+        }
+      ],
+      "timeout_minutes": 120,
+      "retry": {
+        "max_attempts": 2,
+        "backoff": "fixed"
+      }
+    },
+    {
+      "id": "phase-1",
+      "name": "需求分析",
+      "order": 1,
+      "optional": false,
+      "trigger_condition": "UX/UI设计完成或跳过",
+      "agents": {
+        "primary": [
+          "product-manager"
+        ],
+        "supporting": []
+      },
+      "inputs": [
+        {
+          "name": "用户需求描述",
+          "type": "document",
+          "required": true
+        },
+        {
+          "name": "业务背景信息",
+          "type": "document",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "需求规格说明书",
+          "type": "document",
+          "validation": "需求已获用户确认"
+        },
+        {
+          "name": "用户故事列表",
+          "type": "document",
+          "validation": "符合INVEST原则"
+        },
+        {
+          "name": "验收标准文档",
+          "type": "document",
+          "validation": "验收标准明确可测试"
+        },
+        {
+          "name": "平台需求分析报告",
+          "type": "document"
+        }
+      ],
+      "quality_gates": [
+        {
+          "gate_id": "GATE-001",
+          "blocking": true,
+          "pass_criteria": "所有用户故事符合INVEST原则"
+        },
+        {
+          "gate_id": "GATE-001",
+          "blocking": true,
+          "pass_criteria": "验收标准明确可测试且歧义已解决"
+        }
+      ],
+      "timeout_minutes": 60,
+      "retry": {
+        "max_attempts": 2,
+        "backoff": "fixed"
+      }
+    },
+    {
+      "id": "phase-2",
+      "name": "架构设计",
+      "order": 2,
+      "optional": false,
+      "trigger_condition": "需求分析完成",
+      "agents": {
+        "primary": [
+          "system-architect"
+        ],
+        "supporting": []
+      },
+      "inputs": [
+        {
+          "name": "需求规格说明书",
+          "type": "document",
+          "required": true,
+          "source_phase": "phase-1"
+        },
+        {
+          "name": "用户故事列表",
+          "type": "document",
+          "required": true,
+          "source_phase": "phase-1"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "架构设计文档",
+          "type": "document",
+          "validation": "符合SOLID原则"
+        },
+        {
+          "name": "API接口规范",
+          "type": "document",
+          "validation": "接口定义清晰完整"
+        },
+        {
+          "name": "数据模型图",
+          "type": "document"
+        },
+        {
+          "name": "技术决策记录",
+          "type": "document",
+          "validation": "技术选型有充分理由"
+        },
+        {
+          "name": "跨平台架构方案",
+          "type": "document"
+        },
+        {
+          "name": "桌面框架选型ADR",
+          "type": "document"
+        }
+      ],
+      "quality_gates": [
+        {
+          "gate_id": "GATE-003",
+          "blocking": true,
+          "pass_criteria": "架构设计符合SOLID原则"
+        },
+        {
+          "gate_id": "GATE-004",
+          "blocking": true,
+          "pass_criteria": "接口定义清晰完整且跨平台边界明确"
+        }
+      ],
+      "timeout_minutes": 90,
+      "retry": {
+        "max_attempts": 2,
+        "backoff": "fixed"
+      }
+    },
+    {
+      "id": "phase-3",
+      "name": "测试策略",
+      "order": 3,
+      "optional": false,
+      "trigger_condition": "架构设计完成",
+      "agents": {
+        "primary": [
+          "test-architect"
+        ],
+        "supporting": []
+      },
+      "inputs": [
+        {
+          "name": "架构设计文档",
+          "type": "document",
+          "required": true,
+          "source_phase": "phase-2"
+        },
+        {
+          "name": "用户故事列表",
+          "type": "document",
+          "required": true,
+          "source_phase": "phase-1"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "测试策略文档",
+          "type": "document"
+        },
+        {
+          "name": "测试用例清单",
+          "type": "document",
+          "validation": "覆盖所有用户故事"
+        },
+        {
+          "name": "测试数据方案",
+          "type": "document"
+        },
+        {
+          "name": "桌面测试用例清单",
+          "type": "document"
+        }
+      ],
+      "quality_gates": [
+        {
+          "gate_id": "GATE-005",
+          "blocking": true,
+          "pass_criteria": "测试覆盖所有用户故事"
+        },
+        {
+          "gate_id": "GATE-006",
+          "blocking": true,
+          "pass_criteria": "测试用例可自动化执行且边界条件已覆盖"
+        }
+      ],
+      "timeout_minutes": 60,
+      "retry": {
+        "max_attempts": 2,
+        "backoff": "fixed"
+      }
+    },
+    {
+      "id": "phase-4",
+      "name": "TDD开发与代码审查",
+      "order": 4,
+      "optional": false,
+      "trigger_condition": "测试策略完成",
+      "agents": {
+        "primary": [
+          "fullstack-engineer",
+          "unit-tester",
+          "code-reviewer"
+        ],
+        "supporting": [
+          "frontend-stylist",
+          "desktop-ui-adapter",
+          "native-module-developer"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "架构设计文档",
+          "type": "document",
+          "required": true,
+          "source_phase": "phase-2"
+        },
+        {
+          "name": "测试用例清单",
+          "type": "document",
+          "required": true,
+          "source_phase": "phase-3"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "源代码文件",
+          "type": "code",
+          "validation": "代码审查通过"
+        },
+        {
+          "name": "单元测试文件",
+          "type": "code",
+          "validation": "覆盖率>=80%"
+        },
+        {
+          "name": "代码覆盖率报告",
+          "type": "document",
+          "validation": "覆盖率>=80%"
+        },
+        {
+          "name": "代码审查报告",
+          "type": "document"
+        },
+        {
+          "name": "改进建议清单",
+          "type": "document"
+        }
+      ],
+      "quality_gates": [
+        {
+          "gate_id": "TEST-PASS",
+          "blocking": true,
+          "pass_criteria": "所有测试用例通过"
+        },
+        {
+          "gate_id": "GATE-005",
+          "blocking": true,
+          "pass_criteria": "代码覆盖率>=80%"
+        },
+        {
+          "gate_id": "GATE-002",
+          "blocking": true,
+          "pass_criteria": "所有Spec-Drift标记已按影响级别复核"
+        }
+      ],
+      "timeout_minutes": 240,
+      "retry": {
+        "max_attempts": 3,
+        "backoff": "exponential"
+      }
+    },
+    {
+      "id": "phase-5",
+      "name": "验证",
+      "order": 5,
+      "optional": false,
+      "trigger_condition": "TDD开发与代码审查通过",
+      "agents": {
+        "primary": [
+          "qa-engineer",
+          "security-auditor",
+          "ai-penetration-tester",
+          "performance-tester"
+        ],
+        "supporting": []
+      },
+      "inputs": [
+        {
+          "name": "通过审查的代码",
+          "type": "code",
+          "required": true,
+          "source_phase": "phase-4"
+        },
+        {
+          "name": "测试用例清单",
+          "type": "document",
+          "required": true,
+          "source_phase": "phase-3"
+        },
+        {
+          "name": "安全测试清单",
+          "type": "document",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "测试执行报告",
+          "type": "document",
+          "validation": "通过率和覆盖率达标"
+        },
+        {
+          "name": "安全审计报告",
+          "type": "document",
+          "validation": "无P0/P1安全问题"
+        },
+        {
+          "name": "性能测试报告",
+          "type": "document"
+        },
+        {
+          "name": "视觉差异报告",
+          "type": "document"
+        },
+        {
+          "name": "可访问性违规清单",
+          "type": "document"
+        },
+        {
+          "name": "规格一致性报告",
+          "type": "document"
+        },
+        {
+          "name": "桌面跨平台兼容性报告",
+          "type": "document",
+          "validation": "三平台功能一致性>95%"
+        }
+      ],
+      "quality_gates": [
+        {
+          "gate_id": "TEST-PASS",
+          "blocking": true,
+          "pass_criteria": "所有测试通过"
+        },
+        {
+          "gate_id": "GATE-012",
+          "blocking": true,
+          "pass_criteria": "无P0/P1安全问题"
+        },
+        {
+          "gate_id": "GATE-005",
+          "blocking": true,
+          "pass_criteria": "覆盖率达标且视觉差异<1%"
+        }
+      ],
+      "timeout_minutes": 120,
+      "retry": {
+        "max_attempts": 2,
+        "backoff": "fixed"
+      }
+    },
+    {
+      "id": "phase-6",
+      "name": "验收",
+      "order": 6,
+      "optional": false,
+      "trigger_condition": "验证阶段通过",
+      "agents": {
+        "primary": [
+          "product-manager"
+        ],
+        "supporting": [
+          "desktop-developer",
+          "build-release-engineer"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "Phase5验证通过的产物",
+          "type": "document",
+          "required": true,
+          "source_phase": "phase-5"
+        },
+        {
+          "name": "用户故事和验收标准",
+          "type": "document",
+          "required": true,
+          "source_phase": "phase-1"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "用户验收测试报告",
+          "type": "document"
+        },
+        {
+          "name": "合规检查清单签署",
+          "type": "document"
+        },
+        {
+          "name": "文档完整性报告",
+          "type": "document"
+        },
+        {
+          "name": "体验验收报告",
+          "type": "document"
+        },
+        {
+          "name": "正式发布建议",
+          "type": "document",
+          "validation": "批准或驳回"
+        }
+      ],
+      "quality_gates": [
+        {
+          "gate_id": "UX-ACCEPTANCE",
+          "blocking": true,
+          "pass_criteria": "所有验收标准通过"
+        },
+        {
+          "gate_id": "GATE-013",
+          "blocking": true,
+          "pass_criteria": "无阻塞性问题且文档覆盖率100%"
+        }
+      ],
+      "timeout_minutes": 60,
+      "retry": {
+        "max_attempts": 2,
+        "backoff": "fixed"
+      }
+    },
+    {
+      "id": "phase-7",
+      "name": "迭代",
+      "order": 7,
+      "optional": true,
+      "trigger_condition": "验证或验收阶段未通过",
+      "agents": {
+        "primary": [
+          "orchestrator",
+          "refactoring-specialist"
+        ],
+        "supporting": [
+          "fullstack-engineer",
+          "test-architect"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "验证阶段或验收阶段的反馈",
+          "type": "document",
+          "required": true,
+          "source_phase": "phase-5"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "修复后的代码",
+          "type": "code",
+          "validation": "修复项验证通过"
+        },
+        {
+          "name": "迭代总结报告",
+          "type": "document"
+        },
+        {
+          "name": "学习到的模式",
+          "type": "document"
+        },
+        {
+          "name": "更新后的规格文档",
+          "type": "document"
+        },
+        {
+          "name": "RCA报告",
+          "type": "document",
+          "validation": "RCA已完成并归档"
+        },
+        {
+          "name": "安全工单闭环记录",
+          "type": "document"
+        },
+        {
+          "name": "知识同步日志",
+          "type": "document"
+        }
+      ],
+      "quality_gates": [
+        {
+          "gate_id": "TEST-PASS",
+          "blocking": true,
+          "pass_criteria": "所有修复项验证通过"
+        },
+        {
+          "gate_id": "TEST-PASS",
+          "blocking": true,
+          "pass_criteria": "回归测试通过"
+        },
+        {
+          "gate_id": "GATE-015",
+          "blocking": false,
+          "pass_criteria": "RCA报告已完成并归档"
+        }
+      ],
+      "timeout_minutes": 120,
+      "retry": {
+        "max_attempts": 3,
+        "backoff": "exponential"
+      }
+    },
+    {
+      "id": "phase-8",
+      "name": "构建与发布",
+      "order": 8,
+      "optional": false,
+      "trigger_condition": "验收通过",
+      "agents": {
+        "primary": [
+          "build-release-engineer",
+          "desktop-developer"
+        ],
+        "supporting": [
+          "cicd-specialist"
+        ]
+      },
+      "inputs": [
+        {
+          "name": "部署通过的代码",
+          "type": "code",
+          "required": true,
+          "source_phase": "phase-6"
+        },
+        {
+          "name": "桌面打包配置",
+          "type": "document",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "多平台安装包",
+          "type": "artifact",
+          "validation": "所有平台构建成功"
+        },
+        {
+          "name": "代码签名证书",
+          "type": "artifact",
+          "validation": "签名与公证通过"
+        },
+        {
+          "name": "自动更新配置文件",
+          "type": "document",
+          "validation": "自动更新功能验证通过"
+        },
+        {
+          "name": "发布说明文档",
+          "type": "document",
+          "validation": "发布说明完整"
+        },
+        {
+          "name": "分发清单",
+          "type": "document"
+        }
+      ],
+      "quality_gates": [
+        {
+          "gate_id": "DESKTOP-BUILD",
+          "blocking": true,
+          "pass_criteria": "所有平台构建成功"
+        },
+        {
+          "gate_id": "DESKTOP-SIGN",
+          "blocking": true,
+          "pass_criteria": "代码签名与公证通过"
+        },
+        {
+          "gate_id": "DESKTOP-UPDATE",
+          "blocking": true,
+          "pass_criteria": "自动更新功能验证通过"
+        }
+      ],
+      "timeout_minutes": 180,
+      "retry": {
+        "max_attempts": 2,
+        "backoff": "exponential"
+      }
+    }
+  ]
+}

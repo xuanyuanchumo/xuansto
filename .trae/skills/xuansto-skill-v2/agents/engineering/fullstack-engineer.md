@@ -1,16 +1,10 @@
 ---
-name: FullStackEngineer
-emoji: 🔗
+name: Fullstack Engineer
 description: 前后端联调与接口对接
-color: teal
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: standard
-services:
+phase: [4]
+layer: 工程
+model_routing: standard
+capabilities:
   - integration
   - contract-testing
   - e2e

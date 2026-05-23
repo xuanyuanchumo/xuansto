@@ -1,16 +1,10 @@
 ---
-name: TestMaintainer
-emoji: 🔧
+name: Test Maintainer
 description: 测试维护与稳定性保障
-color: green
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: standard
-services:
+phase: [5, 7]
+layer: 测试
+model_routing: standard
+capabilities:
   - test-stability
   - flaky-detection
   - test-refactoring

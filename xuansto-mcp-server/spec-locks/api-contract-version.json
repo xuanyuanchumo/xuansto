@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "xuansto://spec-locks/api-contract-version",
+  "title": "APIContractVersion",
+  "description": "API contract version lock for xuansto-mcp-server. Defines current and minimum supported API versions.",
+  "current_version": "2.0.0",
+  "min_supported_version": "1.0.0",
+  "version_history": [
+    {
+      "version": "1.0.0",
+      "date": "2024-01-01",
+      "changes": [
+        "Initial API with 13 core tools",
+        "Basic resource URIs (xuansto:// scheme)",
+        "Session management and workflow dispatch"
+      ]
+    },
+    {
+      "version": "2.0.0",
+      "date": "2025-01-01",
+      "changes": [
+        "Pluggable search engine architecture (SearchEngine Protocol)",
+        "HookEngine plugin system for dynamic hook registration",
+        "YAML-based fallback/degradation configuration",
+        "Event-driven config hot-reload via watchfiles",
+        "Backward compatible with v1.0.0 clients",
+        "Added decision_log, token_budget, project_init tools (16 total)"
+      ]
+    }
+  ],
+  "compatibility_rules": {
+    "major_version_match": {
+      "description": "Client major version matches server major version. Full feature set available.",
+      "negotiated_version": "server_current",
+      "compatible": true
+    },
+    "min_supported_match": {
+      "description": "Client major version matches minimum supported version. Degraded feature set.",
+      "negotiated_version": "min_supported",
+      "compatible": true
+    },
+    "major_version_mismatch": {
+      "description": "Client major version does not match server or minimum supported. Incompatible.",
+      "negotiated_version": "server_current",
+      "compatible": false
+    }
+  },
+  "breaking_changes_policy": "Major version increments indicate breaking changes. Minor and patch versions are backward compatible.",
+  "deprecation_policy": "Features deprecated in version N will be removed in version N+1 at the earliest."
+}

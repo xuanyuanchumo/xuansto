@@ -1,0 +1,171 @@
+{
+  "version": "1.0",
+  "description": "Standard response format for 16 MCP tools",
+  "tools": {
+    "skill_analyze": {
+      "success_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "metadata": "dict",
+          "structure": {"root": "string", "exists": "bool", "directories": "list", "files_count": "int"},
+          "agents": "list",
+          "dependencies": "dict",
+          "issues": "list",
+          "project_scale": "small|medium|large",
+          "recommended_workflow": "string",
+          "scale_details": {"file_count": "int", "loc_count": "int", "scale": "string", "recommended_workflow": "string", "workflow_phases": "int"}
+        }
+      },
+      "error_format": {
+        "error": true,
+        "code": "string",
+        "message": "string",
+        "details": "dict"
+      }
+    },
+    "knowledge_search": {
+      "success_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "results": [{"source": "string", "content": "string", "match_type": "string", "relevance": "float"}],
+          "total": "int",
+          "strategy": "chromadb_semantic|sqlite_fts5_bm25|keyword_tfidf"
+        }
+      },
+      "actions": ["retrieve", "inject", "precipitate"]
+    },
+    "quality_gate_check": {
+      "success_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "checks": [{"gate_id": "string", "status": "PASS|FAIL|SKIP|ERROR", "source": "inline|script|cache|no_inline_check"}],
+          "summary": {"total": "int", "passed": "int", "failed": "int", "skipped": "int", "blocked": "bool"},
+          "cache_info": {"hit": "bool", "hit_count": "int", "miss_count": "int", "cache_age_seconds": "float"}
+        }
+      }
+    },
+    "workflow_dispatch": {
+      "success_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {}
+      },
+      "actions": ["start", "status", "abort", "phase", "recover", "snapshots"]
+    },
+    "security_scan": {
+      "success_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "agentic_scan": {"vulnerabilities": "list", "total": "int", "by_severity": "dict", "security_score": "int"},
+          "dependency_scan": {"dependencies": "list", "total": "int", "vulnerable_count": "int"}
+        }
+      }
+    },
+    "session_manage": {
+      "success_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {}
+      },
+      "actions": ["save", "load", "list", "detect", "verify", "track", "restore"]
+    },
+    "hook_manage": {
+      "success_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {}
+      },
+      "actions": ["list", "execute"]
+    },
+    "agent_status": {
+      "success_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {}
+      },
+      "actions": ["list", "by_phase", "detail", "create", "match", "assign", "release", "instance_status", "destroy", "schedule"]
+    },
+    "resource_load_status": {
+      "success_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {}
+      },
+      "actions": ["status", "preload", "cache", "clear_cache", "loading_progress", "token_report"]
+    },
+    "server_health": {
+      "success_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "status": "healthy",
+          "version": "string",
+          "api_version": "string",
+          "uptime_seconds": "float",
+          "tools_count": "int",
+          "resources_count": "int",
+          "degradation_stats": "dict",
+          "performance_metrics": "dict",
+          "services": {"chromadb": {"available": "bool", "latency_ms": "float"}},
+          "config": "dict"
+        }
+      },
+      "actions": ["check", "negotiate_version"]
+    },
+    "context_compress": {
+      "success_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "compressed": "string",
+          "original_tokens": "int",
+          "compressed_tokens": "int",
+          "compression_ratio": "float",
+          "strategy": "semantic|selective|lossless"
+        }
+      }
+    },
+    "decision_log": {
+      "success_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {}
+      },
+      "actions": ["log", "query", "export"]
+    },
+    "token_budget": {
+      "success_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {}
+      },
+      "actions": ["status", "set_budget", "recommend", "report"]
+    },
+    "project_init": {
+      "success_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {}
+      },
+      "actions": ["create", "validate", "detect_stack"]
+    },
+    "spec_drift_detect": {
+      "success_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {}
+      }
+    },
+    "code_simplify": {
+      "success_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {}
+      }
+    }
+  }
+}

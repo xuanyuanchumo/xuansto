@@ -1,16 +1,10 @@
 ---
-name: QAEngineer
-emoji: ✅
+name: QA Engineer
 description: 质量保证与测试策略
-color: green
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: standard
-services:
+phase: [5, 6]
+layer: 测试
+model_routing: standard
+capabilities:
   - test-strategy
   - quality-gates
   - acceptance-testing

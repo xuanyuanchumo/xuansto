@@ -1,16 +1,10 @@
 ---
-name: MobileDeveloper
-emoji: 📱
+name: Mobile Developer
 description: 移动端适配与跨端一致性
-color: cyan
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: standard
-services:
+phase: [4]
+layer: 工程
+model_routing: standard
+capabilities:
   - react-native
   - flutter
   - responsive

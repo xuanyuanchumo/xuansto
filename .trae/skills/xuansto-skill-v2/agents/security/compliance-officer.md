@@ -1,15 +1,10 @@
 ---
-name: ComplianceOfficer
-emoji: ⚖️
+name: Compliance Officer
 description: 合规检查与数据隐私审计
-color: yellow
-tools:
-  - Read
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: standard
-services:
+phase: [5, 6]
+layer: 安全
+model_routing: standard
+capabilities:
   - gdpr
   - pci-dss
   - audit-trail

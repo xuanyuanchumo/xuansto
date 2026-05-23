@@ -1,16 +1,10 @@
 ---
-name: BuildReleaseEngineer
-emoji: 📦
+name: Build-Release Engineer
 description: 桌面应用构建与安装包制作
-color: emerald
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: standard
-services:
+phase: [8]
+layer: DevOps
+model_routing: standard
+capabilities:
   - electron-builder
   - tauri-bundler
   - code-signing

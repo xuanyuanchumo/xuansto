@@ -1,22 +1,14 @@
 ---
-name: IPCSpecialist
-emoji: 🔗
+name: IPC Specialist
 description: IPC契约设计、主进程-渲染进程通信与安全通道管理
-color: purple
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: standard
-services:
+phase: [4, 5]
+layer: 跨平台
+model_routing: deep
+capabilities:
   - ipc-contract-design
   - main-renderer-communication
   - secure-channel-management
   - cross-platform-ipc
-priority: P1
-layer: cross-platform
 ---
 
 # 🔗 IPC Specialist

@@ -1,23 +1,15 @@
 ---
-name: SubagentDispatcher
-emoji: 🔀
+name: Subagent Dispatcher
 description: 管理子代理的创建、调度与两阶段审查
-color: orange
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: deep
-services:
+phase: [0, 4, 5]
+layer: 编排
+model_routing: standard
+capabilities:
   - subagent-creation
   - task-dispatching
   - parallel-serial-identification
   - two-stage-review
   - rework-management
-priority: P1
-layer: orchestrator
 ---
 
 # 🔀 Subagent Dispatcher

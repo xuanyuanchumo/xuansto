@@ -1,19 +1,13 @@
 ---
-name: DecisionLogger
-emoji: 📝
+name: Decision Logger
 description: 决策记录与审计日志管理
-color: teal
-tools:
-  - Read
-  - Grep
-  - RunCommand
-model: fast
-services:
+phase: [0, 2, 6]
+layer: 监控
+model_routing: fast
+capabilities:
   - decision-logging
   - audit-trail
   - traceability
-priority: P2
-layer: monitoring
 ---
 
 # 📝 Decision Logger

@@ -6,82 +6,43 @@
 
 ## 门禁别名映射表
 
-SKILL.md 及需求文档中引用门禁时使用语义化别名（如 TEST-PASS、COVERAGE），本文档使用结构化 ID（如 GATE-008）。下表为两者的映射关系：
+SKILL.md 及需求文档中引用门禁时使用语义化别名（如 TEST-PASS、COVERAGE），本文档使用结构化 ID（如 GATE-008）。下表为两者的映射关系。规则：每行仅保留非恒等映射（别名≠规范ID），已废弃别名标注(废弃)。
 
-| 阶段 | 别名 (Alias) | 对应门禁ID | 说明 |
+| 阶段 | 别名 (Alias) | 规范门禁ID | 说明 |
 | ---- | ------------ | ---------- | ---- |
-| **Phase 0** | DESIGN-REVIEW-PRODUCT | DESIGN-REVIEW-PRODUCT | 产品评审验证 |
-| **Phase 0** | DESIGN-REVIEW-TECH | DESIGN-REVIEW-TECH | 技术评审验证 |
-| **Phase 0** | DESIGN-REVIEW-DESIGN | DESIGN-REVIEW-DESIGN | 设计评审验证 |
-| **Phase 0** | DESIGN-TOKENS | DESIGN-TOKENS | 设计令牌同步验证 |
-| **Phase 0** | DESIGN-SYSTEM-COMPLETE | DESIGN-SYSTEM-COMPLETE | 设计系统完整性验证（含可访问性+视觉回归） |
-| **Phase 0** | ANTI-PATTERN-CHECK | ANTI-PATTERN-CHECK | 行业反模式检查验证 |
-| **Phase 0** | DESIGN-REVIEW | DESIGN-REVIEW-PRODUCT/TECH/DESIGN | 设计评审验证（已拆分为三项） |
-| **Phase 0** | DESIGN-ACCESSIBILITY | DESIGN-SYSTEM-COMPLETE | 可访问性检查（已合并至设计系统完整性） |
-| **Phase 0** | DESIGN-VISUAL-REGRESSION | DESIGN-SYSTEM-COMPLETE | 视觉回归（已合并至设计系统完整性） |
+| **Phase 0** | DESIGN-REVIEW(废弃) | DESIGN-REVIEW-PRODUCT | 设计评审（已拆分为PRODUCT/TECH/DESIGN三项，此别名仅映射至PRODUCT） |
+| **Phase 0** | DESIGN-ACCESSIBILITY(废弃) | DESIGN-SYSTEM-COMPLETE | 可访问性检查（已合并至设计系统完整性） |
+| **Phase 0** | DESIGN-VISUAL-REGRESSION(废弃) | DESIGN-SYSTEM-COMPLETE | 视觉回归（已合并至设计系统完整性） |
 | **Phase 1** | REQ-COMPLETENESS | GATE-001 | 需求完整性验证 |
 | **Phase 1** | SPEC-DOC-CONSISTENCY | GATE-002 | 规格文档一致性验证 |
-| **Phase 1** | BRAINSTORM-COMPLETE | BRAINSTORM-COMPLETE | 需求探索完整性验证 |
 | **Phase 2** | ARCH-REVIEW | GATE-003 | 架构合理性验证 |
 | **Phase 2** | CONTRACT | GATE-004 | 接口契约验证 |
-| **Phase 2** | PLAN-ATOMIC | PLAN-ATOMIC | 计划原子性验证 |
-| **Phase 2** | SPEC-ATOMIC | SPEC-ATOMIC | 规格原子性验证 |
-| **Phase 3** | TEST-FIRST | TEST-FIRST | 测试先行验证（含覆盖率+测试数据） |
-| **Phase 3** | COVERAGE | TEST-FIRST | 代码覆盖率达标（已合并至TEST-FIRST） |
-| **Phase 3** | TEST-DESIGN | TEST-FIRST | 测试数据和用例验证（已合并至TEST-FIRST） |
+| **Phase 3** | COVERAGE(废弃) | TEST-FIRST | 代码覆盖率达标（已合并至TEST-FIRST） |
+| **Phase 3** | TEST-DESIGN(废弃) | TEST-FIRST | 测试数据和用例验证（已合并至TEST-FIRST） |
 | **Phase 4** | LINT | GATE-007 | 代码规范检查（含编码+注释语言） |
-| **Phase 4** | TEST-PASS | GATE-008, GATE-010 | 单元测试和集成测试通过 |
-| **Phase 4** | GATE-008 | TEST-PASS | 单元测试通过（已合并至TEST-PASS） |
-| **Phase 4** | GATE-010 | TEST-PASS | 集成测试通过（已合并至TEST-PASS） |
-| **Phase 4** | CODE-REVIEW | GATE-009 | 代码审查验证（含子代理审查） |
-| **Phase 4** | MULTI-PERSPECTIVE-COVERAGE | MULTI-PERSPECTIVE-COVERAGE | 多视角审查覆盖验证（含审查置信度） |
-| **Phase 4** | FILE-ENCODING | GATE-007 | 文件编码格式（已合并至代码质量） |
-| **Phase 4** | COMMENT-LANGUAGE | GATE-007 | 注释语言规范（已合并至代码质量） |
-| **Phase 4** | REVIEW-CONFIDENCE | MULTI-PERSPECTIVE-COVERAGE | 审查置信度（已合并至多视角覆盖） |
-| **Phase 4** | SUBAGENT-REVIEW | GATE-009 | 子代理审查（已合并至代码审查） |
-| **Phase 4** | TDD-RED | TDD-RED | TDD红灯阶段验证 |
-| **Phase 4** | TDD-GREEN | TDD-GREEN | TDD绿灯阶段验证 |
-| **Phase 4** | TDD-REFACTOR | TDD-REFACTOR | TDD重构阶段验证 |
-| **Phase 4** | EXECUTION-VERIFY | EXECUTION-VERIFY | 执行验证 |
-| **Phase 4** | SCRIPT-SECURITY | SCRIPT-SECURITY | 脚本安全约束合规 |
-| **Phase 4/7** | SCRIPT-CLEANUP | SCRIPT-CLEANUP | 临时脚本清理验证 |
-| **跨阶段** | TOKEN-BUDGET | TOKEN-BUDGET | Token预算控制 |
-| **Phase 5** | E2E-TEST | GATE-011 | 端到端测试验证（含Playwright+控制台检查+RENDER-CHECK） |
+| **Phase 4** | GATE-008(废弃) | TEST-PASS | 单元测试通过（已合并至TEST-PASS） |
+| **Phase 4** | GATE-010(废弃) | TEST-PASS | 集成测试通过（已合并至TEST-PASS） |
+| **Phase 4** | FILE-ENCODING(废弃) | GATE-007 | 文件编码格式（已合并至代码质量） |
+| **Phase 4** | COMMENT-LANGUAGE(废弃) | GATE-007 | 注释语言规范（已合并至代码质量） |
+| **Phase 4** | REVIEW-CONFIDENCE(废弃) | MULTI-PERSPECTIVE-COVERAGE | 审查置信度（已合并至多视角覆盖） |
+| **Phase 4** | SUBAGENT-REVIEW(废弃) | GATE-009 | 子代理审查（已合并至代码审查） |
+| **Phase 5** | E2E-TEST | GATE-011 | 端到端测试验证 |
 | **Phase 5** | SECURITY | GATE-012 | 安全扫描验证 |
 | **Phase 5** | SPEC-DRIFT | SPEC-CONSISTENCY | 规格与实现一致性验证 |
-| **Phase 5** | AGENTIC-SEC | AGENTIC-SECURITY | Agentic安全合规验证 |
-| **Phase 5** | AI-PENTEST | AI-PENTEST | AI渗透测试验证 |
-| **Phase 5** | VISUAL-REG | VISUAL-REGRESSION | 视觉回归测试验证（含通过验证） |
-| **Phase 5** | RENDER-CHECK | RENDER-CHECK | 页面渲染验证 |
+| **Phase 5** | AGENTIC-SEC(废弃) | AGENTIC-SECURITY | Agentic安全合规（请使用完整名AGENTIC-SECURITY） |
+| **Phase 5** | CONSOLE-ERROR-FREE(废弃) | GATE-011 | 控制台无错误（已合并至E2E测试） |
+| **Phase 5** | PLAYWRIGHT-E2E-PASS(废弃) | GATE-011 | Playwright E2E（已合并至E2E测试） |
+| **Phase 5** | VISUAL-REGRESSION-PASS(废弃) | VISUAL-REGRESSION | 视觉回归通过（已合并至视觉回归） |
 | **Phase 5** | A11Y | ACCESSIBILITY | 可访问性验证 |
-| **Phase 5** | PERFORMANCE | PERFORMANCE | 性能基准验证 |
-| **Phase 5** | SECURITY-FIX-CLOSED | SECURITY-FIX-CLOSED | 安全修复闭环验证 |
-| **Phase 5** | CONSOLE-ERROR-FREE | GATE-011 | 控制台无错误（已合并至E2E测试） |
-| **Phase 5** | PLAYWRIGHT-E2E-PASS | GATE-011 | Playwright E2E（已合并至E2E测试） |
-| **Phase 5** | VISUAL-REGRESSION-PASS | VISUAL-REGRESSION | 视觉回归通过（已合并至视觉回归） |
 | **Phase 6** | DEPLOY-READY | GATE-013 | 部署就绪验证 |
-| **Phase 6** | PROD-VERIFY | GATE-014 | 生产环境验证（含基础设施健康） |
+| **Phase 6** | PROD-VERIFY | GATE-014 | 生产环境验证 |
 | **Phase 6** | UAT | GATE-013 | 用户验收测试验证 |
-| **Phase 6** | UX-ACCEPTANCE | UX-ACCEPTANCE | 用户体验验收验证 |
-| **Phase 6** | DOD-CHECK | DOD-CHECK | Definition of Done检查 |
-| **Phase 6** | INFRA-HEALTH | GATE-014 | 基础设施健康（已合并至生产验证） |
+| **Phase 6** | INFRA-HEALTH(废弃) | GATE-014 | 基础设施健康（已合并至生产验证） |
 | **Phase 7** | ITERATION-CLOSE | GATE-015 | 迭代闭环验证 |
 | **Phase 7** | DOCUMENTATION | DOC-COMPLETENESS | 文档完整性检查 |
-| **Phase 7** | SIMPLIFICATION-BEHAVIOR | SIMPLIFICATION-BEHAVIOR | 简化行为等价验证 |
-| **Phase 7** | CHESTERTON-FENCE | CHESTERTON-FENCE | Chesterton's Fence验证 |
-| **Phase 8** | DESKTOP-BUILD | DESKTOP-BUILD | 桌面构建验证 |
-| **Phase 8** | DESKTOP-SIGN | DESKTOP-SIGN | 代码签名验证 |
-| **Phase 8** | DESKTOP-UPDATE | DESKTOP-UPDATE | 自动更新验证 |
-| **Phase 8** | DESKTOP-CROSS | DESKTOP-CROSS | 跨平台兼容性验证 |
 | **Phase 8** | IPC-CONTRACT | IPC-CONTRACT | IPC契约验证 |
-| **跨阶段** | ITERATION-BUDGET | ITERATION-BUDGET | 迭代预算验证（含循环完成） |
-| **跨阶段** | SESSION-RECOVERY | SESSION-RECOVERY | 会话恢复验证（含持久规划） |
-| **跨阶段** | BUILD-SUCCESS | BUILD-SUCCESS | 构建成功验证 |
-| **跨阶段** | ROLLBACK-SAFETY | ROLLBACK-SAFETY | 回滚安全验证 |
-| **跨阶段** | INIT-COMPLETE | INIT-COMPLETE | 初始化完成验证 |
-| **跨阶段** | STATUS-HEALTHY | STATUS-HEALTHY | 状态健康验证 |
-| **跨阶段** | LOOP-COMPLETION | ITERATION-BUDGET | 循环完成（已合并至迭代预算） |
-| **跨阶段** | PLAN-PERSISTENCE | SESSION-RECOVERY | 持久规划（已合并至会话恢复） |
+| **跨阶段** | LOOP-COMPLETION(废弃) | ITERATION-BUDGET | 循环完成（已合并至迭代预算） |
+| **跨阶段** | PLAN-PERSISTENCE(废弃) | SESSION-RECOVERY | 持久规划（已合并至会话恢复） |
 
 ## 目录
 

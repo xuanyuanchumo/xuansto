@@ -36,7 +36,7 @@ def test_preload_writes_to_file(tmp_work_dir: Path):
     assert state_file.exists()
     data = json.loads(state_file.read_text(encoding="utf-8"))
     assert isinstance(data, dict)
-    assert data["version"] == 1
+    assert data["version"] == 3
     assert "updated_at" in data
     assert set(data["loaded"]) == {"skill-config", "agent-registry"}
 

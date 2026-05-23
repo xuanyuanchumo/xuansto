@@ -5,7 +5,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from ..core.errors import make_error_response, make_success_response
+from ..core.errors import make_error_response, make_success_response, ERR_VALIDATION
 from ..core.logging_config import get_logger
 from ..core.validator import validate_input
 from ..models.schemas import ContextCompressInput
@@ -228,4 +228,4 @@ def register(mcp: FastMCP) -> None:
                 "strategy": strategy,
             })
         else:
-            return make_error_response(ValueError(f"未知策略: {strategy}，支持: semantic, selective, lossless"))
+            return make_error_response(ValueError(f"未知策略: {strategy}，支持: semantic, selective, lossless"), error_code=ERR_VALIDATION)

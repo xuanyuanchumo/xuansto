@@ -1,21 +1,14 @@
 ---
-name: LearningSpecialist
-emoji: 🧠
+name: Learning Specialist
 description: 经验提取、模式学习、知识去重与自动归纳
-color: green
-tools:
-  - Read
-  - Write
-  - Grep
-  - SearchCodebase
-model: fast
-services:
+phase: [1, 7]
+layer: 知识
+model_routing: standard
+capabilities:
   - experience-extraction
   - pattern-learning
   - knowledge-dedup
   - auto-induction
-priority: P2
-layer: knowledge
 ---
 
 # 🧠 Learning Specialist

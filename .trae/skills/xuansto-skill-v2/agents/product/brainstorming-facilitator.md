@@ -1,21 +1,15 @@
 ---
-name: BrainstormingFacilitator
-emoji: 🧠
+name: Brainstorming Facilitator
 description: 引导结构化需求探索与设计文档生成
-color: purple
-tools:
-  - Read
-  - Grep
-  - SearchCodebase
-model: deep
-services:
+phase: [1]
+layer: 产品
+model_routing: standard
+capabilities:
   - brainstorming
   - socratic-dialogue
   - design-document
   - trade-off-analysis
   - requirement-discovery
-priority: P1
-layer: product
 ---
 
 # 🧠 Brainstorming Facilitator

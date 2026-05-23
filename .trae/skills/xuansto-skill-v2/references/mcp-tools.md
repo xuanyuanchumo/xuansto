@@ -910,3 +910,209 @@ Hook管理：列出Hook配置、执行指定Hook。
 调用: server_health()
 响应: {status: "success", data: {server_status: "HEALTHY", version: "3.5.0", tools_available: 13, tools_status: {skill_analyze: "OK", ...}, memory_usage_mb: 128.5, ...}, ...}
 ```
+
+## decision_log
+
+决策日志管理：记录决策条目、搜索决策、导出决策记录。
+
+**参数：**
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| action | str | 必填 | 操作类型: log, query, export |
+| title | str\|None | None | 决策标题(log时使用) |
+| description | str\|None | None | 决策描述(log时使用) |
+| context | str\|None | None | 决策上下文(log时使用) |
+| alternatives | list\|None | None | 备选方案列表(log时使用) |
+| decision | str\|None | None | 最终决策(log时使用) |
+| rationale | str\|None | None | 决策理由(log时使用) |
+| impact | str\|None | None | 影响范围(log时使用) |
+| decided_by | str\|None | None | 决策者(log时使用) |
+| keyword | str\|None | None | 搜索关键词(query时使用) |
+| tag | str\|None | None | 标签过滤(query时使用) |
+| date_from | str\|None | None | 起始日期(ISO8601, query/export时使用) |
+| date_to | str\|None | None | 截止日期(ISO8601, query/export时使用) |
+| limit | int | 20 | 返回数量上限(query时使用, 1-100) |
+| format | str | "json" | 导出格式(export时使用): json, markdown |
+
+**完整返回值JSON Schema：**
+```json
+{
+  "status": "success",
+  "data": {
+    "action": "log",
+    "id": "ADR-20250122-001",
+    "entry": {
+      "id": "ADR-20250122-001",
+      "title": "选择React作为前端框架",
+      "description": "前端框架选型决策",
+      "context": "新项目需要选择前端框架",
+      "alternatives": ["Vue", "Angular", "Svelte"],
+      "decision": "React + TypeScript",
+      "rationale": "团队经验丰富，生态成熟",
+      "impact": "影响前端架构和组件库选择",
+      "decided_by": "Tech Lead",
+      "tags": [],
+      "created_at": "2025-01-22T14:30:00"
+    },
+    "total_decisions": 1
+  },
+  "metadata": {
+    "tool": "decision_log",
+    "latency_ms": 12,
+    "degraded": false
+  }
+}
+```
+
+**错误码定义：**
+| 错误码 | 说明 | 处理建议 |
+|--------|------|----------|
+| INVALID_INPUT | action不在允许列表中或log缺少title | 使用log/query/export，log需提供title |
+| NOT_FOUND | 查询无结果 | 扩大搜索范围或调整关键词 |
+| EXPORT_ERROR | 导出失败 | 检查format参数 |
+| DEGRADED | 降级模式执行(内联JSON记录) | 检查MCP Server连接 |
+
+**降级脚本路径：** `scripts/decision-log.py` / 内联JSON记录（兜底）
+
+**调用示例：**
+```
+调用: decision_log(action="log", title="选择React作为前端框架", alternatives=["Vue", "Angular"], decision="React", rationale="团队经验丰富")
+响应: {status: "success", data: {action: "log", id: "ADR-20250122-001", entry: {title: "选择React作为前端框架", decision: "React", ...}, total_decisions: 1}, ...}
+
+调用: decision_log(action="query", keyword="React", limit=10)
+响应: {status: "success", data: {results: [{id: "ADR-20250122-001", title: "选择React作为前端框架", ...}], total: 1, limit: 10}, ...}
+
+调用: decision_log(action="export", format="markdown")
+响应: {status: "success", data: {format: "markdown", content: "# Decision Log\n\n## ADR-20250122-001: 选择React作为前端框架\n...", total: 1}, ...}
+```
+
+## token_budget
+
+Token预算管理：查询预算状态、设置预算、获取推荐、生成使用报告。
+
+**参数：**
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| action | str | 必填 | 操作类型: status, set_budget, recommend, report |
+| total_budget | int\|None | None | 总Token预算(set_budget时使用, >=1000) |
+| phase_allocations | dict\|None | None | 阶段分配(set_budget时使用) |
+| project_size | str\|None | None | 项目规模(recommend时使用): small, medium, large |
+| complexity | str\|None | None | 复杂度(recommend时使用): low, medium, high |
+| team_size | int\|None | None | 团队人数(recommend时使用, 1-50) |
+| period | str | "session" | 报告周期(report时使用): daily, weekly, session |
+
+**完整返回值JSON Schema：**
+```json
+{
+  "status": "success",
+  "data": {
+    "action": "status",
+    "total_budget": 150000,
+    "used": 45000,
+    "remaining": 105000,
+    "phase_allocations": {
+      "0": 8000,
+      "1": 15000,
+      "2": 22000,
+      "3": 12000,
+      "4": 45000,
+      "5": 18000,
+      "6": 10000,
+      "7": 12000,
+      "8": 8000
+    },
+    "usage_by_phase": {
+      "0": 5000,
+      "1": 12000,
+      "2": 18000,
+      "4": 10000
+    }
+  },
+  "metadata": {
+    "tool": "token_budget",
+    "latency_ms": 8,
+    "degraded": false
+  }
+}
+```
+
+**错误码定义：**
+| 错误码 | 说明 | 处理建议 |
+|--------|------|----------|
+| INVALID_INPUT | action不在允许列表中或set_budget缺少参数 | 使用status/set_budget/recommend/report |
+| BUDGET_EXCEEDED | Token预算已耗尽 | 调整预算或压缩上下文 |
+| DEGRADED | 降级模式执行(内联估算) | 检查MCP Server连接 |
+
+**降级脚本路径：** `scripts/token-budget-guard.py` / 内联估算（兜底）
+
+**调用示例：**
+```
+调用: token_budget(action="status")
+响应: {status: "success", data: {total_budget: 150000, used: 45000, remaining: 105000, phase_allocations: {...}, ...}, ...}
+
+调用: token_budget(action="set_budget", total_budget=200000, phase_allocations={"0": 10000, "1": 20000, "4": 60000})
+响应: {status: "success", data: {total_budget: 200000, phase_allocations: {"0": 10000, "1": 20000, "4": 60000}, updated_at: "2025-01-22T14:30:00"}, ...}
+
+调用: token_budget(action="recommend", project_size="medium", complexity="high", team_size=3)
+响应: {status: "success", data: {recommended_total: 200000, recommended_allocations: {...}, project_size: "medium", complexity: "high", team_size: 3, adjusted_total: 240000, ...}, ...}
+
+调用: token_budget(action="report", period="session")
+响应: {status: "success", data: {period: "session", total_budget: 150000, total_used: 45000, remaining: 105000, usage_pct: 30.0, ...}, ...}
+```
+
+## project_init
+
+项目初始化管理：创建项目、验证项目配置、检测技术栈。
+
+**参数：**
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| action | str | 必填 | 操作类型: create, validate, detect_stack |
+| name | str\|None | None | 项目名称(create时使用) |
+| description | str\|None | None | 项目描述(create时使用) |
+| stack | list\|None | None | 技术栈列表(create时使用) |
+| template | str\|None | None | 项目模板(create时使用) |
+| directory | str\|None | None | 项目目录(create时使用) |
+| project_path | str\|None | None | 项目路径(validate/detect_stack时使用) |
+
+**完整返回值JSON Schema：**
+```json
+{
+  "status": "success",
+  "data": {
+    "action": "create",
+    "name": "my-project",
+    "directory": "/path/to/my-project",
+    "config_path": "/path/to/my-project/.xuansto-config.yaml",
+    "stack": ["python", "react"],
+    "template": "default"
+  },
+  "metadata": {
+    "tool": "project_init",
+    "latency_ms": 15,
+    "degraded": false
+  }
+}
+```
+
+**错误码定义：**
+| 错误码 | 说明 | 处理建议 |
+|--------|------|----------|
+| INVALID_INPUT | action不在允许列表中或create缺少name | 使用create/validate/detect_stack，create需提供name |
+| NOT_FOUND | 项目路径不存在(validate/detect_stack) | 确认project_path正确 |
+| CONFIG_EXISTS | 项目配置已存在(create) | 删除已有配置或选择其他目录 |
+| DEGRADED | 降级模式执行(内联模板生成) | 检查MCP Server连接 |
+
+**降级脚本路径：** `scripts/project-initializer.py` / 内联模板生成（兜底）
+
+**调用示例：**
+```
+调用: project_init(action="create", name="my-project", stack=["python", "react"], template="default")
+响应: {status: "success", data: {name: "my-project", directory: "/path/to/my-project", config_path: "/path/to/my-project/.xuansto-config.yaml", stack: ["python", "react"], template: "default"}, ...}
+
+调用: project_init(action="validate", project_path="/path/to/my-project")
+响应: {status: "success", data: {project_path: "/path/to/my-project", valid: true, issues: [], total_issues: 0, block_count: 0, warn_count: 0}, ...}
+
+调用: project_init(action="detect_stack", project_path="/path/to/my-project")
+响应: {status: "success", data: {project_path: "/path/to/my-project", detected_stacks: [{stack: "python", confidence: 0.75, markers_found: ["pyproject.toml"]}, {stack: "node", confidence: 1.0, markers_found: ["package.json"]}], primary_stack: "node", total_detected: 2}, ...}
+```

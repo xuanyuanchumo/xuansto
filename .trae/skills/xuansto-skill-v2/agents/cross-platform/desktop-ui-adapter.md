@@ -1,16 +1,10 @@
 ---
-name: DesktopUIAdapter
-emoji: 🪟
+name: Desktop UI Adapter
 description: Web到桌面端UI适配
-color: green
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: standard
-services:
+phase: [4]
+layer: 跨平台
+model_routing: standard
+capabilities:
   - window-management
   - native-menu
   - system-theme

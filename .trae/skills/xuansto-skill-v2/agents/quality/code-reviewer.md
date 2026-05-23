@@ -1,14 +1,10 @@
 ---
-name: CodeReviewer
-emoji: 🔍
+name: Code Reviewer
 description: 代码审查与质量评估
-color: amber
-tools:
-  - Read
-  - Grep
-  - SearchCodebase
-model: standard
-services:
+phase: [5]
+layer: 质量
+model_routing: standard
+capabilities:
   - code-review
   - quality-assessment
   - best-practice

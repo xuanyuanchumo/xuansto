@@ -12,7 +12,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core.config import SKILL_ROOT, SCRIPTS_DIR, HOOK_SCRIPTS_MAP
-from ..core.errors import make_error_response, make_success_response
+from ..core.errors import make_error_response, make_success_response, ERR_VALIDATION, ERR_INTERNAL
 from ..core.logging_config import get_logger
 from ..core.subprocess_utils import run_script
 from ..core.validator import validate_input
@@ -333,7 +333,7 @@ def register(mcp: FastMCP) -> None:
         if action == "list":
             hooks = HOOK_PROFILES.get(profile, [])
             if not hooks:
-                return make_error_response(ValueError(f"未知profile: {profile}，支持: minimal, standard, strict"))
+                return make_error_response(ValueError(f"未知profile: {profile}，支持: minimal, standard, strict"), error_code=ERR_VALIDATION)
             result: list[dict[str, Any]] = []
             for h in hooks:
                 script = HOOK_SCRIPTS_MAP.get(h)
@@ -342,7 +342,7 @@ def register(mcp: FastMCP) -> None:
             return make_success_response({"profile": profile, "hooks": result, "total": len(result)})
         elif action == "execute":
             if not hook_name:
-                return make_error_response(ValueError("execute操作需要hook_name参数"))
+                return make_error_response(ValueError("execute操作需要hook_name参数"), error_code=ERR_VALIDATION)
             script = HOOK_SCRIPTS_MAP.get(hook_name)
             if script:
                 script_path = SCRIPTS_DIR / script
@@ -358,7 +358,7 @@ def register(mcp: FastMCP) -> None:
                     args.extend(["--context", json.dumps(context, ensure_ascii=False)])
                 script_result = run_script(script_path, args=args, timeout=30)
                 if script_result.get("error"):
-                    return make_error_response(Exception(script_result.get("message", "脚本执行失败")))
+                    return make_error_response(Exception(script_result.get("message", "脚本执行失败")), error_code=ERR_INTERNAL)
                 return make_success_response({"hook": hook_name, "status": "executed", "result": script_result.get("data", {})})
             inline_fn = INLINE_HOOK_LOGIC.get(hook_name)
             if inline_fn:
@@ -367,7 +367,7 @@ def register(mcp: FastMCP) -> None:
                 return make_success_response({"hook": hook_name, "status": inline_result["status"], "message": inline_result["message"], "details": inline_result["details"], "source": "inline"})
             return make_success_response({"hook": hook_name, "status": "skipped", "reason": "无对应脚本或内联逻辑，需手动执行"})
         else:
-            return make_error_response(ValueError(f"未知操作: {action}，支持: list, execute"))
+            return make_error_response(ValueError(f"未知操作: {action}，支持: list, execute"), error_code=ERR_VALIDATION)
 
 
 _HOOK_TOOL_MAP: dict[str, list[str]] = {

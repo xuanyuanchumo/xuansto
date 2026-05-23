@@ -12,53 +12,121 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core import atomic_write
-from ..core.config import SKILL_ROOT, REFERENCES_DIR, AGENTS_DIR, COMMANDS_DIR, TEMPLATES_DIR, WORK_DIR, DATA_DIR
+from ..core.config import SKILL_ROOT, REFERENCES_DIR, AGENTS_DIR, COMMANDS_DIR, TEMPLATES_DIR, WORK_DIR
 from ..core.errors import make_error_response, make_success_response, XuanstoMCPError
 from ..core.logging_config import get_logger
+from ..core.notifications import notify
 from ..core.validator import validate_input
-from ..models.schemas import ResourceLoadStatusInput
+from ..models.schemas import ResourceLoadStatusInput, DisclosureTransition
 
 logger = get_logger("resource_load_status")
 
 PHASE_RESOURCE_MAP: dict[int, list[dict[str, str]]] = {
     0: [
         {"id": "skill-config", "type": "config", "path": ".skill-config.yaml"},
-        {"id": "agent-registry", "type": "reference", "path": "references/agent-registry.md"},
-        {"id": "quality-gates", "type": "reference", "path": "references/quality-gates.md"},
     ],
     1: [
-        {"id": "knowledge-general", "type": "knowledge", "path": ".knowledge/general/"},
+        {"id": "agent-registry", "type": "reference", "path": "references/agent-registry.md"},
+        {"id": "quality-gates", "type": "reference", "path": "references/quality-gates.md"},
         {"id": "brainstorm-workflow", "type": "workflow", "path": "workflows/brainstorming-workflow.md"},
+        {"id": "agent-product-manager", "type": "agent", "path": "agents/product/product-manager.md"},
+        {"id": "agent-orchestrator", "type": "agent", "path": "agents/orchestrator/orchestrator.md"},
+        {"id": "agent-system-architect", "type": "agent", "path": "agents/product/system-architect.md"},
     ],
     2: [
-        {"id": "knowledge-patterns", "type": "knowledge", "path": ".knowledge/general/patterns/"},
+        {"id": "knowledge-general", "type": "knowledge", "path": ".knowledge/general/"},
         {"id": "sdd-tdd-full", "type": "workflow", "path": "workflows/sdd-tdd-full.md"},
+        {"id": "sdd-tdd-medium", "type": "workflow", "path": "workflows/sdd-tdd-medium.md"},
+        {"id": "sdd-tdd-fast", "type": "workflow", "path": "workflows/sdd-tdd-fast.md"},
+        {"id": "mcp-tools", "type": "reference", "path": "references/mcp-tools.md"},
+        {"id": "workflow-phases", "type": "reference", "path": "references/workflow-phases.md"},
+        {"id": "agent-registry-full", "type": "agent", "path": "agents/registry.yaml"},
+        {"id": "progressive-loading", "type": "reference", "path": "references/progressive-loading.md"},
     ],
     3: [
         {"id": "test-guidelines", "type": "reference", "path": "references/test-guidelines.md"},
-    ],
-    4: [
         {"id": "coding-standards", "type": "reference", "path": "references/coding-standards.md"},
         {"id": "karpathy-guidelines", "type": "reference", "path": "references/karpathy-guidelines.md"},
-    ],
-    5: [
         {"id": "security-guidelines", "type": "reference", "path": "references/security-guidelines.md"},
         {"id": "owasp-top10", "type": "reference", "path": "references/owasp-top10-2026.md"},
-    ],
-    6: [
         {"id": "acceptance-criteria", "type": "reference", "path": "references/acceptance-criteria.md"},
-    ],
-    7: [
-        {"id": "simplification-rules", "type": "reference", "path": "references/karpathy-guidelines.md", "inherits_from": "phase_4"},
-    ],
-    8: [
         {"id": "desktop-guidelines", "type": "reference", "path": "references/desktop-dev-guidelines.md"},
         {"id": "ipc-contracts", "type": "reference", "path": "references/ipc-contracts.md"},
+        {"id": "knowledge-workflow", "type": "reference", "path": "references/knowledge-workflow-details.md"},
+        {"id": "templates-dir", "type": "template", "path": "templates/"},
+        {"id": "agents-orchestrator-full", "type": "agent", "path": "agents/orchestrator/"},
+        {"id": "agents-product-full", "type": "agent", "path": "agents/product/"},
+        {"id": "agents-design-full", "type": "agent", "path": "agents/design/"},
+        {"id": "agents-engineering-full", "type": "agent", "path": "agents/engineering/"},
+        {"id": "agents-cross-platform-full", "type": "agent", "path": "agents/cross-platform/"},
+        {"id": "agents-database-full", "type": "agent", "path": "agents/database/"},
+        {"id": "agents-testing-full", "type": "agent", "path": "agents/testing/"},
+        {"id": "agents-security-full", "type": "agent", "path": "agents/security/"},
+        {"id": "agents-devops-full", "type": "agent", "path": "agents/devops/"},
+        {"id": "agents-quality-full", "type": "agent", "path": "agents/quality/"},
+        {"id": "agents-documentation-full", "type": "agent", "path": "agents/documentation/"},
+        {"id": "agents-knowledge-full", "type": "agent", "path": "agents/knowledge/"},
+        {"id": "agents-monitoring-full", "type": "agent", "path": "agents/monitoring/"},
     ],
 }
 
+PHASE_TOKEN_BUDGET: dict[int, int] = {
+    0: 2000,
+    1: 5000,
+    2: 10000,
+    3: 20000,
+}
+
+PHASE_AVAILABLE_FUNCTIONS: dict[int, dict[str, bool]] = {
+    0: {
+        "command_routing": True,
+        "command_execution": False,
+        "quality_gates": False,
+        "knowledge_search": False,
+        "reference_docs": False,
+        "agent_details": False,
+        "full_scripts": False,
+    },
+    1: {
+        "command_routing": True,
+        "command_execution": True,
+        "quality_gates": True,
+        "knowledge_search": False,
+        "reference_docs": False,
+        "agent_details": False,
+        "full_scripts": False,
+    },
+    2: {
+        "command_routing": True,
+        "command_execution": True,
+        "quality_gates": True,
+        "knowledge_search": True,
+        "reference_docs": True,
+        "agent_details": True,
+        "full_scripts": False,
+    },
+    3: {
+        "command_routing": True,
+        "command_execution": True,
+        "quality_gates": True,
+        "knowledge_search": True,
+        "reference_docs": True,
+        "agent_details": True,
+        "full_scripts": True,
+    },
+}
+
+PHASE_RESOURCE_LIST: dict[int, list[str]] = {
+    0: [],
+    1: ["xuansto://agents/registry"],
+    2: ["xuansto://agents/registry", "xuansto://workflows/definitions", "xuansto://gates/definitions"],
+    3: ["xuansto://agents/registry", "xuansto://workflows/definitions", "xuansto://gates/definitions", "xuansto://hooks/definitions", "xuansto://templates/"],
+}
+
 _PHASE_INHERITS: dict[int, list[int]] = {
-    7: [4],
+    1: [0],
+    2: [0, 1],
+    3: [0, 1, 2],
 }
 
 _LOADED_PROGRESS = {
@@ -97,70 +165,143 @@ _LOADING_PHASE_MAP: dict[str, int] = {
     "full": 3,
 }
 
-_AVAILABLE_FUNCTIONS_MAP: dict[str, dict[str, bool]] = {
-    "skeleton": {
-        "command_routing": True,
-        "command_execution": False,
-        "quality_gates": False,
-        "knowledge_search": False,
-        "reference_docs": False,
-        "agent_details": False,
-        "full_scripts": False,
-    },
-    "functional": {
-        "command_routing": True,
-        "command_execution": True,
-        "quality_gates": True,
-        "knowledge_search": False,
-        "reference_docs": False,
-        "agent_details": False,
-        "full_scripts": False,
-    },
-    "enhanced": {
-        "command_routing": True,
-        "command_execution": True,
-        "quality_gates": True,
-        "knowledge_search": True,
-        "reference_docs": True,
-        "agent_details": True,
-        "full_scripts": False,
-    },
-    "full": {
-        "command_routing": True,
-        "command_execution": True,
-        "quality_gates": True,
-        "knowledge_search": True,
-        "reference_docs": True,
-        "agent_details": True,
-        "full_scripts": True,
-    },
+_LOADING_PHASE_NAMES: dict[int, str] = {v: k for k, v in _LOADING_PHASE_MAP.items()}
+
+_DISCLOSURE_NOTES: dict[int, str] = {
+    0: "骨架阶段：仅核心元数据可用，命令路由受限，无Agent详情",
+    1: "功能阶段：命令执行和工作流推进可用，知识检索和参考文档需升级到增强阶段",
+    2: "增强阶段：知识检索、参考文档、Agent详情可用，完整脚本集和模板需升级到完整阶段",
+    3: "完整阶段：全部功能可用，无限制",
 }
 
-_DISCLOSURE_NOTES: dict[str, str] = {
-    "skeleton": "骨架阶段，仅命令路由可用",
-    "functional": "功能阶段，知识检索需推进到增强阶段",
-    "enhanced": "增强阶段，完整脚本集需推进到完整阶段",
-    "full": "完整阶段，全部功能可用",
+_UPGRADE_HINTS: dict[int, str] = {
+    0: "升级到功能阶段(Phase 1)可解锁：命令执行、工作流推进、门禁检查、核心Agent(Product Manager/Orchestrator/Architect)",
+    1: "升级到增强阶段(Phase 2)可解锁：知识检索、参考文档、Agent完整注册表、工作流定义",
+    2: "升级到完整阶段(Phase 3)可解锁：完整脚本集、模板库、全部Agent定义、安全/编码/桌面参考文档",
+    3: "已达最高阶段，无需升级",
 }
 
+_PHASE_AVAILABLE_COMMANDS: dict[int, list[str]] = {
+    0: ["/status", "/agent-status", "/init"],
+    1: ["/sprint", "/clarify", "/plan", "/spec", "/design", "/implement", "/test", "/review", "/fix", "/accept", "/deploy", "/build", "/brainstorm", "/execute-plan", "/status", "/agent-status", "/init"],
+    2: ["/sprint", "/clarify", "/plan", "/spec", "/design", "/implement", "/test", "/review", "/fix", "/accept", "/deploy", "/build", "/brainstorm", "/execute-plan", "/audit", "/build-desktop", "/release-desktop", "/refactor", "/simplify", "/loop", "/cancel-loop", "/learn", "/design-system", "/rollback", "/status", "/agent-status", "/init"],
+    3: ["/sprint", "/clarify", "/plan", "/spec", "/design", "/implement", "/test", "/review", "/fix", "/accept", "/deploy", "/build-desktop", "/release-desktop", "/refactor", "/audit", "/agent-status", "/learn", "/brainstorm", "/execute-plan", "/design-system", "/simplify", "/loop", "/cancel-loop", "/build", "/init", "/status", "/rollback"],
+}
 
-def _get_loading_disclosure() -> tuple[dict[str, bool], str]:
+_TRANSITION_HISTORY: list[dict[str, Any]] = []
+
+_MAX_TRANSITION_HISTORY = 50
+
+_TOKEN_ESTIMATE_RATIO = 4
+
+_TOKEN_METRICS: dict[str, dict[str, Any]] = {}
+
+_TOKEN_METRICS_LOCK = threading.Lock()
+
+_PHASE_TOKEN_USAGE: dict[int, dict[str, Any]] = {}
+
+_PHASE_TOKEN_USAGE_LOCK = threading.Lock()
+
+
+def _get_loading_disclosure() -> dict[str, Any]:
     state_file = WORK_DIR / "resource_state.json"
-    current_phase = "skeleton"
+    current_phase = 0
     if state_file.exists():
         try:
             data = json.loads(state_file.read_text(encoding="utf-8"))
             if isinstance(data, dict):
-                current_phase = data.get("phase", current_phase)
+                phase_val = data.get("phase", "skeleton")
+                if isinstance(phase_val, int):
+                    current_phase = phase_val
+                elif isinstance(phase_val, str):
+                    current_phase = _LOADING_PHASE_MAP.get(phase_val, 0)
         except (json.JSONDecodeError, OSError):
             pass
-    available_functions = _AVAILABLE_FUNCTIONS_MAP.get(
-        current_phase, _AVAILABLE_FUNCTIONS_MAP["skeleton"]
+    available_functions = PHASE_AVAILABLE_FUNCTIONS.get(current_phase, PHASE_AVAILABLE_FUNCTIONS[0])
+    disclosure_note = _DISCLOSURE_NOTES.get(current_phase, _DISCLOSURE_NOTES[0])
+    upgrade_hint = _UPGRADE_HINTS.get(current_phase, _UPGRADE_HINTS[0])
+    available_commands = _PHASE_AVAILABLE_COMMANDS.get(current_phase, _PHASE_AVAILABLE_COMMANDS[0])
+    token_budget = PHASE_TOKEN_BUDGET.get(current_phase, PHASE_TOKEN_BUDGET[0])
+    with _PHASE_TOKEN_USAGE_LOCK:
+        phase_usage = _PHASE_TOKEN_USAGE.get(current_phase, {"estimated_tokens": 0, "resource_count": 0})
+    return {
+        "available_functions": available_functions,
+        "disclosure_note": disclosure_note,
+        "upgrade_hint": upgrade_hint,
+        "available_commands": available_commands,
+        "token_budget": token_budget,
+        "token_usage": phase_usage,
+    }
+
+
+def _get_current_phase_index() -> int:
+    state_file = WORK_DIR / "resource_state.json"
+    if state_file.exists():
+        try:
+            data = json.loads(state_file.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                phase_val = data.get("phase", "skeleton")
+                if isinstance(phase_val, int):
+                    return phase_val
+                if isinstance(phase_val, str):
+                    return _LOADING_PHASE_MAP.get(phase_val, 0)
+        except (json.JSONDecodeError, OSError):
+            pass
+    return 0
+
+
+def _get_current_phase_name() -> str:
+    return _LOADING_PHASE_NAMES.get(_get_current_phase_index(), "skeleton")
+
+
+def _phase_index_to_name(phase: int | None) -> str:
+    if phase is None:
+        return _get_current_phase_name()
+    return _LOADING_PHASE_NAMES.get(phase, "skeleton")
+
+
+def _record_transition(from_phase: str, to_phase: str, resources_affected: list[str], status: str = "completed") -> None:
+    transition = DisclosureTransition(
+        from_phase=from_phase,
+        to_phase=to_phase,
+        started_at=datetime.now(timezone.utc).isoformat(),
+        completed_at=datetime.now(timezone.utc).isoformat() if status in ("completed", "failed") else None,
+        resources_affected=resources_affected,
+        status=status,
     )
-    disclosure_note = _DISCLOSURE_NOTES.get(
-        current_phase, _DISCLOSURE_NOTES["skeleton"]
-    )
-    return available_functions, disclosure_note
+    with _cache_lock:
+        _TRANSITION_HISTORY.append(transition.model_dump())
+        if len(_TRANSITION_HISTORY) > _MAX_TRANSITION_HISTORY:
+            del _TRANSITION_HISTORY[:len(_TRANSITION_HISTORY) - _MAX_TRANSITION_HISTORY]
+    logger.info("DisclosureTransition: %s -> %s (%s, %d resources)", from_phase, to_phase, status, len(resources_affected))
+
+
+def _estimate_tokens(text: str) -> int:
+    return max(1, len(text) // _TOKEN_ESTIMATE_RATIO)
+
+
+def _update_phase_token_usage(phase: int, estimated_tokens: int) -> None:
+    with _PHASE_TOKEN_USAGE_LOCK:
+        if phase not in _PHASE_TOKEN_USAGE:
+            _PHASE_TOKEN_USAGE[phase] = {"estimated_tokens": 0, "resource_count": 0}
+        _PHASE_TOKEN_USAGE[phase]["estimated_tokens"] += estimated_tokens
+        _PHASE_TOKEN_USAGE[phase]["resource_count"] += 1
+
+
+def record_token_usage(tool_name: str, input_text: str, output_text: str) -> None:
+    input_tokens = _estimate_tokens(input_text)
+    output_tokens = _estimate_tokens(output_text)
+    with _TOKEN_METRICS_LOCK:
+        if tool_name not in _TOKEN_METRICS:
+            _TOKEN_METRICS[tool_name] = {
+                "total_input_tokens": 0,
+                "total_output_tokens": 0,
+                "call_count": 0,
+            }
+        metrics = _TOKEN_METRICS[tool_name]
+        metrics["total_input_tokens"] += input_tokens
+        metrics["total_output_tokens"] += output_tokens
+        metrics["call_count"] += 1
 
 
 def _compute_file_hash(path: Path) -> str:
@@ -195,7 +336,7 @@ def _resolve_uri_source_path(uri: str) -> Path | None:
                 break
     if resource_key is None:
         return None
-    return DATA_DIR / resource_key
+    return SKILL_ROOT / resource_key
 
 
 def _is_cache_valid(cache_key: str) -> tuple[bool, str]:
@@ -279,18 +420,39 @@ def _load_resource_state() -> set[str]:
     if state_file.exists():
         data = json.loads(state_file.read_text(encoding="utf-8"))
         if isinstance(data, list):
+            _save_resource_state(set(data))
             return set(data)
         if isinstance(data, dict):
+            if "resources" in data and isinstance(data["resources"], list):
+                loaded = set(data.get("loaded", []))
+                for r in data["resources"]:
+                    if isinstance(r, str):
+                        loaded.add(r)
+                _save_resource_state(loaded)
+                return loaded
             return set(data.get("loaded", []))
     return set()
 
 
 def _save_resource_state(state: set[str]) -> None:
     state_file = _get_state_file()
+    resource_map = {}
+    for rid in sorted(state):
+        resource_map[rid] = {"status": "loaded"}
+        for pid, res_list in PHASE_RESOURCE_MAP.items():
+            for r in res_list:
+                if r["id"] == rid:
+                    resource_map[rid]["phase"] = pid
+                    resource_map[rid]["type"] = r["type"]
+                    resource_map[rid]["path"] = r["path"]
+                    break
+    current_phase = _get_current_phase_index()
     payload = {
-        "version": 1,
+        "version": 3,
         "updated_at": datetime.now(timezone.utc).isoformat(),
+        "phase": _LOADING_PHASE_NAMES.get(current_phase, "skeleton"),
         "loaded": sorted(state),
+        "resources": resource_map,
     }
     atomic_write(state_file, json.dumps(payload, ensure_ascii=False, indent=2))
 
@@ -330,6 +492,36 @@ def _check_resource_status(resource_id: str, resource_path: str) -> str:
         return "available"
     return "missing"
 
+
+def _collect_resources_up_to_phase(target_phase: int) -> list[dict[str, str]]:
+    seen_ids: set[str] = set()
+    result: list[dict[str, str]] = []
+    for p in range(target_phase + 1):
+        for r in PHASE_RESOURCE_MAP.get(p, []):
+            if r["id"] not in seen_ids:
+                seen_ids.add(r["id"])
+                result.append(r)
+    return result
+
+
+def _estimate_resource_tokens(resource: dict[str, str]) -> int:
+    full_path = SKILL_ROOT / resource["path"]
+    if not full_path.exists():
+        return 0
+    try:
+        if full_path.is_file():
+            return _estimate_tokens(full_path.read_text(encoding="utf-8"))
+        if full_path.is_dir():
+            total = 0
+            for fpath in sorted(full_path.rglob("*")):
+                if fpath.is_file() and fpath.suffix in (".json", ".yaml", ".yml", ".md", ".txt"):
+                    total += _estimate_tokens(fpath.read_text(encoding="utf-8"))
+            return total
+    except OSError:
+        pass
+    return 0
+
+
 def register(mcp: FastMCP) -> None:
     @mcp.tool(
         annotations=ToolAnnotations(
@@ -346,36 +538,62 @@ def register(mcp: FastMCP) -> None:
         resource_uris: list[str] | None = None,
         priority: str = "normal",
         batch_mode: bool = False,
+        auto_upgrade: bool = False,
     ) -> dict[str, Any]:
-        """渐进式加载状态管理：查询指定Phase的资源加载状态，预加载指定Phase的资源。返回资源ID、状态(loaded/available/missing/stale/expired)和路径。priority控制预加载优先级(critical/normal/background)，batch_mode启用批量并发加载。"""
-        validated, err = validate_input(ResourceLoadStatusInput, action=action, phase=phase, resource_ids=resource_ids, resource_uris=resource_uris, priority=priority, batch_mode=batch_mode)
+        """渐进式加载状态管理：查询指定Phase的资源加载状态，预加载指定Phase的资源。返回资源ID、状态(loaded/available/missing/stale/expired)和路径。priority控制预加载优先级(critical/normal/background)，batch_mode启用批量并发加载，auto_upgrade启用Token预算超限时自动升级阶段。"""
+        validated, err = validate_input(ResourceLoadStatusInput, action=action, phase=phase, resource_ids=resource_ids, resource_uris=resource_uris, priority=priority, batch_mode=batch_mode, auto_upgrade=auto_upgrade)
         if err:
             return err
         logger.info("resource_load_status called: action=%s", action)
         if action == "status":
             resources = []
             if phase is not None:
-                resources = PHASE_RESOURCE_MAP.get(phase, [])
+                resources = _collect_resources_up_to_phase(phase)
             elif resource_ids:
                 for pid, res_list in PHASE_RESOURCE_MAP.items():
                     for r in res_list:
                         if r["id"] in resource_ids:
                             resources.append(r)
             else:
-                for pid, res_list in PHASE_RESOURCE_MAP.items():
-                    resources.extend(res_list)
+                resources = _collect_resources_up_to_phase(3)
             result = []
+            resource_map = {}
             for r in resources:
                 status = _check_resource_status(r["id"], r["path"])
-                result.append({"id": r["id"], "type": r["type"], "path": r["path"], "status": status})
+                entry = {"id": r["id"], "type": r["type"], "path": r["path"], "status": status, "phase": None}
+                for pid, res_list in PHASE_RESOURCE_MAP.items():
+                    if any(res["id"] == r["id"] for res in res_list):
+                        entry["phase"] = pid
+                        break
+                result.append(entry)
+                resource_map[r["id"]] = {"status": status, "type": r["type"], "path": r["path"], "phase": entry["phase"]}
             loaded = sum(1 for r in result if r["status"] == "loaded")
             stale = sum(1 for r in result if r["status"] == "stale")
             expired = sum(1 for r in result if r["status"] == "expired")
-            available_functions, disclosure_note = _get_loading_disclosure()
-            return make_success_response({"resources": result, "total": len(result), "loaded": loaded, "stale": stale, "expired": expired, "available_functions": available_functions, "disclosure_note": disclosure_note})
+            disclosure = _get_loading_disclosure()
+            with _cache_lock:
+                recent_transitions = list(_TRANSITION_HISTORY[-5:])
+            with _PHASE_TOKEN_USAGE_LOCK:
+                phase_token_snapshot = dict(_PHASE_TOKEN_USAGE)
+            return make_success_response({
+                "resources": result,
+                "resources_map": resource_map,
+                "total": len(result),
+                "loaded": loaded,
+                "stale": stale,
+                "expired": expired,
+                "available_functions": disclosure["available_functions"],
+                "disclosure_note": disclosure["disclosure_note"],
+                "upgrade_hint": disclosure["upgrade_hint"],
+                "available_commands": disclosure["available_commands"],
+                "token_budget": disclosure["token_budget"],
+                "token_usage": disclosure["token_usage"],
+                "phase_token_usage": phase_token_snapshot,
+                "transitions": recent_transitions,
+            })
         elif action == "preload":
             if priority not in ("critical", "normal", "background"):
-                return make_error_response(ValueError(f"无效优先级: {priority}，支持: critical, normal, background"))
+                return make_error_response(ValueError(f"无效优先级: {priority}，支持: critical, normal, background"), error_code=ERR_VALIDATION)
             if resource_uris:
                 with _cache_lock:
                     _LOADED_PROGRESS["loading"] = True
@@ -449,29 +667,52 @@ def register(mcp: FastMCP) -> None:
                     "batch_mode": batch_mode,
                 })
             if phase is None:
-                return make_error_response(ValueError("preload操作需要phase或resource_uris参数"))
-            resources = PHASE_RESOURCE_MAP.get(phase, [])
+                return make_error_response(ValueError("preload操作需要phase或resource_uris参数"), error_code=ERR_VALIDATION)
+            actual_phase = phase
+            if auto_upgrade:
+                current_phase_idx = _get_current_phase_index()
+                resources_to_load = _collect_resources_up_to_phase(actual_phase)
+                total_estimated = sum(_estimate_resource_tokens(r) for r in resources_to_load)
+                budget = PHASE_TOKEN_BUDGET.get(actual_phase, PHASE_TOKEN_BUDGET[3])
+                while total_estimated > budget and actual_phase < 3:
+                    actual_phase += 1
+                    resources_to_load = _collect_resources_up_to_phase(actual_phase)
+                    total_estimated = sum(_estimate_resource_tokens(r) for r in resources_to_load)
+                    budget = PHASE_TOKEN_BUDGET.get(actual_phase, PHASE_TOKEN_BUDGET[3])
+                if actual_phase != phase:
+                    logger.info("auto_upgrade: phase %d -> %d (estimated %d tokens > budget %d)", phase, actual_phase, total_estimated, PHASE_TOKEN_BUDGET.get(phase, 0))
+            else:
+                resources_to_load = _collect_resources_up_to_phase(actual_phase)
+                total_estimated = sum(_estimate_resource_tokens(r) for r in resources_to_load)
+                budget = PHASE_TOKEN_BUDGET.get(actual_phase, PHASE_TOKEN_BUDGET[3])
+                if total_estimated > budget and actual_phase < 3:
+                    next_phase = actual_phase + 1
+                    hint = _UPGRADE_HINTS.get(actual_phase, "")
+                    return make_success_response({
+                        "action": "preload",
+                        "phase": actual_phase,
+                        "preloaded": [],
+                        "total": 0,
+                        "priority": priority,
+                        "batch_mode": batch_mode,
+                        "token_budget_exceeded": True,
+                        "estimated_tokens": total_estimated,
+                        "token_budget": budget,
+                        "upgrade_hint": hint,
+                        "suggested_phase": next_phase,
+                    })
+            resources = PHASE_RESOURCE_MAP.get(actual_phase, [])
             with _cache_lock:
                 _LOADED_PROGRESS["loading"] = True
                 _LOADED_PROGRESS["started_at"] = datetime.now(timezone.utc).isoformat()
                 _LOADED_PROGRESS["total_resources"] = len(resources)
                 _LOADED_PROGRESS["loaded_resources"] = 0
-                _LOADED_PROGRESS["current_phase"] = phase
+                _LOADED_PROGRESS["current_phase"] = actual_phase
                 _LOADED_PROGRESS["completed_at"] = None
             preloaded = []
             current = _get_loaded_resources()
-            inherited_paths: set[str] = set()
-            for parent_phase in _PHASE_INHERITS.get(phase, []):
-                for parent_res in PHASE_RESOURCE_MAP.get(parent_phase, []):
-                    inherited_paths.add(parent_res["path"])
+            phase_estimated_tokens = 0
             for r in resources:
-                if r.get("inherits_from") and r["path"] in inherited_paths:
-                    if r["id"] in current or r["id"] in _RESOURCE_CACHE:
-                        preloaded.append({"id": r["id"], "status": "loaded", "cache": "inherited"})
-                        current.add(r["id"])
-                        with _cache_lock:
-                            _LOADED_PROGRESS["loaded_resources"] += 1
-                        continue
                 full_path = SKILL_ROOT / r["path"]
                 if full_path.exists():
                     is_valid, validity = _is_cache_valid(r["id"])
@@ -500,6 +741,10 @@ def register(mcp: FastMCP) -> None:
                         except OSError:
                             pass
                         content = "\n---\n".join(parts) if parts else None
+                    if content is not None:
+                        res_tokens = _estimate_tokens(content)
+                        phase_estimated_tokens += res_tokens
+                        _update_phase_token_usage(actual_phase, res_tokens)
                     current.add(r["id"])
                     with _cache_lock:
                         _RESOURCE_CACHE[r["id"]] = {
@@ -517,10 +762,43 @@ def register(mcp: FastMCP) -> None:
                     with _cache_lock:
                         _LOADED_PROGRESS["loaded_resources"] += 1
             _set_loaded_resources(current)
+            from_phase = _get_current_phase_name()
+            to_phase = _phase_index_to_name(actual_phase)
+            if from_phase != to_phase:
+                affected = [r["id"] for r in resources]
+                _record_transition(from_phase, to_phase, affected, "completed")
+                notify(f"Resource phase transition: {from_phase} -> {to_phase} ({len(affected)} resources)", "info")
+            state_file = _get_state_file()
+            try:
+                state_data = json.loads(state_file.read_text(encoding="utf-8")) if state_file.exists() else {}
+                state_data["phase"] = to_phase
+                atomic_write(state_file, json.dumps(state_data, ensure_ascii=False, indent=2))
+            except (json.JSONDecodeError, OSError):
+                pass
             with _cache_lock:
                 _LOADED_PROGRESS["loading"] = False
                 _LOADED_PROGRESS["completed_at"] = datetime.now(timezone.utc).isoformat()
-            return make_success_response({"phase": phase, "preloaded": preloaded, "total": len(preloaded), "priority": priority, "batch_mode": batch_mode})
+            with _cache_lock:
+                transitions = list(_TRANSITION_HISTORY)
+            disclosure = _get_loading_disclosure()
+            result_data: dict[str, Any] = {
+                "phase": actual_phase,
+                "phase_name": to_phase,
+                "preloaded": preloaded,
+                "total": len(preloaded),
+                "priority": priority,
+                "batch_mode": batch_mode,
+                "auto_upgrade": auto_upgrade,
+                "estimated_tokens": phase_estimated_tokens,
+                "token_budget": PHASE_TOKEN_BUDGET.get(actual_phase, PHASE_TOKEN_BUDGET[3]),
+                "disclosure_note": disclosure["disclosure_note"],
+                "upgrade_hint": disclosure["upgrade_hint"],
+                "available_commands": disclosure["available_commands"],
+                "transitions": transitions[-5:],
+            }
+            if auto_upgrade and actual_phase != phase:
+                result_data["auto_upgraded_from"] = phase
+            return make_success_response(result_data)
         elif action == "cache":
             with _cache_lock:
                 cache_snapshot = dict(_RESOURCE_CACHE)
@@ -574,5 +852,34 @@ def register(mcp: FastMCP) -> None:
                 "started_at": progress["started_at"],
                 "completed_at": progress["completed_at"],
             })
+        elif action == "token_report":
+            with _TOKEN_METRICS_LOCK:
+                metrics_snapshot = {}
+                for tool_name, metrics in _TOKEN_METRICS.items():
+                    metrics_snapshot[tool_name] = {
+                        "total_input_tokens": metrics["total_input_tokens"],
+                        "total_output_tokens": metrics["total_output_tokens"],
+                        "total_tokens": metrics["total_input_tokens"] + metrics["total_output_tokens"],
+                        "call_count": metrics["call_count"],
+                        "avg_input_tokens": round(metrics["total_input_tokens"] / max(metrics["call_count"], 1), 1),
+                        "avg_output_tokens": round(metrics["total_output_tokens"] / max(metrics["call_count"], 1), 1),
+                    }
+            total_input = sum(m["total_input_tokens"] for m in metrics_snapshot.values())
+            total_output = sum(m["total_output_tokens"] for m in metrics_snapshot.values())
+            with _PHASE_TOKEN_USAGE_LOCK:
+                phase_token_snapshot = dict(_PHASE_TOKEN_USAGE)
+            return make_success_response({
+                "action": "token_report",
+                "tools": metrics_snapshot,
+                "phase_token_usage": phase_token_snapshot,
+                "phase_token_budgets": PHASE_TOKEN_BUDGET,
+                "summary": {
+                    "total_tools": len(metrics_snapshot),
+                    "total_input_tokens": total_input,
+                    "total_output_tokens": total_output,
+                    "total_tokens": total_input + total_output,
+                    "estimate_method": f"char_count/{_TOKEN_ESTIMATE_RATIO}",
+                },
+            })
         else:
-            return make_error_response(ValueError(f"未知操作: {action}，支持: status, preload, cache, clear_cache, loading_progress"))
+            return make_error_response(ValueError(f"未知操作: {action}，支持: status, preload, cache, clear_cache, loading_progress, token_report"), error_code=ERR_VALIDATION)

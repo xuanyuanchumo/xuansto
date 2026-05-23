@@ -1,0 +1,307 @@
+routing_priority: "精确匹配 > 语义匹配 > 更具体命令优先 > 默认/sprint兜底"
+
+routes:
+  - intent: "从零开始新项目"
+    command: "/init"
+    mcp_tools:
+      - skill_analyze
+      - knowledge_search
+      - workflow_dispatch
+      - project_init
+      - decision_log
+    fallback: "知识检索: ChromaDB→SQLite FTS→关键词；项目初始化→内联模板生成"
+    phase: 0
+    detail: commands/init.md
+
+  - intent: "头脑风暴/需求探索"
+    command: "/brainstorm"
+    mcp_tools:
+      - knowledge_search
+      - workflow_dispatch
+    fallback: "知识检索→降级链"
+    phase: 1
+    detail: commands/brainstorm.md
+
+  - intent: "澄清需求"
+    command: "/clarify"
+    mcp_tools:
+      - knowledge_search
+      - workflow_dispatch
+      - quality_gate_check
+    fallback: "知识检索→降级链；门禁→内嵌检查"
+    phase: 1
+    detail: commands/clarify.md
+
+  - intent: "规划架构"
+    command: "/plan"
+    mcp_tools:
+      - skill_analyze
+      - knowledge_search
+      - agent_status
+      - workflow_dispatch
+      - decision_log
+      - token_budget
+    fallback: "项目分析→基础扫描；知识检索→降级链；决策日志→内联记录"
+    phase: 2
+    detail: commands/plan.md
+
+  - intent: "写规格文档"
+    command: "/spec"
+    mcp_tools:
+      - workflow_dispatch
+      - quality_gate_check
+      - spec_drift_detect
+    fallback: "门禁失败→返回修复建议；知识检索→默认模板"
+    phase: 2
+    detail: commands/spec.md
+
+  - intent: "设计"
+    command: "/design"
+    mcp_tools:
+      - quality_gate_check
+      - knowledge_search
+      - workflow_dispatch
+    fallback: "设计门禁→内嵌检查"
+    phase: 2
+    detail: commands/design.md
+
+  - intent: "设计系统"
+    command: "/design-system"
+    mcp_tools:
+      - quality_gate_check
+      - knowledge_search
+      - workflow_dispatch
+    fallback: "知识检索→降级链"
+    phase: 2
+    detail: commands/design-system.md
+
+  - intent: "写代码"
+    command: "/implement"
+    mcp_tools:
+      - workflow_dispatch
+      - quality_gate_check
+      - hook_manage
+    fallback: "门禁失败→阻止实现+修复建议"
+    phase: 4
+    detail: commands/implement.md
+
+  - intent: "跑测试"
+    command: "/test"
+    mcp_tools:
+      - quality_gate_check
+      - workflow_dispatch
+    fallback: "测试门禁FAIL→返回具体失败文件和建议"
+    phase: 5
+    detail: commands/test.md
+
+  - intent: "代码审查"
+    command: "/review"
+    mcp_tools:
+      - quality_gate_check
+      - security_scan
+      - code_simplify
+    fallback: "安全扫描→内嵌降级；代码简化→内嵌降级"
+    phase: 5
+    detail: commands/review.md
+
+  - intent: "安全审计"
+    command: "/audit"
+    mcp_tools:
+      - security_scan
+      - quality_gate_check
+      - spec_drift_detect
+    fallback: "安全扫描→内嵌agentic+dependency扫描"
+    phase: 5
+    detail: commands/audit.md
+
+  - intent: "代码简化"
+    command: "/simplify"
+    mcp_tools:
+      - code_simplify
+      - quality_gate_check
+      - context_compress
+    fallback: "代码简化→内嵌simplify+dedup；压缩→脚本降级"
+    phase: 7
+    detail: commands/simplify.md
+
+  - intent: "代码重构"
+    command: "/refactor"
+    mcp_tools:
+      - code_simplify
+      - quality_gate_check
+      - context_compress
+    fallback: "门禁→内嵌检查；压缩→脚本降级"
+    phase: 7
+    detail: commands/refactor.md
+
+  - intent: "验收确认"
+    command: "/accept"
+    mcp_tools:
+      - quality_gate_check
+      - workflow_dispatch
+    fallback: "门禁检查→增量缓存"
+    phase: 6
+    detail: commands/accept.md
+
+  - intent: "知识学习"
+    command: "/learn"
+    mcp_tools:
+      - knowledge_search
+      - session_manage
+    fallback: "ChromaDB→SQLite FTS→关键词检索"
+    phase: null
+    detail: commands/learn.md
+
+  - intent: "执行计划"
+    command: "/execute-plan"
+    mcp_tools:
+      - workflow_dispatch
+      - session_manage
+    fallback: "工作流启动→手动Phase推进"
+    phase: null
+    detail: commands/execute-plan.md
+
+  - intent: "取消循环"
+    command: "/cancel-loop"
+    mcp_tools:
+      - workflow_dispatch
+      - session_manage
+    fallback: "工作流中止→状态持久化"
+    phase: null
+    detail: commands/cancel-loop.md
+
+  - intent: "自主循环"
+    command: "/loop"
+    mcp_tools:
+      - workflow_dispatch
+      - session_manage
+      - resource_load_status
+      - token_budget
+      - decision_log
+    fallback: "逐步降级: Step1 MCP完整→Step2 MCP简化→Step3 脚本降级，详见 commands/loop.md"
+    phase: null
+    detail: commands/loop.md
+
+  - intent: "查询Agent"
+    command: "/agent-status"
+    mcp_tools:
+      - agent_status
+    fallback: "静态注册表查询"
+    phase: null
+    detail: commands/agent-status.md
+
+  - intent: "查询进度"
+    command: "/status"
+    mcp_tools:
+      - workflow_dispatch
+      - session_manage
+      - server_health
+    fallback: "工作流状态→持久化文件读取"
+    phase: null
+    detail: commands/status.md
+
+  - intent: "修复Bug"
+    command: "/fix"
+    mcp_tools:
+      - session_manage
+      - quality_gate_check
+      - hook_manage
+    fallback: "会话追踪→内存临时状态"
+    phase: 4
+    detail: commands/fix.md
+
+  - intent: "部署交付"
+    command: "/deploy"
+    mcp_tools:
+      - quality_gate_check
+      - server_health
+      - workflow_dispatch
+    fallback: "健康检查→基础状态返回"
+    phase: 8
+    detail: commands/deploy.md
+
+  - intent: "构建项目"
+    command: "/build"
+    mcp_tools:
+      - skill_analyze
+      - quality_gate_check
+      - server_health
+    fallback: "构建门禁→内嵌检查"
+    phase: 8
+    detail: commands/build.md
+
+  - intent: "桌面构建"
+    command: "/build-desktop"
+    mcp_tools:
+      - quality_gate_check
+      - skill_analyze
+      - workflow_dispatch
+    fallback: "桌面门禁→文件存在性检查"
+    phase: 8
+    detail: commands/build-desktop.md
+
+  - intent: "桌面发布"
+    command: "/release-desktop"
+    mcp_tools:
+      - quality_gate_check
+      - workflow_dispatch
+    fallback: "桌面门禁→文件存在性检查"
+    phase: 8
+    detail: commands/release-desktop.md
+
+  - intent: "回滚"
+    command: "/rollback"
+    mcp_tools:
+      - session_manage
+      - workflow_dispatch
+    fallback: "会话恢复→最近保存点"
+    phase: null
+    detail: commands/rollback.md
+
+  - intent: "冲刺"
+    command: "/sprint"
+    mcp_tools:
+      - workflow_dispatch
+      - session_manage
+      - resource_load_status
+      - token_budget
+      - project_init
+    fallback: "快速工作流→精简Phase"
+    phase: 0
+    detail: commands/sprint.md
+
+  - intent: "中等规模SDD+TDD开发"
+    command: "/sdd-tdd-medium"
+    mcp_tools:
+      - skill_analyze
+      - workflow_dispatch
+      - resource_load_status
+    fallback: "项目分析→基础扫描；工作流→内联阶段推进"
+    phase: 0
+    detail: commands/sdd-tdd-medium.md
+
+  - intent: "快速SDD+TDD开发"
+    command: "/sdd-tdd-fast"
+    mcp_tools:
+      - workflow_dispatch
+      - resource_load_status
+    fallback: "工作流→内联阶段推进"
+    phase: 1
+    detail: commands/sdd-tdd-fast.md
+
+  - intent: "决策记录"
+    command: "/decision"
+    mcp_tools:
+      - decision_log
+    fallback: "决策日志→内联JSON记录"
+    phase: null
+    detail: commands/decision.md
+
+  - intent: "Token预算管理"
+    command: "/budget"
+    mcp_tools:
+      - token_budget
+      - resource_load_status
+    fallback: "Token预算→内联估算"
+    phase: null
+    detail: commands/budget.md

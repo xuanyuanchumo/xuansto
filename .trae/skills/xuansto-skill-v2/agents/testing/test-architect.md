@@ -1,16 +1,10 @@
 ---
-name: TestArchitect
-emoji: 🏗️
+name: Test Architect
 description: 测试架构设计与策略制定
-color: green
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: standard
-services:
+phase: [3]
+layer: 测试
+model_routing: deep
+capabilities:
   - test-strategy
   - test-framework
   - coverage-design

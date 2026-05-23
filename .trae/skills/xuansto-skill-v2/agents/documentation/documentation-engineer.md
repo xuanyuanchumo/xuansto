@@ -1,15 +1,10 @@
 ---
-name: DocumentationEngineer
-emoji: 📚
+name: Documentation Engineer
 description: 用户手册与开发者指南编写
-color: yellow
-tools:
-  - Read
-  - Write
-  - Grep
-  - SearchCodebase
-model: fast
-services:
+phase: [6]
+layer: 文档
+model_routing: standard
+capabilities:
   - user-manual
   - dev-guide
   - troubleshooting

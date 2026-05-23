@@ -24,8 +24,17 @@ def _find_project_root() -> Path:
             return Path.cwd()
         current = parent
 
-_SKILL_ROOT_ENV = os.environ.get("XUANSTO_SKILL_ROOT")
-SKILL_ROOT = Path(_SKILL_ROOT_ENV) if _SKILL_ROOT_ENV else DATA_DIR
+def _detect_skill_root() -> Path:
+    _env = os.environ.get("SKILL_ROOT") or os.environ.get("XUANSTO_SKILL_ROOT")
+    if _env:
+        return Path(_env)
+    project_root = _find_project_root()
+    candidate = project_root / ".trae" / "skills" / "xuansto-skill-v2"
+    if candidate.is_dir():
+        return candidate
+    return DATA_DIR
+
+SKILL_ROOT = _detect_skill_root()
 
 SCRIPTS_DIR = SKILL_ROOT / "scripts"
 KNOWLEDGE_SERVER_DIR = SCRIPTS_DIR / "knowledge_server"
@@ -45,6 +54,16 @@ def _load_yaml_config(config_path: Path) -> dict[str, Any]:
         from .logging_config import get_logger
         get_logger("config").warning("Failed to load YAML config from %s: %s", config_path, exc)
         return {}
+
+def _resolve_skill_file(filename: str) -> Path:
+    primary = SKILL_ROOT / filename
+    if primary.exists():
+        return primary
+    if SKILL_ROOT != DATA_DIR:
+        fallback = DATA_DIR / filename
+        if fallback.exists():
+            return fallback
+    return primary
 
 DEFAULT_GATE_SCRIPTS_MAP = {
     "GATE-007": "check-encoding.py",
@@ -85,7 +104,7 @@ DEFAULT_HOOK_SCRIPTS_MAP = {
     "decision-log-persist": None,
 }
 
-_CONFIG = _load_yaml_config(SKILL_ROOT / ".xuansto-config.yaml")
+_CONFIG = _load_yaml_config(_resolve_skill_file(".xuansto-config.yaml"))
 
 GATE_SCRIPTS_MAP = _CONFIG.get("gate_scripts", DEFAULT_GATE_SCRIPTS_MAP)
 QUALITY_GATES_PHASE_MAP = _CONFIG.get("gates_by_phase", DEFAULT_QUALITY_GATES_PHASE_MAP)
@@ -105,7 +124,7 @@ def reload_config() -> dict[str, Any]:
     global GATE_SCRIPTS_MAP, QUALITY_GATES_PHASE_MAP, HOOK_SCRIPTS_MAP
     import yaml
 
-    config_path = SKILL_ROOT / ".xuansto-config.yaml"
+    config_path = _resolve_skill_file(".xuansto-config.yaml")
     validation_warnings: list[str] = []
 
     if not config_path.exists():
@@ -159,15 +178,24 @@ def reload_config() -> dict[str, Any]:
     }
 
 def _get_config_mtime() -> float:
-    config_path = SKILL_ROOT / ".xuansto-config.yaml"
+    config_path = _resolve_skill_file(".xuansto-config.yaml")
     if config_path.exists():
         return config_path.stat().st_mtime
     return 0.0
 
 _config_watcher_thread: threading.Thread | None = None
 _config_watcher_stop = threading.Event()
+_watchfiles_watcher: Any | None = None
 
-def _config_watcher() -> None:
+_HAS_WATCHFILES = False
+try:
+    import watchfiles as _watchfiles_module
+    _HAS_WATCHFILES = True
+except ImportError:
+    _HAS_WATCHFILES = False
+
+
+def _config_watcher_poll() -> None:
     last_mtime = _get_config_mtime()
     while not _config_watcher_stop.is_set():
         _config_watcher_stop.wait(5.0)
@@ -175,6 +203,23 @@ def _config_watcher() -> None:
         if current_mtime != last_mtime and current_mtime > 0:
             last_mtime = current_mtime
             reload_config()
+
+
+def _config_watcher_watchfiles() -> None:
+    config_path = _resolve_skill_file(".xuansto-config.yaml")
+    watch_dir = config_path.parent if config_path.exists() else SKILL_ROOT
+    if not watch_dir.exists():
+        _config_watcher_poll()
+        return
+    try:
+        for _changes in _watchfiles_module.watch(watch_dir, stop_event=_config_watcher_stop):
+            config_path_check = _resolve_skill_file(".xuansto-config.yaml")
+            if config_path_check.exists():
+                reload_config()
+    except Exception as exc:
+        logger.warning("watchfiles watcher failed, falling back to polling: %s", exc)
+        _config_watcher_poll()
+
 
 def _setup_signal_handler() -> None:
     if sys.platform == "win32":
@@ -187,9 +232,13 @@ def _setup_signal_handler() -> None:
 def start_config_watcher() -> None:
     global _config_watcher_thread
     _setup_signal_handler()
-    if sys.platform == "win32":
-        _config_watcher_thread = threading.Thread(target=_config_watcher, daemon=True)
-        _config_watcher_thread.start()
+    target = _config_watcher_watchfiles if _HAS_WATCHFILES else _config_watcher_poll
+    _config_watcher_thread = threading.Thread(target=target, daemon=True)
+    _config_watcher_thread.start()
+    if _HAS_WATCHFILES:
+        logger.info("Config watcher started with watchfiles (event-driven)")
+    else:
+        logger.info("Config watcher started with thread polling (watchfiles not available)")
 
 def stop_config_watcher() -> None:
     _config_watcher_stop.set()
@@ -202,7 +251,7 @@ WORKFLOWS_DIR = SKILL_ROOT / "workflows"
 TEMPLATES_DIR = SKILL_ROOT / "templates"
 HOOKS_PATH = SKILL_ROOT / "hooks" / "hooks.json"
 
-KNOWLEDGE_DIR = SKILL_ROOT / "knowledge"
+KNOWLEDGE_DIR = DATA_DIR / "knowledge"
 KNOWLEDGE_GENERAL_DIR = KNOWLEDGE_DIR / "general"
 KNOWLEDGE_WORKSPACE_DIR = KNOWLEDGE_DIR / "workspace"
 KNOWLEDGE_EXPERIENCE_DIR = KNOWLEDGE_DIR / "experience"
@@ -242,4 +291,15 @@ def _migrate_chroma_path() -> None:
 
 _migrate_chroma_path()
 
-MCP_API_VERSION = "1.0.0"
+MCP_API_VERSION = "2.0.0"
+MCP_MIN_SUPPORTED_VERSION = "1.0.0"
+
+API_CHANGELOG: dict[str, list[str]] = {
+    "2.0.0": [
+        "Pluggable search engine architecture (SearchEngine Protocol)",
+        "HookEngine plugin system for dynamic hook registration",
+        "YAML-based fallback/degradation configuration",
+        "Event-driven config hot-reload via watchfiles",
+        "Backward compatible with v1.0.0 clients",
+    ],
+}

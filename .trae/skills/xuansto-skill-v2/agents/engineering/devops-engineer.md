@@ -1,16 +1,10 @@
 ---
-name: DevOpsEngineer
-emoji: 🚀
+name: DevOps Engineer
 description: 部署配置与CI/CD流水线
-color: orange
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: standard
-services:
+phase: [4, 8]
+layer: 工程
+model_routing: standard
+capabilities:
   - docker
   - k8s
   - github-actions

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import asyncio
 from typing import Any, Callable
 
 from mcp.server.fastmcp import FastMCP
 
-from .core.errors import make_success_response
+from .core.errors import make_success_response, retry_tool_call
+from .core.hook_engine import get_hook_engine
 from .core.logging_config import setup_logging
+from .core.notifications import NotificationCallback, set_notification_callback, get_notification_callback, notify
 
 _REGISTERED_TOOL_NAMES: list[str] = []
 _REGISTERED_RESOURCE_NAMES: list[str] = []
@@ -14,7 +15,7 @@ _TOOL_REGISTRY: dict[str, Any] = {}
 
 mcp = FastMCP(
     "xuansto-mcp-server",
-    instructions="Xuansto Skill MCP服务器 v3.5.0",
+    instructions="Xuansto Skill MCP服务器 v4.0.0",
 )
 
 from .tools import (
@@ -31,6 +32,9 @@ from .tools import (
     resource_load_status,
     context_compress,
     server_health,
+    decision_log,
+    token_budget,
+    project_init,
 )
 
 for tool_module in [
@@ -47,6 +51,9 @@ for tool_module in [
     resource_load_status,
     context_compress,
     server_health,
+    decision_log,
+    token_budget,
+    project_init,
 ]:
     tool_module.register(mcp)
 
@@ -61,11 +68,31 @@ except AttributeError:
 def _with_hook_interception(tool_name: str, tool_fn: Callable[..., Any]) -> Callable[..., Any]:
     async def wrapped(**kwargs: Any) -> dict[str, Any]:
         import time
+        import json as _json
         from .tools.hook_manage import async_execute_pre_hooks, async_execute_post_hooks
         from .tools.server_health import record_tool_call
+        from .tools.resource_load_status import record_token_usage
 
         start = time.time()
         hook_errors: list[dict[str, str]] = []
+
+        engine = get_hook_engine()
+        engine_pre_results, engine_pre_errors = await engine.execute_pre_hooks(tool_name, kwargs)
+        hook_errors.extend(engine_pre_errors)
+        for pr in engine_pre_results:
+            if pr.get("status") == "block":
+                latency = (time.time() - start) * 1000
+                record_tool_call(tool_name, latency, False)
+                notify(f"Tool {tool_name} blocked by pre-hook: {pr.get('reason', '')}", "warning")
+                result = make_success_response({
+                    "action": "blocked",
+                    "tool": tool_name,
+                    "block_reason": pr.get("reason", "Pre-hook blocked execution"),
+                    "hook": pr.get("hook", ""),
+                })
+                if hook_errors:
+                    result["hook_errors"] = hook_errors
+                return result
 
         pre_results, pre_errors = await async_execute_pre_hooks(tool_name, kwargs)
         hook_errors.extend(pre_errors)
@@ -73,6 +100,7 @@ def _with_hook_interception(tool_name: str, tool_fn: Callable[..., Any]) -> Call
             if pr.get("status") == "block":
                 latency = (time.time() - start) * 1000
                 record_tool_call(tool_name, latency, False)
+                notify(f"Tool {tool_name} blocked by pre-hook: {pr.get('reason', '')}", "warning")
                 result = make_success_response({
                     "action": "blocked",
                     "tool": tool_name,
@@ -84,20 +112,27 @@ def _with_hook_interception(tool_name: str, tool_fn: Callable[..., Any]) -> Call
                 return result
 
         try:
-            if asyncio.iscoroutinefunction(tool_fn):
-                result = await tool_fn(**kwargs)
-            else:
-                result = tool_fn(**kwargs)
+            result = await retry_tool_call(tool_name, tool_fn, kwargs)
             latency = (time.time() - start) * 1000
             record_tool_call(tool_name, latency, True)
         except Exception as e:
             latency = (time.time() - start) * 1000
             record_tool_call(tool_name, latency, False)
+            notify(f"Tool {tool_name} failed: {e}", "error")
             raise
+
+        try:
+            input_text = _json.dumps(kwargs, ensure_ascii=False, default=str)
+            output_text = _json.dumps(result, ensure_ascii=False, default=str) if isinstance(result, dict) else str(result)
+            record_token_usage(tool_name, input_text, output_text)
+        except Exception:
+            pass
 
         if isinstance(result, dict):
             post_errors = await async_execute_post_hooks(tool_name, kwargs, result)
             hook_errors.extend(post_errors)
+            engine_post_errors = await engine.execute_post_hooks(tool_name, kwargs, result)
+            hook_errors.extend(engine_post_errors)
             if hook_errors:
                 result["hook_errors"] = hook_errors
             return result
@@ -106,12 +141,18 @@ def _with_hook_interception(tool_name: str, tool_fn: Callable[..., Any]) -> Call
     return wrapped
 
 
-# Wrap tools with hook interception and performance tracking
 try:
     for _tname, _tentry in list(mcp._tool_manager._tools.items()):
         _tentry.fn = _with_hook_interception(_tname, _tentry.fn)
 except AttributeError:
     pass
+
+_hook_engine = get_hook_engine()
+_hook_engine.register_hook("pre", lambda tool_name, kwargs: ([], []))
+_hook_engine.register_hook("post", lambda tool_name, kwargs, result: [])
+
+from .core.config import HOOKS_PATH
+_hook_engine.load_hooks_from_config(HOOKS_PATH)
 
 from .resources import skill_resources
 

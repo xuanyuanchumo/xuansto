@@ -1,16 +1,10 @@
 ---
-name: DesktopDeveloper
-emoji: 🖥️
+name: Desktop Developer
 description: 桌面应用代码实现
-color: purple
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: standard
-services:
+phase: [4, 8]
+layer: 跨平台
+model_routing: standard
+capabilities:
   - electron
   - tauri
   - ipc

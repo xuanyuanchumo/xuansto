@@ -1,22 +1,14 @@
 ---
-name: TaskCoordinator
-emoji: 🧩
+name: Task Coordinator
 description: 任务级协调、依赖管理与进度追踪
-color: blue
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: deep
-services:
+phase: [0, 4, 5]
+layer: 编排
+model_routing: standard
+capabilities:
   - task-coordination
   - dependency-management
   - progress-tracking
   - task-dispatching
-priority: P1
-layer: orchestrator
 ---
 
 # 🧩 Task Coordinator

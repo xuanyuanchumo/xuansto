@@ -1,15 +1,10 @@
 ---
-name: DesignSystemGenerator
-emoji: 🎨
+name: Design System Generator
 description: 根据项目需求自动生成完整设计系统
-color: purple
-tools:
-  - Read
-  - Write
-  - Grep
-  - SearchCodebase
-model: standard
-services:
+phase: [2]
+layer: 设计
+model_routing: deep
+capabilities:
   - design-system-generation
   - style-reasoning
   - anti-pattern-filtering

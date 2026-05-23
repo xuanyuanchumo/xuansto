@@ -1,0 +1,289 @@
+version: "7.0.0"
+total_agents: 57
+total_layers: 13
+
+layers:
+  - name: 编排
+    count: 3
+    agents:
+      - name: Orchestrator
+        file: orchestrator/orchestrator.md
+        phases: [0, 1, 2]
+        model_routing: deep
+      - name: Subagent Dispatcher
+        file: orchestrator/subagent-dispatcher.md
+        phases: [0, 4, 5]
+        model_routing: standard
+      - name: Task Coordinator
+        file: orchestrator/task-coordinator.md
+        phases: [0, 4, 5]
+        model_routing: standard
+
+  - name: 产品
+    count: 4
+    agents:
+      - name: Product Manager
+        file: product/product-manager.md
+        phases: [1, 6]
+        model_routing: standard
+      - name: Brainstorming Facilitator
+        file: product/brainstorming-facilitator.md
+        phases: [1]
+        model_routing: standard
+      - name: System Architect
+        file: product/system-architect.md
+        phases: [2]
+        model_routing: deep
+      - name: Technical Writer
+        file: product/technical-writer.md
+        phases: [1, 6]
+        model_routing: standard
+
+  - name: 设计
+    count: 4
+    agents:
+      - name: Design System Generator
+        file: design/design-system-generator.md
+        phases: [2]
+        model_routing: deep
+      - name: UX Designer
+        file: design/ux-designer.md
+        phases: [2]
+        model_routing: standard
+      - name: Frontend Stylist
+        file: design/frontend-stylist.md
+        phases: [4]
+        model_routing: standard
+      - name: UI Designer
+        file: design/ui-designer.md
+        phases: [2]
+        model_routing: standard
+
+  - name: 工程
+    count: 6
+    agents:
+      - name: Backend Developer
+        file: engineering/backend-developer.md
+        phases: [4]
+        model_routing: standard
+      - name: Database Engineer
+        file: engineering/database-engineer.md
+        phases: [4]
+        model_routing: standard
+      - name: DevOps Engineer
+        file: engineering/devops-engineer.md
+        phases: [4, 8]
+        model_routing: standard
+      - name: Frontend Developer
+        file: engineering/frontend-developer.md
+        phases: [4]
+        model_routing: standard
+      - name: Fullstack Engineer
+        file: engineering/fullstack-engineer.md
+        phases: [4]
+        model_routing: standard
+      - name: Mobile Developer
+        file: engineering/mobile-developer.md
+        phases: [4]
+        model_routing: standard
+
+  - name: 跨平台
+    count: 5
+    agents:
+      - name: Desktop Developer
+        file: cross-platform/desktop-developer.md
+        phases: [4, 8]
+        model_routing: standard
+      - name: Desktop UI Adapter
+        file: cross-platform/desktop-ui-adapter.md
+        phases: [4]
+        model_routing: standard
+      - name: Native Module Developer
+        file: cross-platform/native-module-developer.md
+        phases: [4]
+        model_routing: deep
+      - name: IPC Specialist
+        file: cross-platform/ipc-specialist.md
+        phases: [4, 5]
+        model_routing: deep
+      - name: Auto-Update Engineer
+        file: cross-platform/auto-update-engineer.md
+        phases: [8]
+        model_routing: standard
+
+  - name: 数据
+    count: 3
+    agents:
+      - name: Data Modeler
+        file: database/data-modeler.md
+        phases: [2, 4]
+        model_routing: standard
+      - name: Data Seeder
+        file: database/data-seeder.md
+        phases: [4]
+        model_routing: fast
+      - name: DBA
+        file: database/dba.md
+        phases: [4, 8]
+        model_routing: standard
+
+  - name: 测试
+    count: 10
+    agents:
+      - name: AI Penetration Tester
+        file: testing/ai-penetration-tester.md
+        phases: [5]
+        model_routing: deep
+      - name: Desktop Tester
+        file: testing/desktop-tester.md
+        phases: [5]
+        model_routing: standard
+      - name: E2E Tester
+        file: testing/e2e-tester.md
+        phases: [5]
+        model_routing: standard
+      - name: Integration Tester
+        file: testing/integration-tester.md
+        phases: [5]
+        model_routing: standard
+      - name: Performance Tester
+        file: testing/performance-tester.md
+        phases: [5]
+        model_routing: standard
+      - name: QA Engineer
+        file: testing/qa-engineer.md
+        phases: [5, 6]
+        model_routing: standard
+      - name: Security Tester
+        file: testing/security-tester.md
+        phases: [5]
+        model_routing: deep
+      - name: Test Architect
+        file: testing/test-architect.md
+        phases: [3]
+        model_routing: deep
+      - name: Test Maintainer
+        file: testing/test-maintainer.md
+        phases: [5, 7]
+        model_routing: standard
+      - name: Unit Tester
+        file: testing/unit-tester.md
+        phases: [3, 4]
+        model_routing: fast
+
+  - name: 安全
+    count: 3
+    agents:
+      - name: Security Auditor
+        file: security/security-auditor.md
+        phases: [5]
+        model_routing: deep
+      - name: Compliance Officer
+        file: security/compliance-officer.md
+        phases: [5, 6]
+        model_routing: standard
+      - name: Penetration Tester
+        file: security/penetration-tester.md
+        phases: [5]
+        model_routing: deep
+
+  - name: DevOps
+    count: 4
+    agents:
+      - name: Build-Release Engineer
+        file: devops/build-release-engineer.md
+        phases: [8]
+        model_routing: standard
+      - name: CI/CD Specialist
+        file: devops/cicd-specialist.md
+        phases: [8]
+        model_routing: standard
+      - name: Monitor Specialist
+        file: devops/monitor-specialist.md
+        phases: [8]
+        model_routing: fast
+      - name: Runtime Supervisor
+        file: devops/runtime-supervisor.md
+        phases: [8]
+        model_routing: standard
+
+  - name: 质量
+    count: 7
+    agents:
+      - name: Bug Scanner
+        file: quality/bug-scanner.md
+        phases: [5]
+        model_routing: fast
+      - name: Code Reviewer
+        file: quality/code-reviewer.md
+        phases: [5]
+        model_routing: standard
+      - name: Comment Verifier
+        file: quality/comment-verifier.md
+        phases: [5]
+        model_routing: fast
+      - name: Compliance Reviewer
+        file: quality/compliance-reviewer.md
+        phases: [5, 6]
+        model_routing: standard
+      - name: Doc Reviewer
+        file: quality/doc-reviewer.md
+        phases: [6]
+        model_routing: fast
+      - name: History Analyzer
+        file: quality/history-analyzer.md
+        phases: [5, 7]
+        model_routing: standard
+      - name: Refactoring Specialist
+        file: quality/refactoring-specialist.md
+        phases: [7]
+        model_routing: standard
+
+  - name: 文档
+    count: 2
+    agents:
+      - name: Documentation Engineer
+        file: documentation/documentation-engineer.md
+        phases: [6]
+        model_routing: standard
+      - name: Specification Keeper
+        file: documentation/specification-keeper.md
+        phases: [2, 6]
+        model_routing: standard
+
+  - name: 知识
+    count: 3
+    agents:
+      - name: Knowledge Manager
+        file: knowledge/knowledge-manager.md
+        phases: [0, 1]
+        model_routing: standard
+      - name: Learning Specialist
+        file: knowledge/learning-specialist.md
+        phases: [1, 7]
+        model_routing: standard
+      - name: Token Optimizer
+        file: knowledge/token-optimizer.md
+        phases: [0, 7]
+        model_routing: fast
+
+  - name: 监控
+    count: 3
+    agents:
+      - name: Quality Monitor
+        file: monitoring/quality-monitor.md
+        phases: [0, 5]
+        model_routing: fast
+      - name: Progress Tracker
+        file: monitoring/progress-tracker.md
+        phases: [0, 6]
+        model_routing: fast
+      - name: Decision Logger
+        file: monitoring/decision-logger.md
+        phases: [0, 2, 6]
+        model_routing: fast
+
+model_routing_rules:
+  fast: "搜索/简单编辑"
+  standard: "多文件实现"
+  deep: "架构设计/安全分析"

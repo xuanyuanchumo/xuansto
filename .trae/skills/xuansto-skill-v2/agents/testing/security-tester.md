@@ -1,15 +1,10 @@
 ---
-name: SecurityTester
-emoji: 🔒
+name: Security Tester
 description: 安全测试与漏洞扫描
-color: red
-tools:
-  - Read
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: deep
-services:
+phase: [5]
+layer: 测试
+model_routing: deep
+capabilities:
   - owasp
   - sqli
   - xss

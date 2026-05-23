@@ -1,16 +1,10 @@
 ---
-name: FrontendDeveloper
-emoji: ⚛️
+name: Frontend Developer
 description: Web前端代码实现
-color: cyan
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: standard
-services:
+phase: [4]
+layer: 工程
+model_routing: standard
+capabilities:
   - react
   - vue
   - angular

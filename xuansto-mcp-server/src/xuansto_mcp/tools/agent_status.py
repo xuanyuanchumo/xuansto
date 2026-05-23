@@ -14,7 +14,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core.config import REFERENCES_DIR, AGENTS_DIR, WORK_DIR
-from ..core.errors import make_error_response, make_success_response, XuanstoMCPError
+from ..core.errors import make_error_response, make_success_response, XuanstoMCPError, ERR_VALIDATION, ERR_NOT_FOUND, ERR_INTERNAL, ERR_RATE_LIMIT, ERR_PERMISSION
 from ..core import atomic_write
 from ..core.logging_config import get_logger
 from ..core.validator import validate_input
@@ -165,24 +165,24 @@ def register(mcp: FastMCP) -> None:
             return make_success_response({"agents": agents, "total": len(agents)})
         elif action == "by_phase":
             if phase is None:
-                return make_error_response(ValueError("by_phase操作需要phase参数(0-8)"))
+                return make_error_response(ValueError("by_phase操作需要phase参数(0-8)"), error_code=ERR_VALIDATION)
             phase_agents = PHASE_AGENT_MAP.get(phase, [])
             return make_success_response({"phase": phase, "agents": phase_agents, "total": len(phase_agents)})
         elif action == "detail":
             if not agent_name:
-                return make_error_response(ValueError("detail操作需要agent_name参数"))
+                return make_error_response(ValueError("detail操作需要agent_name参数"), error_code=ERR_VALIDATION)
             detail = _get_agent_detail(agent_name, AGENTS_DIR)
             return make_success_response(detail)
         elif action == "create":
             if not agent_type:
-                return make_error_response(XuanstoMCPError("VALIDATION_ERROR", "agent_type is required for create action"))
+                return make_error_response(XuanstoMCPError("VALIDATION_ERROR", "agent_type is required for create action"), error_code=ERR_VALIDATION)
             new_id = f"agent-{uuid.uuid4().hex[:8]}"
             caps = capabilities or []
             now_iso = datetime.now(timezone.utc).isoformat()
             instance = _AgentInstance(agent_id=new_id, agent_type=agent_type, capabilities=caps, last_active_at=now_iso)
             with _agents_lock:
                 if len(_AGENT_INSTANCES) >= _MAX_AGENT_INSTANCES:
-                    return make_error_response(RuntimeError(f"Agent实例数量已达上限({_MAX_AGENT_INSTANCES})"))
+                    return make_error_response(RuntimeError(f"Agent实例数量已达上限({_MAX_AGENT_INSTANCES})"), error_code=ERR_RATE_LIMIT)
                 _AGENT_INSTANCES[new_id] = instance
             _persist_agent_instances()
             return make_success_response({
@@ -198,7 +198,7 @@ def register(mcp: FastMCP) -> None:
             })
         elif action == "match":
             if not capabilities:
-                return make_error_response(XuanstoMCPError("VALIDATION_ERROR", "capabilities is required for match action"))
+                return make_error_response(XuanstoMCPError("VALIDATION_ERROR", "capabilities is required for match action"), error_code=ERR_VALIDATION)
             required = set(capabilities)
             matches: list[dict[str, Any]] = []
             with _agents_lock:
@@ -225,13 +225,13 @@ def register(mcp: FastMCP) -> None:
             })
         elif action == "assign":
             if not agent_id or not task:
-                return make_error_response(XuanstoMCPError("VALIDATION_ERROR", "agent_id and task are required for assign action"))
+                return make_error_response(XuanstoMCPError("VALIDATION_ERROR", "agent_id and task are required for assign action"), error_code=ERR_VALIDATION)
             with _agents_lock:
                 if agent_id not in _AGENT_INSTANCES:
-                    return make_error_response(XuanstoMCPError("NOT_FOUND", f"Agent {agent_id} not found"))
+                    return make_error_response(XuanstoMCPError("NOT_FOUND", f"Agent {agent_id} not found"), error_code=ERR_NOT_FOUND)
                 inst = _AGENT_INSTANCES[agent_id]
                 if inst.status == "busy":
-                    return make_error_response(XuanstoMCPError("AGENT_BUSY", f"Agent {agent_id} is busy with: {inst.task}"))
+                    return make_error_response(XuanstoMCPError("AGENT_BUSY", f"Agent {agent_id} is busy with: {inst.task}"), error_code=ERR_PERMISSION)
                 inst.status = "busy"
                 inst.task = task
                 inst.task_count += 1
@@ -249,10 +249,10 @@ def register(mcp: FastMCP) -> None:
             })
         elif action == "instance_status":
             if not agent_id:
-                return make_error_response(XuanstoMCPError("VALIDATION_ERROR", "agent_id is required for instance_status action"))
+                return make_error_response(XuanstoMCPError("VALIDATION_ERROR", "agent_id is required for instance_status action"), error_code=ERR_VALIDATION)
             with _agents_lock:
                 if agent_id not in _AGENT_INSTANCES:
-                    return make_error_response(XuanstoMCPError("NOT_FOUND", f"Agent {agent_id} not found"))
+                    return make_error_response(XuanstoMCPError("NOT_FOUND", f"Agent {agent_id} not found"), error_code=ERR_NOT_FOUND)
                 inst = _AGENT_INSTANCES[agent_id]
                 result = {
                     "action": "instance_status",
@@ -270,13 +270,13 @@ def register(mcp: FastMCP) -> None:
             return make_success_response(result)
         elif action == "release":
             if not agent_id:
-                return make_error_response(XuanstoMCPError("VALIDATION_ERROR", "agent_id is required for release action"))
+                return make_error_response(XuanstoMCPError("VALIDATION_ERROR", "agent_id is required for release action"), error_code=ERR_VALIDATION)
             with _agents_lock:
                 if agent_id not in _AGENT_INSTANCES:
-                    return make_error_response(XuanstoMCPError("NOT_FOUND", f"Agent {agent_id} not found"))
+                    return make_error_response(XuanstoMCPError("NOT_FOUND", f"Agent {agent_id} not found"), error_code=ERR_NOT_FOUND)
                 inst = _AGENT_INSTANCES[agent_id]
                 if inst.status != "busy":
-                    return make_error_response(XuanstoMCPError("VALIDATION_ERROR", f"Agent {agent_id} is not busy (status: {inst.status})"))
+                    return make_error_response(XuanstoMCPError("VALIDATION_ERROR", f"Agent {agent_id} is not busy (status: {inst.status})"), error_code=ERR_VALIDATION)
                 duration_ms = int((time.time() - inst._task_start) * 1000) if inst._task_start > 0 else 0
                 inst.total_duration_ms += duration_ms
                 completed_task = inst.task
@@ -298,10 +298,10 @@ def register(mcp: FastMCP) -> None:
             })
         elif action == "destroy":
             if not agent_id:
-                return make_error_response(XuanstoMCPError("VALIDATION_ERROR", "agent_id is required for destroy action"))
+                return make_error_response(XuanstoMCPError("VALIDATION_ERROR", "agent_id is required for destroy action"), error_code=ERR_VALIDATION)
             with _agents_lock:
                 if agent_id not in _AGENT_INSTANCES:
-                    return make_error_response(XuanstoMCPError("NOT_FOUND", f"Agent {agent_id} not found"))
+                    return make_error_response(XuanstoMCPError("NOT_FOUND", f"Agent {agent_id} not found"), error_code=ERR_NOT_FOUND)
                 inst = _AGENT_INSTANCES.pop(agent_id)
                 if inst.status == "busy" and inst._task_start > 0:
                     inst.total_duration_ms += int((time.time() - inst._task_start) * 1000)
@@ -321,4 +321,4 @@ def register(mcp: FastMCP) -> None:
                 "available_actions": ["create", "match", "assign", "release", "list", "destroy", "status"],
             })
         else:
-            return make_error_response(ValueError(f"未知操作: {action}，支持: list, by_phase, detail, create, match, assign, release, instance_status, destroy, schedule"))
+            return make_error_response(ValueError(f"未知操作: {action}，支持: list, by_phase, detail, create, match, assign, release, instance_status, destroy, schedule"), error_code=ERR_VALIDATION)

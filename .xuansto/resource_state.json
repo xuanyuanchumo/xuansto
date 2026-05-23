@@ -1,1 +1,23 @@
-["test-dir-1", "test-hash-1", "test-res-1"]
+{
+  "version": 2,
+  "updated_at": "2026-05-22T14:18:48.777848+00:00",
+  "loaded": [
+    "test-dir-1",
+    "test-hash-1",
+    "test-res-1"
+  ],
+  "resources": {
+    "test-dir-1": {
+      "status": "loaded"
+    },
+    "test-hash-1": {
+      "status": "loaded",
+      "phase": 0,
+      "type": "reference",
+      "path": "hash_test.md"
+    },
+    "test-res-1": {
+      "status": "loaded"
+    }
+  }
+}

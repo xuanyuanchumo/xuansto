@@ -1,22 +1,14 @@
 ---
-name: AutoUpdateEngineer
-emoji: 🔄
+name: Auto-Update Engineer
 description: 自动更新机制设计、增量更新策略与回滚机制
-color: purple
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: standard
-services:
+phase: [8]
+layer: 跨平台
+model_routing: standard
+capabilities:
   - auto-update-design
   - incremental-update
   - rollback-mechanism
   - update-verification
-priority: P1
-layer: cross-platform
 ---
 
 # 🔄 Auto-Update Engineer

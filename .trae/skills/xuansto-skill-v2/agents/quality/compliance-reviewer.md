@@ -1,14 +1,10 @@
 ---
-name: ComplianceReviewer
-emoji: ✅
+name: Compliance Reviewer
 description: 代码合规性审查
-color: amber
-tools:
-  - Read
-  - Grep
-  - SearchCodebase
-model: fast
-services:
+phase: [5, 6]
+layer: 质量
+model_routing: standard
+capabilities:
   - code-compliance
   - standard-check
   - regulation-verify

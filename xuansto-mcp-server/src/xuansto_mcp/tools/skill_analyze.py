@@ -8,7 +8,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core.config import SKILL_ROOT, SCRIPTS_DIR, AGENTS_DIR, REFERENCES_DIR
-from ..core.errors import make_error_response, make_success_response, PathNotFoundError
+from ..core.errors import make_error_response, make_success_response, PathNotFoundError, ERR_NOT_FOUND
 from ..core.logging_config import get_logger
 from ..core.validator import validate_input
 from ..models.schemas import SkillAnalyzeInput
@@ -190,7 +190,7 @@ def register(mcp: FastMCP) -> None:
         logger.info("skill_analyze called: skill_path=%s", skill_path)
         root = Path(skill_path)
         if not root.exists():
-            return make_error_response(PathNotFoundError(skill_path))
+            return make_error_response(PathNotFoundError(skill_path), error_code=ERR_NOT_FOUND)
 
         skill_md = root / "SKILL.md"
         metadata = _parse_yaml_frontmatter(skill_md)

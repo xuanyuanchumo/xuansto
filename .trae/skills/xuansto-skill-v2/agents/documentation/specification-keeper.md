@@ -1,15 +1,10 @@
 ---
-name: SpecificationKeeper
-emoji: 📌
+name: Specification Keeper
 description: 规格文档索引与一致性维护
-color: indigo
-tools:
-  - Read
-  - Write
-  - Grep
-  - SearchCodebase
-model: fast
-services:
+phase: [2, 6]
+layer: 文档
+model_routing: standard
+capabilities:
   - cross-reference
   - version-tracking
   - backup-scheduling

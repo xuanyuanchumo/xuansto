@@ -1,0 +1,130 @@
+version: "8.0.0"
+
+core:
+  - id: spec-first
+    rule: "Spec > Test > Code：先规格再测试最后代码，覆盖率≥80%"
+  - id: karpathy
+    rule: "Think Before Coding | Simplicity First | Surgical Changes"
+  - id: incremental
+    rule: "分解→实现→测试→重复；3-Strike Protocol: 自动修复→换策略→升级处理"
+  - id: script-standard
+    rule: "Python优先 | UTF-8无BOM+无U+FFFD | 验证后删除临时脚本"
+  - id: cross-platform
+    rule: "Web+Desktop(Electron/Tauri/Flutter)，桌面端需IPC安全+代码签名"
+
+token_budgets:
+  phase_0_skeleton:
+    trigger: "Skill触发时"
+    load: "核心元数据：技能名称、版本、可用命令列表(无详情)"
+    estimate: "≤2K"
+    budget: 2000
+  phase_1_functional:
+    trigger: "用户执行命令时"
+    load: "命令描述+MCP工具可用性+核心约束+核心Agent(Product Manager/Orchestrator/Architect)"
+    estimate: "≤5K"
+    budget: 5000
+  phase_2_enhanced:
+    trigger: "需要参考文档时"
+    load: "Agent注册表+工作流定义+质量门禁摘要+参考文档URI+知识检索"
+    estimate: "≤10K"
+    budget: 10000
+  phase_3_full:
+    trigger: "深度分析时"
+    load: "完整参考+模板+知识库访问+全部Agent定义+所有详情"
+    estimate: "≤20K"
+    budget: 20000
+
+resource_priority:
+  P0_must:
+    - "SKILL.md核心约束"
+    - "命令路由表"
+    - "Agent索引表"
+  P1_important:
+    - "命令详细步骤"
+    - "工作流Phase定义"
+    - "MCP工具参数"
+  P2_enhanced:
+    - "参考文档(quality-gates.md等)"
+    - "模板文件"
+    - "知识库"
+  P3_optional:
+    - "示例文档"
+    - "评估配置"
+    - "披露资源"
+
+quality_gates_summary:
+  total: 54
+  key_gates:
+    - gate: DESIGN-SYSTEM-COMPLETE
+      phase: 0
+    - gate: ANTI-PATTERN-CHECK
+      phase: 0
+    - gate: BRAINSTORM-COMPLETE
+      phase: 1
+    - gate: PLAN-ATOMIC
+      phase: 2
+    - gate: TEST-FIRST
+      phase: 3
+    - gate: TEST-PASS
+      phase: 4
+    - gate: GATE-007
+      phase: 4
+    - gate: AI-PENTEST
+      phase: 5
+    - gate: SPEC-CONSISTENCY
+      phase: 5
+    - gate: UX-ACCEPTANCE
+      phase: 6
+    - gate: SIMPLIFICATION-BEHAVIOR
+      phase: 7
+    - gate: DESKTOP-BUILD/SIGN/UPDATE/CROSS
+      phase: 8
+
+disclosure:
+  loading_phases:
+    - phase: "Phase 0: 骨架"
+      available: "核心元数据、命令路由、命令列表(无详情)"
+      unavailable: "命令执行、Agent详情、参考文档、知识检索"
+      token_budget: 2000
+    - phase: "Phase 1: 功能"
+      available: "命令执行、工作流推进、门禁检查、核心Agent(Product Manager/Orchestrator/Architect)"
+      unavailable: "知识检索、参考文档、Agent完整注册表"
+      token_budget: 5000
+    - phase: "Phase 2: 增强"
+      available: "知识检索、参考文档、Agent完整注册表、工作流定义、质量门禁摘要"
+      unavailable: "完整脚本集、模板库、全部Agent定义"
+      token_budget: 10000
+    - phase: "Phase 3: 完整"
+      available: "全部功能可用"
+      unavailable: "无"
+      token_budget: 20000
+  on_unavailable:
+    - "通过 xuansto://loading/status 披露当前可用功能范围"
+    - "提示用户可通过 resource_load_status(preload) 推进加载"
+    - "降级到可用功能范围内执行"
+
+degradation:
+  mcp_detection: "尝试调用skill_analyze，失败则进入降级模式"
+  script_fallback: "使用 python scripts/xxx.py --format json 调用"
+  result_format: "降级模式下结果包装为与MCP工具相同的JSON结构"
+  tool_fallbacks:
+    skill_analyze: "scripts/skill-test.py --analyze"
+    quality_gate_check: "scripts/skill-test.py --gate"
+    knowledge_search: "scripts/knowledge-server.py --search"
+    spec_drift_detect: "scripts/spec-drift-detector.py → 内联漂移检测"
+    security_scan: "scripts/agentic-security-scanner.py → 内联agentic+dependency扫描"
+    code_simplify: "scripts/code-simplifier.py → 内联simplify+dedup"
+    session_manage: "scripts/init-session.py / scripts/session-catchup.py / scripts/session-persist.py"
+    workflow_dispatch: "scripts/project-initializer.py (start) / 内联Phase推进"
+    agent_status: "静态注册表查询(agents/目录) / scripts/skill-test.py --agents"
+    hook_manage: "scripts/check-encoding.py / scripts/token-budget-guard.py / scripts/session-persist.py / 内联Hook执行"
+    resource_load_status: "内联状态检查(resource_state.json)"
+    context_compress: "scripts/context-compressor.py"
+    server_health: "scripts/health-checker.py → 降级状态返回"
+  knowledge_search_degradation: "ChromaDB→SQLite FTS→关键词匹配"
+
+key_rules:
+  - "2-Action Research | 3-Strike Error | Chesterton's Fence | Loop Enforcement"
+  - "Confidence≥80 | 三级仲裁(L1技术→L2策略ADR→L3安全人工)"
+  - "UTF-8无BOM+LF | Python优先 | 业务注释中文"
+  - "Git: <类型>(<范围>): <中文描述> | 禁止Shell(.sh) | 五步闭环"

@@ -1,0 +1,163 @@
+version: "7.0.0"
+
+phrases:
+  - "build this properly"
+  - "write tests first"
+  - "plan my sprint"
+  - "review architecture"
+  - "implement properly"
+  - "build a full feature"
+  - "start a new project"
+  - "refactor this module"
+  - "set up a project"
+  - "create a new app"
+  - "build from scratch"
+  - "develop a feature end-to-end"
+  - "plan development"
+  - "write specs first"
+  - "帮我搭建项目"
+  - "先写测试再写代码"
+  - "做个代码审查"
+  - "安全审计一下"
+  - "重构这段代码"
+  - "帮我规划一下"
+  - "完整开发一个功能"
+  - "从需求到部署"
+  - "多agent协作"
+  - "TDD开发"
+  - "SDD驱动"
+  - "桌面打包"
+  - "渗透测试"
+  - "规格驱动开发"
+  - "搭建项目"
+  - "从零开发"
+  - "端到端开发"
+  - "开发一个功能"
+  - "先写规格"
+  - "做需求分析"
+  - "test-first"
+  - "spec-first"
+  - "full-stack feature"
+  - "multi-step task"
+  - "structured workflow"
+  - "全流程开发"
+  - "规格驱动"
+  - "测试先行"
+  - "brainstorm"
+  - "design system"
+  - "simplify code"
+  - "loop task"
+  - "security review"
+  - "vulnerability scan"
+  - "penetration test"
+  - "桌面应用"
+  - "desktop build"
+  - "app packaging"
+  - "pentest"
+
+keywords:
+  - xuansto
+  - SDD
+  - TDD
+  - spec-driven
+  - test-driven
+  - quality-gates
+  - multi-agent
+  - agent-orchestration
+  - autonomous-development
+  - self-evolving-code
+  - desktop-development
+  - desktop-app
+  - cross-platform
+  - Electron
+  - Tauri
+  - Flutter
+  - OWASP
+  - TrinityGuard
+  - penetration-testing
+  - pentest
+  - security-audit
+  - vulnerability-scan
+  - IPC-contracts
+  - token-optimization
+  - spec-drift
+  - 9-phase-workflow
+  - 54-quality-gates
+  - 57-agents
+  - 27-commands
+  - project-setup
+  - build-from-scratch
+  - end-to-end-development
+  - 冲刺规划
+  - 需求澄清
+  - 架构规划
+  - 代码审查
+  - 安全审计
+  - 桌面构建
+  - 桌面开发
+  - 桌面应用
+  - 全生命周期
+  - 质量门禁
+  - 自动化开发
+  - 编排器
+  - agent协作
+  - 规格优先
+  - 测试先行
+  - 重构安全网
+  - 全流程开发
+  - 规格驱动
+  - 多agent协作
+  - 桌面打包
+  - 渗透测试
+  - brainstorm
+  - design-system
+  - simplify
+  - loop
+  - 搭建项目
+  - 从零开发
+  - 端到端开发
+  - 先写规格
+  - 需求分析
+
+commands:
+  - /sprint
+  - /clarify
+  - /plan
+  - /spec
+  - /design
+  - /implement
+  - /test
+  - /review
+  - /fix
+  - /accept
+  - /deploy
+  - /build-desktop
+  - /release-desktop
+  - /refactor
+  - /audit
+  - /agent-status
+  - /learn
+  - /brainstorm
+  - /execute-plan
+  - /design-system
+  - /simplify
+  - /loop
+  - /cancel-loop
+  - /build
+  - /init
+  - /status
+  - /rollback
+
+not_for:
+  - "simple single-file edits (add comment, fix typo)"
+  - "pure infrastructure/DevOps without code changes"
+  - "documentation-only tasks without code"
+  - "simple Q&A or explanations"
+  - "pure UI/UX design without code development (use ui-ux-pro-max)"
+  - "pure data analysis or reporting"
+  - "simple config changes (env vars, flags)"
+  - "one-line fixes or trivial patches"
+  - "simple security scans without code remediation"
+  - "documentation-only security reports"
+  - "desktop app UI design only without code"
+  - "quick hotfixes under 5 lines"

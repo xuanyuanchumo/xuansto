@@ -1,0 +1,338 @@
+{
+  "version": "1.0",
+  "description": "Expected output format for 27 commands across the xuansto-skill CLI",
+  "commands": {
+    "/init": {
+      "description": "Initialize a new project",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "name": "string",
+          "directory": "string",
+          "config_path": "string",
+          "stack": ["string"],
+          "template": "string"
+        }
+      }
+    },
+    "/sprint": {
+      "description": "Start a sprint workflow",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "workflow_id": "string",
+          "workflow": "string",
+          "project_path": "string",
+          "status": "running",
+          "current_phase": 0
+        }
+      }
+    },
+    "/review": {
+      "description": "Run quality review",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "checks": [{"gate_id": "string", "status": "PASS|FAIL|SKIP", "source": "string"}],
+          "summary": {"total": "int", "passed": "int", "failed": "int", "blocked": "bool"},
+          "cache_info": {"hit": "bool", "hit_count": "int", "miss_count": "int"}
+        }
+      }
+    },
+    "/audit": {
+      "description": "Run security audit",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "agentic_scan": {"vulnerabilities": [], "total": "int", "by_severity": {}, "security_score": "int"},
+          "dependency_scan": {"dependencies": [], "total": "int", "vulnerable_count": "int"}
+        }
+      }
+    },
+    "/analyze": {
+      "description": "Analyze skill structure",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "metadata": {},
+          "structure": {"root": "string", "exists": "bool", "directories": [], "files_count": "int"},
+          "agents": [],
+          "dependencies": {},
+          "issues": [],
+          "project_scale": "string",
+          "recommended_workflow": "string"
+        }
+      }
+    },
+    "/search": {
+      "description": "Search knowledge base",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "results": [{"source": "string", "content": "string", "match_type": "string", "relevance": "float"}],
+          "total": "int",
+          "strategy": "string"
+        }
+      }
+    },
+    "/gate": {
+      "description": "Run quality gate check",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "checks": [{"gate_id": "string", "status": "string", "source": "string"}],
+          "summary": {"total": "int", "passed": "int", "failed": "int", "blocked": "bool"}
+        }
+      }
+    },
+    "/workflow": {
+      "description": "Manage workflows",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {}
+      }
+    },
+    "/session": {
+      "description": "Session management",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {}
+      }
+    },
+    "/hook": {
+      "description": "Hook management",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {"profile": "string", "hooks": [], "total": "int"}
+      }
+    },
+    "/agent": {
+      "description": "Agent status",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {"agents": [], "total": "int"}
+      }
+    },
+    "/resource": {
+      "description": "Resource load status",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {"resources": [], "total": "int", "loaded": "int"}
+      }
+    },
+    "/health": {
+      "description": "Server health check",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "status": "healthy",
+          "version": "string",
+          "uptime_seconds": "float",
+          "tools_count": "int",
+          "resources_count": "int"
+        }
+      }
+    },
+    "/compress": {
+      "description": "Context compression",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "compressed": "string",
+          "original_tokens": "int",
+          "compressed_tokens": "int",
+          "compression_ratio": "float",
+          "strategy": "string"
+        }
+      }
+    },
+    "/decision": {
+      "description": "Decision log",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {"id": "string", "entry": {}, "total_decisions": "int"}
+      }
+    },
+    "/budget": {
+      "description": "Token budget",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "total_budget": "int",
+          "used": "int",
+          "remaining": "int",
+          "phase_allocations": {}
+        }
+      }
+    },
+    "/inject": {
+      "description": "Inject knowledge",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "injected_id": "string",
+          "path": "string",
+          "knowledge_type": "string",
+          "indexed": "bool"
+        }
+      }
+    },
+    "/precipitate": {
+      "description": "Precipitate experience",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "precipitated_id": "string",
+          "path": "string",
+          "patterns_analyzed": "int",
+          "themes_found": "int"
+        }
+      }
+    },
+    "/validate": {
+      "description": "Validate project",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "project_path": "string",
+          "valid": "bool",
+          "issues": [],
+          "total_issues": "int"
+        }
+      }
+    },
+    "/detect": {
+      "description": "Detect tech stack",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "project_path": "string",
+          "detected_stacks": [],
+          "primary_stack": "string|null",
+          "total_detected": "int"
+        }
+      }
+    },
+    "/advance": {
+      "description": "Advance workflow phase",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "workflow_id": "string",
+          "previous_phase": "int",
+          "new_phase": "int",
+          "advanced": "bool",
+          "gates_passed": "bool"
+        }
+      }
+    },
+    "/abort": {
+      "description": "Abort workflow",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "workflow_id": "string",
+          "status": "aborted"
+        }
+      }
+    },
+    "/recover": {
+      "description": "Recover workflow from snapshot",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "action": "recover",
+          "workflow_id": "string",
+          "recovered_phase": "int",
+          "state": {}
+        }
+      }
+    },
+    "/snapshots": {
+      "description": "List workflow snapshots",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "action": "snapshots",
+          "snapshots": [],
+          "total": "int"
+        }
+      }
+    },
+    "/export": {
+      "description": "Export decisions",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "format": "string",
+          "content": "any",
+          "total": "int"
+        }
+      }
+    },
+    "/report": {
+      "description": "Token budget report",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "period": "string",
+          "total_budget": "int",
+          "total_used": "int",
+          "remaining": "int",
+          "usage_pct": "float"
+        }
+      }
+    },
+    "/recommend": {
+      "description": "Budget recommendation",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "recommended_total": "int",
+          "recommended_allocations": {},
+          "project_size": "string",
+          "complexity": "string"
+        }
+      }
+    },
+    "/schedule": {
+      "description": "Agent schedule (planned)",
+      "output_format": {
+        "error": false,
+        "api_version": "string",
+        "data": {
+          "status": "planned",
+          "message": "string",
+          "available_actions": ["string"]
+        }
+      }
+    }
+  }
+}

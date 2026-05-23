@@ -1,16 +1,10 @@
 ---
-name: DatabaseEngineer
-emoji: 🗄️
+name: Database Engineer
 description: 数据库设计与查询优化
-color: indigo
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: deep
-services:
+phase: [4]
+layer: 工程
+model_routing: standard
+capabilities:
   - schema
   - indexing
   - sql-review

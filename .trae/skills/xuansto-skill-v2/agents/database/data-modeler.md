@@ -1,16 +1,10 @@
 ---
-name: DataModeler
-emoji: 📊
+name: Data Modeler
 description: 数据建模与ER图设计
-color: indigo
-tools:
-  - Read
-  - Write
-  - Grep
-  - RunCommand
-  - SearchCodebase
-model: standard
-services:
+phase: [2, 4]
+layer: 数据
+model_routing: standard
+capabilities:
   - er-diagram
   - normalization
   - relations

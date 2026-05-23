@@ -1,14 +1,10 @@
 ---
-name: RefactoringSpecialist
-emoji: 🔄
+name: Refactoring Specialist
 description: 代码重构与结构优化
-color: amber
-tools:
-  - Read
-  - Grep
-  - SearchCodebase
-model: standard
-services:
+phase: [7]
+layer: 质量
+model_routing: standard
+capabilities:
   - code-refactoring
   - structure-optimization
   - tech-debt-management

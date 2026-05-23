@@ -1,14 +1,10 @@
 ---
-name: CommentVerifier
-emoji: 💬
+name: Comment Verifier
 description: 注释与文档一致性验证
-color: amber
-tools:
-  - Read
-  - Grep
-  - SearchCodebase
-model: fast
-services:
+phase: [5]
+layer: 质量
+model_routing: fast
+capabilities:
   - comment-verification
   - doc-consistency
   - stale-detection
