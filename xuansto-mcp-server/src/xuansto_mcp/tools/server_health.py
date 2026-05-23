@@ -204,6 +204,14 @@ def _negotiate_api_version(client_version: str) -> dict[str, Any]:
         client_parts = client_version.split(".")
         client_major = client_parts[0]
         client_minor = int(client_parts[1]) if len(client_parts) > 1 else 0
+        if not client_major.isdigit():
+            return {
+                "compatible": False,
+                "negotiated_version": MCP_API_VERSION,
+                "server_version": MCP_API_VERSION,
+                "min_supported_version": MCP_MIN_SUPPORTED_VERSION,
+                "reason": "invalid_client_version",
+            }
     except (ValueError, IndexError):
         return {
             "compatible": False,
@@ -252,64 +260,68 @@ def register(mcp: FastMCP) -> None:
         if val_err:
             return val_err
         logger.info("server_health called: action=%s", action)
-        from .. import __version__
-        from ..server import _REGISTERED_TOOL_NAMES, _REGISTERED_RESOURCE_NAMES
+        try:
+            from .. import __version__
+            from ..server import _REGISTERED_TOOL_NAMES, _REGISTERED_RESOURCE_NAMES
 
-        if action == "negotiate_version":
-            if not client_version:
-                return make_error_response(ValueError("negotiate_version操作需要client_version参数"), error_code=ERR_VALIDATION)
-            return make_success_response(_negotiate_api_version(client_version))
+            if action == "negotiate_version":
+                if not client_version:
+                    return make_error_response(ValueError("negotiate_version操作需要client_version参数"), error_code=ERR_VALIDATION)
+                return make_success_response(_negotiate_api_version(client_version))
 
-        from .workflow_dispatch import _load_all_workflows, _cleanup_all_snapshots
+            from .workflow_dispatch import _load_all_workflows, _cleanup_all_snapshots
 
-        active_workflows = len(_load_all_workflows())
-        global _last_snapshot_cleanup_time
-        snapshot_cleanup: dict[str, dict[str, Any]] = {}
-        if time.time() - _last_snapshot_cleanup_time >= _SNAPSHOT_CLEANUP_MIN_INTERVAL:
-            snapshot_cleanup = _cleanup_all_snapshots()
-            _last_snapshot_cleanup_time = time.time()
-        total_deleted = sum(r["deleted_count"] for r in snapshot_cleanup.values())
-        total_remaining = sum(r["remaining_count"] for r in snapshot_cleanup.values())
-        performance_metrics = {}
-        with _metrics_lock:
-            for tool_name, metrics in _TOOL_METRICS.items():
-                latencies = metrics.get("latencies", [])
-                performance_metrics[tool_name] = {
-                    "call_count": metrics["call_count"],
-                    "error_count": metrics["error_count"],
-                    "error_rate": round(metrics["error_count"] / max(metrics["call_count"], 1), 4),
-                    "latency_p50_ms": _calculate_percentile(latencies, 50),
-                    "latency_p95_ms": _calculate_percentile(latencies, 95),
-                    "latency_p99_ms": _calculate_percentile(latencies, 99),
-                }
-            degradation_snapshot = dict(_DEGRADATION_COUNTS)
-        chromadb_health = _check_chromadb_health()
-        tools_count = len(_REGISTERED_TOOL_NAMES) if _REGISTERED_TOOL_NAMES else 13
-        resources_count = len(_REGISTERED_RESOURCE_NAMES) if _REGISTERED_RESOURCE_NAMES else 7
-        return make_success_response({
-            "status": "healthy",
-            "version": __version__,
-            "api_version": MCP_API_VERSION,
-            "api_changelog": API_CHANGELOG,
-            "uptime_seconds": round(time.time() - _START_TIME, 1),
-            "tools_count": tools_count,
-            "resources_count": resources_count,
-            "active_workflows": active_workflows,
-            "snapshot_cleanup": {
-                "workflows_checked": len(snapshot_cleanup),
-                "total_deleted": total_deleted,
-                "total_remaining": total_remaining,
-            },
-            "degradation_stats": degradation_snapshot,
-            "performance_metrics": performance_metrics,
-            "services": {
-                "chromadb": chromadb_health,
-            },
-            "config": {
-                "data_dir": str(DATA_DIR),
-                "skill_root": str(SKILL_ROOT),
-                "work_dir": str(WORK_DIR),
-                "data_dir_exists": DATA_DIR.exists(),
-                "skill_root_exists": SKILL_ROOT.exists(),
-            },
-        })
+            active_workflows = len(_load_all_workflows())
+            global _last_snapshot_cleanup_time
+            snapshot_cleanup: dict[str, dict[str, Any]] = {}
+            if time.time() - _last_snapshot_cleanup_time >= _SNAPSHOT_CLEANUP_MIN_INTERVAL:
+                snapshot_cleanup = _cleanup_all_snapshots()
+                _last_snapshot_cleanup_time = time.time()
+            total_deleted = sum(r["deleted_count"] for r in snapshot_cleanup.values())
+            total_remaining = sum(r["remaining_count"] for r in snapshot_cleanup.values())
+            performance_metrics = {}
+            with _metrics_lock:
+                for tool_name, metrics in _TOOL_METRICS.items():
+                    latencies = metrics.get("latencies", [])
+                    performance_metrics[tool_name] = {
+                        "call_count": metrics["call_count"],
+                        "error_count": metrics["error_count"],
+                        "error_rate": round(metrics["error_count"] / max(metrics["call_count"], 1), 4),
+                        "latency_p50_ms": _calculate_percentile(latencies, 50),
+                        "latency_p95_ms": _calculate_percentile(latencies, 95),
+                        "latency_p99_ms": _calculate_percentile(latencies, 99),
+                    }
+                degradation_snapshot = dict(_DEGRADATION_COUNTS)
+            chromadb_health = _check_chromadb_health()
+            tools_count = len(_REGISTERED_TOOL_NAMES) if _REGISTERED_TOOL_NAMES else 13
+            resources_count = len(_REGISTERED_RESOURCE_NAMES) if _REGISTERED_RESOURCE_NAMES else 7
+            return make_success_response({
+                "status": "healthy",
+                "version": __version__,
+                "api_version": MCP_API_VERSION,
+                "api_changelog": API_CHANGELOG,
+                "uptime_seconds": round(time.time() - _START_TIME, 1),
+                "tools_count": tools_count,
+                "resources_count": resources_count,
+                "active_workflows": active_workflows,
+                "snapshot_cleanup": {
+                    "workflows_checked": len(snapshot_cleanup),
+                    "total_deleted": total_deleted,
+                    "total_remaining": total_remaining,
+                },
+                "degradation_stats": degradation_snapshot,
+                "performance_metrics": performance_metrics,
+                "services": {
+                    "chromadb": chromadb_health,
+                },
+                "config": {
+                    "data_dir": str(DATA_DIR),
+                    "skill_root": str(SKILL_ROOT),
+                    "work_dir": str(WORK_DIR),
+                    "data_dir_exists": DATA_DIR.exists(),
+                    "skill_root_exists": SKILL_ROOT.exists(),
+                },
+            })
+        except Exception as e:
+            logger.error("server_health error: %s", e)
+            return make_error_response(e)

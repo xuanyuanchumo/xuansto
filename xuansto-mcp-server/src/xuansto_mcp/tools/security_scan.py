@@ -8,10 +8,10 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core.config import SCRIPTS_DIR
-from ..core.errors import make_success_response
+from ..core.errors import make_success_response, make_error_response, ERR_VALIDATION
 from ..core.logging_config import get_logger
 from ..core.subprocess_utils import run_script
-from ..core.validator import validate_input
+from ..core.validator import validate_input, validate_path_safety
 from ..models.schemas import SecurityScanInput
 
 logger = get_logger("security_scan")
@@ -292,55 +292,62 @@ def register(mcp: FastMCP) -> None:
         if err:
             return err
         logger.info("security_scan called: target=%s", target)
-        results: dict[str, Any] = {}
-        degradation_level = "none"
+        try:
+            safe_path, path_err = validate_path_safety(target, allow_absolute=True)
+            if path_err:
+                return make_error_response(ValueError(path_err), error_code=ERR_VALIDATION)
+            results: dict[str, Any] = {}
+            degradation_level = "none"
 
-        if include_agentic:
-            script_path = SCRIPTS_DIR / "agentic-security-scanner.py"
-            used_inline = False
-            if script_path.exists():
-                result = run_script(
-                    script_path,
-                    args=["--target", target, "--severity-threshold", severity_threshold, "--format", "json"],
-                    timeout=120,
-                )
-                if result.get("error"):
+            if include_agentic:
+                script_path = SCRIPTS_DIR / "agentic-security-scanner.py"
+                used_inline = False
+                if script_path.exists():
+                    result = run_script(
+                        script_path,
+                        args=["--target", target, "--severity-threshold", severity_threshold, "--format", "json"],
+                        timeout=120,
+                    )
+                    if result.get("error"):
+                        results["agentic_scan"] = _inline_agentic_scan(target, severity_threshold)
+                        used_inline = True
+                    else:
+                        results["agentic_scan"] = result.get("data", result)
+                else:
                     results["agentic_scan"] = _inline_agentic_scan(target, severity_threshold)
                     used_inline = True
-                else:
-                    results["agentic_scan"] = result.get("data", result)
-            else:
-                results["agentic_scan"] = _inline_agentic_scan(target, severity_threshold)
-                used_inline = True
-            if used_inline:
-                logger.warning("security_scan degraded: agentic_scan -> inline")
-                from .server_health import track_degradation
-                track_degradation("security_scan")
-                results["agentic_scan"]["degradation_level"] = "inline"
-                degradation_level = "inline"
+                if used_inline:
+                    logger.warning("security_scan degraded: agentic_scan -> inline")
+                    from .server_health import track_degradation
+                    track_degradation("security_scan")
+                    results["agentic_scan"]["degradation_level"] = "inline"
+                    degradation_level = "inline"
 
-        if include_dependency:
-            script_path = SCRIPTS_DIR / "dependency-scan.py"
-            used_inline = False
-            if script_path.exists():
-                result = run_script(
-                    script_path,
-                    args=["--target", target, "--format", "json"],
-                    timeout=60,
-                )
-                if result.get("error"):
+            if include_dependency:
+                script_path = SCRIPTS_DIR / "dependency-scan.py"
+                used_inline = False
+                if script_path.exists():
+                    result = run_script(
+                        script_path,
+                        args=["--target", target, "--format", "json"],
+                        timeout=60,
+                    )
+                    if result.get("error"):
+                        results["dependency_scan"] = _inline_dependency_scan(target)
+                        used_inline = True
+                    else:
+                        results["dependency_scan"] = result.get("data", result)
+                else:
                     results["dependency_scan"] = _inline_dependency_scan(target)
                     used_inline = True
-                else:
-                    results["dependency_scan"] = result.get("data", result)
-            else:
-                results["dependency_scan"] = _inline_dependency_scan(target)
-                used_inline = True
-            if used_inline:
-                logger.warning("security_scan degraded: dependency_scan -> inline")
-                from .server_health import track_degradation
-                track_degradation("security_scan")
-                results["dependency_scan"]["degradation_level"] = "inline"
-                degradation_level = "inline"
+                if used_inline:
+                    logger.warning("security_scan degraded: dependency_scan -> inline")
+                    from .server_health import track_degradation
+                    track_degradation("security_scan")
+                    results["dependency_scan"]["degradation_level"] = "inline"
+                    degradation_level = "inline"
 
-        return make_success_response(results, degradation_level=degradation_level if degradation_level != "none" else None)
+            return make_success_response(results, degradation_level=degradation_level if degradation_level != "none" else None)
+        except Exception as e:
+            logger.error("security_scan error: %s", e)
+            return make_error_response(e)

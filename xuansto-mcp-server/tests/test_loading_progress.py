@@ -46,9 +46,18 @@ async def test_loading_progress_returns_fields(tool_fn):
         "loaded_resources",
         "progress_percent",
         "current_phase",
+        "phase_name",
         "loading",
         "started_at",
         "completed_at",
+        "available_features",
+        "unavailable_features",
+        "loaded_resource_ids",
+        "token_budget_used",
+        "token_budget_remaining",
+        "total_budget",
+        "next_phase_trigger",
+        "phase_history",
     ]
     for field in required_fields:
         assert field in data, f"Missing field: {field}"
@@ -61,10 +70,19 @@ async def test_loading_progress_initial_state(tool_fn):
     assert data["total_resources"] == 0
     assert data["loaded_resources"] == 0
     assert data["progress_percent"] == 0
-    assert data["current_phase"] is None
+    assert data["current_phase"] == 0
+    assert data["phase_name"] == "骨架"
     assert data["loading"] is False
     assert data["started_at"] is None
     assert data["completed_at"] is None
+    assert isinstance(data["available_features"], list)
+    assert isinstance(data["unavailable_features"], list)
+    assert isinstance(data["loaded_resource_ids"], list)
+    assert isinstance(data["token_budget_used"], int)
+    assert isinstance(data["token_budget_remaining"], int)
+    assert isinstance(data["total_budget"], int)
+    assert isinstance(data["next_phase_trigger"], str)
+    assert isinstance(data["phase_history"], list)
 
 
 @pytest.mark.asyncio

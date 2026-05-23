@@ -46,7 +46,7 @@ async def test_server_health_returns_version():
     result = await tool_fn.fn()
     data = result["data"]
     assert "version" in data
-    assert data["version"] == "3.5.0"
+    assert data["version"] == "5.0.0"
 
 
 @pytest.mark.asyncio

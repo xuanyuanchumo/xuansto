@@ -188,44 +188,48 @@ def register(mcp: FastMCP) -> None:
         if err:
             return err
         logger.info("context_compress called: strategy=%s", strategy)
-        original_tokens = _estimate_tokens(content)
-        if original_tokens <= target_tokens:
-            return make_success_response({
-                "compressed": content,
-                "original_tokens": original_tokens,
-                "compressed_tokens": original_tokens,
-                "compression_ratio": 1.0,
-                "strategy": strategy,
-            })
-        if strategy == "semantic":
-            result = _semantic_compress(content, target_tokens)
-            return make_success_response({
-                "compressed": result["compressed_content"],
-                "original_tokens": result["original_tokens"],
-                "compressed_tokens": result["compressed_tokens"],
-                "compression_ratio": result["ratio"],
-                "strategy": strategy,
-            })
-        elif strategy == "selective":
-            result = _selective_compress(content, target_tokens, preserve_sections)
-            return make_success_response({
-                "compressed": result["compressed_content"],
-                "original_tokens": result["original_tokens"],
-                "compressed_tokens": result["compressed_tokens"],
-                "compression_ratio": result["ratio"],
-                "strategy": strategy,
-                "preserved_chunks": result.get("preserved_chunks"),
-                "total_chunks": result.get("total_chunks"),
-            })
-        elif strategy == "lossless":
-            compressed = _compress_lossless(content, target_tokens, preserve_sections)
-            compressed_tokens = _estimate_tokens(compressed)
-            return make_success_response({
-                "compressed": compressed,
-                "original_tokens": original_tokens,
-                "compressed_tokens": compressed_tokens,
-                "compression_ratio": round(compressed_tokens / original_tokens, 2) if original_tokens > 0 else 0,
-                "strategy": strategy,
-            })
-        else:
-            return make_error_response(ValueError(f"未知策略: {strategy}，支持: semantic, selective, lossless"), error_code=ERR_VALIDATION)
+        try:
+            original_tokens = _estimate_tokens(content)
+            if original_tokens <= target_tokens:
+                return make_success_response({
+                    "compressed": content,
+                    "original_tokens": original_tokens,
+                    "compressed_tokens": original_tokens,
+                    "compression_ratio": 1.0,
+                    "strategy": strategy,
+                })
+            if strategy == "semantic":
+                result = _semantic_compress(content, target_tokens)
+                return make_success_response({
+                    "compressed": result["compressed_content"],
+                    "original_tokens": result["original_tokens"],
+                    "compressed_tokens": result["compressed_tokens"],
+                    "compression_ratio": result["ratio"],
+                    "strategy": strategy,
+                })
+            elif strategy == "selective":
+                result = _selective_compress(content, target_tokens, preserve_sections)
+                return make_success_response({
+                    "compressed": result["compressed_content"],
+                    "original_tokens": result["original_tokens"],
+                    "compressed_tokens": result["compressed_tokens"],
+                    "compression_ratio": result["ratio"],
+                    "strategy": strategy,
+                    "preserved_chunks": result.get("preserved_chunks"),
+                    "total_chunks": result.get("total_chunks"),
+                })
+            elif strategy == "lossless":
+                compressed = _compress_lossless(content, target_tokens, preserve_sections)
+                compressed_tokens = _estimate_tokens(compressed)
+                return make_success_response({
+                    "compressed": compressed,
+                    "original_tokens": original_tokens,
+                    "compressed_tokens": compressed_tokens,
+                    "compression_ratio": round(compressed_tokens / original_tokens, 2) if original_tokens > 0 else 0,
+                    "strategy": strategy,
+                })
+            else:
+                return make_error_response(ValueError(f"未知策略: {strategy}，支持: semantic, selective, lossless"), error_code=ERR_VALIDATION)
+        except Exception as e:
+            logger.error("context_compress error: %s", e)
+            return make_error_response(e)

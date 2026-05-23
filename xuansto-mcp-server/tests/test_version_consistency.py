@@ -5,7 +5,7 @@ from pathlib import Path
 
 from xuansto_mcp import __version__
 
-EXPECTED = "3.5.0"
+EXPECTED = "5.0.0"
 ROOT = Path(__file__).resolve().parent.parent
 
 

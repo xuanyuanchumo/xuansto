@@ -130,11 +130,12 @@
       "required": ["action"],
       "properties": {
         "action": {"type": "string", "enum": ["status", "preload", "cache", "clear_cache", "loading_progress", "token_report"]},
-        "phase": {"type": ["integer", "null"], "minimum": 0, "maximum": 8},
+        "phase": {"type": ["integer", "null"], "minimum": 0, "maximum": 3},
         "resource_ids": {"type": ["array", "null"], "items": {"type": "string"}},
         "resource_uris": {"type": ["array", "null"], "items": {"type": "string"}},
         "priority": {"type": "string", "enum": ["critical", "normal", "background"], "default": "normal"},
-        "batch_mode": {"type": "boolean", "default": false}
+        "batch_mode": {"type": "boolean", "default": false},
+        "auto_upgrade": {"type": "boolean", "default": false}
       },
       "additionalProperties": false
     },
@@ -161,7 +162,7 @@
       "type": "object",
       "required": ["action"],
       "properties": {
-        "action": {"type": "string", "enum": ["log", "query", "export"]},
+        "action": {"type": "string", "enum": ["log", "list", "query", "update", "export", "stats"]},
         "title": {"type": ["string", "null"]},
         "description": {"type": ["string", "null"]},
         "context": {"type": ["string", "null"]},
@@ -175,7 +176,10 @@
         "date_from": {"type": ["string", "null"]},
         "date_to": {"type": ["string", "null"]},
         "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20},
-        "format": {"type": "string", "enum": ["json", "markdown"], "default": "json"}
+        "offset": {"type": "integer", "minimum": 0, "maximum": 10000, "default": 0},
+        "format": {"type": "string", "enum": ["json", "markdown"], "default": "json"},
+        "decision_id": {"type": ["string", "null"]},
+        "status": {"type": ["string", "null"], "enum": ["proposed", "accepted", "deprecated", "superseded", null]}
       },
       "additionalProperties": false
     },

@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Platform](https://img.shields.io/badge/Platform-Trae%20IDE%20%7C%20Claude%20Code%20%7C%20Cursor%20%7C%20Windsurf-blue)]()
-[![Version](https://img.shields.io/badge/Version-1.0.0-green)]()
+[![Version](https://img.shields.io/badge/Version-5.0.0-green)]()
 
 **Xuansto Skill - 多Agent自主开发编排器 | 基于SDD+TDD融合的智能开发协调系统**
 
@@ -36,7 +36,7 @@ Xuansto Skill (原名 Skiller) 是一个功能完善的AI Skill开发框架，�
 xuansto-skill/
 ├── .trae/
 │   └── skills/
-│       ├── xuansto-skill/                       # 主Skill项目
+│       ├── xuansto-skill/                       # 主Skill项目 (v5, deprecated)
 │       │   ├── agents/                          # 35个Agent定义
 │       │   │   ├── orchestrator/                # 编排层
 │       │   │   ├── product/                     # 产品层
@@ -55,12 +55,20 @@ xuansto-skill/
 │       │   ├── references/                      # 14个参考文档
 │       │   ├── memory/                          # 记忆系统
 │       │   └── SKILL.md                         # 主入口文件
+│       ├── xuansto-skill-v2/                    # v2 Skill项目 (v8.0.0, recommended)
+│       │   ├── agents/                          # 57个Agent定义
+│       │   ├── commands/                        # 27个命令定义
+│       │   ├── workflows/                       # 15个工作流定义
+│       │   ├── scripts/                         # 49个辅助脚本
+│       │   ├── references/                      # 参考文档
+│       │   └── SKILL.md                         # 主入口文件
 │       ├── agency-agents/                       # Agency Agents参考实现
 │       ├── global-chinese/                      # 全局中文响应技能
 │       ├── mcp-builder/                         # MCP服务器构建技能
 │       ├── sanliu/                              # 三省六部系统
 │       └── universal-devops/                    # 通用DevOps技能
 └── docs/
+    ├── plan/                                    # 规划文档
     └── skill需求.md                             # 详细需求文档
 ```
 

@@ -16,10 +16,10 @@ from mcp.types import ToolAnnotations
 
 from ..core import atomic_write
 from ..core.config import SCRIPTS_DIR, GATE_SCRIPTS_MAP, QUALITY_GATES_PHASE_MAP, WORK_DIR
-from ..core.errors import make_error_response, make_success_response
+from ..core.errors import make_error_response, make_success_response, ERR_VALIDATION
 from ..core.logging_config import get_logger
 from ..core.notifications import notify
-from ..core.validator import validate_input
+from ..core.validator import validate_input, validate_path_safety
 from ..models.schemas import QualityGateCheckInput
 
 logger = get_logger("quality_gate_check")
@@ -1072,52 +1072,109 @@ def register(mcp: FastMCP) -> None:
         if err:
             return err
         logger.info("quality_gate_check called: gate_ids=%s phase=%s", gate_ids, phase)
-        gates_to_check = _resolve_gates(gate_ids, phase)
+        try:
+            safe_path, path_err = validate_path_safety(project_path, allow_absolute=True)
+            if path_err:
+                return make_error_response(ValueError(path_err), error_code=ERR_VALIDATION)
+            gates_to_check = _resolve_gates(gate_ids, phase)
 
-        current_hashes = _compute_file_hashes(project_path, force_refresh=force_refresh)
-        cache = _load_gate_cache(project_path)
-        cache_hit = not force_refresh and _is_cache_valid(cache, current_hashes)
-        cache_age = 0.0
-        if cache_hit and "timestamp" in cache:
-            cache_age = time.time() - cache["timestamp"]
+            current_hashes = _compute_file_hashes(project_path, force_refresh=force_refresh)
+            cache = _load_gate_cache(project_path)
+            cache_hit = not force_refresh and _is_cache_valid(cache, current_hashes)
+            cache_age = 0.0
+            if cache_hit and "timestamp" in cache:
+                cache_age = time.time() - cache["timestamp"]
 
-        if cache_hit and "checks" in cache:
-            cached_checks = cache["checks"]
-            cached_gate_ids = {c["gate_id"] for c in cached_checks}
-            if set(gates_to_check).issubset(cached_gate_ids):
-                filtered = [c for c in cached_checks if c["gate_id"] in gates_to_check]
-                for c in filtered:
-                    c["source"] = "cache"
-                passed = sum(1 for c in filtered if c["status"] == "PASS")
-                failed = sum(1 for c in filtered if c["status"] == "FAIL")
-                return make_success_response({
-                    "checks": filtered,
-                    "summary": {
-                        "total": len(filtered),
-                        "passed": passed,
-                        "failed": failed,
-                        "skipped": sum(1 for c in filtered if c["status"] == "SKIP"),
-                        "blocked": any(c["status"] == "FAIL" for c in filtered),
-                    },
-                    "cache_info": {
-                        "hit": True,
-                        "hit_count": len(filtered),
-                        "miss_count": 0,
-                        "cache_age_seconds": round(cache_age, 1),
-                    },
-                })
+            if cache_hit and "checks" in cache:
+                cached_checks = cache["checks"]
+                cached_gate_ids = {c["gate_id"] for c in cached_checks}
+                if set(gates_to_check).issubset(cached_gate_ids):
+                    filtered = [c for c in cached_checks if c["gate_id"] in gates_to_check]
+                    for c in filtered:
+                        c["source"] = "cache"
+                    passed = sum(1 for c in filtered if c["status"] == "PASS")
+                    failed = sum(1 for c in filtered if c["status"] == "FAIL")
+                    return make_success_response({
+                        "checks": filtered,
+                        "summary": {
+                            "total": len(filtered),
+                            "passed": passed,
+                            "failed": failed,
+                            "skipped": sum(1 for c in filtered if c["status"] == "SKIP"),
+                            "blocked": any(c["status"] == "FAIL" for c in filtered),
+                        },
+                        "cache_info": {
+                            "hit": True,
+                            "hit_count": len(filtered),
+                            "miss_count": 0,
+                            "cache_age_seconds": round(cache_age, 1),
+                        },
+                    })
 
-        checks: list[dict[str, Any]] = []
+            checks: list[dict[str, Any]] = []
 
-        for gate_id in gates_to_check:
-            script = GATE_SCRIPTS_MAP.get(gate_id)
-            if script:
-                script_path = SCRIPTS_DIR / script
-                if not script_path.exists():
-                    if gate_id in INLINE_CHECKS and INLINE_CHECKS[gate_id] is not None:
+            for gate_id in gates_to_check:
+                script = GATE_SCRIPTS_MAP.get(gate_id)
+                if script:
+                    script_path = SCRIPTS_DIR / script
+                    if not script_path.exists():
+                        if gate_id in INLINE_CHECKS and INLINE_CHECKS[gate_id] is not None:
+                            try:
+                                inline_result = INLINE_CHECKS[gate_id](project_path)
+                                check_entry: dict[str, Any] = {
+                                    "gate_id": gate_id,
+                                    "status": inline_result["status"],
+                                    "source": "inline",
+                                    "details": {
+                                        "message": inline_result["message"],
+                                        **inline_result.get("details", {}),
+                                    },
+                                }
+                                if "suggestion" in inline_result:
+                                    check_entry["suggestion"] = inline_result["suggestion"]
+                                checks.append(check_entry)
+                            except Exception as e:
+                                checks.append({"gate_id": gate_id, "status": "ERROR", "source": "inline", "details": str(e)})
+                            continue
+                        if gate_id in INLINE_CHECKS and INLINE_CHECKS[gate_id] is None:
+                            checks.append({
+                                "gate_id": gate_id,
+                                "status": "SKIP",
+                                "source": "no_inline_check",
+                                "message": "该门禁无内嵌检查，需外部脚本支持",
+                                "severity": "WARN",
+                            })
+                        else:
+                            checks.append({"gate_id": gate_id, "status": "SKIP", "source": "no_inline_check", "details": "检查脚本不存在且无内嵌检查"})
+                        continue
+                    try:
+                        result = subprocess.run(
+                            [sys.executable, str(script_path), "--format", "json"],
+                            capture_output=True,
+                            text=True,
+                            timeout=30,
+                            cwd=project_path,
+                        )
+                        parsed = _parse_gate_result(gate_id, result)
+                        parsed["source"] = "script"
+                        checks.append(parsed)
+                    except subprocess.TimeoutExpired:
+                        checks.append({"gate_id": gate_id, "status": "SKIP", "source": "script", "details": "执行超时(30s)"})
+                    except Exception as e:
+                        checks.append({"gate_id": gate_id, "status": "ERROR", "source": "script", "details": str(e)})
+                elif gate_id in INLINE_CHECKS:
+                    if INLINE_CHECKS[gate_id] is None:
+                        checks.append({
+                            "gate_id": gate_id,
+                            "status": "SKIP",
+                            "source": "no_inline_check",
+                            "message": "该门禁无内嵌检查，需外部脚本支持",
+                            "severity": "WARN",
+                        })
+                    else:
                         try:
                             inline_result = INLINE_CHECKS[gate_id](project_path)
-                            check_entry: dict[str, Any] = {
+                            check_entry = {
                                 "gate_id": gate_id,
                                 "status": inline_result["status"],
                                 "source": "inline",
@@ -1131,97 +1188,47 @@ def register(mcp: FastMCP) -> None:
                             checks.append(check_entry)
                         except Exception as e:
                             checks.append({"gate_id": gate_id, "status": "ERROR", "source": "inline", "details": str(e)})
-                        continue
-                    if gate_id in INLINE_CHECKS and INLINE_CHECKS[gate_id] is None:
-                        checks.append({
-                            "gate_id": gate_id,
-                            "status": "SKIP",
-                            "source": "no_inline_check",
-                            "message": "该门禁无内嵌检查，需外部脚本支持",
-                            "severity": "WARN",
-                        })
-                    else:
-                        checks.append({"gate_id": gate_id, "status": "SKIP", "source": "no_inline_check", "details": "检查脚本不存在且无内嵌检查"})
-                    continue
-                try:
-                    result = subprocess.run(
-                        [sys.executable, str(script_path), "--format", "json"],
-                        capture_output=True,
-                        text=True,
-                        timeout=30,
-                        cwd=project_path,
-                    )
-                    parsed = _parse_gate_result(gate_id, result)
-                    parsed["source"] = "script"
-                    checks.append(parsed)
-                except subprocess.TimeoutExpired:
-                    checks.append({"gate_id": gate_id, "status": "SKIP", "source": "script", "details": "执行超时(30s)"})
-                except Exception as e:
-                    checks.append({"gate_id": gate_id, "status": "ERROR", "source": "script", "details": str(e)})
-            elif gate_id in INLINE_CHECKS:
-                if INLINE_CHECKS[gate_id] is None:
+                else:
                     checks.append({
                         "gate_id": gate_id,
                         "status": "SKIP",
                         "source": "no_inline_check",
-                        "message": "该门禁无内嵌检查，需外部脚本支持",
-                        "severity": "WARN",
+                        "details": "无对应检查脚本，需手动验证",
                     })
-                else:
-                    try:
-                        inline_result = INLINE_CHECKS[gate_id](project_path)
-                        check_entry = {
-                            "gate_id": gate_id,
-                            "status": inline_result["status"],
-                            "source": "inline",
-                            "details": {
-                                "message": inline_result["message"],
-                                **inline_result.get("details", {}),
-                            },
-                        }
-                        if "suggestion" in inline_result:
-                            check_entry["suggestion"] = inline_result["suggestion"]
-                        checks.append(check_entry)
-                    except Exception as e:
-                        checks.append({"gate_id": gate_id, "status": "ERROR", "source": "inline", "details": str(e)})
-            else:
-                checks.append({
-                    "gate_id": gate_id,
-                    "status": "SKIP",
-                    "source": "no_inline_check",
-                    "details": "无对应检查脚本，需手动验证",
-                })
 
-        passed = sum(1 for c in checks if c["status"] == "PASS")
-        failed = sum(1 for c in checks if c["status"] == "FAIL")
-        blocked = any(c["status"] == "FAIL" for c in checks)
+            passed = sum(1 for c in checks if c["status"] == "PASS")
+            failed = sum(1 for c in checks if c["status"] == "FAIL")
+            blocked = any(c["status"] == "FAIL" for c in checks)
 
-        if blocked:
-            failed_ids = [c["gate_id"] for c in checks if c["status"] == "FAIL"]
-            notify(f"Quality gates blocked: {failed_ids}", "warning")
+            if blocked:
+                failed_ids = [c["gate_id"] for c in checks if c["status"] == "FAIL"]
+                notify(f"Quality gates blocked: {failed_ids}", "warning")
 
-        _save_gate_cache(project_path, {
-            "file_hashes": current_hashes,
-            "checks": checks,
-            "timestamp": time.time(),
-        })
+            _save_gate_cache(project_path, {
+                "file_hashes": current_hashes,
+                "checks": checks,
+                "timestamp": time.time(),
+            })
 
-        cache_hit_count = 0
-        cache_miss_count = len(checks)
+            cache_hit_count = 0
+            cache_miss_count = len(checks)
 
-        return make_success_response({
-            "checks": checks,
-            "summary": {
-                "total": len(checks),
-                "passed": passed,
-                "failed": failed,
-                "skipped": sum(1 for c in checks if c["status"] == "SKIP"),
-                "blocked": blocked,
-            },
-            "cache_info": {
-                "hit": cache_hit,
-                "hit_count": cache_hit_count,
-                "miss_count": cache_miss_count,
-                "cache_age_seconds": round(cache_age, 1) if cache_hit else 0.0,
-            },
-        })
+            return make_success_response({
+                "checks": checks,
+                "summary": {
+                    "total": len(checks),
+                    "passed": passed,
+                    "failed": failed,
+                    "skipped": sum(1 for c in checks if c["status"] == "SKIP"),
+                    "blocked": blocked,
+                },
+                "cache_info": {
+                    "hit": cache_hit,
+                    "hit_count": cache_hit_count,
+                    "miss_count": cache_miss_count,
+                    "cache_age_seconds": round(cache_age, 1) if cache_hit else 0.0,
+                },
+            })
+        except Exception as e:
+            logger.error("quality_gate_check error: %s", e)
+            return make_error_response(e)

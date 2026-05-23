@@ -2,6 +2,28 @@
 
 > 本文件由SKILL.md按需加载，不需要时不会占用上下文
 
+## 目录
+
+1. [skill_analyze](#skill_analyze)
+2. [knowledge_search](#knowledge_search)
+3. [quality_gate_check](#quality_gate_check)
+4. [spec_drift_detect](#spec_drift_detect)
+5. [security_scan](#security_scan)
+6. [code_simplify](#code_simplify)
+7. [session_manage](#session_manage)
+8. [workflow_dispatch](#workflow_dispatch)
+9. [agent_status](#agent_status)
+10. [hook_manage](#hook_manage)
+11. [resource_load_status](#resource_load_status)
+12. [context_compress](#context_compress)
+13. [server_health](#server_health)
+14. [decision_log](#decision_log)
+15. [token_budget](#token_budget)
+16. [knowledge_inject](#knowledge_inject)
+17. [project_init](#project_init)
+
+---
+
 ## skill_analyze
 
 分析技能项目结构，提取YAML元数据、目录结构、Agent注册表、脚本依赖和验证问题。
@@ -1059,6 +1081,46 @@ Token预算管理：查询预算状态、设置预算、获取推荐、生成使
 调用: token_budget(action="report", period="session")
 响应: {status: "success", data: {period: "session", total_budget: 150000, total_used: 45000, remaining: 105000, usage_pct: 30.0, ...}, ...}
 ```
+
+## knowledge_inject
+
+将检索到的知识内容注入到当前会话上下文中，供Agent在执行任务时参考。
+
+**参数：**
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| action | str | 必填 | 操作类型: inject, preview, clear |
+| content | str\|None | None | 注入内容(inject时使用) |
+| scope | str\|None | "session" | 注入范围: session, workflow, global |
+| source | str\|None | None | 知识来源标识(如knowledge_search结果ID) |
+| priority | str\|None | "normal" | 优先级: low, normal, high |
+
+**完整返回值JSON Schema：**
+```json
+{
+  "status": "success",
+  "data": {
+    "action": "inject",
+    "scope": "session",
+    "injected_tokens": 1500,
+    "source": "kb-result-abc123",
+    "priority": "normal",
+    "context_window_usage_pct": 35.0
+  },
+  "metadata": {
+    "tool": "knowledge_inject",
+    "latency_ms": 5,
+    "degraded": false
+  }
+}
+```
+
+**错误码定义：**
+| 错误码 | 说明 | 处理建议 |
+|--------|------|----------|
+| INVALID_INPUT | action不在允许列表中或inject缺少content | 使用inject/preview/clear，inject需提供content |
+| CONTEXT_OVERFLOW | 注入内容超出上下文窗口 | 减少content长度或使用context_compress先压缩 |
+| DEGRADED | 降级模式执行(内联注入) | 检查MCP Server连接 |
 
 ## project_init
 

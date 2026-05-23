@@ -330,44 +330,48 @@ def register(mcp: FastMCP) -> None:
         if err:
             return err
         logger.info("hook_manage called: action=%s hook_name=%s", action, hook_name)
-        if action == "list":
-            hooks = HOOK_PROFILES.get(profile, [])
-            if not hooks:
-                return make_error_response(ValueError(f"未知profile: {profile}，支持: minimal, standard, strict"), error_code=ERR_VALIDATION)
-            result: list[dict[str, Any]] = []
-            for h in hooks:
-                script = HOOK_SCRIPTS_MAP.get(h)
-                has_inline = h in INLINE_HOOK_LOGIC
-                result.append({"name": h, "has_script": script is not None, "script": script, "has_inline_logic": has_inline})
-            return make_success_response({"profile": profile, "hooks": result, "total": len(result)})
-        elif action == "execute":
-            if not hook_name:
-                return make_error_response(ValueError("execute操作需要hook_name参数"), error_code=ERR_VALIDATION)
-            script = HOOK_SCRIPTS_MAP.get(hook_name)
-            if script:
-                script_path = SCRIPTS_DIR / script
-                if not script_path.exists():
-                    inline_fn = INLINE_HOOK_LOGIC.get(hook_name)
-                    if inline_fn:
-                        project_path = context.get("project_path", ".") if context else "."
-                        inline_result = inline_fn(project_path, context)
-                        return make_success_response({"hook": hook_name, "status": inline_result["status"], "message": inline_result["message"], "details": inline_result["details"], "source": "inline_fallback"})
-                    return make_success_response({"hook": hook_name, "status": "skipped", "reason": f"脚本不存在且无内嵌逻辑: {script}"})
-                args = []
-                if context:
-                    args.extend(["--context", json.dumps(context, ensure_ascii=False)])
-                script_result = run_script(script_path, args=args, timeout=30)
-                if script_result.get("error"):
-                    return make_error_response(Exception(script_result.get("message", "脚本执行失败")), error_code=ERR_INTERNAL)
-                return make_success_response({"hook": hook_name, "status": "executed", "result": script_result.get("data", {})})
-            inline_fn = INLINE_HOOK_LOGIC.get(hook_name)
-            if inline_fn:
-                project_path = context.get("project_path", ".") if context else "."
-                inline_result = inline_fn(project_path, context)
-                return make_success_response({"hook": hook_name, "status": inline_result["status"], "message": inline_result["message"], "details": inline_result["details"], "source": "inline"})
-            return make_success_response({"hook": hook_name, "status": "skipped", "reason": "无对应脚本或内联逻辑，需手动执行"})
-        else:
-            return make_error_response(ValueError(f"未知操作: {action}，支持: list, execute"), error_code=ERR_VALIDATION)
+        try:
+            if action == "list":
+                hooks = HOOK_PROFILES.get(profile, [])
+                if not hooks:
+                    return make_error_response(ValueError(f"未知profile: {profile}，支持: minimal, standard, strict"), error_code=ERR_VALIDATION)
+                result: list[dict[str, Any]] = []
+                for h in hooks:
+                    script = HOOK_SCRIPTS_MAP.get(h)
+                    has_inline = h in INLINE_HOOK_LOGIC
+                    result.append({"name": h, "has_script": script is not None, "script": script, "has_inline_logic": has_inline})
+                return make_success_response({"profile": profile, "hooks": result, "total": len(result)})
+            elif action == "execute":
+                if not hook_name:
+                    return make_error_response(ValueError("execute操作需要hook_name参数"), error_code=ERR_VALIDATION)
+                script = HOOK_SCRIPTS_MAP.get(hook_name)
+                if script:
+                    script_path = SCRIPTS_DIR / script
+                    if not script_path.exists():
+                        inline_fn = INLINE_HOOK_LOGIC.get(hook_name)
+                        if inline_fn:
+                            project_path = context.get("project_path", ".") if context else "."
+                            inline_result = inline_fn(project_path, context)
+                            return make_success_response({"hook": hook_name, "status": inline_result["status"], "message": inline_result["message"], "details": inline_result["details"], "source": "inline_fallback"})
+                        return make_success_response({"hook": hook_name, "status": "skipped", "reason": f"脚本不存在且无内嵌逻辑: {script}"})
+                    args = []
+                    if context:
+                        args.extend(["--context", json.dumps(context, ensure_ascii=False)])
+                    script_result = run_script(script_path, args=args, timeout=30)
+                    if script_result.get("error"):
+                        return make_error_response(Exception(script_result.get("message", "脚本执行失败")), error_code=ERR_INTERNAL)
+                    return make_success_response({"hook": hook_name, "status": "executed", "result": script_result.get("data", {})})
+                inline_fn = INLINE_HOOK_LOGIC.get(hook_name)
+                if inline_fn:
+                    project_path = context.get("project_path", ".") if context else "."
+                    inline_result = inline_fn(project_path, context)
+                    return make_success_response({"hook": hook_name, "status": inline_result["status"], "message": inline_result["message"], "details": inline_result["details"], "source": "inline"})
+                return make_success_response({"hook": hook_name, "status": "skipped", "reason": "无对应脚本或内联逻辑，需手动执行"})
+            else:
+                return make_error_response(ValueError(f"未知操作: {action}，支持: list, execute"), error_code=ERR_VALIDATION)
+        except Exception as e:
+            logger.error("hook_manage error: %s", e)
+            return make_error_response(e)
 
 
 _HOOK_TOOL_MAP: dict[str, list[str]] = {

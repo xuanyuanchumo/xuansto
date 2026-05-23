@@ -23,7 +23,7 @@
 
 加载内容：
 - SKILL.md 核心约束（5条）
-- 命令路由概要（27命令 → MCP Tool映射）
+- 命令路由概要（31命令 → MCP Tool映射）
 - Agent索引表（57 Agent按层级分组）
 - MCP Server依赖声明
 - 降级模式入口

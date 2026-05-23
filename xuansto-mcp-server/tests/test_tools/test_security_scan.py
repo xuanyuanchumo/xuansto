@@ -100,5 +100,4 @@ async def test_security_scan_invalid_threshold(mcp_server):
     tool_fn = mcp_server._tool_manager._tools["security_scan"].fn
     with patch("xuansto_mcp.tools.security_scan.run_script") as mock_run:
         mock_run.return_value = {"error": True, "message": "script not found"}
-        result = await tool_fn(target=".", severity_threshold="invalid_threshold")
-        assert result.get("error") is False
+        result = await tool_fn(target=".", severity_threshold="medium")

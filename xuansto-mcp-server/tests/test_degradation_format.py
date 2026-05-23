@@ -96,10 +96,10 @@ class TestHelperFunctions:
 
 
 class TestFallbackMapCompleteness:
-    def test_fallback_map_has_13_entries(self):
-        assert len(FALLBACK_MAP) == 13
+    def test_fallback_map_has_16_entries(self):
+        assert len(FALLBACK_MAP) == 16
 
-    def test_all_13_tool_names_present(self):
+    def test_all_16_tool_names_present(self):
         expected = {
             "skill_analyze",
             "knowledge_search",
@@ -114,6 +114,9 @@ class TestFallbackMapCompleteness:
             "resource_load_status",
             "context_compress",
             "server_health",
+            "decision_log",
+            "token_budget",
+            "project_init",
         }
         assert set(FALLBACK_MAP.keys()) == expected
 

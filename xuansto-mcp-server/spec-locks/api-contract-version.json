@@ -3,8 +3,8 @@
   "$id": "xuansto://spec-locks/api-contract-version",
   "title": "APIContractVersion",
   "description": "API contract version lock for xuansto-mcp-server. Defines current and minimum supported API versions.",
-  "current_version": "2.0.0",
-  "min_supported_version": "1.0.0",
+  "current_version": "3.0.0",
+  "min_supported_version": "2.0.0",
   "version_history": [
     {
       "version": "1.0.0",
@@ -25,6 +25,17 @@
         "Event-driven config hot-reload via watchfiles",
         "Backward compatible with v1.0.0 clients",
         "Added decision_log, token_budget, project_init tools (16 total)"
+      ]
+    },
+    {
+      "version": "3.0.0",
+      "date": "2026-05-23",
+      "changes": [
+        "Progressive loading with phase-based resource preloading",
+        "Enhanced loading_progress action with feature availability and token budget tracking",
+        "Cumulative phase preloading (loads all resources up to target phase)",
+        "Phase history tracking with trigger information",
+        "Backward compatible with v2.0.0 and v1.0.0 clients"
       ]
     }
   ],

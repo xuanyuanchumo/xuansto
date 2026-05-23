@@ -118,4 +118,4 @@ def test_recover_empty_workflow_id_format():
     assert "code" in result
     assert "message" in result
     assert result["message"] == "workflow_id不能为空"
-    assert result["code"] == "INTERNAL_ERROR"
+    assert result["code"] == "VALIDATION_ERROR"

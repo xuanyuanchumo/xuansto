@@ -545,341 +545,345 @@ def register(mcp: FastMCP) -> None:
         if err:
             return err
         logger.info("resource_load_status called: action=%s", action)
-        if action == "status":
-            resources = []
-            if phase is not None:
-                resources = _collect_resources_up_to_phase(phase)
-            elif resource_ids:
-                for pid, res_list in PHASE_RESOURCE_MAP.items():
-                    for r in res_list:
-                        if r["id"] in resource_ids:
-                            resources.append(r)
-            else:
-                resources = _collect_resources_up_to_phase(3)
-            result = []
-            resource_map = {}
-            for r in resources:
-                status = _check_resource_status(r["id"], r["path"])
-                entry = {"id": r["id"], "type": r["type"], "path": r["path"], "status": status, "phase": None}
-                for pid, res_list in PHASE_RESOURCE_MAP.items():
-                    if any(res["id"] == r["id"] for res in res_list):
-                        entry["phase"] = pid
-                        break
-                result.append(entry)
-                resource_map[r["id"]] = {"status": status, "type": r["type"], "path": r["path"], "phase": entry["phase"]}
-            loaded = sum(1 for r in result if r["status"] == "loaded")
-            stale = sum(1 for r in result if r["status"] == "stale")
-            expired = sum(1 for r in result if r["status"] == "expired")
-            disclosure = _get_loading_disclosure()
-            with _cache_lock:
-                recent_transitions = list(_TRANSITION_HISTORY[-5:])
-            with _PHASE_TOKEN_USAGE_LOCK:
-                phase_token_snapshot = dict(_PHASE_TOKEN_USAGE)
-            return make_success_response({
-                "resources": result,
-                "resources_map": resource_map,
-                "total": len(result),
-                "loaded": loaded,
-                "stale": stale,
-                "expired": expired,
-                "available_functions": disclosure["available_functions"],
-                "disclosure_note": disclosure["disclosure_note"],
-                "upgrade_hint": disclosure["upgrade_hint"],
-                "available_commands": disclosure["available_commands"],
-                "token_budget": disclosure["token_budget"],
-                "token_usage": disclosure["token_usage"],
-                "phase_token_usage": phase_token_snapshot,
-                "transitions": recent_transitions,
-            })
-        elif action == "preload":
-            if priority not in ("critical", "normal", "background"):
-                return make_error_response(ValueError(f"无效优先级: {priority}，支持: critical, normal, background"), error_code=ERR_VALIDATION)
-            if resource_uris:
+        try:
+            if action == "status":
+                resources = []
+                if phase is not None:
+                    resources = _collect_resources_up_to_phase(phase)
+                elif resource_ids:
+                    for pid, res_list in PHASE_RESOURCE_MAP.items():
+                        for r in res_list:
+                            if r["id"] in resource_ids:
+                                resources.append(r)
+                else:
+                    resources = _collect_resources_up_to_phase(3)
+                result = []
+                resource_map = {}
+                for r in resources:
+                    status = _check_resource_status(r["id"], r["path"])
+                    entry = {"id": r["id"], "type": r["type"], "path": r["path"], "status": status, "phase": None}
+                    for pid, res_list in PHASE_RESOURCE_MAP.items():
+                        if any(res["id"] == r["id"] for res in res_list):
+                            entry["phase"] = pid
+                            break
+                    result.append(entry)
+                    resource_map[r["id"]] = {"status": status, "type": r["type"], "path": r["path"], "phase": entry["phase"]}
+                loaded = sum(1 for r in result if r["status"] == "loaded")
+                stale = sum(1 for r in result if r["status"] == "stale")
+                expired = sum(1 for r in result if r["status"] == "expired")
+                disclosure = _get_loading_disclosure()
+                with _cache_lock:
+                    recent_transitions = list(_TRANSITION_HISTORY[-5:])
+                with _PHASE_TOKEN_USAGE_LOCK:
+                    phase_token_snapshot = dict(_PHASE_TOKEN_USAGE)
+                return make_success_response({
+                    "resources": result,
+                    "resources_map": resource_map,
+                    "total": len(result),
+                    "loaded": loaded,
+                    "stale": stale,
+                    "expired": expired,
+                    "available_functions": disclosure["available_functions"],
+                    "disclosure_note": disclosure["disclosure_note"],
+                    "upgrade_hint": disclosure["upgrade_hint"],
+                    "available_commands": disclosure["available_commands"],
+                    "token_budget": disclosure["token_budget"],
+                    "token_usage": disclosure["token_usage"],
+                    "phase_token_usage": phase_token_snapshot,
+                    "transitions": recent_transitions,
+                })
+            elif action == "preload":
+                if priority not in ("critical", "normal", "background"):
+                    return make_error_response(ValueError(f"无效优先级: {priority}，支持: critical, normal, background"), error_code=ERR_VALIDATION)
+                if resource_uris:
+                    with _cache_lock:
+                        _LOADED_PROGRESS["loading"] = True
+                        _LOADED_PROGRESS["started_at"] = datetime.now(timezone.utc).isoformat()
+                        _LOADED_PROGRESS["total_resources"] = len(resource_uris)
+                        _LOADED_PROGRESS["loaded_resources"] = 0
+                        _LOADED_PROGRESS["current_phase"] = None
+                        _LOADED_PROGRESS["completed_at"] = None
+                    loaded_count = 0
+                    skipped_count = 0
+                    refreshed_count = 0
+                    total_size = 0
+                    errors: list[str] = []
+                    all_truncated = False
+                    all_skipped_large_files: list[str] = []
+                    for uri in resource_uris:
+                        try:
+                            is_valid, validity = _is_cache_valid(uri)
+                            if is_valid:
+                                skipped_count += 1
+                                with _cache_lock:
+                                    _LOADED_PROGRESS["loaded_resources"] += 1
+                                continue
+                            if validity in ("stale", "expired"):
+                                with _cache_lock:
+                                    _RESOURCE_CACHE.pop(uri, None)
+                                refreshed_count += 1
+                            result = _read_resource_content(uri)
+                            content = result["content"]
+                            if result["truncated"]:
+                                all_truncated = True
+                            all_skipped_large_files.extend(result["skipped_large_files"])
+                            if content is not None:
+                                _cleanup_cache()
+                                source_path = _resolve_uri_source_path(uri)
+                                source_hash = _compute_path_hash(source_path) if source_path else None
+                                with _cache_lock:
+                                    _RESOURCE_CACHE[uri] = {
+                                        "content": content,
+                                        "cached_at": time.time(),
+                                        "access_count": 0,
+                                        "content_hash": source_hash or hashlib.sha256(content.encode("utf-8")).hexdigest(),
+                                        "ttl_seconds": _CACHE_TTL_SECONDS,
+                                        "source_path": str(source_path) if source_path else None,
+                                    }
+                                    _LOADED_PROGRESS["loaded_resources"] += 1
+                                loaded_count += 1
+                                total_size += len(content)
+                            else:
+                                errors.append(f"Resource not found: {uri}")
+                                with _cache_lock:
+                                    _LOADED_PROGRESS["loaded_resources"] += 1
+                        except Exception as e:
+                            errors.append(f"Failed to load {uri}: {str(e)}")
+                            with _cache_lock:
+                                _LOADED_PROGRESS["loaded_resources"] += 1
+                    with _cache_lock:
+                        _LOADED_PROGRESS["loading"] = False
+                        _LOADED_PROGRESS["completed_at"] = datetime.now(timezone.utc).isoformat()
+                    return make_success_response({
+                        "action": "preload",
+                        "loaded_count": loaded_count,
+                        "skipped_count": skipped_count,
+                        "refreshed_count": refreshed_count,
+                        "total_uris": len(resource_uris),
+                        "total_size_bytes": total_size,
+                        "truncated": all_truncated,
+                        "skipped_large_files": all_skipped_large_files if all_skipped_large_files else None,
+                        "errors": errors if errors else None,
+                        "priority": priority,
+                        "batch_mode": batch_mode,
+                    })
+                if phase is None:
+                    return make_error_response(ValueError("preload操作需要phase或resource_uris参数"), error_code=ERR_VALIDATION)
+                actual_phase = phase
+                if auto_upgrade:
+                    current_phase_idx = _get_current_phase_index()
+                    resources_to_load = _collect_resources_up_to_phase(actual_phase)
+                    total_estimated = sum(_estimate_resource_tokens(r) for r in resources_to_load)
+                    budget = PHASE_TOKEN_BUDGET.get(actual_phase, PHASE_TOKEN_BUDGET[3])
+                    while total_estimated > budget and actual_phase < 3:
+                        actual_phase += 1
+                        resources_to_load = _collect_resources_up_to_phase(actual_phase)
+                        total_estimated = sum(_estimate_resource_tokens(r) for r in resources_to_load)
+                        budget = PHASE_TOKEN_BUDGET.get(actual_phase, PHASE_TOKEN_BUDGET[3])
+                    if actual_phase != phase:
+                        logger.info("auto_upgrade: phase %d -> %d (estimated %d tokens > budget %d)", phase, actual_phase, total_estimated, PHASE_TOKEN_BUDGET.get(phase, 0))
+                else:
+                    resources_to_load = _collect_resources_up_to_phase(actual_phase)
+                    total_estimated = sum(_estimate_resource_tokens(r) for r in resources_to_load)
+                    budget = PHASE_TOKEN_BUDGET.get(actual_phase, PHASE_TOKEN_BUDGET[3])
+                    if total_estimated > budget and actual_phase < 3:
+                        next_phase = actual_phase + 1
+                        hint = _UPGRADE_HINTS.get(actual_phase, "")
+                        return make_success_response({
+                            "action": "preload",
+                            "phase": actual_phase,
+                            "preloaded": [],
+                            "total": 0,
+                            "priority": priority,
+                            "batch_mode": batch_mode,
+                            "token_budget_exceeded": True,
+                            "estimated_tokens": total_estimated,
+                            "token_budget": budget,
+                            "upgrade_hint": hint,
+                            "suggested_phase": next_phase,
+                        })
+                resources = PHASE_RESOURCE_MAP.get(actual_phase, [])
                 with _cache_lock:
                     _LOADED_PROGRESS["loading"] = True
                     _LOADED_PROGRESS["started_at"] = datetime.now(timezone.utc).isoformat()
-                    _LOADED_PROGRESS["total_resources"] = len(resource_uris)
+                    _LOADED_PROGRESS["total_resources"] = len(resources)
                     _LOADED_PROGRESS["loaded_resources"] = 0
-                    _LOADED_PROGRESS["current_phase"] = None
+                    _LOADED_PROGRESS["current_phase"] = actual_phase
                     _LOADED_PROGRESS["completed_at"] = None
-                loaded_count = 0
-                skipped_count = 0
-                refreshed_count = 0
-                total_size = 0
-                errors: list[str] = []
-                all_truncated = False
-                all_skipped_large_files: list[str] = []
-                for uri in resource_uris:
-                    try:
-                        is_valid, validity = _is_cache_valid(uri)
+                preloaded = []
+                current = _get_loaded_resources()
+                phase_estimated_tokens = 0
+                for r in resources:
+                    full_path = SKILL_ROOT / r["path"]
+                    if full_path.exists():
+                        is_valid, validity = _is_cache_valid(r["id"])
                         if is_valid:
-                            skipped_count += 1
+                            preloaded.append({"id": r["id"], "status": "loaded", "cache": "valid"})
+                            current.add(r["id"])
                             with _cache_lock:
                                 _LOADED_PROGRESS["loaded_resources"] += 1
                             continue
                         if validity in ("stale", "expired"):
                             with _cache_lock:
-                                _RESOURCE_CACHE.pop(uri, None)
-                            refreshed_count += 1
-                        result = _read_resource_content(uri)
-                        content = result["content"]
-                        if result["truncated"]:
-                            all_truncated = True
-                        all_skipped_large_files.extend(result["skipped_large_files"])
+                                _RESOURCE_CACHE.pop(r["id"], None)
+                        source_hash = _compute_path_hash(full_path)
+                        content = None
+                        if full_path.is_file():
+                            try:
+                                content = full_path.read_text(encoding="utf-8")
+                            except OSError:
+                                pass
+                        elif full_path.is_dir():
+                            parts: list[str] = []
+                            try:
+                                for fpath in sorted(full_path.rglob("*")):
+                                    if fpath.is_file() and fpath.suffix in (".json", ".yaml", ".yml", ".md", ".txt"):
+                                        parts.append(fpath.read_text(encoding="utf-8"))
+                            except OSError:
+                                pass
+                            content = "\n---\n".join(parts) if parts else None
                         if content is not None:
-                            _cleanup_cache()
-                            source_path = _resolve_uri_source_path(uri)
-                            source_hash = _compute_path_hash(source_path) if source_path else None
-                            with _cache_lock:
-                                _RESOURCE_CACHE[uri] = {
-                                    "content": content,
-                                    "cached_at": time.time(),
-                                    "access_count": 0,
-                                    "content_hash": source_hash or hashlib.sha256(content.encode("utf-8")).hexdigest(),
-                                    "ttl_seconds": _CACHE_TTL_SECONDS,
-                                    "source_path": str(source_path) if source_path else None,
-                                }
-                                _LOADED_PROGRESS["loaded_resources"] += 1
-                            loaded_count += 1
-                            total_size += len(content)
-                        else:
-                            errors.append(f"Resource not found: {uri}")
-                            with _cache_lock:
-                                _LOADED_PROGRESS["loaded_resources"] += 1
-                    except Exception as e:
-                        errors.append(f"Failed to load {uri}: {str(e)}")
+                            res_tokens = _estimate_tokens(content)
+                            phase_estimated_tokens += res_tokens
+                            _update_phase_token_usage(actual_phase, res_tokens)
+                        current.add(r["id"])
+                        with _cache_lock:
+                            _RESOURCE_CACHE[r["id"]] = {
+                                "content": content or "",
+                                "cached_at": time.time(),
+                                "access_count": 0,
+                                "content_hash": source_hash or hashlib.sha256((content or "").encode("utf-8")).hexdigest(),
+                                "ttl_seconds": _CACHE_TTL_SECONDS,
+                                "source_path": str(full_path),
+                            }
+                            _LOADED_PROGRESS["loaded_resources"] += 1
+                        preloaded.append({"id": r["id"], "status": "loaded", "cache": "refreshed" if validity in ("stale", "expired") else "new"})
+                    else:
+                        preloaded.append({"id": r["id"], "status": "missing"})
                         with _cache_lock:
                             _LOADED_PROGRESS["loaded_resources"] += 1
+                _set_loaded_resources(current)
+                from_phase = _get_current_phase_name()
+                to_phase = _phase_index_to_name(actual_phase)
+                if from_phase != to_phase:
+                    affected = [r["id"] for r in resources]
+                    _record_transition(from_phase, to_phase, affected, "completed")
+                    notify(f"Resource phase transition: {from_phase} -> {to_phase} ({len(affected)} resources)", "info")
+                state_file = _get_state_file()
+                try:
+                    state_data = json.loads(state_file.read_text(encoding="utf-8")) if state_file.exists() else {}
+                    state_data["phase"] = to_phase
+                    atomic_write(state_file, json.dumps(state_data, ensure_ascii=False, indent=2))
+                except (json.JSONDecodeError, OSError):
+                    pass
                 with _cache_lock:
                     _LOADED_PROGRESS["loading"] = False
                     _LOADED_PROGRESS["completed_at"] = datetime.now(timezone.utc).isoformat()
-                return make_success_response({
-                    "action": "preload",
-                    "loaded_count": loaded_count,
-                    "skipped_count": skipped_count,
-                    "refreshed_count": refreshed_count,
-                    "total_uris": len(resource_uris),
-                    "total_size_bytes": total_size,
-                    "truncated": all_truncated,
-                    "skipped_large_files": all_skipped_large_files if all_skipped_large_files else None,
-                    "errors": errors if errors else None,
+                with _cache_lock:
+                    transitions = list(_TRANSITION_HISTORY)
+                disclosure = _get_loading_disclosure()
+                result_data: dict[str, Any] = {
+                    "phase": actual_phase,
+                    "phase_name": to_phase,
+                    "preloaded": preloaded,
+                    "total": len(preloaded),
                     "priority": priority,
                     "batch_mode": batch_mode,
-                })
-            if phase is None:
-                return make_error_response(ValueError("preload操作需要phase或resource_uris参数"), error_code=ERR_VALIDATION)
-            actual_phase = phase
-            if auto_upgrade:
-                current_phase_idx = _get_current_phase_index()
-                resources_to_load = _collect_resources_up_to_phase(actual_phase)
-                total_estimated = sum(_estimate_resource_tokens(r) for r in resources_to_load)
-                budget = PHASE_TOKEN_BUDGET.get(actual_phase, PHASE_TOKEN_BUDGET[3])
-                while total_estimated > budget and actual_phase < 3:
-                    actual_phase += 1
-                    resources_to_load = _collect_resources_up_to_phase(actual_phase)
-                    total_estimated = sum(_estimate_resource_tokens(r) for r in resources_to_load)
-                    budget = PHASE_TOKEN_BUDGET.get(actual_phase, PHASE_TOKEN_BUDGET[3])
-                if actual_phase != phase:
-                    logger.info("auto_upgrade: phase %d -> %d (estimated %d tokens > budget %d)", phase, actual_phase, total_estimated, PHASE_TOKEN_BUDGET.get(phase, 0))
-            else:
-                resources_to_load = _collect_resources_up_to_phase(actual_phase)
-                total_estimated = sum(_estimate_resource_tokens(r) for r in resources_to_load)
-                budget = PHASE_TOKEN_BUDGET.get(actual_phase, PHASE_TOKEN_BUDGET[3])
-                if total_estimated > budget and actual_phase < 3:
-                    next_phase = actual_phase + 1
-                    hint = _UPGRADE_HINTS.get(actual_phase, "")
-                    return make_success_response({
-                        "action": "preload",
-                        "phase": actual_phase,
-                        "preloaded": [],
-                        "total": 0,
-                        "priority": priority,
-                        "batch_mode": batch_mode,
-                        "token_budget_exceeded": True,
-                        "estimated_tokens": total_estimated,
-                        "token_budget": budget,
-                        "upgrade_hint": hint,
-                        "suggested_phase": next_phase,
-                    })
-            resources = PHASE_RESOURCE_MAP.get(actual_phase, [])
-            with _cache_lock:
-                _LOADED_PROGRESS["loading"] = True
-                _LOADED_PROGRESS["started_at"] = datetime.now(timezone.utc).isoformat()
-                _LOADED_PROGRESS["total_resources"] = len(resources)
-                _LOADED_PROGRESS["loaded_resources"] = 0
-                _LOADED_PROGRESS["current_phase"] = actual_phase
-                _LOADED_PROGRESS["completed_at"] = None
-            preloaded = []
-            current = _get_loaded_resources()
-            phase_estimated_tokens = 0
-            for r in resources:
-                full_path = SKILL_ROOT / r["path"]
-                if full_path.exists():
-                    is_valid, validity = _is_cache_valid(r["id"])
-                    if is_valid:
-                        preloaded.append({"id": r["id"], "status": "loaded", "cache": "valid"})
-                        current.add(r["id"])
-                        with _cache_lock:
-                            _LOADED_PROGRESS["loaded_resources"] += 1
-                        continue
-                    if validity in ("stale", "expired"):
-                        with _cache_lock:
-                            _RESOURCE_CACHE.pop(r["id"], None)
-                    source_hash = _compute_path_hash(full_path)
-                    content = None
-                    if full_path.is_file():
-                        try:
-                            content = full_path.read_text(encoding="utf-8")
-                        except OSError:
-                            pass
-                    elif full_path.is_dir():
-                        parts: list[str] = []
-                        try:
-                            for fpath in sorted(full_path.rglob("*")):
-                                if fpath.is_file() and fpath.suffix in (".json", ".yaml", ".yml", ".md", ".txt"):
-                                    parts.append(fpath.read_text(encoding="utf-8"))
-                        except OSError:
-                            pass
-                        content = "\n---\n".join(parts) if parts else None
-                    if content is not None:
-                        res_tokens = _estimate_tokens(content)
-                        phase_estimated_tokens += res_tokens
-                        _update_phase_token_usage(actual_phase, res_tokens)
-                    current.add(r["id"])
-                    with _cache_lock:
-                        _RESOURCE_CACHE[r["id"]] = {
-                            "content": content or "",
-                            "cached_at": time.time(),
-                            "access_count": 0,
-                            "content_hash": source_hash or hashlib.sha256((content or "").encode("utf-8")).hexdigest(),
-                            "ttl_seconds": _CACHE_TTL_SECONDS,
-                            "source_path": str(full_path),
-                        }
-                        _LOADED_PROGRESS["loaded_resources"] += 1
-                    preloaded.append({"id": r["id"], "status": "loaded", "cache": "refreshed" if validity in ("stale", "expired") else "new"})
-                else:
-                    preloaded.append({"id": r["id"], "status": "missing"})
-                    with _cache_lock:
-                        _LOADED_PROGRESS["loaded_resources"] += 1
-            _set_loaded_resources(current)
-            from_phase = _get_current_phase_name()
-            to_phase = _phase_index_to_name(actual_phase)
-            if from_phase != to_phase:
-                affected = [r["id"] for r in resources]
-                _record_transition(from_phase, to_phase, affected, "completed")
-                notify(f"Resource phase transition: {from_phase} -> {to_phase} ({len(affected)} resources)", "info")
-            state_file = _get_state_file()
-            try:
-                state_data = json.loads(state_file.read_text(encoding="utf-8")) if state_file.exists() else {}
-                state_data["phase"] = to_phase
-                atomic_write(state_file, json.dumps(state_data, ensure_ascii=False, indent=2))
-            except (json.JSONDecodeError, OSError):
-                pass
-            with _cache_lock:
-                _LOADED_PROGRESS["loading"] = False
-                _LOADED_PROGRESS["completed_at"] = datetime.now(timezone.utc).isoformat()
-            with _cache_lock:
-                transitions = list(_TRANSITION_HISTORY)
-            disclosure = _get_loading_disclosure()
-            result_data: dict[str, Any] = {
-                "phase": actual_phase,
-                "phase_name": to_phase,
-                "preloaded": preloaded,
-                "total": len(preloaded),
-                "priority": priority,
-                "batch_mode": batch_mode,
-                "auto_upgrade": auto_upgrade,
-                "estimated_tokens": phase_estimated_tokens,
-                "token_budget": PHASE_TOKEN_BUDGET.get(actual_phase, PHASE_TOKEN_BUDGET[3]),
-                "disclosure_note": disclosure["disclosure_note"],
-                "upgrade_hint": disclosure["upgrade_hint"],
-                "available_commands": disclosure["available_commands"],
-                "transitions": transitions[-5:],
-            }
-            if auto_upgrade and actual_phase != phase:
-                result_data["auto_upgraded_from"] = phase
-            return make_success_response(result_data)
-        elif action == "cache":
-            with _cache_lock:
-                cache_snapshot = dict(_RESOURCE_CACHE)
-            expired_count = sum(
-                1 for v in cache_snapshot.values()
-                if isinstance(v, dict) and (time.time() - v["cached_at"]) > v.get("ttl_seconds", _CACHE_TTL_SECONDS)
-            )
-            stale_count = 0
-            for v in cache_snapshot.values():
-                source_path = v.get("source_path")
-                if source_path is not None:
-                    current_hash = _compute_path_hash(Path(source_path))
-                    if current_hash is not None and current_hash != v.get("content_hash"):
-                        stale_count += 1
-            return make_success_response({
-                "action": "cache",
-                "cached_uris": list(cache_snapshot.keys()),
-                "cache_size": sum(len(v.get("content", "")) for v in cache_snapshot.values()),
-                "total_entries": len(cache_snapshot),
-                "ttl_seconds": _CACHE_TTL_SECONDS,
-                "max_entries": _CACHE_MAX_ENTRIES,
-                "expired_entries": expired_count,
-                "stale_entries": stale_count,
-            })
-        elif action == "clear_cache":
-            with _cache_lock:
-                count = len(_RESOURCE_CACHE)
+                    "auto_upgrade": auto_upgrade,
+                    "estimated_tokens": phase_estimated_tokens,
+                    "token_budget": PHASE_TOKEN_BUDGET.get(actual_phase, PHASE_TOKEN_BUDGET[3]),
+                    "disclosure_note": disclosure["disclosure_note"],
+                    "upgrade_hint": disclosure["upgrade_hint"],
+                    "available_commands": disclosure["available_commands"],
+                    "transitions": transitions[-5:],
+                }
+                if auto_upgrade and actual_phase != phase:
+                    result_data["auto_upgraded_from"] = phase
+                return make_success_response(result_data)
+            elif action == "cache":
+                with _cache_lock:
+                    cache_snapshot = dict(_RESOURCE_CACHE)
                 expired_count = sum(
-                    1 for v in _RESOURCE_CACHE.values()
+                    1 for v in cache_snapshot.values()
                     if isinstance(v, dict) and (time.time() - v["cached_at"]) > v.get("ttl_seconds", _CACHE_TTL_SECONDS)
                 )
-                _RESOURCE_CACHE.clear()
-            return make_success_response({
-                "action": "clear_cache",
-                "cleared_entries": count,
-                "expired_entries": expired_count,
-            })
-        elif action == "loading_progress":
-            with _cache_lock:
-                progress = dict(_LOADED_PROGRESS)
-            total = progress["total_resources"]
-            loaded = progress["loaded_resources"]
-            progress_percent = (loaded / total * 100) if total > 0 else 0
-            return make_success_response({
-                "action": "loading_progress",
-                "total_resources": total,
-                "loaded_resources": loaded,
-                "progress_percent": round(progress_percent, 2),
-                "current_phase": progress["current_phase"],
-                "loading": progress["loading"],
-                "started_at": progress["started_at"],
-                "completed_at": progress["completed_at"],
-            })
-        elif action == "token_report":
-            with _TOKEN_METRICS_LOCK:
-                metrics_snapshot = {}
-                for tool_name, metrics in _TOKEN_METRICS.items():
-                    metrics_snapshot[tool_name] = {
-                        "total_input_tokens": metrics["total_input_tokens"],
-                        "total_output_tokens": metrics["total_output_tokens"],
-                        "total_tokens": metrics["total_input_tokens"] + metrics["total_output_tokens"],
-                        "call_count": metrics["call_count"],
-                        "avg_input_tokens": round(metrics["total_input_tokens"] / max(metrics["call_count"], 1), 1),
-                        "avg_output_tokens": round(metrics["total_output_tokens"] / max(metrics["call_count"], 1), 1),
-                    }
-            total_input = sum(m["total_input_tokens"] for m in metrics_snapshot.values())
-            total_output = sum(m["total_output_tokens"] for m in metrics_snapshot.values())
-            with _PHASE_TOKEN_USAGE_LOCK:
-                phase_token_snapshot = dict(_PHASE_TOKEN_USAGE)
-            return make_success_response({
-                "action": "token_report",
-                "tools": metrics_snapshot,
-                "phase_token_usage": phase_token_snapshot,
-                "phase_token_budgets": PHASE_TOKEN_BUDGET,
-                "summary": {
-                    "total_tools": len(metrics_snapshot),
-                    "total_input_tokens": total_input,
-                    "total_output_tokens": total_output,
-                    "total_tokens": total_input + total_output,
-                    "estimate_method": f"char_count/{_TOKEN_ESTIMATE_RATIO}",
-                },
-            })
-        else:
-            return make_error_response(ValueError(f"未知操作: {action}，支持: status, preload, cache, clear_cache, loading_progress, token_report"), error_code=ERR_VALIDATION)
+                stale_count = 0
+                for v in cache_snapshot.values():
+                    source_path = v.get("source_path")
+                    if source_path is not None:
+                        current_hash = _compute_path_hash(Path(source_path))
+                        if current_hash is not None and current_hash != v.get("content_hash"):
+                            stale_count += 1
+                return make_success_response({
+                    "action": "cache",
+                    "cached_uris": list(cache_snapshot.keys()),
+                    "cache_size": sum(len(v.get("content", "")) for v in cache_snapshot.values()),
+                    "total_entries": len(cache_snapshot),
+                    "ttl_seconds": _CACHE_TTL_SECONDS,
+                    "max_entries": _CACHE_MAX_ENTRIES,
+                    "expired_entries": expired_count,
+                    "stale_entries": stale_count,
+                })
+            elif action == "clear_cache":
+                with _cache_lock:
+                    count = len(_RESOURCE_CACHE)
+                    expired_count = sum(
+                        1 for v in _RESOURCE_CACHE.values()
+                        if isinstance(v, dict) and (time.time() - v["cached_at"]) > v.get("ttl_seconds", _CACHE_TTL_SECONDS)
+                    )
+                    _RESOURCE_CACHE.clear()
+                return make_success_response({
+                    "action": "clear_cache",
+                    "cleared_entries": count,
+                    "expired_entries": expired_count,
+                })
+            elif action == "loading_progress":
+                with _cache_lock:
+                    progress = dict(_LOADED_PROGRESS)
+                total = progress["total_resources"]
+                loaded = progress["loaded_resources"]
+                progress_percent = (loaded / total * 100) if total > 0 else 0
+                return make_success_response({
+                    "action": "loading_progress",
+                    "total_resources": total,
+                    "loaded_resources": loaded,
+                    "progress_percent": round(progress_percent, 2),
+                    "current_phase": progress["current_phase"],
+                    "loading": progress["loading"],
+                    "started_at": progress["started_at"],
+                    "completed_at": progress["completed_at"],
+                })
+            elif action == "token_report":
+                with _TOKEN_METRICS_LOCK:
+                    metrics_snapshot = {}
+                    for tool_name, metrics in _TOKEN_METRICS.items():
+                        metrics_snapshot[tool_name] = {
+                            "total_input_tokens": metrics["total_input_tokens"],
+                            "total_output_tokens": metrics["total_output_tokens"],
+                            "total_tokens": metrics["total_input_tokens"] + metrics["total_output_tokens"],
+                            "call_count": metrics["call_count"],
+                            "avg_input_tokens": round(metrics["total_input_tokens"] / max(metrics["call_count"], 1), 1),
+                            "avg_output_tokens": round(metrics["total_output_tokens"] / max(metrics["call_count"], 1), 1),
+                        }
+                total_input = sum(m["total_input_tokens"] for m in metrics_snapshot.values())
+                total_output = sum(m["total_output_tokens"] for m in metrics_snapshot.values())
+                with _PHASE_TOKEN_USAGE_LOCK:
+                    phase_token_snapshot = dict(_PHASE_TOKEN_USAGE)
+                return make_success_response({
+                    "action": "token_report",
+                    "tools": metrics_snapshot,
+                    "phase_token_usage": phase_token_snapshot,
+                    "phase_token_budgets": PHASE_TOKEN_BUDGET,
+                    "summary": {
+                        "total_tools": len(metrics_snapshot),
+                        "total_input_tokens": total_input,
+                        "total_output_tokens": total_output,
+                        "total_tokens": total_input + total_output,
+                        "estimate_method": f"char_count/{_TOKEN_ESTIMATE_RATIO}",
+                    },
+                })
+            else:
+                return make_error_response(ValueError(f"未知操作: {action}，支持: status, preload, cache, clear_cache, loading_progress, token_report"), error_code=ERR_VALIDATION)
+        except Exception as e:
+            logger.error("resource_load_status error: %s", e)
+            return make_error_response(e)

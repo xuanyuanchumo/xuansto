@@ -9,17 +9,22 @@ from .errors import make_error_response, ERR_VALIDATION
 def validate_path_safety(
     path_component: str,
     allowed_base_dirs: list[Path] | None = None,
+    allow_absolute: bool = False,
 ) -> tuple[Path | None, str | None]:
     if "\x00" in path_component:
         return None, f"Path contains null byte: {path_component!r}"
-    if ".." in Path(path_component).parts:
+    resolved = Path(path_component)
+    if ".." in resolved.parts:
         return None, f"Path traversal detected (..): {path_component!r}"
-    if Path(path_component).is_absolute():
+    if resolved.is_absolute() and not allow_absolute:
         return None, f"Absolute path not allowed: {path_component!r}"
-    if "/" in path_component or "\\" in path_component:
-        resolved = Path(path_component)
-        if ".." in resolved.parts:
-            return None, f"Path traversal detected (..): {path_component!r}"
+    if resolved.is_absolute() and allow_absolute:
+        try:
+            real_resolved = resolved.resolve()
+            if ".." in real_resolved.parts:
+                return None, f"Path traversal detected after resolve (..): {path_component!r}"
+        except (OSError, ValueError):
+            return None, f"Invalid path: {path_component!r}"
     if allowed_base_dirs:
         candidate = None
         for base_dir in allowed_base_dirs:

@@ -225,9 +225,12 @@ def make_error_response(error: Exception, error_code: str | None = None, languag
     result = {
         "error": True,
         "code": "INTERNAL_ERROR",
-        "message": str(error),
+        "message": _get_i18n_message(ERR_INTERNAL, language) or "内部错误",
         "details": {},
     }
+    if isinstance(error, (ValueError, TypeError, KeyError)):
+        result["message"] = str(error)
+        result["code"] = "VALIDATION_ERROR"
     if resolved_code:
         result["error_code"] = resolved_code
         i18n_msg = _get_i18n_message(resolved_code, language)

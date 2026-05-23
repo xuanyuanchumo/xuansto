@@ -79,10 +79,24 @@ async def test_audit_command_flow(mcp_server, tmp_path):
     qg_fn = mcp_server._tool_manager._tools["quality_gate_check"].fn
     dl_fn = mcp_server._tool_manager._tools["decision_log"].fn
     decisions_file = tmp_path / "decisions.json"
+    decisions_db = tmp_path / "decisions.db"
+    import sqlite3
+    from xuansto_mcp.tools.decision_log import _CREATE_TABLE_SQL, _CREATE_INDEX_SQL, _CREATE_FTS_SQL, _CREATE_FTS_TRIGGERS_SQL
+    conn = sqlite3.connect(str(decisions_db))
+    conn.executescript(_CREATE_TABLE_SQL)
+    try:
+        conn.executescript(_CREATE_FTS_SQL)
+        conn.executescript(_CREATE_FTS_TRIGGERS_SQL)
+    except sqlite3.OperationalError:
+        pass
+    conn.executescript(_CREATE_INDEX_SQL)
+    conn.commit()
+    conn.close()
     with patch("xuansto_mcp.tools.quality_gate_check._compute_file_hashes", return_value={}):
         gate_result = await qg_fn(gate_ids=["SPEC-CONSISTENCY"], project_path=str(tmp_path))
         assert gate_result["error"] is False
     with patch("xuansto_mcp.tools.decision_log.DECISIONS_FILE", decisions_file), \
+         patch("xuansto_mcp.tools.decision_log.DECISIONS_DB", decisions_db), \
          patch("xuansto_mcp.tools.decision_log.notify"):
         log_result = await dl_fn(action="log", title="Audit decision", decision="Pass audit")
         assert log_result["error"] is False

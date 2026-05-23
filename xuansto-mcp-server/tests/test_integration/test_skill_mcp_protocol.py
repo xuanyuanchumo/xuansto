@@ -135,7 +135,21 @@ async def test_decision_log_tool_call_response_format(mcp_server, tmp_path):
     register(mcp_server)
     tool_fn = mcp_server._tool_manager._tools["decision_log"].fn
     budget_file = tmp_path / "decisions.json"
+    budget_db = tmp_path / "decisions.db"
+    import sqlite3
+    from xuansto_mcp.tools.decision_log import _CREATE_TABLE_SQL, _CREATE_INDEX_SQL, _CREATE_FTS_SQL, _CREATE_FTS_TRIGGERS_SQL
+    conn = sqlite3.connect(str(budget_db))
+    conn.executescript(_CREATE_TABLE_SQL)
+    try:
+        conn.executescript(_CREATE_FTS_SQL)
+        conn.executescript(_CREATE_FTS_TRIGGERS_SQL)
+    except sqlite3.OperationalError:
+        pass
+    conn.executescript(_CREATE_INDEX_SQL)
+    conn.commit()
+    conn.close()
     with patch("xuansto_mcp.tools.decision_log.DECISIONS_FILE", budget_file), \
+         patch("xuansto_mcp.tools.decision_log.DECISIONS_DB", budget_db), \
          patch("xuansto_mcp.tools.decision_log.notify"):
         result = await tool_fn(action="log", title="Test")
         assert isinstance(result, dict)
