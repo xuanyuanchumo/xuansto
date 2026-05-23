@@ -11,7 +11,7 @@ from mcp.types import ToolAnnotations
 from ..core.config import SESSION_DIR, PATTERNS_DIR
 from ..core.errors import make_error_response, make_success_response, ERR_VALIDATION
 from ..core.logging_config import get_logger
-from ..core.validator import validate_input
+from ..core.validator import validate_input, validate_path_safety
 from ..models.schemas import SessionManageInput
 
 logger = get_logger("session_manage")
@@ -236,21 +236,28 @@ def register(mcp: FastMCP) -> None:
         if err:
             return err
         logger.info("session_manage called: action=%s", action)
-        if action == "save":
-            return make_success_response(_save_session(completed_tasks, pending_tasks, decisions, experience))
-        elif action == "load":
-            return make_success_response(_load_last_session())
-        elif action == "list":
-            return make_success_response(_list_sessions())
-        elif action == "detect":
-            return make_success_response(_detect_patterns(error_log))
-        elif action == "verify":
-            if not pattern_path:
-                return make_error_response(ValueError("verify操作需要pattern_path参数"), error_code=ERR_VALIDATION)
-            return make_success_response(_verify_pattern(pattern_path, success))
-        elif action == "track":
-            return make_success_response(_track_session(current_phase, current_task, decisions, pending_tasks))
-        elif action == "restore":
-            return make_success_response(_restore_session())
-        else:
-            return make_error_response(ValueError(f"未知操作: {action}，支持: save, load, list, detect, verify, track, restore"), error_code=ERR_VALIDATION)
+        try:
+            if action == "save":
+                return make_success_response(_save_session(completed_tasks, pending_tasks, decisions, experience))
+            elif action == "load":
+                return make_success_response(_load_last_session())
+            elif action == "list":
+                return make_success_response(_list_sessions())
+            elif action == "detect":
+                return make_success_response(_detect_patterns(error_log))
+            elif action == "verify":
+                if not pattern_path:
+                    return make_error_response(ValueError("verify操作需要pattern_path参数"), error_code=ERR_VALIDATION)
+                safe_path, path_err = validate_path_safety(pattern_path, allow_absolute=True)
+                if path_err:
+                    return make_error_response(ValueError(path_err), error_code=ERR_VALIDATION)
+                return make_success_response(_verify_pattern(pattern_path, success))
+            elif action == "track":
+                return make_success_response(_track_session(current_phase, current_task, decisions, pending_tasks))
+            elif action == "restore":
+                return make_success_response(_restore_session())
+            else:
+                return make_error_response(ValueError(f"未知操作: {action}，支持: save, load, list, detect, verify, track, restore"), error_code=ERR_VALIDATION)
+        except Exception as e:
+            logger.error("session_manage error: %s", e)
+            return make_error_response(e)

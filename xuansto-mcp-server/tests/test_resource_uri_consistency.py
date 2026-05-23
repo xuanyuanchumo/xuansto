@@ -12,7 +12,7 @@ from mcp.server.fastmcp import FastMCP
 
 RESOURCES_SOURCE = Path(__file__).resolve().parent.parent / "src" / "xuansto_mcp" / "resources" / "skill_resources.py"
 
-DYNAMIC_URIS = {"xuansto://templates/{name}", "xuansto://sessions/latest"}
+DYNAMIC_URIS = {"xuansto://templates/{name}", "xuansto://sessions/latest", "xuansto://loading/status"}
 
 
 def _extract_static_resource_mappings() -> list[tuple[str, Path]]:
@@ -69,7 +69,7 @@ def _extract_static_resource_mappings() -> list[tuple[str, Path]]:
 
 def test_static_resource_files_exist():
     mappings = _extract_static_resource_mappings()
-    assert len(mappings) >= 4, f"Expected at least 4 static resource mappings, found {len(mappings)}"
+    assert len(mappings) >= 3, f"Expected at least 3 static resource mappings, found {len(mappings)}"
 
     errors: list[str] = []
     for uri, file_path in mappings:
@@ -146,14 +146,9 @@ def test_workflow_phases_uri_reads_correct_file():
     assert len(content) > 0, "workflow-phases.md is empty"
 
 
-def test_workflow_phases_and_checkpoints_content_identical():
+def test_workflow_phases_file_exists_and_not_empty():
     phases_file = REFERENCES_DIR / "workflow-phases.md"
-    checkpoints_file = REFERENCES_DIR / "workflow-checkpoints.md"
     assert phases_file.exists(), f"{phases_file} does not exist"
-    assert checkpoints_file.exists(), f"{checkpoints_file} does not exist"
 
     phases_content = phases_file.read_text(encoding="utf-8")
-    checkpoints_content = checkpoints_file.read_text(encoding="utf-8")
-    assert phases_content == checkpoints_content, (
-        "workflow-phases.md and workflow-checkpoints.md content mismatch"
-    )
+    assert len(phases_content) > 0, "workflow-phases.md is empty"

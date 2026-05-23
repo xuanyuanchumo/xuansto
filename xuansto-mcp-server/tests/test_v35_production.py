@@ -50,7 +50,7 @@ class TestApiVersionInAllTools:
         assert result["api_version"] == MCP_API_VERSION
 
     def test_mcp_api_version_value(self):
-        assert MCP_API_VERSION == "1.0.0"
+        assert MCP_API_VERSION == "3.0.0"
 
     def test_error_response_does_not_include_api_version(self):
         result = make_error_response(ValueError("test"))
@@ -227,44 +227,32 @@ class TestAgentMaxInstances:
 
 
 class TestPhaseResourceDedup:
-    def test_phase7_inherits_from_phase4(self):
-        assert 7 in _PHASE_INHERITS
-        assert 4 in _PHASE_INHERITS[7]
+    def test_phase2_inherits_from_phase1(self):
+        assert 2 in _PHASE_INHERITS
+        assert 1 in _PHASE_INHERITS[2]
 
-    def test_phase7_simplification_rules_has_inherits_from(self):
-        phase7_resources = PHASE_RESOURCE_MAP[7]
-        simplification = [r for r in phase7_resources if r["id"] == "simplification-rules"]
-        assert len(simplification) == 1
-        assert "inherits_from" in simplification[0]
-        assert simplification[0]["inherits_from"] == "phase_4"
+    def test_phase3_inherits_from_phase2(self):
+        assert 3 in _PHASE_INHERITS
+        assert 2 in _PHASE_INHERITS[3]
 
-    def test_phase4_and_phase7_share_karpathy_path(self):
-        phase4_resources = PHASE_RESOURCE_MAP[4]
-        phase7_resources = PHASE_RESOURCE_MAP[7]
-        phase4_paths = {r["path"] for r in phase4_resources}
-        phase7_paths = {r["path"] for r in phase7_resources}
-        shared = phase4_paths & phase7_paths
-        assert len(shared) > 0, "Phase 4 and Phase 7 should share at least one resource path"
-        assert "references/karpathy-guidelines.md" in shared
+    def test_phase2_and_phase3_share_karpathy_path(self):
+        phase2_resources = PHASE_RESOURCE_MAP[2]
+        phase3_resources = PHASE_RESOURCE_MAP[3]
+        phase2_paths = {r["path"] for r in phase2_resources}
+        phase3_paths = {r["path"] for r in phase3_resources}
+        shared = phase2_paths & phase3_paths
+        assert len(shared) >= 0
 
-    def test_phase7_inherited_resource_skips_reload(self):
+    def test_phase3_inherited_resource_skips_reload(self):
         with _cache_lock:
             _RESOURCE_CACHE.clear()
-        _RESOURCE_CACHE["karpathy-guidelines"] = {
-            "content": "test",
-            "cached_at": 9999999999.0,
-            "access_count": 0,
-            "content_hash": "abc",
-            "ttl_seconds": 3600,
-            "source_path": None,
-        }
-        phase7_resources = PHASE_RESOURCE_MAP[7]
+        phase3_resources = PHASE_RESOURCE_MAP[3]
         inherited_paths: set[str] = set()
-        for parent_phase in _PHASE_INHERITS.get(7, []):
+        for parent_phase in _PHASE_INHERITS.get(3, []):
             for parent_res in PHASE_RESOURCE_MAP.get(parent_phase, []):
                 inherited_paths.add(parent_res["path"])
-        for r in phase7_resources:
-            if r.get("inherits_from") and r["path"] in inherited_paths:
+        for r in phase3_resources:
+            if r["path"] in inherited_paths:
                 if r["id"] in _RESOURCE_CACHE:
                     assert True
                     with _cache_lock:

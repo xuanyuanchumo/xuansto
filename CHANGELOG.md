@@ -1,5 +1,25 @@
 # 变更日志 (CHANGELOG)
 
+## [5.0.0] - 2026-05-23
+
+### 重构
+- **BREAKING**: xuansto-skill v5 标记为最终废弃（FINAL NOTICE），将在 xuansto-skill-v2 v9.0.0 发布时移除
+- 更新废弃警告，明确移除时间线和迁移路径
+- 迁移目标更新为 `xuansto-skill-v2` (v8.0.0) + `xuansto-mcp-server` (v5.0.0)
+
+### 优化
+- 优化 `.gitignore`：将 `docs/` 整体排除替换为精确排除规则，保留 `docs/plan/` 目录可提交
+- 添加 `docs/_build/`、`docs/_static/`、`docs/_templates/` 构建产物排除
+- 添加 `xuansto-skill-v2/.knowledge/index/knowledge.db` 排除规则
+- 添加 `*.so` 排除规则
+
+### 文档
+- 更新 README.md 版本号至 5.0.0
+- 更新 README.md 项目结构描述，添加 xuansto-skill-v2 和 docs/plan/ 目录
+- 更新 MCP Server 版本引用为 v5.0.0
+
+---
+
 ## [1.0.0] - 2026-04-17
 
 ### 重命名

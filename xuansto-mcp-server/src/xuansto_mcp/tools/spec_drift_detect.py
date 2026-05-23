@@ -9,10 +9,10 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core.config import SCRIPTS_DIR
-from ..core.errors import make_success_response
+from ..core.errors import make_success_response, make_error_response, ERR_VALIDATION
 from ..core.logging_config import get_logger
 from ..core.subprocess_utils import run_script
-from ..core.validator import validate_input
+from ..core.validator import validate_input, validate_path_safety
 from ..models.schemas import SpecDriftDetectInput
 
 logger = get_logger("spec_drift_detect")
@@ -160,25 +160,34 @@ def register(mcp: FastMCP) -> None:
         if err:
             return err
         logger.info("spec_drift_detect called: spec_dir=%s", spec_dir)
+        try:
+            safe_spec, spec_err = validate_path_safety(spec_dir, allow_absolute=True)
+            if spec_err:
+                return make_error_response(ValueError(spec_err), error_code=ERR_VALIDATION)
+            safe_src, src_err = validate_path_safety(src_dir, allow_absolute=True)
+            if src_err:
+                return make_error_response(ValueError(src_err), error_code=ERR_VALIDATION)
+            script_path = SCRIPTS_DIR / "spec-drift-detector.py"
 
-        script_path = SCRIPTS_DIR / "spec-drift-detector.py"
+            if script_path.exists():
+                result = run_script(
+                    script_path,
+                    args=["--spec-dir", spec_dir, "--src-dir", src_dir, "--format", "json"],
+                    timeout=60,
+                )
+                if not result.get("error"):
+                    return make_success_response(result.get("data", {}), degradation_level="script")
+                logger.warning("spec_drift_detect degraded: script -> inline")
+                from .server_health import track_degradation
+                track_degradation("spec_drift_detect")
+                inline_result = _inline_spec_drift(spec_dir, src_dir)
+                return make_success_response(inline_result, degradation_level="inline")
 
-        if script_path.exists():
-            result = run_script(
-                script_path,
-                args=["--spec-dir", spec_dir, "--src-dir", src_dir, "--format", "json"],
-                timeout=60,
-            )
-            if not result.get("error"):
-                return make_success_response(result.get("data", {}), degradation_level="script")
-            logger.warning("spec_drift_detect degraded: script -> inline")
+            logger.warning("spec_drift_detect degraded: no script -> inline")
             from .server_health import track_degradation
             track_degradation("spec_drift_detect")
             inline_result = _inline_spec_drift(spec_dir, src_dir)
             return make_success_response(inline_result, degradation_level="inline")
-
-        logger.warning("spec_drift_detect degraded: no script -> inline")
-        from .server_health import track_degradation
-        track_degradation("spec_drift_detect")
-        inline_result = _inline_spec_drift(spec_dir, src_dir)
-        return make_success_response(inline_result, degradation_level="inline")
+        except Exception as e:
+            logger.error("spec_drift_detect error: %s", e)
+            return make_error_response(e)

@@ -153,6 +153,7 @@ def test_with_hook_interception_passes():
 
 def test_with_hook_interception_records_metrics_on_block():
     from xuansto_mcp.server import _with_hook_interception
+    from xuansto_mcp.core.hook_engine import get_hook_engine
 
     _TOOL_METRICS.pop("__test_hook_block__", None)
 
@@ -161,10 +162,11 @@ def test_with_hook_interception_records_metrics_on_block():
 
     wrapped = _with_hook_interception("__test_hook_block__", fake_tool)
 
-    def mock_pre(tool_name, kwargs):
+    async def mock_pre(tool_name, kwargs):
         return ([{"status": "block", "hook": "security-block", "message": "blocked"}], [])
 
-    with patch("xuansto_mcp.tools.hook_manage.execute_pre_hooks", side_effect=mock_pre):
+    engine = get_hook_engine()
+    with patch.object(engine, "execute_pre_hooks", side_effect=mock_pre):
         result = asyncio.run(wrapped(project_path="."))
         assert result["data"]["action"] == "blocked"
 
@@ -177,6 +179,7 @@ def test_with_hook_interception_records_metrics_on_block():
 
 def test_with_hook_interception_records_metrics_on_success():
     from xuansto_mcp.server import _with_hook_interception
+    from xuansto_mcp.core.hook_engine import get_hook_engine
 
     _TOOL_METRICS.pop("__test_hook_success__", None)
 
@@ -185,8 +188,9 @@ def test_with_hook_interception_records_metrics_on_success():
 
     wrapped = _with_hook_interception("__test_hook_success__", fake_tool)
 
-    with patch("xuansto_mcp.tools.hook_manage.execute_pre_hooks", return_value=([], [])):
-        with patch("xuansto_mcp.tools.hook_manage.execute_post_hooks", return_value=[]):
+    engine = get_hook_engine()
+    with patch.object(engine, "execute_pre_hooks", return_value=([], [])):
+        with patch.object(engine, "execute_post_hooks", return_value=[]):
             result = asyncio.run(wrapped(project_path="."))
             assert result["data"]["status"] == "ok"
 
@@ -199,6 +203,7 @@ def test_with_hook_interception_records_metrics_on_success():
 
 def test_with_hook_interception_records_metrics_on_exception():
     from xuansto_mcp.server import _with_hook_interception
+    from xuansto_mcp.core.hook_engine import get_hook_engine
 
     _TOOL_METRICS.pop("__test_hook_exc__", None)
 
@@ -207,7 +212,8 @@ def test_with_hook_interception_records_metrics_on_exception():
 
     wrapped = _with_hook_interception("__test_hook_exc__", fake_tool)
 
-    with patch("xuansto_mcp.tools.hook_manage.execute_pre_hooks", return_value=([], [])):
+    engine = get_hook_engine()
+    with patch.object(engine, "execute_pre_hooks", return_value=([], [])):
         try:
             asyncio.run(wrapped(project_path="."))
         except RuntimeError:
@@ -221,14 +227,16 @@ def test_with_hook_interception_records_metrics_on_exception():
 
 def test_with_hook_interception_post_hooks_called():
     from xuansto_mcp.server import _with_hook_interception
+    from xuansto_mcp.core.hook_engine import get_hook_engine
 
     async def fake_tool(**kwargs):
         return make_success_response({"status": "ok"})
 
     wrapped = _with_hook_interception("workflow_dispatch", fake_tool)
 
-    with patch("xuansto_mcp.tools.hook_manage.execute_pre_hooks", return_value=([], [])) as mock_pre:
-        with patch("xuansto_mcp.tools.hook_manage.execute_post_hooks", return_value=[]) as mock_post:
+    engine = get_hook_engine()
+    with patch.object(engine, "execute_pre_hooks", return_value=([], [])) as mock_pre:
+        with patch.object(engine, "execute_post_hooks", return_value=[]) as mock_post:
             result = asyncio.run(wrapped(project_path="."))
             assert result["data"]["status"] == "ok"
             mock_pre.assert_called_once()

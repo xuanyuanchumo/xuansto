@@ -291,8 +291,8 @@ def _migrate_chroma_path() -> None:
 
 _migrate_chroma_path()
 
-MCP_API_VERSION = "2.0.0"
-MCP_MIN_SUPPORTED_VERSION = "1.0.0"
+MCP_API_VERSION = "3.0.0"
+MCP_MIN_SUPPORTED_VERSION = "2.0.0"
 
 API_CHANGELOG: dict[str, list[str]] = {
     "2.0.0": [
@@ -301,5 +301,12 @@ API_CHANGELOG: dict[str, list[str]] = {
         "YAML-based fallback/degradation configuration",
         "Event-driven config hot-reload via watchfiles",
         "Backward compatible with v1.0.0 clients",
+    ],
+    "3.0.0": [
+        "Progressive loading with phase-based resource preloading",
+        "Enhanced loading_progress action with feature availability and token budget tracking",
+        "Cumulative phase preloading (loads all resources up to target phase)",
+        "Phase history tracking with trigger information",
+        "Backward compatible with v2.0.0 and v1.0.0 clients",
     ],
 }

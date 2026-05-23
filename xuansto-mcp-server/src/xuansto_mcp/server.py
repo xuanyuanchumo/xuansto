@@ -15,7 +15,7 @@ _TOOL_REGISTRY: dict[str, Any] = {}
 
 mcp = FastMCP(
     "xuansto-mcp-server",
-    instructions="Xuansto Skill MCP服务器 v4.1.0",
+    instructions="Xuansto Skill MCP服务器 v5.0.0",
 )
 
 from .tools import (

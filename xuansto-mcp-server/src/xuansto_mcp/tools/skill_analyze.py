@@ -8,9 +8,9 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core.config import SKILL_ROOT, SCRIPTS_DIR, AGENTS_DIR, REFERENCES_DIR
-from ..core.errors import make_error_response, make_success_response, PathNotFoundError, ERR_NOT_FOUND
+from ..core.errors import make_error_response, make_success_response, PathNotFoundError, ERR_NOT_FOUND, ERR_VALIDATION
 from ..core.logging_config import get_logger
-from ..core.validator import validate_input
+from ..core.validator import validate_input, validate_path_safety
 from ..models.schemas import SkillAnalyzeInput
 
 logger = get_logger("skill_analyze")
@@ -188,40 +188,47 @@ def register(mcp: FastMCP) -> None:
         if err:
             return err
         logger.info("skill_analyze called: skill_path=%s", skill_path)
-        root = Path(skill_path)
-        if not root.exists():
-            return make_error_response(PathNotFoundError(skill_path), error_code=ERR_NOT_FOUND)
+        try:
+            safe_path, path_err = validate_path_safety(skill_path, allow_absolute=True)
+            if path_err:
+                return make_error_response(ValueError(path_err), error_code=ERR_VALIDATION)
+            root = Path(skill_path)
+            if not root.exists():
+                return make_error_response(PathNotFoundError(skill_path), error_code=ERR_NOT_FOUND)
 
-        skill_md = root / "SKILL.md"
-        metadata = _parse_yaml_frontmatter(skill_md)
+            skill_md = root / "SKILL.md"
+            metadata = _parse_yaml_frontmatter(skill_md)
 
-        structure = _scan_directory(root, depth)
+            structure = _scan_directory(root, depth)
 
-        agents: list[dict[str, Any]] = []
-        if include_agents:
-            registry = root / "references" / "agent-registry.md"
-            if not registry.exists():
-                registry = REFERENCES_DIR / "agent-registry.md"
-            agents = _parse_agent_registry(registry)
+            agents: list[dict[str, Any]] = []
+            if include_agents:
+                registry = root / "references" / "agent-registry.md"
+                if not registry.exists():
+                    registry = REFERENCES_DIR / "agent-registry.md"
+                agents = _parse_agent_registry(registry)
 
-        dependencies: dict[str, Any] = {}
-        if include_scripts:
-            scripts_dir = root / "scripts"
-            if not scripts_dir.exists():
-                scripts_dir = SCRIPTS_DIR
-            dependencies = _scan_script_dependencies(scripts_dir)
+            dependencies: dict[str, Any] = {}
+            if include_scripts:
+                scripts_dir = root / "scripts"
+                if not scripts_dir.exists():
+                    scripts_dir = SCRIPTS_DIR
+                dependencies = _scan_script_dependencies(scripts_dir)
 
-        issues = _run_skill_validation(root)
+            issues = _run_skill_validation(root)
 
-        scale_assessment = _assess_project_scale(skill_path)
+            scale_assessment = _assess_project_scale(skill_path)
 
-        return make_success_response({
-            "metadata": metadata,
-            "structure": structure,
-            "agents": agents,
-            "dependencies": dependencies,
-            "issues": issues,
-            "project_scale": scale_assessment["scale"],
-            "recommended_workflow": scale_assessment["recommended_workflow"],
-            "scale_details": scale_assessment,
-        })
+            return make_success_response({
+                "metadata": metadata,
+                "structure": structure,
+                "agents": agents,
+                "dependencies": dependencies,
+                "issues": issues,
+                "project_scale": scale_assessment["scale"],
+                "recommended_workflow": scale_assessment["recommended_workflow"],
+                "scale_details": scale_assessment,
+            })
+        except Exception as e:
+            logger.error("skill_analyze error: %s", e)
+            return make_error_response(e)

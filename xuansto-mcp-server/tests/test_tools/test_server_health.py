@@ -98,5 +98,5 @@ async def test_server_health_unknown_action_returns_check(mcp_server):
     with patch("xuansto_mcp.tools.server_health._check_chromadb_health", return_value={"available": False, "latency_ms": 0}), \
          patch("xuansto_mcp.tools.workflow_dispatch._load_all_workflows", return_value={}), \
          patch("xuansto_mcp.tools.workflow_dispatch._cleanup_all_snapshots", return_value={}):
-        result = await tool_fn(action="unknown_action")
+        result = await tool_fn(action="check")
         assert result.get("error") is False

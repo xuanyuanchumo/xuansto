@@ -21,6 +21,7 @@ logger = get_logger("decision_log")
 
 DECISIONS_DB = WORK_DIR / "decisions.db"
 DECISIONS_JSON_FILE = WORK_DIR / "decisions.json"
+DECISIONS_FILE = DECISIONS_JSON_FILE
 
 _cache: dict[str, dict[str, Any]] = {}
 _cache_lock = threading.Lock()
@@ -174,7 +175,7 @@ def _log_decision(
         conn = _get_connection()
         try:
             cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM decisions WHERE created_at LIKE ?", (now.strftime("%Y%m%d") + "%",))
+            cursor.execute("SELECT COUNT(*) FROM decisions WHERE created_at LIKE ?", (now.strftime("%Y-%m-%d") + "%",))
             day_count = cursor.fetchone()[0]
             entry_id = f"ADR-{now.strftime('%Y%m%d')}-{day_count + 1:03d}"
             now_iso = now.isoformat()
@@ -527,24 +528,28 @@ def register(mcp: FastMCP) -> None:
         if err:
             return err
         logger.info("decision_log called: action=%s", action)
-        if action == "log":
-            if not title:
-                return make_error_response(ValueError("log操作需要title参数"), error_code=ERR_VALIDATION)
-            return make_success_response(_log_decision(title, description, context, alternatives, decision, rationale, impact, decided_by, status))
-        elif action == "list":
-            return make_success_response(_list_decisions(limit, offset, status, date_from, date_to))
-        elif action == "query":
-            return make_success_response(_query_decisions(keyword, tag, date_from, date_to, limit, offset))
-        elif action == "update":
-            if not decision_id:
-                return make_error_response(ValueError("update操作需要decision_id参数"), error_code=ERR_VALIDATION)
-            result = _update_decision(decision_id, status)
-            if result.get("error"):
-                return make_error_response(ValueError(result["message"]), error_code=ERR_NOT_FOUND)
-            return make_success_response(result)
-        elif action == "export":
-            return make_success_response(_export_decisions(format, date_from, date_to))
-        elif action == "stats":
-            return make_success_response(_stats_decisions(date_from, date_to))
-        else:
-            return make_error_response(ValueError(f"未知操作: {action}，支持: log, list, query, update, export, stats"), error_code=ERR_VALIDATION)
+        try:
+            if action == "log":
+                if not title:
+                    return make_error_response(ValueError("log操作需要title参数"), error_code=ERR_VALIDATION)
+                return make_success_response(_log_decision(title, description, context, alternatives, decision, rationale, impact, decided_by, status))
+            elif action == "list":
+                return make_success_response(_list_decisions(limit, offset, status, date_from, date_to))
+            elif action == "query":
+                return make_success_response(_query_decisions(keyword, tag, date_from, date_to, limit, offset))
+            elif action == "update":
+                if not decision_id:
+                    return make_error_response(ValueError("update操作需要decision_id参数"), error_code=ERR_VALIDATION)
+                result = _update_decision(decision_id, status)
+                if result.get("error"):
+                    return make_error_response(ValueError(result["message"]), error_code=ERR_NOT_FOUND)
+                return make_success_response(result)
+            elif action == "export":
+                return make_success_response(_export_decisions(format, date_from, date_to))
+            elif action == "stats":
+                return make_success_response(_stats_decisions(date_from, date_to))
+            else:
+                return make_error_response(ValueError(f"未知操作: {action}，支持: log, list, query, update, export, stats"), error_code=ERR_VALIDATION)
+        except Exception as e:
+            logger.error("decision_log error: %s", e)
+            return make_error_response(e)

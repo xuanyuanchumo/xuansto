@@ -19,7 +19,9 @@ min_version: 1.0.0
 license: MIT
 ---
 
-> ⚠️ **DEPRECATED**: This skill (v1) is deprecated and will be removed in a future release. Please migrate to `xuansto-skill-v2` (v8.0.0) + `xuansto-mcp-server` (v4.0.0). See migration guide in `docs/plan/v-comparison.md`.
+> ⚠️ **DEPRECATED — FINAL NOTICE**: This skill (xuansto-skill v5) is deprecated and **will be removed when xuansto-skill-v2 v9.0.0 is released**. Please migrate to `xuansto-skill-v2` (v8.0.0) + `xuansto-mcp-server` (v5.0.0).
+>
+> **Migration Path**: Replace `xuansto-skill` with `xuansto-skill-v2` in `.trae/skills/`. The v2 skill provides full backward compatibility via its 27-command routing table and 57-agent registry. See migration guide in `docs/plan/v-comparison.md`.
 
 ---
 

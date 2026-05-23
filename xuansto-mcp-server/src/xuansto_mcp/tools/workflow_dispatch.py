@@ -532,76 +532,80 @@ def register(mcp: FastMCP) -> None:
         if err:
             return err
         logger.info("workflow_dispatch called: action=%s", action)
-        if action == "start":
-            if not workflow:
-                return make_error_response(ValueError("start操作需要workflow参数"), error_code=ERR_VALIDATION)
-            result = _start_workflow(workflow, project_path)
-            if result.get("error"):
-                return result
-            return make_success_response(result)
-        elif action == "status":
-            if not workflow_id:
+        try:
+            if action == "start":
+                if not workflow:
+                    return make_error_response(ValueError("start操作需要workflow参数"), error_code=ERR_VALIDATION)
+                result = _start_workflow(workflow, project_path)
+                if result.get("error"):
+                    return result
+                return make_success_response(result)
+            elif action == "status":
+                if not workflow_id:
+                    with _workflows_lock:
+                        all_workflows = dict(_ACTIVE_WORKFLOWS)
+                    disk_workflows = _load_all_workflows()
+                    for wid, data in disk_workflows.items():
+                        if wid not in all_workflows:
+                            all_workflows[wid] = data
+                    return make_success_response({"workflows": all_workflows})
+                result = _get_workflow_status(workflow_id)
+                if result.get("error"):
+                    return result
+                return make_success_response(result)
+            elif action == "abort":
+                if not workflow_id:
+                    return make_error_response(ValueError("abort操作需要workflow_id参数"), error_code=ERR_VALIDATION)
+                result = _abort_workflow(workflow_id)
+                if result.get("error"):
+                    return result
+                return make_success_response(result)
+            elif action == "phase":
+                if not workflow_id:
+                    return make_error_response(ValueError("phase操作需要workflow_id参数"), error_code=ERR_VALIDATION)
+                if not phase_action:
+                    return make_error_response(ValueError("phase操作需要phase_action参数: advance, current"), error_code=ERR_VALIDATION)
+                if phase_action == "advance":
+                    result = _advance_phase(workflow_id)
+                    if result.get("error"):
+                        return result
+                    return make_success_response(result)
+                elif phase_action == "current":
+                    result = _current_phase(workflow_id)
+                    if result.get("error"):
+                        return result
+                    return make_success_response(result)
+                else:
+                    return make_error_response(ValueError(f"未知phase_action: {phase_action}，支持: advance, current"), error_code=ERR_VALIDATION)
+            elif action == "recover":
+                if not workflow_id or workflow_id.strip() == "":
+                    return make_error_response(ValueError("workflow_id不能为空"), error_code=ERR_VALIDATION)
+                snapshot = _load_latest_snapshot(workflow_id, project_path, snapshot_phase)
+                if snapshot is None:
+                    return make_error_response(XuanstoMCPError("RECOVER_FAILED", f"No snapshot found for workflow {workflow_id}"), error_code=ERR_INTERNAL)
+                state = snapshot.get("state", {})
                 with _workflows_lock:
-                    all_workflows = dict(_ACTIVE_WORKFLOWS)
-                disk_workflows = _load_all_workflows()
-                for wid, data in disk_workflows.items():
-                    if wid not in all_workflows:
-                        all_workflows[wid] = data
-                return make_success_response({"workflows": all_workflows})
-            result = _get_workflow_status(workflow_id)
-            if result.get("error"):
-                return result
-            return make_success_response(result)
-        elif action == "abort":
-            if not workflow_id:
-                return make_error_response(ValueError("abort操作需要workflow_id参数"), error_code=ERR_VALIDATION)
-            result = _abort_workflow(workflow_id)
-            if result.get("error"):
-                return result
-            return make_success_response(result)
-        elif action == "phase":
-            if not workflow_id:
-                return make_error_response(ValueError("phase操作需要workflow_id参数"), error_code=ERR_VALIDATION)
-            if not phase_action:
-                return make_error_response(ValueError("phase操作需要phase_action参数: advance, current"), error_code=ERR_VALIDATION)
-            if phase_action == "advance":
-                result = _advance_phase(workflow_id)
-                if result.get("error"):
-                    return result
-                return make_success_response(result)
-            elif phase_action == "current":
-                result = _current_phase(workflow_id)
-                if result.get("error"):
-                    return result
-                return make_success_response(result)
+                    if workflow_id and workflow_id in _ACTIVE_WORKFLOWS:
+                        _ACTIVE_WORKFLOWS[workflow_id] = state.copy()
+                _persist_workflow(workflow_id, state.copy())
+                _persist_active_workflows()
+                return make_success_response({
+                    "action": "recover",
+                    "workflow_id": workflow_id,
+                    "recovered_phase": snapshot.get("phase", 0),
+                    "snapshot_time": snapshot.get("time_iso", ""),
+                    "state": state,
+                })
+            elif action == "snapshots":
+                snapshots = _list_snapshots(workflow_id or "", project_path)
+                return make_success_response({
+                    "action": "snapshots",
+                    "workflow_id": workflow_id,
+                    "snapshots": snapshots,
+                    "total": len(snapshots),
+                })
             else:
-                return make_error_response(ValueError(f"未知phase_action: {phase_action}，支持: advance, current"), error_code=ERR_VALIDATION)
-        elif action == "recover":
-            if not workflow_id or workflow_id.strip() == "":
-                return make_error_response(ValueError("workflow_id不能为空"), error_code=ERR_VALIDATION)
-            snapshot = _load_latest_snapshot(workflow_id, project_path, snapshot_phase)
-            if snapshot is None:
-                return make_error_response(XuanstoMCPError("RECOVER_FAILED", f"No snapshot found for workflow {workflow_id}"), error_code=ERR_INTERNAL)
-            state = snapshot.get("state", {})
-            with _workflows_lock:
-                if workflow_id and workflow_id in _ACTIVE_WORKFLOWS:
-                    _ACTIVE_WORKFLOWS[workflow_id] = state.copy()
-            _persist_workflow(workflow_id, state.copy())
-            _persist_active_workflows()
-            return make_success_response({
-                "action": "recover",
-                "workflow_id": workflow_id,
-                "recovered_phase": snapshot.get("phase", 0),
-                "snapshot_time": snapshot.get("time_iso", ""),
-                "state": state,
-            })
-        elif action == "snapshots":
-            snapshots = _list_snapshots(workflow_id or "", project_path)
-            return make_success_response({
-                "action": "snapshots",
-                "workflow_id": workflow_id,
-                "snapshots": snapshots,
-                "total": len(snapshots),
-            })
-        else:
-            return make_error_response(ValueError(f"未知操作: {action}，支持: start, status, abort, phase"), error_code=ERR_VALIDATION)
+                return make_error_response(ValueError(f"未知操作: {action}，支持: start, status, abort, phase"), error_code=ERR_VALIDATION)
+        except Exception as e:
+            logger.error("workflow_dispatch error: %s", e)
+            return make_error_response(e)

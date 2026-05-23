@@ -12,10 +12,10 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core.config import SCRIPTS_DIR
-from ..core.errors import make_success_response
+from ..core.errors import make_success_response, make_error_response, ERR_VALIDATION
 from ..core.logging_config import get_logger
 from ..core.subprocess_utils import run_script
-from ..core.validator import validate_input
+from ..core.validator import validate_input, validate_path_safety
 from ..models.schemas import CodeSimplifyInput
 
 logger = get_logger("code_simplify")
@@ -424,48 +424,55 @@ def register(mcp: FastMCP) -> None:
         if err:
             return err
         logger.info("code_simplify called: target=%s", target)
-        results: dict[str, Any] = {}
-        degradation_level = "full"
+        try:
+            safe_path, path_err = validate_path_safety(target, allow_absolute=True)
+            if path_err:
+                return make_error_response(ValueError(path_err), error_code=ERR_VALIDATION)
+            results: dict[str, Any] = {}
+            degradation_level = "full"
 
-        simplifier_path = SCRIPTS_DIR / "code-simplifier.py"
-        if simplifier_path.exists():
-            result = run_script(
-                simplifier_path,
-                args=["--target", target, "--scope", scope, "--format", "json"],
-                timeout=60,
-            )
-            if not result.get("error"):
-                results["simplification"] = result.get("data", result)
-            else:
-                results["simplification"] = _inline_simplify(target, scope)
-                logger.warning("code_simplify degraded: simplification -> inline")
-                from .server_health import track_degradation
-                track_degradation("code_simplify")
-                degradation_level = "inline"
-        else:
-            results["simplification"] = _inline_simplify(target, scope)
-            logger.warning("code_simplify degraded: simplification -> inline (no script)")
-            from .server_health import track_degradation
-            track_degradation("code_simplify")
-            degradation_level = "inline"
-
-        if include_dedup:
-            dedup_path = SCRIPTS_DIR / "deduplication-detector.py"
-            if dedup_path.exists():
+            simplifier_path = SCRIPTS_DIR / "code-simplifier.py"
+            if simplifier_path.exists():
                 result = run_script(
-                    dedup_path,
-                    args=["--target", target, "--format", "json"],
+                    simplifier_path,
+                    args=["--target", target, "--scope", scope, "--format", "json"],
                     timeout=60,
                 )
                 if not result.get("error"):
-                    results["deduplication"] = result.get("data", result)
+                    results["simplification"] = result.get("data", result)
+                else:
+                    results["simplification"] = _inline_simplify(target, scope)
+                    logger.warning("code_simplify degraded: simplification -> inline")
+                    from .server_health import track_degradation
+                    track_degradation("code_simplify")
+                    degradation_level = "inline"
+            else:
+                results["simplification"] = _inline_simplify(target, scope)
+                logger.warning("code_simplify degraded: simplification -> inline (no script)")
+                from .server_health import track_degradation
+                track_degradation("code_simplify")
+                degradation_level = "inline"
+
+            if include_dedup:
+                dedup_path = SCRIPTS_DIR / "deduplication-detector.py"
+                if dedup_path.exists():
+                    result = run_script(
+                        dedup_path,
+                        args=["--target", target, "--format", "json"],
+                        timeout=60,
+                    )
+                    if not result.get("error"):
+                        results["deduplication"] = result.get("data", result)
+                    else:
+                        results["deduplication"] = _inline_dedup(target)
+                        if degradation_level == "full":
+                            degradation_level = "partial"
                 else:
                     results["deduplication"] = _inline_dedup(target)
                     if degradation_level == "full":
                         degradation_level = "partial"
-            else:
-                results["deduplication"] = _inline_dedup(target)
-                if degradation_level == "full":
-                    degradation_level = "partial"
 
-        return make_success_response(results, degradation_level=degradation_level)
+            return make_success_response(results, degradation_level=degradation_level)
+        except Exception as e:
+            logger.error("code_simplify error: %s", e)
+            return make_error_response(e)

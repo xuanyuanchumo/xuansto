@@ -1,6 +1,6 @@
 [project]
 name = "xuansto-mcp-server"
-version = "4.1.0"
+version = "5.0.0"
 description = "Xuansto Skill MCP Server - 13 atomic tools + 6 resources for autonomous development orchestration"
 requires-python = ">=3.10"
 license = "MIT"

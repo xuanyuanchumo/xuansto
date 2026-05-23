@@ -189,15 +189,19 @@ def register(mcp: FastMCP) -> None:
         if err:
             return err
         logger.info("token_budget called: action=%s", action)
-        if action == "status":
-            return make_success_response(_get_status())
-        elif action == "set_budget":
-            if total_budget is None and phase_allocations is None:
-                return make_error_response(ValueError("set_budget操作需要total_budget或phase_allocations参数"), error_code=ERR_VALIDATION)
-            return make_success_response(_set_budget(total_budget, phase_allocations))
-        elif action == "recommend":
-            return make_success_response(_recommend(project_size, complexity, team_size))
-        elif action == "report":
-            return make_success_response(_report(period))
-        else:
-            return make_error_response(ValueError(f"未知操作: {action}，支持: status, set_budget, recommend, report"), error_code=ERR_VALIDATION)
+        try:
+            if action == "status":
+                return make_success_response(_get_status())
+            elif action == "set_budget":
+                if total_budget is None and phase_allocations is None:
+                    return make_error_response(ValueError("set_budget操作需要total_budget或phase_allocations参数"), error_code=ERR_VALIDATION)
+                return make_success_response(_set_budget(total_budget, phase_allocations))
+            elif action == "recommend":
+                return make_success_response(_recommend(project_size, complexity, team_size))
+            elif action == "report":
+                return make_success_response(_report(period))
+            else:
+                return make_error_response(ValueError(f"未知操作: {action}，支持: status, set_budget, recommend, report"), error_code=ERR_VALIDATION)
+        except Exception as e:
+            logger.error("token_budget error: %s", e)
+            return make_error_response(e)

@@ -11,7 +11,7 @@ from mcp.types import ToolAnnotations
 from ..core.errors import make_error_response, make_success_response, ERR_VALIDATION, ERR_NOT_FOUND
 from ..core.logging_config import get_logger
 from ..core.notifications import notify
-from ..core.validator import validate_input
+from ..core.validator import validate_input, validate_path_safety
 from ..models.schemas import ProjectInitInput
 
 logger = get_logger("project_init")
@@ -161,26 +161,40 @@ def register(mcp: FastMCP) -> None:
         if err:
             return err
         logger.info("project_init called: action=%s", action)
-        if action == "create":
-            if not name:
-                return make_error_response(ValueError("create操作需要name参数"), error_code=ERR_VALIDATION)
-            result = _create_project(name, description, stack, template, directory)
-            if result.get("error"):
-                return make_error_response(ValueError(result["message"]), error_code=ERR_VALIDATION)
-            return make_success_response(result)
-        elif action == "validate":
-            if not project_path:
-                return make_error_response(ValueError("validate操作需要project_path参数"), error_code=ERR_VALIDATION)
-            result = _validate_project(project_path)
-            if result.get("error"):
-                return make_error_response(ValueError(result["message"]), error_code=ERR_NOT_FOUND)
-            return make_success_response(result)
-        elif action == "detect_stack":
-            if not project_path:
-                return make_error_response(ValueError("detect_stack操作需要project_path参数"), error_code=ERR_VALIDATION)
-            result = _detect_stack(project_path)
-            if result.get("error"):
-                return make_error_response(ValueError(result["message"]), error_code=ERR_NOT_FOUND)
-            return make_success_response(result)
-        else:
-            return make_error_response(ValueError(f"未知操作: {action}，支持: create, validate, detect_stack"), error_code=ERR_VALIDATION)
+        try:
+            if action == "create":
+                if not name:
+                    return make_error_response(ValueError("create操作需要name参数"), error_code=ERR_VALIDATION)
+                if directory:
+                    safe_dir, dir_err = validate_path_safety(directory, allow_absolute=True)
+                    if dir_err:
+                        return make_error_response(ValueError(dir_err), error_code=ERR_VALIDATION)
+                result = _create_project(name, description, stack, template, directory)
+                if result.get("error"):
+                    return make_error_response(ValueError(result["message"]), error_code=ERR_VALIDATION)
+                return make_success_response(result)
+            elif action == "validate":
+                if not project_path:
+                    return make_error_response(ValueError("validate操作需要project_path参数"), error_code=ERR_VALIDATION)
+                safe_path, path_err = validate_path_safety(project_path, allow_absolute=True)
+                if path_err:
+                    return make_error_response(ValueError(path_err), error_code=ERR_VALIDATION)
+                result = _validate_project(project_path)
+                if result.get("error"):
+                    return make_error_response(ValueError(result["message"]), error_code=ERR_NOT_FOUND)
+                return make_success_response(result)
+            elif action == "detect_stack":
+                if not project_path:
+                    return make_error_response(ValueError("detect_stack操作需要project_path参数"), error_code=ERR_VALIDATION)
+                safe_path, path_err = validate_path_safety(project_path, allow_absolute=True)
+                if path_err:
+                    return make_error_response(ValueError(path_err), error_code=ERR_VALIDATION)
+                result = _detect_stack(project_path)
+                if result.get("error"):
+                    return make_error_response(ValueError(result["message"]), error_code=ERR_NOT_FOUND)
+                return make_success_response(result)
+            else:
+                return make_error_response(ValueError(f"未知操作: {action}，支持: create, validate, detect_stack"), error_code=ERR_VALIDATION)
+        except Exception as e:
+            logger.error("project_init error: %s", e)
+            return make_error_response(e)

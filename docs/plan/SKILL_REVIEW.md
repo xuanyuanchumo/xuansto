@@ -1,963 +1,1055 @@
-# Xuansto Skill v7.0.0 (MCP Edition) 综合评审文档
+# Xuansto Skill 详细分析文档
 
-> 评审版本: xuansto-skill-v2 7.0.0 | 评审日期: 2026-05-22 | 基于源码事实分析
+> 版本: 1.0.0 | 日期: 2026-05-23 | 分析范围: xuansto-skill (v5) + xuansto-skill-v2 (v8)
 
 ---
 
 ## 目录
 
-1. [SKILL.md全文分析](#1-skillmd全文分析)
-2. [功能逻辑分解](#2-功能逻辑分解)
-3. [交互模式](#3-交互模式)
-4. [渐进式加载披露逻辑分析](#4-渐进式加载披露逻辑分析)
-5. [可复用与需废弃部分](#5-可复用与需废弃部分)
-6. [引用依赖追踪](#6-引用依赖追踪)
+- [1. Skill定义文件全文解析](#1-skill定义文件全文解析)
+  - [1.1 v5 SKILL.md 解析](#11-v5-skillmd-解析)
+  - [1.2 v2 SKILL.md 解析](#12-v2-skillmd-解析)
+  - [1.3 v5 vs v2 对比表](#13-v5-vs-v2-对比表)
+- [2. 功能逻辑分步拆解](#2-功能逻辑分步拆解)
+  - [2.1 触发与入口](#21-触发与入口)
+  - [2.2 命令路由与执行](#22-命令路由与执行)
+  - [2.3 工作流Phase推进](#23-工作流phase推进)
+  - [2.4 质量门禁检查](#24-质量门禁检查)
+  - [2.5 MCP工具调用链](#25-mcp工具调用链)
+  - [2.6 降级与容错](#26-降级与容错)
+- [3. 交互模式](#3-交互模式)
+  - [3.1 单轮交互](#31-单轮交互)
+  - [3.2 多轮交互](#32-多轮交互)
+  - [3.3 输入输出格式](#33-输入输出格式)
+- [4. 特效逻辑分析](#4-特效逻辑分析)
+  - [4.1 渐进式加载](#41-渐进式加载)
+  - [4.2 MCP工具驱动](#42-mcp工具驱动)
+  - [4.3 Hook系统](#43-hook系统)
+  - [4.4 模型路由](#44-模型路由)
+  - [4.5 与渐进式目标的差距](#45-与渐进式目标的差距)
+- [5. 可复用模块清单 / 需废弃或重写部分](#5-可复用模块清单--需废弃或重写部分)
+  - [5.1 可复用模块](#51-可复用模块)
+  - [5.2 需废弃部分](#52-需废弃部分)
+  - [5.3 需重写部分](#53-需重写部分)
+- [6. 依赖图](#6-依赖图)
+- [7. 问题清单](#7-问题清单)
 
 ---
 
-## 1. SKILL.md全文分析
+## 1. Skill定义文件全文解析
 
-### 1.1 触发条件：三维触发矩阵
+### 1.1 v5 SKILL.md 解析
 
-SKILL.md的frontmatter定义了三维触发矩阵：`phrases` / `keywords` / `commands` / `not_for`。
+**文件路径**: `.trae/skills/xuansto-skill/SKILL.md`
+**版本**: 5.0.0 | **状态**: 已废弃(deprecated: true) | **迁移目标**: xuansto-skill-v2
 
-#### 1.1.1 phrases（短语触发）
+#### 1.1.1 Frontmatter 元数据
 
-共47个触发短语，覆盖中英文双语场景：
+| 字段 | 值 | 说明 |
+|------|-----|------|
+| name | xuansto-skill | Skill标识符 |
+| version | 5.0.0 | 版本号 |
+| deprecated | true | 已废弃标记 |
+| migrate_to | xuansto-skill-v2 | 迁移目标 |
+| agents_summary | "13 layers / 57 agents" | Agent规模 |
+| min_version | 1.0.0 | 最低平台版本 |
+| license | MIT | 许可证 |
 
-| 语言 | 数量 | 典型示例 |
-|------|------|----------|
-| 英文 | 21 | "build this properly", "write tests first", "plan my sprint", "review architecture", "brainstorm", "design system", "simplify code", "loop task", "security review", "penetration test", "desktop build", "app packaging", "pentest" |
-| 中文 | 26 | "帮我搭建项目", "先写测试再写代码", "做个代码审查", "安全审计一下", "重构这段代码", "帮我规划一下", "完整开发一个功能", "从需求到部署", "多agent协作", "TDD开发", "SDD驱动", "桌面打包", "渗透测试", "规格驱动开发", "搭建项目", "从零开发", "端到端开发", "开发一个功能", "先写规格", "做需求分析", "全流程开发", "规格驱动", "测试先行", "桌面应用" |
+#### 1.1.2 触发条件（内嵌在SKILL.md中）
 
-**分析**：phrases覆盖了从需求到部署的全生命周期意图表达，中文短语占55%，体现了中文优先的设计倾向。但存在重复语义覆盖（如"帮我搭建项目"与"搭建项目"、"TDD开发"与"测试先行"），建议去重以减少触发矩阵体积。
+- **phrases**: 52个触发短语（中英文混合），如 "build this properly"、"帮我搭建项目"
+- **keywords**: 57个关键词，如 "xuansto"、"SDD"、"TDD"、"pentest"
+- **commands**: 27个斜杠命令
+- **not_for**: 12个排除场景
 
-#### 1.1.2 keywords（关键词触发）
+**特征**: v5将所有触发条件直接内嵌在SKILL.md的frontmatter中，导致SKILL.md体积膨胀。
 
-共83个关键词，分为以下类别：
+#### 1.1.3 核心约束（5条）
 
-| 类别 | 数量 | 示例 |
-|------|------|------|
-| 核心标识 | 1 | xuansto |
-| 方法论 | 6 | SDD, TDD, spec-driven, test-driven, 规格优先, 测试先行 |
-| 架构概念 | 8 | quality-gates, multi-agent, agent-orchestration, autonomous-development, self-evolving-code, 质量门禁, 自动化开发, 编排器 |
-| 工作流 | 5 | 9-phase-workflow, 54-quality-gates, 57-agents, 27-commands, 全生命周期 |
-| 桌面开发 | 6 | desktop-development, desktop-app, cross-platform, Electron, Tauri, Flutter |
-| 安全 | 5 | OWASP, TrinityGuard, penetration-testing, pentest, security-audit, vulnerability-scan |
-| 开发阶段 | 8 | 冲刺规划, 需求澄清, 架构规划, 代码审查, 安全审计, 桌面构建, 桌面开发, 桌面应用 |
-| 技术概念 | 4 | IPC-contracts, token-optimization, spec-drift, project-setup |
-| 功能动词 | 6 | brainstorm, design-system, simplify, loop, 搭建项目, 从零开发 |
-| 其他 | 34 | 端到端开发, 先写规格, 需求分析, agent协作, 重构安全网, 全流程开发, 规格驱动, 多agent协作, 桌面打包, 渗透测试 等 |
+1. Spec > Test > Code，覆盖率≥80%
+2. Karpathy准则：Think Before Coding | Simplicity First | Surgical Changes
+3. 增量约束：分解→实现→测试→重复；3-Strike Protocol
+4. 脚本规范：Python优先 | UTF-8无BOM+无U+FFFD | 验证后删除临时脚本
+5. 跨平台：Web+Desktop(Electron/Tauri/Flutter)
 
-**分析**：keywords与phrases存在大量语义重叠（如"渗透测试"同时出现在phrases和keywords中），这是有意设计——phrases匹配用户完整语句，keywords匹配用户输入中的关键词片段。但83个关键词中约30%与phrases完全重复，可考虑合并去重以降低触发矩阵的Token消耗。
+#### 1.1.4 执行入口（5步）
 
-#### 1.1.3 commands（斜杠命令触发）
+1. 平台检测 → 检查项目依赖和结构
+2. 规模评估 → 统计文件数判断规模
+3. 工作流选择 → full/medium/fast
+4. 加载命令+知识检索 → 读取commands/对应.md → knowledge_search → 注入Agent上下文
+5. 执行Phase 0 → 按Phase顺序推进
 
-共27个斜杠命令：
+#### 1.1.5 工作流Phase概览（9阶段 + 跨阶段）
+
+| Phase | 名称 | 关键门禁 |
+|-------|------|----------|
+| 0 | 初始化 | DESIGN-SYSTEM-COMPLETE, ANTI-PATTERN-CHECK |
+| 1 | 需求分析 | BRAINSTORM-COMPLETE, GATE-001~002 |
+| 2 | 架构设计 | PLAN-ATOMIC, GATE-003~004 |
+| 3 | 测试先行 | TEST-FIRST |
+| 4 | 代码实现 | GATE-007, TEST-PASS, FILE-ENCODING, GATE-009 |
+| 5 | 测试验证 | AI-PENTEST, SPEC-CONSISTENCY, GATE-011~012 |
+| 6 | 验收确认 | GATE-013~014, UX-ACCEPTANCE |
+| 7 | 持续重构 | SIMPLIFICATION-BEHAVIOR, CHESTERTON-FENCE |
+| 8 | 部署交付 | DESKTOP-BUILD/SIGN/UPDATE/CROSS, IPC-CONTRACT |
+
+#### 1.1.6 命令路由表（27命令，内嵌在SKILL.md中）
+
+v5将完整的27命令路由表（含MCP工具调用链和降级策略）全部内嵌在SKILL.md中，每个命令包含详细步骤说明，导致SKILL.md超过310行。
+
+#### 1.1.7 Agent角色索引表（13层/57Agent，内嵌在SKILL.md中）
+
+v5在SKILL.md中内嵌了完整的Agent层级索引表，按13个层级列出57个Agent。
+
+#### 1.1.8 外部引用
+
+v5引用了大量外部参考文件（72+个），包括：
+- 门禁恢复详情: `references/gate-recovery-details.md`
+- 知识工作流: `references/knowledge-workflow-details.md`
+- Token降级: `references/token-degradation-details.md`
+- 会话持久化: `references/session-persistence.md`
+- Hook系统: `references/hook-system.md`
+- 模型路由: `references/model-routing.md`
+- 并行化策略: `references/parallelization-strategy.md`
+- 评估框架: `references/evaluation-framework.md`
+- MCP集成: `references/mcp-integration-strategy.md`
+
+---
+
+### 1.2 v2 SKILL.md 解析
+
+**文件路径**: `.trae/skills/xuansto-skill-v2/SKILL.md`
+**版本**: 8.0.0 (MCP Edition) | **状态**: 活跃
+
+#### 1.2.1 Frontmatter 元数据
+
+| 字段 | 值 | 说明 |
+|------|-----|------|
+| name | xuansto-skill-v2 | Skill标识符 |
+| version | 8.0.0 | 版本号 |
+| agents_summary | "13 layers / 57 agents (via MCP v2)" | Agent规模，标注MCP驱动 |
+| min_version | 1.0.0 | 最低平台版本 |
+| license | MIT | 许可证 |
+
+#### 1.2.2 触发条件（外部化到 triggers.yaml）
+
+v2将触发条件完全外部化到 `triggers.yaml`，SKILL.md仅通过 `{{include:triggers.yaml}}` 引用。
+
+**triggers.yaml 内容**:
+- **phrases**: 52个（与v5相同）
+- **keywords**: 57个（与v5相同）
+- **commands**: 27个（与v5相同）
+- **not_for**: 12个（与v5相同）
+
+#### 1.2.3 外部参考（按需加载）
+
+v2采用 `{{include:}}` 指令延迟加载外部文件：
+
+| 引用文件 | 内容 |
+|----------|------|
+| `{{include:triggers.yaml}}` | 触发条件完整定义 |
+| `{{include:commands/routes.yaml}}` | 27命令路由表 |
+| `{{include:agents/registry.yaml}}` | 57 Agent注册表 |
+| `{{include:constraints.yaml}}` | 核心约束+Token预算+降级规则 |
+| `references/mcp-tools.md` | 17个MCP工具参数与返回值 |
+| `references/workflow-phases.md` | 9阶段工作流详情 |
+| `references/quality-gates.md` | 54项质量门禁定义 |
+
+#### 1.2.4 核心约束（5条，与v5一致）
+
+v2核心约束与v5完全相同，但通过 `constraints.yaml` 外部化提供了更详细的配置参数。
+
+#### 1.2.5 MCP依赖
+
+- 最低兼容: xuansto-mcp-server >= 4.0.0
+- API版本: 2.0.0
+- MCP不可用时自动降级到 scripts/ 目录Python脚本
+
+#### 1.2.6 执行入口（5步，与v5逻辑相同但MCP驱动）
+
+1. 平台检测 → 检查项目依赖和结构
+2. 规模评估 → 统计文件数判断规模
+3. 工作流选择 → full/medium/fast
+4. **MCP+知识检索** → skill_analyze → knowledge_search → 注入Agent上下文
+5. 执行Phase 0 → 按Phase顺序推进
+
+**关键差异**: v2步骤4明确使用MCP工具（skill_analyze、knowledge_search），而非v5的"读取commands/对应.md"。
+
+#### 1.2.7 工作流Phase概览（9阶段，增加MCP工具列）
+
+v2的Phase概览表增加了"MCP工具"列，明确标注每个Phase使用的MCP工具：
+
+| Phase | 名称 | MCP工具 | 关键门禁 |
+|-------|------|---------|----------|
+| 0 | 初始化 | skill_analyze, workflow_dispatch, agent_status, resource_load_status | DESIGN-SYSTEM-COMPLETE, ANTI-PATTERN-CHECK |
+| 1 | 需求分析 | knowledge_search, resource_load_status | BRAINSTORM-COMPLETE, GATE-001~002 |
+| 2 | 架构设计 | knowledge_search, resource_load_status | PLAN-ATOMIC, GATE-003~004 |
+| 3 | 测试先行 | — | TEST-FIRST |
+| 4 | 代码实现 | quality_gate_check, agent_status | GATE-007, TEST-PASS, FILE-ENCODING |
+| 5 | 测试验证 | security_scan, spec_drift_detect, agent_status | AI-PENTEST, SPEC-CONSISTENCY |
+| 6 | 验收确认 | quality_gate_check | GATE-013~014, UX-ACCEPTANCE |
+| 7 | 持续重构 | code_simplify, context_compress | SIMPLIFICATION-BEHAVIOR, GATE-015 |
+| 8 | 部署交付 | — | DESKTOP-BUILD/SIGN/UPDATE/CROSS |
+
+---
+
+### 1.3 v5 vs v2 对比表
+
+| 维度 | v5 (xuansto-skill) | v2 (xuansto-skill-v2) |
+|------|---------------------|------------------------|
+| **版本** | 5.0.0 | 8.0.0 |
+| **状态** | 已废弃 | 活跃 |
+| **SKILL.md行数** | ~310行 | ~71行 |
+| **触发条件** | 内嵌frontmatter | 外部化 `triggers.yaml` |
+| **命令路由** | 内嵌SKILL.md | 外部化 `commands/routes.yaml` |
+| **Agent注册** | 内嵌SKILL.md | 外部化 `agents/registry.yaml` |
+| **约束配置** | 内嵌SKILL.md | 外部化 `constraints.yaml` |
+| **MCP工具数** | 13个（SKILL.md中声明16个） | 17个（含decision_log, token_budget, project_init） |
+| **MCP依赖** | 无明确版本要求 | xuansto-mcp-server >= 4.0.0 |
+| **降级策略** | 简单提及 | 完整三级降级链（constraints.yaml） |
+| **渐进式加载** | 无 | 4阶段加载（skeleton/functional/enhanced/full） |
+| **Hook系统** | 文字描述 | 完整JSON配置（hooks.json，3个profile） |
+| **Token预算** | 简单提及 | 完整配置（.skill-config.yaml + constraints.yaml） |
+| **脚本目录** | 引用49个脚本 | 实际包含60+脚本（含knowledge_server/子目录） |
+| **参考文件** | 72+引用 | 6个核心引用（按需加载） |
+| **工作流定义** | SKILL.md内描述 | 独立YAML+MD文件（workflows/目录） |
+| **模板文件** | SKILL.md内引用 | 独立文件（templates/目录，19个模板） |
+| **问题清单** | 27个问题（全部已修复） | 9个问题（全部未修复） |
+
+---
+
+## 2. 功能逻辑分步拆解
+
+### 2.1 触发与入口
+
+#### 2.1.1 触发判定流程
 
 ```
-/sprint, /clarify, /plan, /spec, /design, /implement, /test, /review, /fix,
-/accept, /deploy, /build-desktop, /release-desktop, /refactor, /audit,
-/agent-status, /learn, /brainstorm, /execute-plan, /design-system, /simplify,
-/loop, /cancel-loop, /build, /init, /status, /rollback
+用户输入 → Trae平台匹配Skill
+  ├─ 匹配phrases（52个短语）→ 触发
+  ├─ 匹配keywords（57个关键词）→ 触发
+  ├─ 匹配commands（27个斜杠命令）→ 触发
+  └─ 匹配not_for（12个排除场景）→ 不触发
 ```
 
-**命令分类**：
+**代码位置**:
+- v5: `.trae/skills/xuansto-skill/SKILL.md` L11-L15（frontmatter triggers）
+- v2: `.trae/skills/xuansto-skill-v2/triggers.yaml` L1-L163
 
-| 类别 | 命令 | 数量 |
-|------|------|------|
-| 工作流类 | /sprint, /clarify, /plan, /spec, /design, /implement, /test, /review, /fix, /accept, /deploy, /brainstorm, /execute-plan, /design-system, /simplify, /refactor, /audit | 17 |
-| 桌面类 | /build-desktop, /release-desktop | 2 |
-| 系统类 | /agent-status, /learn, /loop, /cancel-loop, /build, /init, /status, /rollback | 8 |
+#### 2.1.2 执行入口流程
 
-#### 1.1.4 not_for（排除触发）
+```
+Step 1: 平台检测
+  ├─ v5: 分析package.json/pubspec.yaml/Cargo.toml → 判断Web/Desktop/Flutter
+  └─ v2: 调用skill_analyze(depth="full") → MCP返回平台类型
 
-共12条排除规则：
+Step 2: 规模评估
+  ├─ v5: 统计项目文件数 → >50=大, 20-50=中, <20=小
+  └─ v2: 调用skill_analyze → MCP返回structure.file_count
 
-| 排除项 | 说明 |
-|--------|------|
-| simple single-file edits | 单文件编辑（添加注释、修复拼写错误） |
-| pure infrastructure/DevOps | 纯基础设施/DevOps无代码变更 |
-| documentation-only tasks | 纯文档任务无代码 |
-| simple Q&A or explanations | 简单问答或解释 |
-| pure UI/UX design without code | 纯UI/UX设计无代码开发（应使用ui-ux-pro-max） |
-| pure data analysis or reporting | 纯数据分析或报告 |
-| simple config changes | 简单配置变更（环境变量、标志位） |
-| one-line fixes or trivial patches | 单行修复或5行以下的补丁 |
-| simple security scans without remediation | 简单安全扫描无代码修复 |
-| documentation-only security reports | 纯文档安全报告 |
-| desktop app UI design only | 仅桌面应用UI设计无代码 |
-| quick hotfixes under 5 lines | 5行以下的快速热修复 |
+Step 3: 工作流选择
+  ├─ 大项目/安全关键/用户指定 → full（9阶段，全部门禁）
+  ├─ 中等项目/中等复杂度 → medium（合并阶段，核心门禁）
+  └─ 小项目/快速迭代 → fast（最少阶段，仅核心门禁）
+  优先级: 用户显式指定 > 项目特征自动判断 > 默认medium
 
-**分析**：not_for定义清晰，与phrases/keywords形成互补——正面匹配+负面排除确保触发精准度。但缺少对"已有其他Skill更好匹配"场景的排除规则（如"仅前端样式调整"应优先匹配frontend-design Skill）。
+Step 4: 知识检索
+  ├─ v5: 读取commands/对应.md → 解析任务类型+技术栈 → knowledge_search → 注入Agent上下文(token≤2048)
+  └─ v2: skill_analyze → knowledge_search(retrieve) → 注入Agent上下文 → 完成后沉淀经验
 
-### 1.2 参数定义与校验
+Step 5: 执行Phase 0
+  └─ 调用workflow_dispatch(start) → 启动工作流实例
+```
 
-SKILL.md本身不定义全局参数，参数定义分散在27个命令的`.md`文件中。各命令参数遵循统一模式：
+**代码位置**:
+- v5: `.trae/skills/xuansto-skill/SKILL.md` L40-L44
+- v2: `.trae/skills/xuansto-skill-v2/SKILL.md` L46-L52
+- v2工作流详情: `.trae/skills/xuansto-skill-v2/references/workflow-phases.md` L5-L36
 
-| 参数类型 | 校验方式 | 示例 |
-|----------|----------|------|
-| string | 非空校验 | `<topic>` in /brainstorm |
-| enum | 值域校验 | `--depth: quick/standard/thorough` |
-| int | 范围校验 | `--coverage: 80` (百分比) |
-| flag | 布尔校验 | `--auto`, `--skip-tests` |
-| path | 存在性校验 | `--input: .sprint/artifacts/requirements/` |
-| json | 格式校验 | `--constraints: {}` |
-| list | 元素校验 | `--skip-phases: []` |
+### 2.2 命令路由与执行
 
-**问题**：参数校验逻辑仅在命令文档中描述，无运行时校验脚本。LLM需自行理解并执行参数校验，可能导致参数传递错误不被捕获。
+#### 2.2.1 路由匹配优先级
 
-### 1.3 提示词/指令内容
+```
+精确匹配 > 语义匹配 > 更具体命令优先 > 默认/sprint兜底
+```
 
-SKILL.md的核心指令内容分为以下部分：
+**代码位置**:
+- v5: `.trae/skills/xuansto-skill/SKILL.md` L97
+- v2: `.trae/skills/xuansto-skill-v2/commands/routes.yaml` L1
 
-| 部分 | 行数 | 内容 |
-|------|------|------|
-| 核心约束 | 5条 | Spec>Test>Code / Karpathy准则 / 增量约束 / 脚本规范 / 跨平台 |
-| MCP Server依赖 | 1节 | 版本要求、降级模式功能范围表 |
-| 渐进式加载披露 | 1节 | 4级加载阶段、加载指令、资源优先级、功能可用性披露 |
-| MCP工具调用 | 1节 | 13个工具概要表 |
-| MCP Resource访问 | 1节 | 7个URI资源 |
-| 降级模式 | 1节 | 检测→回退→格式统一 |
-| 执行入口 | 5步 | 平台检测→规模评估→工作流选择→MCP+知识检索→Phase 0 |
-| 工作流Phase概览 | 9行 | Phase 0-8的MCP工具和关键门禁 |
-| 命令路由表 | 27行 | 用户意图→命令→MCP调用链→降级策略 |
-| 命令详细步骤 | 27节 | 每个命令的MCP调用步骤 |
-| Agent角色索引表 | 13层57个 | 按层级分组的Agent列表 |
-| Hook系统 | 1节 | 核心Hook和MCP工具映射 |
-| 模型路由 | 1节 | fast/standard/deep三级 |
-| 会话持久化 | 1节 | SessionStart/Stop Hook |
-| 关键规则 | 1节 | 6条规则 |
+#### 2.2.2 命令执行流程（以 /implement 为例）
 
-**Token估算**：SKILL.md全文约420行，预估Token消耗约8K-10K。通过渐进式加载，Phase 0骨架可降至~2K。
+```
+/implement 命令触发
+  │
+  ├─ Step 1: workflow_dispatch(action="phase", phase_action="current")
+  │   → 查询当前Phase状态
+  │   → 降级: 手动Phase推进
+  │
+  ├─ Step 2: quality_gate_check(phase="3")
+  │   → 检查测试先行门禁（TEST-FIRST）
+  │   → 降级: 内嵌检查
+  │   → 失败: 阻止实现，返回修复建议
+  │
+  ├─ Step 3: hook_manage(action="list")
+  │   → 获取当前Hook配置
+  │   → 降级: 内联Hook执行
+  │   → 拦截: security-block检查
+  │
+  └─ Step 4: knowledge_search(query="实现模式", action="retrieve")
+      → 检索实现参考
+      → 降级: ChromaDB→SQLite FTS→关键词
+```
 
-### 1.4 引用的脚本或工具列表
+**代码位置**:
+- v5: `.trae/skills/xuansto-skill/SKILL.md` L137-L143
+- v2: `.trae/skills/xuansto-skill-v2/commands/routes.yaml` L78-L87
+- v2命令详情: `.trae/skills/xuansto-skill-v2/commands/implement.md`
 
-#### MCP工具（13个）
+#### 2.2.3 v2新增命令路由（v5中无独立路由）
 
-| 工具 | 用途 | 降级脚本 |
-|------|------|----------|
+| 命令 | 意图 | Phase | MCP工具 |
+|------|------|-------|---------|
+| /sdd-tdd-medium | 中等规模SDD+TDD开发 | 0 | skill_analyze, workflow_dispatch, resource_load_status |
+| /sdd-tdd-fast | 快速SDD+TDD开发 | 1 | workflow_dispatch, resource_load_status |
+| /decision | 决策记录 | null | decision_log |
+| /budget | Token预算管理 | null | token_budget, resource_load_status |
+
+**代码位置**: `.trae/skills/xuansto-skill-v2/commands/routes.yaml` L274-L308
+
+### 2.3 工作流Phase推进
+
+#### 2.3.1 Phase转换流程
+
+```
+Phase N 执行
+  ├─ 1. 调用resource_load_status(preload, phase=N) → 预加载资源
+  ├─ 2. 调用agent_status(by_phase, phase=N) → 查询可用Agent
+  ├─ 3. 执行Phase任务（Agent并行/串行编排）
+  ├─ 4. 调用quality_gate_check(gate_ids=[...]) → 验证门禁
+  │   ├─ PASS → 触发PhaseEnter Hook → 进入Phase N+1
+  │   ├─ FAIL → 3-Strike Protocol
+  │   │   ├─ Strike 1: 自动修复
+  │   │   ├─ Strike 2: 换策略
+  │   │   └─ Strike 3: 升级处理（通知用户）
+  │   └─ PASS_WITH_NOTE → 记录到gate-exceptions.jsonl
+  └─ 5. 调用session_manage(track) → 追踪进度
+```
+
+**代码位置**:
+- v2工作流详情: `.trae/skills/xuansto-skill-v2/references/workflow-phases.md`
+- v2工作流YAML: `.trae/skills/xuansto-skill-v2/workflows/_yaml/` (15个YAML文件)
+
+#### 2.3.2 工作流选择矩阵
+
+| 工作流名称 | 适用场景 | Phase覆盖 |
+|-----------|---------|-----------|
+| sdd-tdd-full | 大型项目/完整流程 | 0-8全部 |
+| sdd-tdd-medium | 中等项目 | 合并部分阶段 |
+| sdd-tdd-fast | 小型项目/快速迭代 | 精简阶段 |
+| brainstorming-workflow | 需求探索 | Phase 1 |
+| bug-fix | Bug修复 | Phase 4-5 |
+| security-audit | 安全审计 | Phase 5 |
+| desktop-build-workflow | 桌面构建 | Phase 8 |
+| ui-ux-workflow | UI/UX设计 | Phase 2 |
+| webapp-testing-workflow | Web测试 | Phase 5 |
+| subagent-driven-workflow | 代码审查 | Phase 5 |
+| autonomous_loop | 自主循环 | 全阶段 |
+| acceptance | 验收 | Phase 6 |
+| cross-platform-workflow | 跨平台 | Phase 8 |
+| flutter-desktop-workflow | Flutter桌面 | Phase 8 |
+| performance-test | 性能测试 | Phase 5 |
+
+**代码位置**: `.trae/skills/xuansto-skill-v2/workflows/` 目录
+
+### 2.4 质量门禁检查
+
+#### 2.4.1 门禁体系概览
+
+共54项质量门禁，按Phase分布：
+
+| Phase | 门禁数 | 关键门禁 |
+|-------|--------|----------|
+| 0 | 6 | DESIGN-SYSTEM-COMPLETE, ANTI-PATTERN-CHECK, DESIGN-REVIEW-PRODUCT/TECH/DESIGN, DESIGN-TOKENS |
+| 1 | 3 | GATE-001, GATE-002, BRAINSTORM-COMPLETE |
+| 2 | 4 | GATE-003, GATE-004, PLAN-ATOMIC, SPEC-ATOMIC |
+| 3 | 1 | TEST-FIRST |
+| 4 | 11 | GATE-007, TEST-PASS, GATE-009, MULTI-PERSPECTIVE-COVERAGE, TDD-RED/GREEN/REFACTOR, EXECUTION-VERIFY, SCRIPT-SECURITY, SCRIPT-CLEANUP, TOKEN-BUDGET |
+| 5 | 10 | GATE-011, GATE-012, SPEC-CONSISTENCY, AGENTIC-SECURITY, AI-PENTEST, VISUAL-REGRESSION, RENDER-CHECK, ACCESSIBILITY, PERFORMANCE, SECURITY-FIX-CLOSED |
+| 6 | 4 | GATE-013, GATE-014, UX-ACCEPTANCE, DOD-CHECK |
+| 7 | 4 | GATE-015, DOC-COMPLETENESS, SIMPLIFICATION-BEHAVIOR, CHESTERTON-FENCE |
+| 8 | 5 | DESKTOP-BUILD, DESKTOP-SIGN, DESKTOP-UPDATE, DESKTOP-CROSS, IPC-CONTRACT |
+| 跨阶段 | 6 | ITERATION-BUDGET, SESSION-RECOVERY, BUILD-SUCCESS, ROLLBACK-SAFETY, INIT-COMPLETE, STATUS-HEALTHY |
+
+**代码位置**: `.trae/skills/xuansto-skill-v2/references/quality-gates.md`
+
+#### 2.4.2 门禁异常处理
+
+```
+门禁检查结果
+  ├─ PASS → 正常通过
+  ├─ PASS_WITH_NOTE → 通过但存在注意事项
+  │   → 记录到 .skill-logs/gate-exceptions.jsonl
+  │   → 连续3次PASS_WITH_NOTE → 触发人工审查断点
+  ├─ WARN → 警告
+  │   → 连续2次WARN → 自动升级为BLOCK
+  └─ BLOCK → 阻塞
+      → 3-Strike Protocol: 自动修复→换策略→升级处理
+      → 降级不可逆：必须通过人工审查确认
+```
+
+**容差规则**:
+- 数值型指标: ±0.5%容差
+- 布尔型指标: 无容差
+- 比率型指标: 2%容差
+- 安全类门禁: 无容差
+
+**代码位置**: `.trae/skills/xuansto-skill-v2/references/quality-gates.md` L1031-L1053
+
+### 2.5 MCP工具调用链
+
+#### 2.5.1 17个MCP工具一览
+
+| 工具名 | 功能 | 降级脚本 |
+|--------|------|----------|
 | skill_analyze | 项目结构分析 | scripts/skill-test.py --analyze |
-| knowledge_search | 知识库检索 | scripts/knowledge-server.py --search |
-| quality_gate_check | 质量门禁检查 | scripts/skill-test.py --gate |
+| knowledge_search | 知识检索（retrieve/inject/precipitate） | scripts/knowledge-server.py --search |
+| quality_gate_check | 54项质量门禁检查 | scripts/skill-test.py --gate |
 | spec_drift_detect | 规格漂移检测 | scripts/spec-drift-detector.py |
-| security_scan | 安全扫描 | scripts/agentic-security-scanner.py |
+| security_scan | OWASP+依赖漏洞扫描 | scripts/agentic-security-scanner.py |
 | code_simplify | 代码简化分析 | scripts/code-simplifier.py |
 | session_manage | 会话状态管理 | scripts/init-session.py / session-catchup.py / session-persist.py |
-| workflow_dispatch | 工作流调度 | scripts/project-initializer.py (start) / 内联Phase推进 |
+| workflow_dispatch | 工作流调度 | scripts/project-initializer.py / 内联Phase推进 |
 | agent_status | Agent状态查询 | 静态注册表 / scripts/skill-test.py --agents |
 | hook_manage | Hook管理 | scripts/check-encoding.py / token-budget-guard.py / session-persist.py |
-| resource_load_status | 渐进式加载状态 | 内联状态检查(resource_state.json) |
+| resource_load_status | 渐进式加载状态 | 内联状态检查 |
 | context_compress | 上下文压缩 | scripts/context-compressor.py |
 | server_health | 服务器健康检查 | scripts/health-checker.py |
+| decision_log | 决策日志管理 | 内联JSON记录 |
+| token_budget | Token预算管理 | scripts/token-budget-guard.py / 内联估算 |
+| project_init | 项目初始化 | scripts/project-initializer.py / 内联模板生成 |
 
-#### 降级脚本（完整列表）
+**代码位置**: `.trae/skills/xuansto-skill-v2/references/mcp-tools.md`
 
-| 脚本文件 | 对应MCP工具 | 语言 |
-|----------|-------------|------|
-| scripts/skill-test.py | skill_analyze, quality_gate_check, agent_status | Python |
-| scripts/knowledge-server.py | knowledge_search | Python |
-| scripts/spec-drift-detector.py | spec_drift_detect | Python |
-| scripts/agentic-security-scanner.py | security_scan | Python |
-| scripts/code-simplifier.py | code_simplify | Python |
-| scripts/init-session.py | session_manage(save/init) | Python |
-| scripts/session-catchup.py | session_manage(load/detect/restore) | Python |
-| scripts/session-persist.py | session_manage(save/load/list) | Python |
-| scripts/project-initializer.py | workflow_dispatch(start) | Python |
-| scripts/check-encoding.py | hook_manage(encoding-check) | Python |
-| scripts/token-budget-guard.py | hook_manage(token-budget-check) | Python |
-| scripts/context-compressor.py | context_compress | Python |
-| scripts/health-checker.py | server_health | Python |
+#### 2.5.2 典型MCP调用链
 
----
-
-## 2. 功能逻辑分解
-
-### 2.1 执行流程步骤拆解
-
-#### Step 1: 平台检测
-
-**触发时机**：Skill首次触发 / /init命令执行 / SessionStart Hook(platform-detect)
-
-**逻辑**：
-1. 读取项目根目录文件列表
-2. 按优先级检测平台类型（配置于`configs/default.yaml`的`platform_detection`节）：
-   - `explicit_declaration`：用户显式声明（如`/init --type desktop`）
-   - `dependency_analysis`：分析package.json/Cargo.toml/pubspec.yaml中的依赖
-   - `structure_analysis`：分析目录结构（如src-tauri目录→Tauri）
-   - `default_web`：无法检测时默认Web平台
-3. Web项目指示器：package.json with react/vue/angular / next.config.js / vite.config.ts
-4. Desktop项目指示器：package.json with electron / src-tauri directory / electron-builder.yml
-
-**涉及文件**：
-- [configs/default.yaml](file:///d:/Projects/TraeProjects/skiller/.trae/skills/xuansto-skill-v2/configs/default.yaml) - `platform_detection`配置节
-- [hooks/hooks.json](file:///d:/Projects/TraeProjects/skiller/.trae/skills/xuansto-skill-v2/hooks/hooks.json) - `platform-detect` Hook
-- MCP工具：`skill_analyze(skill_path, depth="full")`
-
-#### Step 2: 规模评估
-
-**触发时机**：平台检测完成后
-
-**逻辑**：
-1. 统计项目文件数
-2. 判断项目规模：
-   - 文件数>50 → 大型项目（full工作流）
-   - 文件数20-50 → 中型项目（medium工作流）
-   - 文件数<20 → 小型项目（fast工作流）
-3. 判断优先级：用户显式指定 > 项目特征自动判断 > 默认medium
-
-**涉及文件**：
-- [SKILL.md](file:///d:/Projects/TraeProjects/skiller/.trae/skills/xuansto-skill-v2/SKILL.md) - 工作流选择逻辑
-- [configs/default.yaml](file:///d:/Projects/TraeProjects/skiller/.trae/skills/xuansto-skill-v2/configs/default.yaml) - `orchestrator.lean_mode_threshold`配置
-
-#### Step 3: 工作流选择
-
-**触发时机**：规模评估完成后
-
-**逻辑**：根据规模选择工作流级别：
-
-| 条件 | 工作流 | 文件 |
-|------|--------|------|
-| 大型/完整流程/安全关键 | sdd-tdd-full | [workflows/sdd-tdd-full.md](file:///d:/Projects/TraeProjects/skiller/.trae/skills/xuansto-skill-v2/workflows/sdd-tdd-full.md) |
-| 中型/中等复杂度 | sdd-tdd-medium | [workflows/sdd-tdd-medium.md](file:///d:/Projects/TraeProjects/skiller/.trae/skills/xuansto-skill-v2/workflows/sdd-tdd-medium.md) |
-| 小型/快速迭代 | sdd-tdd-fast | [workflows/sdd-tdd-fast.md](file:///d:/Projects/TraeProjects/skiller/.trae/skills/xuansto-skill-v2/workflows/sdd-tdd-fast.md) |
-
-特殊工作流（按命令触发）：
-
-| 命令 | 工作流 |
-|------|--------|
-| /brainstorm, /clarify | brainstorming-workflow |
-| /design, /design-system | ui-ux-workflow |
-| /build-desktop | desktop-build-workflow |
-| /release-desktop | desktop-release-workflow |
-| /audit | security-audit |
-| /loop | autonomous_loop |
-| /review | subagent-driven-workflow |
-
-**涉及文件**：
-- [workflows/](file:///d:/Projects/TraeProjects/skiller/.trae/skills/xuansto-skill-v2/workflows/) - 15个工作流定义（.md + .yaml双格式）
-- MCP工具：`workflow_dispatch(action="start", workflow=选定工作流)`
-
-#### Step 4: 加载命令+知识检索
-
-**触发时机**：工作流选择完成后，每个Phase开始前
-
-**逻辑**：
-1. 读取`commands/[command].md`获取当前命令的详细步骤
-2. 解析任务类型和技术栈
-3. 调用`knowledge_search(query=任务关键词, search_type="hybrid")`检索相关知识
-4. 注入Agent上下文（Token≤2048）
-5. 完成后沉淀经验（knowledge_search(action="precipitate")）
-
-**知识检索降级链**：
+**从零开始新项目 (/init)**:
 ```
-ChromaDB(语义+关键词) → SQLite FTS5(关键词) → keyword_fallback(纯关键词匹配)
+skill_analyze(skill_path, depth="full")
+  → knowledge_search(query="项目初始化最佳实践", action="retrieve")
+  → workflow_dispatch(action="start", workflow="brainstorming-workflow")
+  → project_init(action="create", name=..., stack=...)
+  → decision_log(action="log", title="项目初始化决策", ...)
 ```
 
-**涉及文件**：
-- [commands/](file:///d:/Projects/TraeProjects/skiller/.trae/skills/xuansto-skill-v2/commands/) - 27个命令定义文件
-- [scripts/knowledge-server.py](file:///d:/Projects/TraeProjects/skiller/.trae/skills/xuansto-skill-v2/scripts/knowledge-server.py) - 知识服务器
-- [scripts/knowledge_server/](file:///d:/Projects/TraeProjects/skiller/.trae/skills/xuansto-skill-v2/scripts/knowledge_server/) - 知识服务器完整模块（30+文件）
+**代码审查 (/review)**:
+```
+quality_gate_check(gate_ids=["GATE-009", "MULTI-PERSPECTIVE-COVERAGE"])
+  → security_scan(target=".", severity_threshold="medium")
+  → code_simplify(target=".", scope="recent")
+```
 
-#### Step 5: 执行Phase 0
+**安全审计 (/audit)**:
+```
+security_scan(target=".", severity_threshold="low", include_agentic=True)
+  → quality_gate_check(gate_ids=["AI-PENTEST", "AGENTIC-SECURITY"])
+  → spec_drift_detect(spec_dir=".trae/specs", src_dir=".")
+```
 
-**触发时机**：知识检索完成后
+### 2.6 降级与容错
 
-**逻辑**（9步）：
-1. `skill_analyze(skill_path, depth="full")` → 获取项目元数据
-2. 检测平台类型（package.json/pubspec.yaml/Cargo.toml）
-3. 评估项目规模（文件数统计）
-4. `workflow_dispatch(action="start", workflow=选定工作流)` → 启动工作流实例
-5. `agent_status(action="by_phase", phase=0)` → 查询初始化阶段Agent
-6. `resource_load_status(action="preload", phase=0)` → 预加载Phase 0资源
-7. 建立设计系统基线（色彩/字体/间距/组件规范）
-8. `quality_gate_check(gate_ids=["DESIGN-SYSTEM-COMPLETE", "ANTI-PATTERN-CHECK"])` → 验证初始化门禁
-9. 门禁通过后触发PhaseEnter Hook → 进入Phase 1
+#### 2.6.1 三级降级链
 
-**涉及文件**：
-- [references/workflow-phases.md](file:///d:/Projects/TraeProjects/skiller/.trae/skills/xuansto-skill-v2/references/workflow-phases.md) - Phase 0详细步骤
-- [references/quality-gates.md](file:///d:/Projects/TraeProjects/skiller/.trae/skills/xuansto-skill-v2/references/quality-gates.md) - 门禁定义
-- [hooks/hooks.json](file:///d:/Projects/TraeProjects/skiller/.trae/skills/xuansto-skill-v2/hooks/hooks.json) - Hook定义
+```
+MCP工具优先 → REST API降级 → 文件系统兜底
+```
 
-### 2.2 各步骤涉及的代码/脚本文件/函数名/关键逻辑
+**MCP检测**: 尝试调用skill_analyze，失败则进入降级模式
 
-| 步骤 | 脚本文件 | 关键函数/逻辑 | MCP工具 |
-|------|----------|---------------|---------|
-| 平台检测 | scripts/skill-test.py --analyze | 项目结构扫描、依赖解析 | skill_analyze |
-| 规模评估 | scripts/skill-test.py --analyze | 文件计数、模块统计 | skill_analyze |
-| 工作流选择 | scripts/project-initializer.py | 工作流实例化、Phase初始化 | workflow_dispatch |
-| 知识检索 | scripts/knowledge-server.py / scripts/knowledge_server/ | hybrid_search(), progressive_search(), vector_engine | knowledge_search |
-| Phase 0执行 | scripts/skill-test.py --gate | 门禁检查逻辑 | quality_gate_check |
-| 安全扫描 | scripts/agentic-security-scanner.py | agentic_scan(), dependency_scan() | security_scan |
-| 规格漂移 | scripts/spec-drift-detector.py | spec_vs_code_diff() | spec_drift_detect |
-| 代码简化 | scripts/code-simplifier.py | simplify(), dedup() | code_simplify |
-| 会话管理 | scripts/init-session.py / session-catchup.py / session-persist.py | save(), load(), detect() | session_manage |
-| 上下文压缩 | scripts/context-compressor.py | semantic_compress(), selective_compress() | context_compress |
-| 健康检查 | scripts/health-checker.py | health_check() | server_health |
-| Hook执行 | scripts/check-encoding.py / token-budget-guard.py | encoding_check(), budget_check() | hook_manage |
+**脚本降级**: 使用 `python scripts/xxx.py --format json` 调用
+
+**结果格式**: 降级模式下结果包装为与MCP工具相同的JSON结构
+
+**代码位置**: `.trae/skills/xuansto-skill-v2/constraints.yaml` L107-L125
+
+#### 2.6.2 知识检索降级链
+
+```
+ChromaDB（向量+关键词混合）→ SQLite FTS5（全文搜索）→ 关键词匹配
+```
+
+**代码位置**: `.trae/skills/xuansto-skill-v2/constraints.yaml` L126
+
+#### 2.6.3 Token降级策略
+
+| 级别 | 触发条件 | 动作 |
+|------|----------|------|
+| L1 | Token使用率≥80% | 减少并行Agent数至5，MCP工具降级 |
+| L2 | Token使用率≥95% | 精简模式，仅保留核心层Agent（≤15个） |
+| L3 | Token使用率=100% | 最小串行模式，仅3个Agent |
+
+**恢复**: Token使用率降至60%时逐步恢复
+
+**代码位置**: `.trae/skills/xuansto-skill-v2/.skill-config.yaml` L69-L83
 
 ---
 
 ## 3. 交互模式
 
-### 3.1 用户输入格式
+### 3.1 单轮交互
 
-#### 3.1.1 自然语言输入
+适用于查询类命令，一次输入一次输出：
 
-用户可通过自然语言触发Skill，匹配逻辑为：
+| 命令 | 输入 | 输出 |
+|------|------|------|
+| /agent-status | 无或Agent名称 | Agent列表或详情 |
+| /status | 无 | 当前Phase+任务+决策 |
+| /build | 无 | 构建门禁结果+健康检查 |
+| /budget | action参数 | Token预算状态 |
 
+**交互流程**:
 ```
-用户输入 → phrases匹配(完整语句) → keywords匹配(关键词片段) → 语义匹配 → 命令路由
-```
-
-**匹配优先级**：精确匹配 > 语义匹配 > 更具体命令优先 > 默认/sprint兜底
-
-**示例**：
-
-| 用户输入 | 匹配方式 | 路由命令 |
-|----------|----------|----------|
-| "帮我搭建项目" | phrases精确匹配 | /init → /brainstorm |
-| "先写测试再写代码" | phrases精确匹配 | /implement (TDD模式) |
-| "安全审计一下" | phrases精确匹配 | /audit |
-| "重构这段代码" | phrases精确匹配 | /refactor |
-| "我想做一个SaaS产品" | 语义匹配 | /brainstorm |
-| "检查代码质量" | 语义匹配 | /review |
-
-#### 3.1.2 斜杠命令输入
-
-27个斜杠命令均支持别名和参数：
-
-```
-/命令名 [必选参数] [--可选参数=值] [--flag]
+用户: /agent-status
+  → agent_status(action="list")
+  → 返回57个Agent列表（名称/层级/状态/能力）
+  → 结束
 ```
 
-**命令别名示例**：
+### 3.2 多轮交互
 
-| 命令 | 别名 |
-|------|------|
-| /accept | acc |
-| /agent-status | agents, as |
-| /brainstorm | bs, explore |
-| /build | b |
-| /cancel-loop | cancel, stop |
-| /clarify | c |
-| /deploy | dep |
-| /design | d |
-| /design-system | ds, design-sys |
-| /execute-plan | ep, exec |
-| /fix | f |
-| /implement | i, impl |
-| /learn | l |
-| /loop | lp |
-| /plan | p |
-| /refactor | ref |
-| /release-desktop | rdesk |
-| /review | r, rv |
-| /rollback | rb, revert |
-| /simplify | simp |
-| /spec | sp |
-| /sprint | sp, sprint-start |
-| /status | st, info |
-| /test | t |
+适用于开发类命令，需要多轮对话推进Phase：
 
-### 3.2 输出格式
+| 命令 | 轮次 | 说明 |
+|------|------|------|
+| /init → /brainstorm | 3-5轮 | 需求探索→设计文档→用户确认 |
+| /clarify | 2-3轮 | 需求澄清→完整性检查 |
+| /plan | 2-4轮 | 架构设计→原子任务分解→门禁验证 |
+| /implement | 多轮 | 逐个原子任务实现→测试→门禁 |
+| /review | 2-3轮 | 多视角审查→安全扫描→简化建议 |
+| /loop | 持续 | 自主循环直到完成或停滞 |
 
-#### 3.2.1 命令输出
+**交互流程（以/init为例）**:
+```
+Round 1: 用户: "帮我搭建一个React项目"
+  → skill_analyze → 平台检测 → 规模评估
+  → workflow_dispatch(start, brainstorming-workflow)
+  → 输出: 项目分析报告 + 设计系统基线
 
-各命令的输出格式由命令定义中的"输出交付"步骤决定：
+Round 2: 用户确认设计方向
+  → knowledge_search(retrieve) → 检索最佳实践
+  → 输出: 技术选型建议 + 架构草案
 
-| 命令 | 输出格式 | 输出文件 |
-|------|----------|----------|
-| /brainstorm | 设计文档(.md) | .agent_cache/<task>/design-document.md |
-| /clarify | 需求文档(.md) + 验收标准(.json) | clarified-requirements.md, acceptance-criteria.json |
-| /plan | 实施计划(.md) + 任务图(.json) | implementation-plan.md, task-graph.json |
-| /spec | 规格文档(.yaml/.md) | api-spec.yaml, data-model.md, architecture.md |
-| /review | 审查报告(.md/.json/.sarif) | 审查报告 |
-| /audit | 安全报告(.md/.html/.pdf/.sarif) | 安全审计报告 |
-| /accept | 验收报告(.md/.html/.pdf) | 验收报告 |
-| /init | 初始化报告(.md) | init-report.md |
-| /status | 状态报告(table/.json/.md) | 控制台输出 |
-| /agent-status | Agent状态表(table/.json/.detailed) | 控制台输出 |
+Round 3: 用户确认架构
+  → quality_gate_check(DESIGN-SYSTEM-COMPLETE, ANTI-PATTERN-CHECK)
+  → project_init(create, ...)
+  → 输出: 项目初始化结果 + 下一步建议
+```
 
-#### 3.2.2 门禁检查输出
+### 3.3 输入输出格式
 
+#### 输入格式
+
+| 类型 | 格式 | 示例 |
+|------|------|------|
+| 斜杠命令 | `/command [args]` | `/implement`, `/review` |
+| 自然语言 | 中文/英文描述 | "帮我搭建项目", "build from scratch" |
+| 混合模式 | 命令+描述 | `/plan 用户认证模块` |
+
+#### 输出格式
+
+MCP工具返回统一JSON结构：
 ```json
 {
-  "status": "success",
-  "data": {
-    "gates_checked": 6,
-    "gates_passed": 5,
-    "gates_failed": 1,
-    "results": [
-      {
-        "gate_id": "TEST-PASS",
-        "status": "PASS",
-        "severity": "BLOCK",
-        "message": "All 42 tests passed. Coverage: 87.3%",
-        "details": { ... }
-      }
-    ],
-    "can_proceed": false
+  "status": "success|error",
+  "data": { ... },
+  "metadata": {
+    "tool": "工具名",
+    "latency_ms": 123,
+    "degraded": false
   }
 }
 ```
 
-### 3.3 交互阶段
-
-#### 3.3.1 单轮交互
-
-适用于查询类命令，一次输入一次输出：
-
-| 命令 | 交互模式 | 说明 |
-|------|----------|------|
-| /status | 单轮 | 查询即返回 |
-| /agent-status | 单轮 | 查询即返回 |
-| /build | 单轮 | 构建即返回结果 |
-| /rollback | 单轮 | 执行即返回 |
-
-#### 3.3.2 多轮交互
-
-适用于工作流类命令，需要多轮对话推进：
-
-| 命令 | 交互模式 | 交互轮数 |
-|------|----------|----------|
-| /brainstorm | 多轮(6阶段) | Discovery→Option→Design→Reflect→Commit→Transition |
-| /clarify | 多轮(5步) | 输入验证→Agent调度→任务执行→结果验证→输出交付 |
-| /plan | 多轮(5步) | 输入验证→Agent调度→任务执行→结果验证→输出交付 |
-| /sprint | 多轮(6阶段) | Clarify→Plan→Implement→Test→Review→Accept |
-| /loop | 多轮(9阶段) | Clarify→Plan→Spec→Design→Implement→Test→Review→Accept→Deploy |
-| /implement | 多轮(5步) | 每个原子任务一轮 |
-
-**交互控制参数**：
-
-| 参数 | 命令 | 说明 |
-|------|------|------|
-| --interactive | /loop | 每阶段确认 |
-| --auto | /accept, /fix | 自动模式 |
-| --depth | /brainstorm, /clarify, /learn | 交互深度 |
-| --skip-* | /sprint, /init | 跳过特定阶段 |
-| --dry-run | /deploy, /refactor, /execute-plan | 仅模拟不执行 |
+降级模式下返回相同结构，`degraded` 字段为 `true`。
 
 ---
 
-## 4. 渐进式加载披露逻辑分析
+## 4. 特效逻辑分析
 
-### 4.1 当前实现方式
+### 4.1 渐进式加载
 
-#### 4.1.1 四级加载层次
+#### 4.1.1 实现方式
 
-渐进式加载在[references/progressive-loading.md](file:///d:/Projects/TraeProjects/skiller/.trae/skills/xuansto-skill-v2/references/progressive-loading.md)中定义了4级加载：
+v2通过 `constraints.yaml` 定义了4阶段渐进式加载：
 
-| 阶段 | 名称 | 加载内容 | 预估Token |
-|------|------|----------|-----------|
-| Phase 0 | 骨架(Skeleton) | 核心约束+命令概要+Agent索引 | ~2K |
-| Phase 1 | 功能(Functional) | 命令详细步骤+工作流Phase+MCP工具参数 | ~3K |
-| Phase 2 | 增强(Enhanced) | 参考文档+模板+知识库索引 | ~5K |
-| Phase 3 | 完整(Full) | 全部资源+脚本集+披露资源 | ~10K |
+| 阶段 | 触发条件 | 加载内容 | Token预算 |
+|------|----------|----------|-----------|
+| Phase 0: 骨架 | Skill触发时 | 核心元数据、命令列表(无详情) | ≤2K |
+| Phase 1: 功能 | 用户执行命令时 | 命令描述+MCP工具可用性+核心约束+核心Agent | ≤5K |
+| Phase 2: 增强 | 需要参考文档时 | Agent注册表+工作流定义+质量门禁摘要+知识检索 | ≤10K |
+| Phase 3: 完整 | 深度分析时 | 完整参考+模板+知识库+全部Agent定义 | ≤20K |
 
-#### 4.1.2 LoadPhase枚举
+**代码位置**: `.trae/skills/xuansto-skill-v2/constraints.yaml` L15-L35
 
-```python
-class LoadPhase(str, Enum):
-    SKELETON = "skeleton"
-    FUNCTIONAL = "functional"
-    ENHANCED = "enhanced"
-    FULL = "full"
-```
+#### 4.1.2 资源优先级
 
-#### 4.1.3 available_functions（功能可用性披露）
+| 优先级 | 资源 |
+|--------|------|
+| P0 必须加载 | SKILL.md核心约束、命令路由表、Agent索引表 |
+| P1 重要 | 命令详细步骤、工作流Phase定义、MCP工具参数 |
+| P2 增强 | 参考文档、模板文件、知识库 |
+| P3 可选 | 示例文档、评估配置、披露资源 |
 
-SKILL.md中定义了各加载阶段的功能可用性表：
+**代码位置**: `.trae/skills/xuansto-skill-v2/constraints.yaml` L37-L53
 
-| 加载阶段 | 可用功能 | 不可用功能 |
-|----------|----------|------------|
-| Phase 0: 骨架 | 命令路由、Agent索引、核心约束 | 命令详细步骤、参考文档、知识检索 |
-| Phase 1: 功能 | 命令执行、工作流推进、门禁检查 | 参考文档、Agent详细定义、知识检索 |
-| Phase 2: 增强 | 知识检索、参考文档、Agent详细定义 | 完整脚本集、评估配置 |
-| Phase 3: 完整 | 全部功能可用 | 无 |
+#### 4.1.3 披露规则
 
-#### 4.1.4 disclosure_note（披露说明）
-
-当功能因加载阶段限制不可用时，系统应：
-1. 通过`xuansto://loading/status`披露当前可用功能范围
-2. 提示用户可通过`resource_load_status(preload)`推进加载
+当请求的功能在当前加载阶段不可用时：
+1. 通过 `xuansto://loading/status` 披露当前可用功能范围
+2. 提示用户可通过 `resource_load_status(preload)` 推进加载
 3. 降级到可用功能范围内执行
 
-#### 4.1.5 priority/batch_mode
+**代码位置**: `.trae/skills/xuansto-skill-v2/constraints.yaml` L83-L104
 
-资源优先级定义：
+### 4.2 MCP工具驱动
 
-| 优先级 | 名称 | 资源 | Token紧张时处理 |
-|--------|------|------|-----------------|
-| P0 | 必须 | SKILL.md核心约束、命令路由表、Agent索引表 | 始终保留 |
-| P1 | 重要 | 命令详细步骤、工作流Phase定义、MCP工具参数 | Token>95%时释放 |
-| P2 | 增强 | 参考文档、模板文件、知识库 | Token>80%时释放 |
-| P3 | 可选 | 示例文档、评估配置、披露资源 | Token>60%时释放 |
+#### 4.2.1 实现方式
 
-`resource_load_status`工具支持`batch_mode`参数，批量模式并发加载多个资源。
+v2通过 `xuansto-mcp-server` 提供MCP工具，Skill本身不包含工具实现代码，仅定义调用接口和降级策略。
 
-### 4.2 加载方式
+**MCP Server架构**:
+```
+xuansto-mcp-server (独立进程)
+  ├─ 17个MCP工具实现
+  ├─ knowledge_server/ (知识库服务子模块)
+  │   ├─ hybrid_search.py (混合检索)
+  │   ├─ vector_engine.py (向量引擎)
+  │   ├─ embedding.py (嵌入生成)
+  │   ├─ db_engine.py (数据库引擎)
+  │   ├─ degradation.py (降级处理)
+  │   └─ ... (20+文件)
+  └─ API版本: 2.0.0
+```
 
-#### 4.2.1 同步加载
+**代码位置**: `.trae/skills/xuansto-skill-v2/scripts/knowledge_server/`
 
-当前实现以同步加载为主：
+#### 4.2.2 降级模式问题
 
-| 加载场景 | 方式 | 说明 |
-|----------|------|------|
-| Skill首次触发 | 同步 | 加载Phase 0骨架（SKILL.md核心部分） |
-| 命令路由匹配 | 同步 | 读取commands/[command].md |
-| Phase转换 | 同步 | resource_load_status(preload, phase=N) |
-| 参考文档请求 | 同步 | 读取references/目录文件 |
+**SKILL-01**: v2降级模式不可用
 
-#### 4.2.2 异步加载
+MCP Server的 `degradation.py` 仅返回fallback响应，未实际调用scripts/目录下的Python脚本。当MCP Server不可用时，所有MCP工具调用将失败，系统完全无法运行。
 
-当前无真正的异步加载实现。`batch_mode`参数设计为并发加载，但实际执行仍依赖LLM的顺序工具调用。
+**代码位置**: `.trae/skills/xuansto-skill-v2/PROBLEM.md` P0-01
 
-### 4.3 与"渐进式加载披露"目标的差距
+### 4.3 Hook系统
 
-#### 4.3.1 缺少加载状态管理
+#### 4.3.1 实现方式
 
-**现状**：
-- `resource_load_status`工具定义了status/preload/cache/clear_cache/loading_progress五种action
-- `resource_state.json`定义了持久化格式
-- 但无实际的状态管理器实现——状态管理完全依赖LLM的上下文记忆
+v2通过 `hooks.json` 定义了3个配置级别（minimal/standard/strict），每个级别包含5种生命周期Hook：
 
-**差距**：
-- 无独立的状态管理进程/服务
-- 加载状态无法跨会话持久化（resource_state.json仅定义格式，无写入逻辑）
-- LLM上下文丢失后无法恢复加载状态
+| 生命周期 | 触发时机 | standard配置 |
+|----------|----------|-------------|
+| PreToolUse | 工具调用前 | security-block, token-budget-check |
+| PostToolUse | 工具调用后 | auto-format, encoding-check |
+| SessionStart | 会话开始 | load-context, kb-health-check |
+| Stop | 会话结束 | session-save, git-status-check, experience-precipitate |
+| PreCompact | 上下文压缩前 | save-state |
 
-#### 4.3.2 缺少优先级调度
+**代码位置**: `.trae/skills/xuansto-skill-v2/hooks/hooks.json`
 
-**现状**：
-- P0-P3优先级定义清晰
-- 资源释放顺序定义明确（P3→P2→P1→P0）
-- 但无调度器实现——优先级判断完全依赖LLM推理
+#### 4.3.2 Hook配置级别对比
 
-**差距**：
-- 无独立的优先级调度器
-- Token预算检查依赖`token-budget-guard.py`脚本，但脚本仅做检查不做调度
-- 缺少基于Token预算的自动资源释放机制
+| Hook | minimal | standard | strict |
+|------|---------|----------|--------|
+| security-block | ✅ | ✅ | ✅ |
+| token-budget-check | ❌ | ✅ | ✅ |
+| dangerous-cmd-confirm | ❌ | ❌ | ✅ |
+| auto-format | ❌ | ✅ | ✅ |
+| encoding-check | ❌ | ✅ | ✅ |
+| console-log-detect | ❌ | ❌ | ✅ |
+| type-check | ❌ | ❌ | ✅ |
+| load-context | ❌ | ✅ | ✅ |
+| kb-health-check | ❌ | ✅ | ✅ |
+| platform-detect | ❌ | ❌ | ✅ |
+| session-save | ✅ | ✅ | ✅ |
+| git-status-check | ❌ | ✅ | ✅ |
+| experience-precipitate | ❌ | ✅ | ✅ |
+| pattern-detect | ❌ | ❌ | ✅ |
+| save-state | ❌ | ✅ | ✅ |
+| decision-log-persist | ❌ | ❌ | ✅ |
 
-#### 4.3.3 缺少占位符
+**环境变量覆盖**: `ECC_HOOK_PROFILE`
 
-**现状**：
-- 功能可用性披露表定义了"不可用功能"列表
-- disclosure_note定义了3步披露流程
-- 但无占位符机制——不可用功能不会在输出中预留位置
+**代码位置**: `.trae/skills/xuansto-skill-v2/.skill-config.yaml` L113-L120
 
-**差距**：
-- 未加载的资源无占位符标记
-- 用户无法感知哪些功能"将要加载但尚未加载"
-- 缺少"加载中"状态的视觉反馈
+### 4.4 模型路由
 
-#### 4.3.4 其他差距
+#### 4.4.1 实现方式
 
-| 差距项 | 说明 |
-|--------|------|
-| 无加载进度条 | loading_progress仅返回0.0-1.0浮点数，无UI呈现 |
-| 无预加载预测 | 缺少基于用户行为预测下一阶段并提前加载的机制 |
-| 无缓存失效 | content_hash定义了但无实际缓存验证逻辑 |
-| 无TTL管理 | LoadingProgress.ttl定义了但无过期清理逻辑 |
-| 降级策略不完整 | MCP不可用时降级为"直接读取本地文件"，但未定义文件读取失败的处理 |
+v2通过 `agents/registry.yaml` 为每个Agent定义了模型路由级别：
 
-#### 4.3.5 差距总结
+| 级别 | 适用场景 | Token节省 |
+|------|----------|-----------|
+| fast | 搜索/简单编辑/文档 | 60% |
+| standard | 多文件实现/代码审查/测试 | baseline |
+| deep | 架构设计/安全分析/复杂调试 | -50% |
 
-| 维度 | 设计完整度 | 实现完整度 | 差距 |
-|------|-----------|-----------|------|
-| 加载阶段定义 | ★★★★★ | ★★★☆☆ | 定义清晰但无状态管理器 |
-| 优先级调度 | ★★★★☆ | ★★☆☆☆ | 优先级定义完整但无调度器 |
-| 功能可用性披露 | ★★★★☆ | ★★★☆☆ | 披露规则清晰但无占位符 |
-| 降级策略 | ★★★★★ | ★★★★☆ | 降级链完整，脚本覆盖率高 |
-| Token优化 | ★★★★☆ | ★★★☆☆ | 压缩策略定义完整但自动化不足 |
-| 缓存管理 | ★★★☆☆ | ★☆☆☆☆ | 格式定义但无实现 |
+**Agent模型路由分布**:
+- fast: 8个Agent（Data Seeder, Unit Tester, Bug Scanner, Comment Verifier, Doc Reviewer, Monitor Specialist, Token Optimizer, Quality Monitor, Progress Tracker, Decision Logger）
+- standard: 33个Agent（大多数工程/测试/DevOps Agent）
+- deep: 10个Agent（Orchestrator, System Architect, Design System Generator, Native Module Developer, IPC Specialist, AI Penetration Tester, Security Tester, Security Auditor, Penetration Tester, Test Architect）
 
----
+**代码位置**: `.trae/skills/xuansto-skill-v2/agents/registry.yaml` L286-L289
 
-## 5. 可复用与需废弃部分
+### 4.5 与渐进式目标的差距
 
-### 5.1 可直接迁移至新Skill或MCP的模块
+#### 4.5.1 已实现的渐进式特性
 
-#### 5.1.1 MCP工具定义（高复用）
+| 特性 | 实现状态 | 说明 |
+|------|----------|------|
+| 4阶段加载 | ✅ 已实现 | constraints.yaml定义了skeleton/functional/enhanced/full |
+| 资源优先级 | ✅ 已实现 | P0-P3四级优先级 |
+| 按需加载策略 | ✅ 已实现 | .skill-config.yaml配置lazy加载 |
+| Phase感知卸载 | ✅ 已实现 | phase_transition_rules定义了Phase间资源切换 |
+| 披露规则 | ✅ 已实现 | on_unavailable定义了3步披露流程 |
+| Token预算控制 | ✅ 已实现 | 每阶段Token预算+三级压缩 |
 
-[references/mcp-tools.md](file:///d:/Projects/TraeProjects/skiller/.trae/skills/xuansto-skill-v2/references/mcp-tools.md)中的13个MCP工具定义完整，包含参数Schema、返回值JSON Schema、错误码、降级脚本路径和调用示例。可直接迁移至xuansto-mcp-server实现。
+#### 4.5.2 未实现/存在差距的特性
 
-| MCP工具 | 复用价值 | 迁移难度 |
-|---------|---------|---------|
-| skill_analyze | 高 | 低 - 已有skill-test.py降级实现 |
-| knowledge_search | 高 | 中 - 需ChromaDB/FTS5依赖 |
-| quality_gate_check | 高 | 低 - 已有skill-test.py --gate降级实现 |
-| spec_drift_detect | 高 | 低 - 已有spec-drift-detector.py |
-| security_scan | 高 | 中 - 需OWASP Agentic Top 10规则 |
-| code_simplify | 中 | 低 - 已有code-simplifier.py |
-| session_manage | 高 | 中 - 需持久化存储 |
-| workflow_dispatch | 高 | 中 - 需工作流引擎 |
-| agent_status | 中 | 低 - 静态注册表查询 |
-| hook_manage | 中 | 低 - Hook配置管理 |
-| resource_load_status | 中 | 中 - 需状态管理器 |
-| context_compress | 中 | 低 - 已有context-compressor.py |
-| server_health | 低 | 低 - 简单健康检查 |
-
-#### 5.1.2 质量门禁定义（高复用）
-
-[references/quality-gates.md](file:///d:/Projects/TraeProjects/skiller/.trae/skills/xuansto-skill-v2/references/quality-gates.md)中的54项门禁定义完整，包含检查项、通过条件、阻塞级别、自动化程度和失败处理。可直接迁移至独立的质量门禁服务。
-
-#### 5.1.3 Agent注册表（高复用）
-
-[references/agent-registry.md](file:///d:/Projects/TraeProjects/skiller/.trae/skills/xuansto-skill-v2/references/agent-registry.md)和[agents/](file:///d:/Projects/TraeProjects/skiller/.trae/skills/xuansto-skill-v2/agents/)目录下的57个Agent定义文件，结构统一，可直接迁移。
-
-#### 5.1.4 命令定义（中复用）
-
-[commands/](file:///d:/Projects/TraeProjects/skiller/.trae/skills/xuansto-skill-v2/commands/)目录下的27个命令定义文件，结构统一（frontmatter+MCP调用链+降级策略+涉及Agent+参数定义+执行流程+质量门禁+使用示例），可作为新Skill的命令模板。
-
-#### 5.1.5 配置系统（高复用）
-
-[configs/default.yaml](file:///d:/Projects/TraeProjects/skiller/.trae/skills/xuansto-skill-v2/configs/default.yaml)的配置结构完整，覆盖编排器、质量门禁、通信协议、桌面应用、日志、知识库、安全、可观测性、成本优化、平台检测、人机协作、编码、Token优化等13个配置域。
-
-#### 5.1.6 Hook系统（高复用）
-
-[hooks/hooks.json](file:///d:/Projects/TraeProjects/skiller/.trae/skills/xuansto-skill-v2/hooks/hooks.json)定义了3个Profile（minimal/standard/strict）和14个Hook，结构清晰，可直接迁移。
-
-#### 5.1.7 降级脚本（高复用）
-
-scripts/目录下的降级脚本可直接迁移，特别是：
-- `scripts/skill-test.py` - 多功能降级脚本
-- `scripts/knowledge-server.py` + `scripts/knowledge_server/` - 完整知识服务
-- `scripts/agentic-security-scanner.py` - 安全扫描
-- `scripts/spec-drift-detector.py` - 规格漂移检测
-- `scripts/code-simplifier.py` - 代码简化
-
-### 5.2 需重写或废弃的部分
-
-#### 5.2.1 v1 SKILL.md（需废弃）
-
-[.trae/skills/xuansto-skill/SKILL.md](file:///d:/Projects/TraeProjects/skiller/.trae/skills/xuansto-skill/SKILL.md)已标记为`deprecated: true`，`migrate_to: xuansto-skill-v2`。v1与v2的主要差异：
-
-| 维度 | v1 (5.0.0) | v2 (7.0.0) | 变更 |
-|------|-----------|-----------|------|
-| MCP工具 | 无MCP依赖 | 13个MCP工具 | 新增MCP层 |
-| 降级策略 | 脚本直接调用 | MCP优先→脚本降级 | 增加MCP层 |
-| 渐进式加载 | 无 | 4级加载+披露 | 新增 |
-| MCP Resource | 无 | 7个URI | 新增 |
-| 知识检索 | retrieve/inject/precipitate | retrieve/inject/precipitate(简化) | 简化API |
-| 会话管理 | track/restore | save/load/list/detect/verify/track/restore | 扩展action |
-| 工作流调度 | phase(current/advance) | start/status/abort/phase/recover/snapshots | 扩展action |
-| Agent状态 | list/query | list/by_phase/detail/create/match/assign/release/... | 大幅扩展 |
-| 引用索引 | 72+ Refs, 49 Scripts | 按需加载 | 精简 |
-
-#### 5.2.2 渐进式加载状态管理（需重写）
-
-当前渐进式加载的状态管理完全依赖LLM上下文记忆，缺少：
-- 独立的状态管理服务
-- 跨会话持久化
-- 自动资源释放调度器
-- 缓存失效和TTL管理
-
-**建议**：将状态管理逻辑迁移至xuansto-mcp-server的`resource_load_status`工具中实现，而非依赖LLM推理。
-
-#### 5.2.3 工作流引擎（需重写）
-
-当前工作流调度完全依赖LLM的Phase推进推理，缺少：
-- 独立的工作流引擎进程
-- Phase状态机实现
-- 自动门禁检查和Phase转换
-- 工作流快照和恢复
-
-**建议**：将工作流引擎迁移至xuansto-mcp-server的`workflow_dispatch`工具中实现。
-
-#### 5.2.4 Token预算管理（需重写）
-
-当前Token预算管理依赖`token-budget-guard.py`脚本和LLM自律，缺少：
-- 实时Token计数器
-- 自动压缩触发
-- 并行→串行自动降级
-- 预算耗尽优雅退出
-
-#### 5.2.5 重复的触发矩阵（需精简）
-
-phrases(47个)和keywords(83个)存在约30%语义重叠，建议：
-- 合并去重
-- 按语义聚类分组
-- 降低触发矩阵Token消耗
+| 特性 | 差距 | 问题编号 |
+|------|------|----------|
+| 降级脚本实际调用 | degradation.py仅返回fallback响应 | SKILL-01 |
+| 参考文档完整性 | v2仅6个参考文件，v1有72+ | SKILL-02 |
+| MCP版本一致性 | MCP Server v3.5.0 vs Skill v8.0.0 | SKILL-03 |
+| knowledge_search inject/precipitate | mcp-tools.md仅文档了retrieve | SKILL-04 |
+| server_health文档 | 工具已实现但未在mcp-tools.md列出 | SKILL-05 |
+| 评估配置 | v1有evals/目录，v2无 | SKILL-06 |
+| CHANGELOG | v2无版本变更追踪 | SKILL-07 |
+| v1/v2文件重复 | agents/commands/workflows在两版本中同时存在 | SKILL-08 |
+| SKILL.md行数 | v2增强后可能超过500行上限 | SKILL-09 |
 
 ---
 
-## 6. 引用依赖追踪
+## 5. 可复用模块清单 / 需废弃或重写部分
 
-### 6.1 核心依赖图
+### 5.1 可复用模块
+
+| 模块 | 来源 | 说明 | 复用方式 |
+|------|------|------|----------|
+| agents/registry.yaml | v2 | 57 Agent结构化注册表（含Phase/模型路由） | 直接复用，按需扩展 |
+| commands/routes.yaml | v2 | 27+命令路由表（含MCP工具链/降级/Phase映射） | 直接复用 |
+| constraints.yaml | v2 | 核心约束+Token预算+降级规则+披露规则 | 直接复用 |
+| triggers.yaml | v2 | 触发条件外部化定义 | 直接复用 |
+| hooks/hooks.json | v2 | Hook系统3级配置 | 直接复用 |
+| configs/default.yaml | v2 | 完整默认配置（编排器/门禁/通信/桌面/安全等） | 直接复用 |
+| references/quality-gates.md | v2 | 54项质量门禁完整定义 | 直接复用 |
+| references/workflow-phases.md | v2 | 9阶段工作流详细步骤 | 直接复用 |
+| references/mcp-tools.md | v2 | 17个MCP工具参数与返回值 | 直接复用，需补充缺失工具 |
+| scripts/knowledge_server/ | v2 | 知识库服务完整实现（20+文件） | 直接复用 |
+| scripts/*.py | v2 | 60+降级脚本 | 直接复用，需验证降级调用链 |
+| workflows/_yaml/*.yaml | v2 | 15个工作流YAML定义 | 直接复用 |
+| templates/ | v2 | 19个模板文件 | 直接复用 |
+
+### 5.2 需废弃部分
+
+| 模块 | 来源 | 原因 |
+|------|------|------|
+| v5 SKILL.md内嵌触发条件 | v1 | 已外部化到triggers.yaml |
+| v5 SKILL.md内嵌命令路由表 | v1 | 已外部化到routes.yaml |
+| v5 SKILL.md内嵌Agent索引表 | v1 | 已外部化到registry.yaml |
+| v5 SKILL.md内嵌命令详细步骤 | v1 | 已外部化到commands/*.md |
+| v5 references/中与v2重复的文件 | v1 | v2已有更新版本 |
+| v5 .knowledge/目录结构 | v1 | v2有独立的.knowledge/结构 |
+| v5 memory/目录 | v1 | v2已精简 |
+
+### 5.3 需重写部分
+
+| 模块 | 来源 | 原因 | 重写方案 |
+|------|------|------|----------|
+| degradation.py | v2 MCP Server | 仅返回fallback响应，未实际调用脚本 | 实现到scripts/目录下Python脚本的实际调用链 |
+| mcp-tools.md | v2 references/ | 缺少server_health、knowledge_search inject/precipitate文档 | 补充缺失工具文档 |
+| PROBLEM.md | v2 | 9个问题全部未修复 | 按优先级修复P0→P1→P2→P3 |
+| evals/ | v2 | 缺失评估配置 | 从v1迁移并适配v2结构 |
+| CHANGELOG.md | v2 | 缺失版本变更追踪 | 创建v2专用CHANGELOG |
+
+---
+
+## 6. 依赖图
+
+### 6.1 文件调用链（Mermaid）
 
 ```mermaid
 graph TD
-    SKILL["SKILL.md<br/>核心入口"] --> CMDS["commands/<br/>27个命令"]
-    SKILL --> REFS["references/<br/>6个参考文档"]
-    SKILL --> AGENTS["agents/<br/>57个Agent定义"]
-    SKILL --> WORKFLOWS["workflows/<br/>15个工作流"]
-    SKILL --> CONFIG["configs/default.yaml<br/>默认配置"]
-    SKILL --> HOOKS["hooks/hooks.json<br/>Hook定义"]
-    SKILL --> SCRIPTS["scripts/<br/>降级脚本集"]
-    SKILL --> TEMPLATES["templates/<br/>19个模板文件"]
+    SKILL["SKILL.md<br/>(入口，71行)"]
+    SKILL -->|{{include:}}| TRIGGERS["triggers.yaml<br/>(触发条件)"]
+    SKILL -->|{{include:}}| ROUTES["commands/routes.yaml<br/>(命令路由)"]
+    SKILL -->|{{include:}}| REGISTRY["agents/registry.yaml<br/>(Agent注册表)"]
+    SKILL -->|{{include:}}| CONSTRAINTS["constraints.yaml<br/>(约束配置)"]
+    SKILL -->|按需加载| MCP_TOOLS["references/mcp-tools.md<br/>(MCP工具参考)"]
+    SKILL -->|按需加载| WF_PHASES["references/workflow-phases.md<br/>(工作流阶段)"]
+    SKILL -->|按需加载| Q_GATES["references/quality-gates.md<br/>(质量门禁)"]
 
-    CMDS --> |"MCP调用链"| MCP["xuansto-mcp-server<br/>13个MCP工具"]
-    CMDS --> |"降级策略"| SCRIPTS
+    ROUTES -->|detail引用| CMD_MD["commands/*.md<br/>(27+命令详情)"]
+    REGISTRY -->|file引用| AGENT_MD["agents/*/*.md<br/>(57 Agent定义)"]
 
-    REFS --> |"mcp-tools.md"| MCP
-    REFS --> |"quality-gates.md"| GATES["54项质量门禁"]
-    REFS --> |"workflow-phases.md"| WORKFLOWS
-    REFS --> |"progressive-loading.md"| LOADING["渐进式加载状态"]
-    REFS --> |"agent-registry.md"| AGENTS
+    CONSTRAINTS -->|降级脚本| SCRIPTS["scripts/*.py<br/>(60+降级脚本)"]
+    CONSTRAINTS -->|知识检索降级| KB_SERVER["scripts/knowledge_server/<br/>(知识库服务)"]
 
-    WORKFLOWS --> |".yaml双格式"| WF_YAML["workflows/_yaml/<br/>15个YAML定义"]
-    WORKFLOWS --> |".md文档"| WF_MD["workflows/*.md<br/>15个Markdown定义"]
+    SKILL -->|配置| CONFIG[".skill-config.yaml<br/>(运行时配置)"]
+    SKILL -->|配置| DEFAULT["configs/default.yaml<br/>(默认配置)"]
+    SKILL -->|Hook| HOOKS["hooks/hooks.json<br/>(Hook配置)"]
 
-    HOOKS --> |"security-block"| SCRIPT_SEC["scripts/check-encoding.py"]
-    HOOKS --> |"token-budget-check"| SCRIPT_TOKEN["scripts/token-budget-guard.py"]
-    HOOKS --> |"session-save"| SCRIPT_SESS["scripts/session-persist.py"]
+    ROUTES -->|MCP工具调用| MCP_SERVER["xuansto-mcp-server<br/>(MCP服务进程)"]
+    MCP_SERVER -->|降级| SCRIPTS
 
-    MCP --> |"降级"| SCRIPTS
+    CONFIG -->|Hook profile| HOOKS
+    CONFIG -->|Token预算| CONSTRAINTS
+    CONFIG -->|会话持久化| SESSION_SCRIPTS["scripts/session-*.py"]
 
-    SCRIPTS --> KS_CORE["scripts/knowledge_server/<br/>30+模块"]
-    SCRIPTS --> KS_SIMPLE["scripts/knowledge-server.py<br/>简化入口"]
-    SCRIPTS --> SKILL_TEST["scripts/skill-test.py<br/>多功能降级"]
-    SCRIPTS --> SECURITY["scripts/agentic-security-scanner.py"]
-    SCRIPTS --> SPEC_DRIFT["scripts/spec-drift-detector.py"]
-    SCRIPTS --> CODE_SIMP["scripts/code-simplifier.py"]
-    SCRIPTS --> CONTEXT["scripts/context-compressor.py"]
-    SCRIPTS --> HEALTH["scripts/health-checker.py"]
-    SCRIPTS --> SESSION["scripts/init-session.py<br/>session-catchup.py<br/>session-persist.py"]
-    SCRIPTS --> PROJECT["scripts/project-initializer.py"]
+    WF_PHASES -->|工作流定义| WF_YAML["workflows/_yaml/*.yaml<br/>(15个工作流)"]
+    WF_YAML -->|工作流详情| WF_MD["workflows/*.md<br/>(工作流文档)"]
+
+    Q_GATES -->|门禁脚本| GATE_SCRIPTS["scripts/skill-test.py<br/>scripts/coverage-check.py<br/>scripts/agentic-security-scanner.py<br/>..."]
+
+    ROUTES -->|模板引用| TEMPLATES["templates/*.md<br/>(19个模板)"]
+
+    style SKILL fill:#e1f5fe
+    style MCP_SERVER fill:#fff3e0
+    style SCRIPTS fill:#e8f5e9
+    style CONSTRAINTS fill:#fce4ec
 ```
 
-### 6.2 MCP工具调用链依赖图
+### 6.2 MCP工具依赖关系图
 
 ```mermaid
 graph LR
-    subgraph "Phase 0 初始化"
-        SA[skill_analyze] --> WD[workflow_dispatch]
-        WD --> AS[agent_status]
-        AS --> RLS[resource_load_status]
-        RLS --> QGC[quality_gate_check]
+    subgraph 核心工具
+        SA[skill_analyze]
+        WD[workflow_dispatch]
+        QGC[quality_gate_check]
+        KS[knowledge_search]
     end
 
-    subgraph "Phase 1-2 需求+架构"
-        KS[knowledge_search] --> RLS2[resource_load_status]
-        RLS2 --> QGC2[quality_gate_check]
+    subgraph 安全工具
+        SS[security_scan]
+        SDD[spec_drift_detect]
+        CS[code_simplify]
     end
 
-    subgraph "Phase 3-4 测试+实现"
-        QGC3[quality_gate_check] --> AS2[agent_status]
-        AS2 --> HM[hook_manage]
+    subgraph 状态工具
+        SM[session_manage]
+        AS[agent_status]
+        HM[hook_manage]
+        RLS[resource_load_status]
     end
 
-    subgraph "Phase 5 验证"
-        SS[security_scan] --> SDD[spec_drift_detect]
-        SDD --> AS3[agent_status]
-        AS3 --> QGC4[quality_gate_check]
+    subgraph 辅助工具
+        CC[context_compress]
+        SH[server_health]
+        DL[decision_log]
+        TB[token_budget]
+        PI[project_init]
     end
 
-    subgraph "Phase 6-7 验收+重构"
-        QGC5[quality_gate_check] --> CS[code_simplify]
-        CS --> CC[context_compress]
-    end
-
-    subgraph "跨Phase"
-        SM[session_manage] -.-> |"Hook触发"| QGC
-        SH[server_health] -.-> |"启动时"| SA
-    end
+    WD -->|Phase推进| QGC
+    WD -->|Agent分配| AS
+    WD -->|资源预加载| RLS
+    QGC -->|门禁失败| SM
+    KS -->|知识注入| SM
+    SS -->|安全发现| QGC
+    SDD -->|漂移报告| QGC
+    CS -->|简化建议| QGC
+    RLS -->|Token预算| TB
+    SM -->|决策记录| DL
+    CC -->|压缩后| RLS
+    PI -->|初始化| WD
 ```
 
-### 6.3 命令→MCP工具→降级脚本完整调用链
+### 6.3 命令→MCP工具→降级脚本映射
 
 ```mermaid
 graph TD
-    subgraph "命令层"
+    subgraph 命令层
         INIT["/init"]
-        BRAINSTORM["/brainstorm"]
-        CLARIFY["/clarify"]
         PLAN["/plan"]
-        SPEC["/spec"]
-        DESIGN["/design"]
-        IMPLEMENT["/implement"]
+        IMPL["/implement"]
         TEST["/test"]
         REVIEW["/review"]
-        FIX["/fix"]
         AUDIT["/audit"]
-        ACCEPT["/accept"]
-        DEPLOY["/deploy"]
-        SIMPLIFY["/simplify"]
-        REFACTOR["/refactor"]
         LOOP["/loop"]
-        SPRINT["/sprint"]
-        BUILD["/build"]
-        BDESK["/build-desktop"]
-        RDESK["/release-desktop"]
-        LEARN["/learn"]
-        AST["/agent-status"]
-        STATUS["/status"]
-        ROLLBACK["/rollback"]
-        CANCEL["/cancel-loop"]
-        EXECPLAN["/execute-plan"]
-        DSYS["/design-system"]
     end
 
-    subgraph "MCP工具层"
+    subgraph MCP工具层
         SA2[skill_analyze]
         KS2[knowledge_search]
-        QGC6[quality_gate_check]
-        SDD2[spec_drift_detect]
+        WD2[workflow_dispatch]
+        QGC2[quality_gate_check]
         SS2[security_scan]
         CS2[code_simplify]
         SM2[session_manage]
-        WD2[workflow_dispatch]
-        AS4[agent_status]
-        HM2[hook_manage]
-        RLS3[resource_load_status]
-        CC2[context_compress]
-        SH2[server_health]
+        RLS2[resource_load_status]
+        DL2[decision_log]
+        TB2[token_budget]
+        PI2[project_init]
     end
 
-    subgraph "降级脚本层"
+    subgraph 降级脚本层
         ST["skill-test.py"]
-        KSV["knowledge-server.py"]
-        SDD3["spec-drift-detector.py"]
+        KS_PY["knowledge-server.py"]
+        PI_PY["project-initializer.py"]
         ASS["agentic-security-scanner.py"]
-        CS3["code-simplifier.py"]
-        IS["init-session.py"]
-        SC["session-catchup.py"]
-        SP["session-persist.py"]
-        PI["project-initializer.py"]
-        CE["check-encoding.py"]
-        TBG["token-budget-guard.py"]
-        CC3["context-compressor.py"]
+        CS_PY["code-simplifier.py"]
+        SC_PY["session-catchup.py"]
+        SP_PY["session-persist.py"]
         HC["health-checker.py"]
     end
 
     INIT --> SA2 --> ST
-    INIT --> WD2 --> PI
-    BRAINSTORM --> KS2 --> KSV
-    BRAINSTORM --> WD2
-    CLARIFY --> KS2
+    INIT --> KS2 --> KS_PY
+    INIT --> WD2 --> PI_PY
+    INIT --> PI2 --> PI_PY
+    INIT --> DL2
+
     PLAN --> SA2
     PLAN --> KS2
-    PLAN --> AS4
-    SPEC --> WD2
-    SPEC --> QGC6 --> ST
-    SPEC --> SDD2 --> SDD3
-    DESIGN --> QGC6
-    DESIGN --> KS2
-    IMPLEMENT --> QGC6
-    IMPLEMENT --> AS4
-    IMPLEMENT --> HM2 --> CE
-    TEST --> QGC6
-    REVIEW --> QGC6
+    PLAN --> WD2
+    PLAN --> DL2
+    PLAN --> TB2
+
+    IMPL --> WD2
+    IMPL --> QGC2 --> ST
+    IMPL --> HM2[hook_manage]
+
+    TEST --> QGC2
+    TEST --> WD2
+
+    REVIEW --> QGC2
     REVIEW --> SS2 --> ASS
-    REVIEW --> CS2 --> CS3
-    FIX --> SM2 --> IS
-    FIX --> QGC6
-    FIX --> SS2
+    REVIEW --> CS2 --> CS_PY
+
     AUDIT --> SS2
-    AUDIT --> QGC6
-    AUDIT --> SDD2
-    ACCEPT --> QGC6
-    DEPLOY --> QGC6
-    DEPLOY --> SH2 --> HC
-    DEPLOY --> WD2
-    SIMPLIFY --> CS2
-    SIMPLIFY --> QGC6
-    SIMPLIFY --> CC2 --> CC3
-    REFACTOR --> CS2
-    REFACTOR --> QGC6
-    REFACTOR --> CC2
-    LOOP --> SA2
-    LOOP --> KS2
-    LOOP --> QGC6
-    LOOP --> SDD2
-    LOOP --> SS2
-    LOOP --> CS2
-    LOOP --> SM2
+    AUDIT --> QGC2
+    AUDIT --> SDD2[spec_drift_detect] --> SDD_PY["spec-drift-detector.py"]
+
     LOOP --> WD2
-    LOOP --> AS4
-    LOOP --> HM2
-    LOOP --> RLS3
-    LOOP --> CC2
-    LOOP --> SH2
-    SPRINT --> WD2
-    SPRINT --> SM2
-    SPRINT --> RLS3
-    BUILD --> SA2
-    BUILD --> QGC6
-    BUILD --> SH2
-    BDESK --> QGC6
-    BDESK --> SA2
-    BDESK --> WD2
-    RDESK --> QGC6
-    RDESK --> WD2
-    LEARN --> KS2
-    AST --> AS4
-    STATUS --> WD2
-    STATUS --> SM2
-    STATUS --> SH2
-    ROLLBACK --> SM2
-    ROLLBACK --> WD2
-    CANCEL --> WD2
-    CANCEL --> SM2
-    EXECPLAN --> WD2
-    EXECPLAN --> SM2
-    DSYS --> QGC6
-    DSYS --> KS2
-    DSYS --> WD2
-```
-
-### 6.4 文件依赖统计
-
-| 文件/目录 | 被引用次数 | 引用来源 |
-|-----------|-----------|----------|
-| scripts/skill-test.py | 15 | skill_analyze降级, quality_gate_check降级, agent_status降级, /build, /test, /accept, /fix, /audit, /deploy, /build-desktop, /release-desktop, /implement, /review |
-| scripts/knowledge-server.py | 6 | knowledge_search降级, /brainstorm, /clarify, /plan, /learn, /design, /design-system |
-| scripts/agentic-security-scanner.py | 4 | security_scan降级, /review, /audit, /fix |
-| scripts/code-simplifier.py | 4 | code_simplify降级, /review, /simplify, /refactor |
-| scripts/spec-drift-detector.py | 3 | spec_drift_detect降级, /spec, /audit |
-| scripts/init-session.py | 5 | session_manage(save/init)降级, /brainstorm, /clarify, /plan, /fix, /sprint |
-| scripts/session-catchup.py | 3 | session_manage(load/restore)降级, /status, /rollback |
-| scripts/session-persist.py | 3 | session_manage(兜底)降级, hook_manage降级 |
-| scripts/project-initializer.py | 2 | workflow_dispatch(start)降级, /init |
-| scripts/context-compressor.py | 3 | context_compress降级, /simplify, /refactor, /loop |
-| scripts/health-checker.py | 3 | server_health降级, /deploy, /build, /status |
-| scripts/check-encoding.py | 1 | hook_manage(encoding-check)降级 |
-| scripts/token-budget-guard.py | 1 | hook_manage(token-budget-check)降级 |
-| references/mcp-tools.md | 1 | SKILL.md按需加载 |
-| references/quality-gates.md | 1 | SKILL.md按需加载 |
-| references/workflow-phases.md | 1 | SKILL.md按需加载 |
-| references/progressive-loading.md | 1 | SKILL.md按需加载 |
-| references/agent-registry.md | 1 | SKILL.md按需加载 |
-| references/knowledge-workflow-details.md | 1 | v1遗留，v2未引用 |
-| configs/default.yaml | 1 | SKILL.md配置引用 |
-| hooks/hooks.json | 1 | SKILL.md Hook系统引用 |
-
-### 6.5 v1→v2迁移依赖
-
-```mermaid
-graph LR
-    V1["xuansto-skill v5.0.0<br/>(deprecated)"] --> |"migrate_to"| V2["xuansto-skill-v2 v7.0.0"]
-
-    V1 -.-> |"保留"| CORE["核心约束<br/>5条规则"]
-    V1 -.-> |"保留"| AGENT_IDX["Agent索引表<br/>57 Agent/13层"]
-    V1 -.-> |"保留"| CMD_ROUTE["命令路由表<br/>27命令"]
-    V1 -.-> |"保留"| GATES["质量门禁<br/>54项"]
-    V1 -.-> |"保留"| SCRIPTS["降级脚本<br/>核心脚本集"]
-
-    V1 -.-> |"重写"| MCP["MCP工具层<br/>13个MCP工具"]
-    V1 -.-> |"重写"| LOADING["渐进式加载<br/>4级+披露"]
-    V1 -.-> |"重写"| RESOURCE["MCP Resource<br/>7个URI"]
-    V1 -.-> |"重写"| SESSION["会话管理<br/>扩展action"]
-    V1 -.-> |"重写"| WF["工作流调度<br/>扩展action"]
-
-    V1 -.-> |"废弃"| V1_REFS["v1引用索引<br/>72+ Refs"]
-    V1 -.-> |"废弃"| V1_WF_DETAIL["v1工作流详情<br/>内联于SKILL.md"]
-    V1 -.-> |"废弃"| V1_PARALLEL["v1并行化策略<br/>独立参考文档"]
-    V1 -.-> |"废弃"| V1_EVAL["v1评估框架<br/>独立参考文档"]
-    V1 -.-> |"废弃"| V1_MODEL["v1模型路由<br/>独立参考文档"]
+    LOOP --> SM2 --> SC_PY
+    LOOP --> RLS2
+    LOOP --> TB2
+    LOOP --> DL2
 ```
 
 ---
 
-> 评审结论：xuansto-skill-v2 7.0.0在架构设计上显著优于v1，MCP工具层和渐进式加载披露是核心创新点。主要差距在于渐进式加载的状态管理、优先级调度和占位符机制尚未实现，仍依赖LLM推理而非独立服务。建议将状态管理、工作流引擎和Token预算管理迁移至xuansto-mcp-server实现，以实现真正的"渐进式加载披露"目标。
+## 7. 问题清单
+
+### SKILL-01: v2降级模式不可用
+
+- **严重级别**: P0 阻塞
+- **需求来源**: SKILL.md声明"MCP工具优先→脚本降级→文件系统兜底"
+- **当前状态**: MCP Server的degradation.py仅返回fallback响应，未实际调用scripts/目录下的Python脚本
+- **影响**: MCP Server不可用时，所有MCP工具调用将失败，系统完全无法运行
+- **修复方案**: 实现degradation.py到scripts/目录下Python脚本的实际调用链
+- **代码位置**: `scripts/knowledge_server/degradation.py`
+
+### SKILL-02: v2参考文档严重不足
+
+- **严重级别**: P0 阻塞
+- **需求来源**: v1有72+参考文件，v2仅6个
+- **当前状态**: v2 references/仅包含mcp-tools.md、workflow-phases.md、quality-gates.md、agent-registry.md、knowledge-workflow-details.md、progressive-loading.md
+- **影响**: Agent和命令执行时无法获取详细参考（如编码规范、安全指南、桌面开发指南等）
+- **修复方案**: 从v1迁移关键参考文件到v2 references/，或通过MCP Resource提供
+- **代码位置**: `.trae/skills/xuansto-skill-v2/references/`
+
+### SKILL-03: MCP Server版本与Skill版本不一致
+
+- **严重级别**: P1 高
+- **当前状态**: MCP Server v3.5.0 vs Skill v8.0.0
+- **影响**: 用户难以判断版本兼容性，SKILL.md声明需要>=4.0.0但实际为3.5.0
+- **修复方案**: 在SKILL.md和MCP Server README中互相声明兼容版本；升级MCP Server到4.0.0+
+- **代码位置**: `.trae/skills/xuansto-skill-v2/SKILL.md` L43, `scripts/knowledge_server/mcp_server.py`
+
+### SKILL-04: knowledge_search缺少inject/precipitate action文档
+
+- **严重级别**: P1 高
+- **当前状态**: v1 SKILL.md声明knowledge_search支持retrieve/inject/precipitate三个action，v2 mcp-tools.md仅文档了retrieve
+- **影响**: 知识注入和经验沉淀功能无法使用
+- **修复方案**: 在mcp-tools.md中补充inject和precipitate action的参数和返回值文档
+- **代码位置**: `.trae/skills/xuansto-skill-v2/references/mcp-tools.md` L83-L148
+
+### SKILL-05: server_health工具未在v2 mcp-tools.md中列出
+
+- **严重级别**: P1 高
+- **当前状态**: MCP Server实现了server_health工具，但v2 references/mcp-tools.md未包含
+- **影响**: 用户无法了解server_health工具的参数和返回值
+- **修复方案**: 在mcp-tools.md中补充server_health工具文档
+- **代码位置**: `.trae/skills/xuansto-skill-v2/references/mcp-tools.md`
+
+### SKILL-06: v2缺少评估配置文件
+
+- **严重级别**: P2 中
+- **当前状态**: v1有evals/目录（含mcp_evaluation.xml和trigger_eval.json），v2无
+- **影响**: 无法进行技能评估和触发准确性测试
+- **修复方案**: 从v1迁移evals/目录并适配v2结构
+- **代码位置**: `.trae/skills/xuansto-skill/evals/`
+
+### SKILL-07: v2缺少CHANGELOG.md
+
+- **严重级别**: P2 中
+- **当前状态**: v1有完整CHANGELOG，v2无
+- **影响**: 无法追踪v2的版本变更历史
+- **修复方案**: 创建v2专用CHANGELOG.md
+- **代码位置**: `.trae/skills/xuansto-skill-v2/`
+
+### SKILL-08: v1与v2存在大量重复文件
+
+- **严重级别**: P3 低
+- **当前状态**: agents/、commands/、workflows/等目录在v1和v2中同时存在，内容可能不一致
+- **影响**: 维护成本增加，可能出现不一致
+- **修复方案**: 确立v2为唯一维护版本，v1标记为archived或删除
+- **代码位置**: `.trae/skills/xuansto-skill/` vs `.trae/skills/xuansto-skill-v2/`
+
+### SKILL-09: v2 SKILL.md行数可能超过500行上限
+
+- **严重级别**: P3 低
+- **当前状态**: 当前71行，但增强后可能接近或超过skill-creator建议的500行上限
+- **影响**: Token消耗增加
+- **修复方案**: 将详细步骤外移到references/，SKILL.md保留概要和索引
+- **代码位置**: `.trae/skills/xuansto-skill-v2/SKILL.md`
+
+### SKILL-10: Hook系统与MCP工具的集成不完整
+
+- **严重级别**: P2 中
+- **当前状态**: hooks.json定义了Hook配置，但Hook执行依赖hook_manage MCP工具，降级时仅能执行部分Hook（encoding-check、token-budget-check、session-save）
+- **影响**: 降级模式下Hook覆盖不完整，auto-format、kb-health-check等Hook无法执行
+- **修复方案**: 为每个Hook实现独立的降级脚本
+- **代码位置**: `.trae/skills/xuansto-skill-v2/hooks/hooks.json`, `.trae/skills/xuansto-skill-v2/constraints.yaml` L119-L122
+
+### SKILL-11: Agent合并策略仅在default.yaml中定义，未在运行时实际执行
+
+- **严重级别**: P2 中
+- **当前状态**: configs/default.yaml定义了9条Agent合并规则，但无代码实现合并逻辑
+- **影响**: 小型项目无法自动减少Agent数量，Token浪费
+- **修复方案**: 在Orchestrator或MCP Server中实现Agent合并执行逻辑
+- **代码位置**: `.trae/skills/xuansto-skill-v2/configs/default.yaml` L21-L51
+
+### SKILL-12: 工作流YAML与MD存在同步风险
+
+- **严重级别**: P3 低
+- **当前状态**: workflows/目录同时包含_yaml/*.yaml和*.md两种格式，内容可能不一致
+- **影响**: 工作流定义存在两个来源，可能导致执行歧义
+- **修复方案**: 确定单一来源（建议YAML为权威源），MD由YAML生成
+- **代码位置**: `.trae/skills/xuansto-skill-v2/workflows/`
+
+---
+
+## 附录: 问题统计摘要
+
+| 严重级别 | 数量 | 问题编号 |
+|----------|------|----------|
+| P0 阻塞 | 2 | SKILL-01, SKILL-02 |
+| P1 高 | 3 | SKILL-03, SKILL-04, SKILL-05 |
+| P2 中 | 3 | SKILL-06, SKILL-07, SKILL-10, SKILL-11 |
+| P3 低 | 3 | SKILL-08, SKILL-09, SKILL-12 |
+| **总计** | **12** | |

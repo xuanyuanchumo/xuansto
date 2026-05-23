@@ -24,13 +24,14 @@ async def _run_with_session(test_fn):
 
 
 @pytest.mark.asyncio
-async def test_list_tools_returns_13_tools():
+async def test_list_tools_returns_17_tools():
     async def check(session):
         tools_result = await session.list_tools()
         tool_names = [t.name for t in tools_result.tools]
         expected_tools = [
             "skill_analyze",
             "knowledge_search",
+            "knowledge_inject",
             "quality_gate_check",
             "spec_drift_detect",
             "security_scan",
@@ -42,6 +43,9 @@ async def test_list_tools_returns_13_tools():
             "resource_load_status",
             "context_compress",
             "server_health",
+            "decision_log",
+            "token_budget",
+            "project_init",
         ]
         for tool_name in expected_tools:
             assert tool_name in tool_names, f"Missing tool: {tool_name}"

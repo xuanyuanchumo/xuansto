@@ -14,10 +14,12 @@
 !.trae/skills/xuansto-skill-v2/.knowledge/temp-scripts/.gitkeep
 .trae/skills/xuansto-skill-v2/.knowledge/script-errors/*
 !.trae/skills/xuansto-skill-v2/.knowledge/script-errors/.gitkeep
+.trae/skills/xuansto-skill-v2/.knowledge/index/knowledge.db
 
 .xuansto/
 
 .venv/
+.venv_test/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -43,3 +45,8 @@ logs/
 *.sqlite3
 
 副本/
+docs/_build/
+docs/_static/
+docs/_templates/
+!docs/plan/
+*.so
