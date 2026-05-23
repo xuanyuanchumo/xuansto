@@ -9,8 +9,13 @@ from mcp.server.fastmcp import FastMCP
 
 from ..core.config import SKILL_ROOT, REFERENCES_DIR, TEMPLATES_DIR, SESSION_DIR, WORK_DIR, _resolve_skill_file
 from ..core.logging_config import get_logger
+from ..core.validator import validate_path_safety
 
 logger = get_logger("skill_resources")
+
+
+def _is_safe_path(path_component: str, allowed_base_dirs: list[Path]) -> tuple[Path | None, str | None]:
+    return validate_path_safety(path_component, allowed_base_dirs)
 
 
 def _degraded_resource(uri: str, error: str) -> str:
@@ -68,11 +73,11 @@ def register(mcp: FastMCP) -> None:
     @mcp.resource("xuansto://templates/{name}")
     def template(name: str) -> str:
         try:
-            if "/" in name or "\\" in name or ".." in name:
-                return f"Error: invalid template name '{name}'"
-            template_path = TEMPLATES_DIR / f"{name}.md"
-            if template_path.resolve().is_relative_to(TEMPLATES_DIR.resolve()) and template_path.exists():
-                return template_path.read_text(encoding="utf-8")
+            safe_path, err = _is_safe_path(f"{name}.md", [TEMPLATES_DIR])
+            if err or safe_path is None:
+                return f"Error: invalid template name '{name}' ({err})"
+            if safe_path.resolve().is_relative_to(TEMPLATES_DIR.resolve()) and safe_path.exists():
+                return safe_path.read_text(encoding="utf-8")
             return f"Template '{name}' not found"
         except Exception as e:
             return _degraded_resource(f"xuansto://templates/{name}", str(e))

@@ -3,18 +3,463 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import threading
+import time
+from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, cast
 
 from .config import SCRIPTS_DIR, DATA_DIR
 from .errors import XuanstoMCPError, make_error_response, make_success_response, ERR_INTERNAL
 from .logging_config import get_logger
+from . import atomic_write
 
 logger = get_logger("degradation")
 
 MCP_AVAILABLE = True
 
 _FALLBACK_CONFIG_PATH = DATA_DIR / "fallback_config.yaml"
+
+
+class DegradationLevel(str, Enum):
+    L1_NORMAL = "L1_NORMAL"
+    L2_LOCAL_SEMANTIC = "L2_LOCAL_SEMANTIC"
+    L3_BM25_ONLY = "L3_BM25_ONLY"
+
+    def __lt__(self, other: object) -> bool:
+        if not isinstance(other, DegradationLevel):
+            return NotImplemented
+        order = [DegradationLevel.L1_NORMAL, DegradationLevel.L2_LOCAL_SEMANTIC, DegradationLevel.L3_BM25_ONLY]
+        return order.index(self) < order.index(other)
+
+    def __le__(self, other: object) -> bool:
+        return self == other or self < other
+
+    def __gt__(self, other: object) -> bool:
+        if not isinstance(other, DegradationLevel):
+            return NotImplemented
+        return not self <= other
+
+    def __ge__(self, other: object) -> bool:
+        return self == other or self > other
+
+
+_LEVEL_ORDER = [DegradationLevel.L1_NORMAL, DegradationLevel.L2_LOCAL_SEMANTIC, DegradationLevel.L3_BM25_ONLY]
+
+
+class _ComponentState:
+    __slots__ = ("name", "level", "check_fn", "recover_fn", "last_check_time",
+                 "last_check_healthy", "recovery_attempts", "next_recovery_time",
+                 "degraded_since", "levels")
+
+    def __init__(
+        self,
+        name: str,
+        check_fn: Callable[[], bool],
+        recover_fn: Callable[[], bool],
+        levels: list[str],
+    ) -> None:
+        self.name = name
+        self.level = levels[0] if levels else "normal"
+        self.check_fn = check_fn
+        self.recover_fn = recover_fn
+        self.last_check_time: float = 0.0
+        self.last_check_healthy: bool = True
+        self.recovery_attempts: int = 0
+        self.next_recovery_time: float = 0.0
+        self.degraded_since: float | None = None
+        self.levels = levels
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "level": self.level,
+            "last_check_time": self.last_check_time,
+            "last_check_healthy": self.last_check_healthy,
+            "recovery_attempts": self.recovery_attempts,
+            "next_recovery_time": self.next_recovery_time,
+            "degraded_since": self.degraded_since,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any], check_fn: Callable[[], bool],
+                  recover_fn: Callable[[], bool], levels: list[str]) -> _ComponentState:
+        state = cls(data.get("name", ""), check_fn, recover_fn, levels)
+        state.level = data.get("level", levels[0] if levels else "normal")
+        state.last_check_time = data.get("last_check_time", 0.0)
+        state.last_check_healthy = data.get("last_check_healthy", True)
+        state.recovery_attempts = data.get("recovery_attempts", 0)
+        state.next_recovery_time = data.get("next_recovery_time", 0.0)
+        state.degraded_since = data.get("degraded_since")
+        return state
+
+
+class DegradationManager:
+    _DEFAULT_HEALTH_INTERVAL: float = 30.0
+    _BASE_RECOVERY_BACKOFF: float = 5.0
+    _MAX_RECOVERY_BACKOFF: float = 300.0
+    _BACKOFF_MULTIPLIER: float = 2.0
+    _STATE_FILENAME: str = "degradation_state.json"
+
+    def __init__(self, health_interval: float | None = None) -> None:
+        self._lock = threading.RLock()
+        self._components: dict[str, _ComponentState] = {}
+        self._subscribers: list[Callable[[str, str, str], None]] = []
+        self._health_interval = health_interval or self._DEFAULT_HEALTH_INTERVAL
+        self._health_thread: threading.Thread | None = None
+        self._stop_event = threading.Event()
+        self._started = False
+        self._overall_level = DegradationLevel.L1_NORMAL
+
+    def register_component(
+        self,
+        name: str,
+        check_fn: Callable[[], bool],
+        recover_fn: Callable[[], bool],
+        levels: list[str] | None = None,
+    ) -> None:
+        if levels is None:
+            levels = ["normal", "degraded", "unavailable"]
+        with self._lock:
+            if name in self._components:
+                logger.warning("Component %s already registered, updating", name)
+                existing = self._components[name]
+                existing.check_fn = check_fn
+                existing.recover_fn = recover_fn
+                existing.levels = levels
+            else:
+                self._components[name] = _ComponentState(name, check_fn, recover_fn, levels)
+            logger.info("Registered degradation component: %s (levels=%s)", name, levels)
+
+    def get_current_level(self) -> str:
+        with self._lock:
+            return self._overall_level.value
+
+    def check_and_degrade(self, component: str) -> str:
+        with self._lock:
+            state = self._components.get(component)
+            if state is None:
+                logger.warning("Unknown component: %s", component)
+                return "unknown"
+            healthy = False
+            try:
+                healthy = state.check_fn()
+            except Exception as exc:
+                logger.warning("Health check failed for %s: %s", component, exc)
+                healthy = False
+            state.last_check_time = time.time()
+            state.last_check_healthy = healthy
+            if not healthy:
+                current_idx = state.levels.index(state.level) if state.level in state.levels else 0
+                if current_idx < len(state.levels) - 1:
+                    old_level = state.level
+                    state.level = state.levels[current_idx + 1]
+                    if state.degraded_since is None:
+                        state.degraded_since = time.time()
+                    state.recovery_attempts = 0
+                    state.next_recovery_time = time.time() + self._compute_backoff(0)
+                    logger.warning(
+                        "Component %s degraded: %s -> %s", component, old_level, state.level
+                    )
+                    self._notify(component, old_level, state.level)
+            self._update_overall_level()
+            self._persist_state()
+            return state.level
+
+    def attempt_recovery(self, component: str) -> bool:
+        with self._lock:
+            state = self._components.get(component)
+            if state is None:
+                logger.warning("Unknown component: %s", component)
+                return False
+            if state.level == state.levels[0]:
+                return True
+            if time.time() < state.next_recovery_time:
+                return False
+            recovered = False
+            try:
+                recovered = state.recover_fn()
+            except Exception as exc:
+                logger.warning("Recovery attempt failed for %s: %s", component, exc)
+                recovered = False
+            if recovered:
+                old_level = state.level
+                current_idx = state.levels.index(state.level) if state.level in state.levels else 0
+                if current_idx > 0:
+                    state.level = state.levels[current_idx - 1]
+                else:
+                    state.level = state.levels[0]
+                if state.level == state.levels[0]:
+                    state.degraded_since = None
+                    state.recovery_attempts = 0
+                else:
+                    state.recovery_attempts += 1
+                    state.next_recovery_time = time.time() + self._compute_backoff(state.recovery_attempts)
+                logger.info(
+                    "Component %s recovered: %s -> %s", component, old_level, state.level
+                )
+                self._notify(component, old_level, state.level)
+            else:
+                state.recovery_attempts += 1
+                state.next_recovery_time = time.time() + self._compute_backoff(state.recovery_attempts)
+                logger.info(
+                    "Component %s recovery failed (attempt %d), next try in %.1fs",
+                    component, state.recovery_attempts,
+                    self._compute_backoff(state.recovery_attempts),
+                )
+            self._update_overall_level()
+            self._persist_state()
+            return recovered
+
+    def get_status(self) -> dict[str, Any]:
+        with self._lock:
+            components = {}
+            for name, state in self._components.items():
+                components[name] = state.to_dict()
+            return {
+                "overall_level": self._overall_level.value,
+                "components": components,
+                "health_interval": self._health_interval,
+                "started": self._started,
+            }
+
+    def subscribe(self, callback: Callable[[str, str, str], None]) -> None:
+        with self._lock:
+            self._subscribers.append(callback)
+
+    def start_health_monitor(self) -> None:
+        with self._lock:
+            if self._started:
+                return
+            self._started = True
+            self._stop_event.clear()
+        self._health_thread = threading.Thread(
+            target=self._health_loop, daemon=True, name="degradation-health-monitor"
+        )
+        self._health_thread.start()
+        logger.info("Degradation health monitor started (interval=%.1fs)", self._health_interval)
+
+    def stop_health_monitor(self) -> None:
+        with self._lock:
+            if not self._started:
+                return
+            self._started = False
+        self._stop_event.set()
+        if self._health_thread is not None:
+            self._health_thread.join(timeout=5.0)
+            self._health_thread = None
+        logger.info("Degradation health monitor stopped")
+
+    def load_state(self) -> None:
+        try:
+            from .config import WORK_DIR
+            state_path = WORK_DIR / self._STATE_FILENAME
+        except Exception:
+            return
+        if not state_path.exists():
+            return
+        try:
+            data = json.loads(state_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as exc:
+            logger.warning("Failed to load degradation state: %s", exc)
+            return
+        with self._lock:
+            components_data = data.get("components", {})
+            for name, comp_data in components_data.items():
+                state = self._components.get(name)
+                if state is not None:
+                    state.level = comp_data.get("level", state.levels[0])
+                    state.last_check_time = comp_data.get("last_check_time", 0.0)
+                    state.last_check_healthy = comp_data.get("last_check_healthy", True)
+                    state.recovery_attempts = comp_data.get("recovery_attempts", 0)
+                    state.next_recovery_time = comp_data.get("next_recovery_time", 0.0)
+                    state.degraded_since = comp_data.get("degraded_since")
+            overall = data.get("overall_level")
+            if overall:
+                try:
+                    self._overall_level = DegradationLevel(overall)
+                except ValueError:
+                    pass
+        logger.info("Loaded degradation state from %s", state_path)
+
+    def _compute_backoff(self, attempts: int) -> float:
+        backoff = self._BASE_RECOVERY_BACKOFF * (self._BACKOFF_MULTIPLIER ** attempts)
+        return min(backoff, self._MAX_RECOVERY_BACKOFF)
+
+    def _update_overall_level(self) -> None:
+        worst = DegradationLevel.L1_NORMAL
+        for state in self._components.values():
+            level_map = {
+                "chromadb": DegradationLevel.L1_NORMAL,
+                "sqlite_fts": DegradationLevel.L2_LOCAL_SEMANTIC,
+                "keyword": DegradationLevel.L3_BM25_ONLY,
+                "full": DegradationLevel.L1_NORMAL,
+                "workspace_only": DegradationLevel.L2_LOCAL_SEMANTIC,
+                "no_knowledge": DegradationLevel.L3_BM25_ONLY,
+                "full_hooks": DegradationLevel.L1_NORMAL,
+                "essential_only": DegradationLevel.L2_LOCAL_SEMANTIC,
+                "no_hooks": DegradationLevel.L3_BM25_ONLY,
+                "full_resources": DegradationLevel.L1_NORMAL,
+                "cached_only": DegradationLevel.L2_LOCAL_SEMANTIC,
+                "minimal": DegradationLevel.L3_BM25_ONLY,
+                "normal": DegradationLevel.L1_NORMAL,
+                "degraded": DegradationLevel.L2_LOCAL_SEMANTIC,
+                "unavailable": DegradationLevel.L3_BM25_ONLY,
+            }
+            component_level = level_map.get(state.level, DegradationLevel.L2_LOCAL_SEMANTIC)
+            if component_level > worst:
+                worst = component_level
+        old_overall = self._overall_level
+        self._overall_level = worst
+        if old_overall != worst:
+            logger.info("Overall degradation level changed: %s -> %s", old_overall.value, worst.value)
+
+    def _notify(self, component: str, old_level: str, new_level: str) -> None:
+        for callback in self._subscribers:
+            try:
+                callback(component, old_level, new_level)
+            except Exception as exc:
+                logger.warning("Subscriber callback error: %s", exc)
+
+    def _persist_state(self) -> None:
+        try:
+            from .config import WORK_DIR
+            state_path = WORK_DIR / self._STATE_FILENAME
+        except Exception:
+            return
+        try:
+            data = self.get_status()
+            atomic_write(state_path, json.dumps(data, ensure_ascii=False, indent=2))
+        except Exception as exc:
+            logger.warning("Failed to persist degradation state: %s", exc)
+
+    def _health_loop(self) -> None:
+        while not self._stop_event.is_set():
+            component_names: list[str]
+            with self._lock:
+                component_names = list(self._components.keys())
+            for name in component_names:
+                if self._stop_event.is_set():
+                    break
+                self.check_and_degrade(name)
+                with self._lock:
+                    state = self._components.get(name)
+                if state is not None and state.level != state.levels[0]:
+                    self.attempt_recovery(name)
+            self._stop_event.wait(self._health_interval)
+
+
+def _check_search_engine() -> bool:
+    try:
+        from .config import KNOWLEDGE_CHROMA_PATH
+        import chromadb
+        client = chromadb.PersistentClient(path=str(KNOWLEDGE_CHROMA_PATH))
+        client.get_or_create_collection("knowledge")
+        return True
+    except ImportError:
+        return False
+    except Exception:
+        return False
+
+
+def _recover_search_engine() -> bool:
+    try:
+        import chromadb
+        from .config import KNOWLEDGE_CHROMA_PATH
+        client = chromadb.PersistentClient(path=str(KNOWLEDGE_CHROMA_PATH))
+        client.get_or_create_collection("knowledge")
+        return True
+    except Exception:
+        return False
+
+
+def _check_knowledge_base() -> bool:
+    try:
+        from .config import KNOWLEDGE_DB_PATH, KNOWLEDGE_CHROMA_PATH
+        if KNOWLEDGE_CHROMA_PATH.exists() and KNOWLEDGE_DB_PATH.exists():
+            return True
+        if KNOWLEDGE_DB_PATH.exists():
+            return True
+        return False
+    except Exception:
+        return False
+
+
+def _recover_knowledge_base() -> bool:
+    try:
+        from .config import KNOWLEDGE_DB_PATH
+        return KNOWLEDGE_DB_PATH.exists()
+    except Exception:
+        return False
+
+
+def _check_hooks() -> bool:
+    try:
+        from .config import HOOKS_PATH
+        return HOOKS_PATH.exists()
+    except Exception:
+        return False
+
+
+def _recover_hooks() -> bool:
+    try:
+        from .config import HOOKS_PATH
+        return HOOKS_PATH.exists()
+    except Exception:
+        return False
+
+
+def _check_resources() -> bool:
+    try:
+        from .config import DATA_DIR
+        return DATA_DIR.exists()
+    except Exception:
+        return False
+
+
+def _recover_resources() -> bool:
+    try:
+        from .config import DATA_DIR
+        return DATA_DIR.exists()
+    except Exception:
+        return False
+
+
+_MANAGER: DegradationManager | None = None
+_MANAGER_LOCK = threading.Lock()
+
+
+def get_degradation_manager() -> DegradationManager:
+    global _MANAGER
+    with _MANAGER_LOCK:
+        if _MANAGER is None:
+            _MANAGER = DegradationManager()
+            _MANAGER.register_component(
+                "search_engine",
+                check_fn=_check_search_engine,
+                recover_fn=_recover_search_engine,
+                levels=["chromadb", "sqlite_fts", "keyword"],
+            )
+            _MANAGER.register_component(
+                "knowledge_base",
+                check_fn=_check_knowledge_base,
+                recover_fn=_recover_knowledge_base,
+                levels=["full", "workspace_only", "no_knowledge"],
+            )
+            _MANAGER.register_component(
+                "hooks",
+                check_fn=_check_hooks,
+                recover_fn=_recover_hooks,
+                levels=["full_hooks", "essential_only", "no_hooks"],
+            )
+            _MANAGER.register_component(
+                "resources",
+                check_fn=_check_resources,
+                recover_fn=_recover_resources,
+                levels=["full_resources", "cached_only", "minimal"],
+            )
+            _MANAGER.load_state()
+        return _MANAGER
 
 
 def check_mcp_available() -> bool:

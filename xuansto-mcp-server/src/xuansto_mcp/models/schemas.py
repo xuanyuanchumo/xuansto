@@ -137,10 +137,10 @@ class ContextCompressInput(BaseModel):
 
 class DecisionLogInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: str = Field(description="操作类型: log, query, export")
+    action: str = Field(description="操作类型: log, list, query, update, export, stats")
     title: str | None = Field(default=None, description="决策标题(log时使用)")
     description: str | None = Field(default=None, description="决策描述(log时使用)")
-    context: str | None = Field(default=None, description="决策上下文(log时使用)")
+    context: str | None = Field(default=None, description="决策上下文(log/query时使用)")
     alternatives: list[str] | None = Field(default=None, description="备选方案列表(log时使用)")
     decision: str | None = Field(default=None, description="最终决策(log时使用)")
     rationale: str | None = Field(default=None, description="决策理由(log时使用)")
@@ -148,10 +148,13 @@ class DecisionLogInput(BaseModel):
     decided_by: str | None = Field(default=None, description="决策者(log时使用)")
     keyword: str | None = Field(default=None, description="搜索关键词(query时使用)")
     tag: str | None = Field(default=None, description="标签过滤(query时使用)")
-    date_from: str | None = Field(default=None, description="起始日期(ISO8601, query/export时使用)")
-    date_to: str | None = Field(default=None, description="截止日期(ISO8601, query/export时使用)")
-    limit: int = Field(default=20, ge=1, le=100, description="返回数量上限(query时使用)")
+    date_from: str | None = Field(default=None, description="起始日期(ISO8601, query/export/stats时使用)")
+    date_to: str | None = Field(default=None, description="截止日期(ISO8601, query/export/stats时使用)")
+    limit: int = Field(default=20, ge=1, le=100, description="返回数量上限(list/query时使用)")
+    offset: int = Field(default=0, ge=0, le=10000, description="偏移量(list/query时使用)")
     format: str = Field(default="json", description="导出格式(export时使用): json, markdown")
+    decision_id: str | None = Field(default=None, description="决策ID(update时使用)")
+    status: str | None = Field(default=None, description="决策状态(log/update时使用): proposed, accepted, deprecated, superseded")
 
 
 class TokenBudgetInput(BaseModel):
@@ -174,3 +177,17 @@ class ProjectInitInput(BaseModel):
     template: str | None = Field(default=None, description="项目模板(create时使用)")
     directory: str | None = Field(default=None, description="项目目录(create时使用)")
     project_path: str | None = Field(default=None, description="项目路径(validate/detect_stack时使用)")
+
+
+class KnowledgeInjectInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    action: str = Field(default="inject", description="操作类型: inject, list_available, precipitate")
+    topics: list[str] | None = Field(default=None, description="知识主题列表(inject时使用)")
+    scope: str = Field(default="general", description="知识范围: general, workspace, experience")
+    max_tokens: int = Field(default=5000, ge=100, le=50000, description="最大注入Token数量(inject时使用)")
+    relevance_threshold: float = Field(default=0.5, ge=0.0, le=1.0, description="相关性阈值(inject时使用)")
+    category: str | None = Field(default=None, description="经验分类(precipitate时使用)")
+    title: str | None = Field(default=None, description="经验标题(precipitate时使用)")
+    content: str | None = Field(default=None, description="经验内容(precipitate时使用)")
+    tags: list[str] | None = Field(default=None, description="标签列表(precipitate时使用)")
+    confidence: float = Field(default=0.8, ge=0.0, le=1.0, description="置信度(precipitate时使用)")

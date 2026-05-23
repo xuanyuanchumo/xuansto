@@ -147,6 +147,7 @@ routes:
     command: "/learn"
     mcp_tools:
       - knowledge_search
+      - knowledge_inject
       - session_manage
     fallback: "ChromaDB→SQLite FTS→关键词检索"
     phase: null

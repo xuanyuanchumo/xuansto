@@ -15,12 +15,13 @@ _TOOL_REGISTRY: dict[str, Any] = {}
 
 mcp = FastMCP(
     "xuansto-mcp-server",
-    instructions="Xuansto Skill MCP服务器 v4.0.0",
+    instructions="Xuansto Skill MCP服务器 v4.1.0",
 )
 
 from .tools import (
     skill_analyze,
     knowledge_search,
+    knowledge_inject,
     quality_gate_check,
     spec_drift_detect,
     security_scan,
@@ -40,6 +41,7 @@ from .tools import (
 for tool_module in [
     skill_analyze,
     knowledge_search,
+    knowledge_inject,
     quality_gate_check,
     spec_drift_detect,
     security_scan,
@@ -69,7 +71,6 @@ def _with_hook_interception(tool_name: str, tool_fn: Callable[..., Any]) -> Call
     async def wrapped(**kwargs: Any) -> dict[str, Any]:
         import time
         import json as _json
-        from .tools.hook_manage import async_execute_pre_hooks, async_execute_post_hooks
         from .tools.server_health import record_tool_call
         from .tools.resource_load_status import record_token_usage
 
@@ -77,24 +78,7 @@ def _with_hook_interception(tool_name: str, tool_fn: Callable[..., Any]) -> Call
         hook_errors: list[dict[str, str]] = []
 
         engine = get_hook_engine()
-        engine_pre_results, engine_pre_errors = await engine.execute_pre_hooks(tool_name, kwargs)
-        hook_errors.extend(engine_pre_errors)
-        for pr in engine_pre_results:
-            if pr.get("status") == "block":
-                latency = (time.time() - start) * 1000
-                record_tool_call(tool_name, latency, False)
-                notify(f"Tool {tool_name} blocked by pre-hook: {pr.get('reason', '')}", "warning")
-                result = make_success_response({
-                    "action": "blocked",
-                    "tool": tool_name,
-                    "block_reason": pr.get("reason", "Pre-hook blocked execution"),
-                    "hook": pr.get("hook", ""),
-                })
-                if hook_errors:
-                    result["hook_errors"] = hook_errors
-                return result
-
-        pre_results, pre_errors = await async_execute_pre_hooks(tool_name, kwargs)
+        pre_results, pre_errors = await engine.execute_pre_hooks(tool_name, kwargs)
         hook_errors.extend(pre_errors)
         for pr in pre_results:
             if pr.get("status") == "block":
@@ -129,10 +113,8 @@ def _with_hook_interception(tool_name: str, tool_fn: Callable[..., Any]) -> Call
             pass
 
         if isinstance(result, dict):
-            post_errors = await async_execute_post_hooks(tool_name, kwargs, result)
+            post_errors = await engine.execute_post_hooks(tool_name, kwargs, result)
             hook_errors.extend(post_errors)
-            engine_post_errors = await engine.execute_post_hooks(tool_name, kwargs, result)
-            hook_errors.extend(engine_post_errors)
             if hook_errors:
                 result["hook_errors"] = hook_errors
             return result
@@ -148,8 +130,9 @@ except AttributeError:
     pass
 
 _hook_engine = get_hook_engine()
-_hook_engine.register_hook("pre", lambda tool_name, kwargs: ([], []))
-_hook_engine.register_hook("post", lambda tool_name, kwargs, result: [])
+from .tools.hook_manage import execute_pre_hooks, execute_post_hooks
+_hook_engine.register_hook("pre", execute_pre_hooks)
+_hook_engine.register_hook("post", execute_post_hooks)
 
 from .core.config import HOOKS_PATH
 _hook_engine.load_hooks_from_config(HOOKS_PATH)

@@ -111,6 +111,7 @@ degradation:
     skill_analyze: "scripts/skill-test.py --analyze"
     quality_gate_check: "scripts/skill-test.py --gate"
     knowledge_search: "scripts/knowledge-server.py --search"
+    knowledge_inject: "scripts/knowledge_server/main.py --inject"
     spec_drift_detect: "scripts/spec-drift-detector.py → 内联漂移检测"
     security_scan: "scripts/agentic-security-scanner.py → 内联agentic+dependency扫描"
     code_simplify: "scripts/code-simplifier.py → 内联simplify+dedup"

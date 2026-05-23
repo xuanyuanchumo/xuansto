@@ -1,6 +1,7 @@
 from . import (
     skill_analyze,
     knowledge_search,
+    knowledge_inject,
     quality_gate_check,
     spec_drift_detect,
     security_scan,
@@ -20,6 +21,7 @@ from . import (
 __all__ = [
     "skill_analyze",
     "knowledge_search",
+    "knowledge_inject",
     "quality_gate_check",
     "spec_drift_detect",
     "security_scan",
