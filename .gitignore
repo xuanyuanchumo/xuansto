@@ -44,3 +44,13 @@ logs/
 
 xuansto-clean/
 副本/
+
+CHANGELOG.md
+CODE_WIKI.md
+xuansto-skill-WIKI.md
+_copy_helper.ps1
+_copy_helper.py
+setup-worktree.ps1
+test-path-resolve.ps1
+test-syntax.ps1
+docs/
