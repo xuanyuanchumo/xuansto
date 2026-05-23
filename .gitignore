@@ -1,14 +1,7 @@
 .trae/*
 !.trae/skills/
 .trae/skills/*
-!.trae/skills/xuansto-skill/
 !.trae/skills/xuansto-skill-v2/
-
-.trae/skills/xuansto-skill/.knowledge/temp-scripts/*
-!.trae/skills/xuansto-skill/.knowledge/temp-scripts/.gitkeep
-.trae/skills/xuansto-skill/.knowledge/script-errors/*
-!.trae/skills/xuansto-skill/.knowledge/script-errors/.gitkeep
-.trae/skills/xuansto-skill/.knowledge/index/knowledge.db
 
 .trae/skills/xuansto-skill-v2/.knowledge/temp-scripts/*
 !.trae/skills/xuansto-skill-v2/.knowledge/temp-scripts/.gitkeep
@@ -32,6 +25,9 @@ Thumbs.db
 
 .idea/
 .vscode/
+.claude/
+.cursor/
+.windsurf/
 *.swp
 *.swo
 *~
@@ -46,9 +42,5 @@ logs/
 *.db
 *.sqlite3
 
+xuansto-clean/
 副本/
-docs/_build/
-docs/_static/
-docs/_templates/
-!docs/plan/
-*.so
