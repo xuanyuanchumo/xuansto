@@ -1,4 +1,5 @@
 ---
+> 权威来源：_yaml/sdd-tdd-full.yaml（YAML为准，本文档为可读参考）
 metadata:
   name: SDD+TDD完整开发工作流
   version: "3.2.0"

@@ -9,6 +9,7 @@ from . import (
     session_manage,
     workflow_dispatch,
     agent_status,
+    agent_manage,
     hook_manage,
     resource_load_status,
     context_compress,
@@ -16,6 +17,8 @@ from . import (
     decision_log,
     token_budget,
     project_init,
+    metrics_report,
+    config_manage,
 )
 
 __all__ = [
@@ -29,6 +32,7 @@ __all__ = [
     "session_manage",
     "workflow_dispatch",
     "agent_status",
+    "agent_manage",
     "hook_manage",
     "resource_load_status",
     "context_compress",
@@ -36,4 +40,6 @@ __all__ = [
     "decision_log",
     "token_budget",
     "project_init",
+    "metrics_report",
+    "config_manage",
 ]

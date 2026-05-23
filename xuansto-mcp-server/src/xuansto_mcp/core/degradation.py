@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import asyncio
+import atexit
+import hashlib
 import json
+import random
 import subprocess
 import sys
 import threading
@@ -110,6 +114,7 @@ class DegradationManager:
         self._stop_event = threading.Event()
         self._started = False
         self._overall_level = DegradationLevel.L1_NORMAL
+        atexit.register(self._persist_state)
 
     def register_component(
         self,
@@ -263,8 +268,16 @@ class DegradationManager:
         except (json.JSONDecodeError, OSError) as exc:
             logger.warning("Failed to load degradation state: %s", exc)
             return
+        components_data = data.get("components", {})
+        stored_hash = data.get("_hash")
+        if stored_hash is not None:
+            computed_hash = hashlib.sha256(json.dumps(components_data, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+            if computed_hash != stored_hash:
+                logger.warning("Degradation state hash mismatch, skipping load")
+                return
+        else:
+            logger.warning("Degradation state file has no integrity hash, loading without verification")
         with self._lock:
-            components_data = data.get("components", {})
             for name, comp_data in components_data.items():
                 state = self._components.get(name)
                 if state is not None:
@@ -284,7 +297,8 @@ class DegradationManager:
 
     def _compute_backoff(self, attempts: int) -> float:
         backoff = self._BASE_RECOVERY_BACKOFF * (self._BACKOFF_MULTIPLIER ** attempts)
-        return min(backoff, self._MAX_RECOVERY_BACKOFF)
+        jitter = random.uniform(0, 0.5) * backoff
+        return min(backoff + jitter, self._MAX_RECOVERY_BACKOFF)
 
     def _update_overall_level(self) -> None:
         worst = DegradationLevel.L1_NORMAL
@@ -320,6 +334,16 @@ class DegradationManager:
                 callback(component, old_level, new_level)
             except Exception as exc:
                 logger.warning("Subscriber callback error: %s", exc)
+        try:
+            from .notifications import send_mcp_notification
+            send_mcp_notification("degradation_change", {
+                "component": component,
+                "old_level": old_level,
+                "new_level": new_level,
+                "overall_level": self._overall_level.value,
+            })
+        except Exception:
+            pass
 
     def _persist_state(self) -> None:
         try:
@@ -327,11 +351,15 @@ class DegradationManager:
             state_path = WORK_DIR / self._STATE_FILENAME
         except Exception:
             return
-        try:
-            data = self.get_status()
-            atomic_write(state_path, json.dumps(data, ensure_ascii=False, indent=2))
-        except Exception as exc:
-            logger.warning("Failed to persist degradation state: %s", exc)
+        with self._lock:
+            try:
+                data = self.get_status()
+                components_data = data.get("components", {})
+                data["_timestamp"] = time.time()
+                data["_hash"] = hashlib.sha256(json.dumps(components_data, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+                atomic_write(state_path, json.dumps(data, ensure_ascii=False, indent=2))
+            except Exception as exc:
+                logger.warning("Failed to persist degradation state: %s", exc)
 
     def _health_loop(self) -> None:
         while not self._stop_event.is_set():
@@ -525,6 +553,38 @@ def run_script_fallback(
         }
 
 
+async def run_script_fallback_async(
+    script_name: str,
+    args: list[str] | None = None,
+    cwd: str = ".",
+    timeout: int = 60,
+) -> dict[str, Any]:
+    script_path = SCRIPTS_DIR / script_name
+    if not script_path.exists():
+        return {"error": True, "code": "SCRIPT_NOT_FOUND", "message": f"脚本不存在: {script_name}", "fallback": True}
+    cmd = [sys.executable, str(script_path)]
+    if args:
+        cmd.extend(args)
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=cwd,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        output = stdout.decode("utf-8", errors="replace").strip()
+        try:
+            parsed = json.loads(output)
+            return {"error": False, "data": parsed, "fallback": True}
+        except json.JSONDecodeError:
+            return {"error": False, "data": {"raw_output": output[:2000]}, "fallback": True}
+    except asyncio.TimeoutError:
+        return {"error": True, "code": "TIMEOUT", "message": f"脚本执行超时({timeout}s): {script_name}", "fallback": True}
+    except Exception as e:
+        return {"error": True, "code": "EXECUTION_ERROR", "message": str(e), "fallback": True}
+
+
 def _fallback_success(
     tool: str,
     data: dict[str, Any] | None = None,
@@ -579,7 +639,15 @@ def skill_analyze_fallback(skill_path: str, **kwargs: Any) -> dict[str, Any]:
         args=["--path", skill_path, "--format", "json"],
         timeout=30,
     )
-    return _standardize_result(script_result, "skill_analyze")
+    if not script_result.get("error"):
+        return _standardize_result(script_result, "skill_analyze")
+    try:
+        from ..tools.skill_analyze import _inline_skill_analyze
+        inline_result = _inline_skill_analyze(skill_path, **kwargs)
+        return _fallback_success("skill_analyze", inline_result, degradation_level="inline")
+    except Exception:
+        pass
+    return _fallback_success("skill_analyze", {"skill_path": skill_path, "analyzed": False}, degradation_level="minimal")
 
 
 def knowledge_search_fallback(query: str, **kwargs: Any) -> dict[str, Any]:
@@ -596,7 +664,33 @@ def knowledge_search_fallback(query: str, **kwargs: Any) -> dict[str, Any]:
         args=["search", "--query", query, "--format", "json"],
         timeout=30,
     )
-    return _standardize_result(script_result, "knowledge_search")
+    if not script_result.get("error"):
+        return _standardize_result(script_result, "knowledge_search")
+    try:
+        from ..tools.knowledge_search import _inline_knowledge_search
+        inline_result = _inline_knowledge_search(query, **kwargs)
+        return _fallback_success("knowledge_search", inline_result, degradation_level="inline")
+    except Exception:
+        pass
+    return _fallback_success("knowledge_search", {"query": query, "results": []}, degradation_level="minimal")
+
+
+def knowledge_inject_fallback(action: str = "inject", topics: list[str] | None = None, scope: str = "general", **kwargs: Any) -> dict[str, Any]:
+    logger.warning("Tool %s using fallback", "knowledge_inject")
+    script_result = run_script_fallback(
+        "knowledge-server.py",
+        args=["--inject", "--action", action, "--scope", scope, "--format", "json"],
+        timeout=30,
+    )
+    if not script_result.get("error"):
+        return _standardize_result(script_result, "knowledge_inject")
+    try:
+        from ..tools.knowledge_inject import _inline_knowledge_inject
+        inline_result = _inline_knowledge_inject(action, topics, scope, **kwargs)
+        return _fallback_success("knowledge_inject", inline_result, degradation_level="inline")
+    except Exception:
+        pass
+    return _fallback_success("knowledge_inject", {"action": action, "injected_count": 0, "topics": topics or []}, degradation_level="minimal")
 
 
 def quality_gate_fallback(gate_ids: list[str] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -622,7 +716,15 @@ def quality_gate_fallback(gate_ids: list[str] | None = None, **kwargs: Any) -> d
             results.append({"gate_id": gate_id, **result})
         else:
             results.append({"gate_id": gate_id, "status": "SKIP", "fallback": True})
-    return _fallback_success("quality_gate_check", {"checks": results})
+    if any(r.get("status") != "SKIP" for r in results):
+        return _fallback_success("quality_gate_check", {"checks": results})
+    try:
+        from ..tools.quality_gate_check import _inline_quality_gate
+        inline_result = _inline_quality_gate(gate_ids, **kwargs)
+        return _fallback_success("quality_gate_check", inline_result, degradation_level="inline")
+    except Exception:
+        pass
+    return _fallback_success("quality_gate_check", {"checks": results}, degradation_level="minimal")
 
 
 def spec_drift_fallback(spec_dir: str = ".trae/specs", src_dir: str = ".", **kwargs: Any) -> dict[str, Any]:
@@ -634,15 +736,17 @@ def spec_drift_fallback(spec_dir: str = ".trae/specs", src_dir: str = ".", **kwa
     )
     if not script_result.get("error"):
         return _standardize_result(script_result, "spec_drift_detect")
-    from ..tools.spec_drift_detect import _inline_spec_drift
-    inline_result = _inline_spec_drift(spec_dir, src_dir)
-    return _fallback_success("spec_drift_detect", inline_result, degradation_level="inline")
+    try:
+        from ..tools.spec_drift_detect import _inline_spec_drift
+        inline_result = _inline_spec_drift(spec_dir, src_dir)
+        return _fallback_success("spec_drift_detect", inline_result, degradation_level="inline")
+    except Exception:
+        pass
+    return _fallback_success("spec_drift_detect", {"spec_dir": spec_dir, "src_dir": src_dir, "drifts": []}, degradation_level="minimal")
 
 
 def security_scan_fallback(target: str = ".", severity_threshold: str = "medium", **kwargs: Any) -> dict[str, Any]:
     logger.warning("Tool %s using fallback", "security_scan")
-    from ..tools.security_scan import _inline_agentic_scan, _inline_dependency_scan
-
     script_path = SCRIPTS_DIR / "agentic-security-scanner.py"
     if script_path.exists():
         result = run_script_fallback(
@@ -652,9 +756,13 @@ def security_scan_fallback(target: str = ".", severity_threshold: str = "medium"
         )
         if not result.get("error"):
             return _standardize_result(result, "security_scan")
-
-    agentic_result = _inline_agentic_scan(target, severity_threshold)
-    return _fallback_success("security_scan", {"agentic_scan": agentic_result}, degradation_level="inline")
+    try:
+        from ..tools.security_scan import _inline_agentic_scan
+        agentic_result = _inline_agentic_scan(target, severity_threshold)
+        return _fallback_success("security_scan", {"agentic_scan": agentic_result}, degradation_level="inline")
+    except Exception:
+        pass
+    return _fallback_success("security_scan", {"target": target, "issues": [], "scanned": False}, degradation_level="minimal")
 
 
 def code_simplify_fallback(target: str, scope: str = "recent", **kwargs: Any) -> dict[str, Any]:
@@ -666,10 +774,13 @@ def code_simplify_fallback(target: str, scope: str = "recent", **kwargs: Any) ->
     )
     if not script_result.get("error"):
         return _standardize_result(script_result, "code_simplify")
-
-    from ..tools.code_simplify import _inline_simplify
-    inline_result = _inline_simplify(target, scope)
-    return _fallback_success("code_simplify", inline_result, degradation_level="inline")
+    try:
+        from ..tools.code_simplify import _inline_simplify
+        inline_result = _inline_simplify(target, scope)
+        return _fallback_success("code_simplify", inline_result, degradation_level="inline")
+    except Exception:
+        pass
+    return _fallback_success("code_simplify", {"target": target, "scope": scope, "simplified": False}, degradation_level="minimal")
 
 
 def session_manage_fallback(action: str, **kwargs: Any) -> dict[str, Any]:
@@ -696,23 +807,34 @@ def session_manage_fallback(action: str, **kwargs: Any) -> dict[str, Any]:
         "list": ["list"],
     }
     args = args_map.get(action, [action])
-    return _standardize_result(
-        run_script_fallback(
-            "session-persist.py",
-            args=args,
-            timeout=15,
-        ),
-        "session_manage",
+    script_result = run_script_fallback(
+        "session-persist.py",
+        args=args,
+        timeout=15,
     )
+    if not script_result.get("error"):
+        return _standardize_result(script_result, "session_manage")
+    try:
+        from ..tools.session_manage import _inline_session_manage
+        inline_result = _inline_session_manage(action, **kwargs)
+        return _fallback_success("session_manage", inline_result, degradation_level="inline")
+    except Exception:
+        pass
+    return _fallback_success("session_manage", {"action": action, "status": "unavailable"}, degradation_level="minimal")
 
 
 def workflow_dispatch_fallback(action: str, **kwargs: Any) -> dict[str, Any]:
     logger.warning("Tool %s using fallback", "workflow_dispatch")
     if action == "start":
-        return _standardize_result(
-            run_script_fallback("project-initializer.py", args=["--format", "json"], timeout=30),
-            "workflow_dispatch",
-        )
+        script_result = run_script_fallback("project-initializer.py", args=["--format", "json"], timeout=30)
+        if not script_result.get("error"):
+            return _standardize_result(script_result, "workflow_dispatch")
+        try:
+            from ..tools.workflow_dispatch import _load_workflow
+            return _fallback_success("workflow_dispatch", {"action": "start", "status": "script_failed"})
+        except Exception:
+            pass
+        return _fallback_success("workflow_dispatch", {"action": "start", "status": "unavailable"}, degradation_level="minimal")
     elif action == "status":
         try:
             from ..tools.workflow_dispatch import _load_workflow
@@ -723,7 +845,7 @@ def workflow_dispatch_fallback(action: str, **kwargs: Any) -> dict[str, Any]:
                     return _fallback_success("workflow_dispatch", state)
         except Exception:
             pass
-        return _fallback_success("workflow_dispatch", {"action": action, "status": "unavailable"})
+        return _fallback_success("workflow_dispatch", {"action": action, "status": "unavailable"}, degradation_level="minimal")
     elif action == "abort":
         return _fallback_success("workflow_dispatch", {"status": "aborted"})
     return _fallback_error("workflow_dispatch", "UNKNOWN_ACTION", f"未知操作: {action}")
@@ -754,7 +876,15 @@ def agent_status_fallback(action: str = "list", **kwargs: Any) -> dict[str, Any]
                 phase_agents.append({"name": agent_file.stem, "layer": agent_file.parent.name})
             return _fallback_success("agent_status", {"agents": phase_agents, "phase": phase, "source": "static_registry"})
     script_result = run_script_fallback("skill-test.py", args=["--agents", "--format", "json"], timeout=30)
-    return _standardize_result(script_result, "agent_status")
+    if not script_result.get("error"):
+        return _standardize_result(script_result, "agent_status")
+    try:
+        from ..tools.agent_status import _inline_agent_status
+        inline_result = _inline_agent_status(action, **kwargs)
+        return _fallback_success("agent_status", inline_result, degradation_level="inline")
+    except Exception:
+        pass
+    return _fallback_success("agent_status", {"agents": [], "total": 0}, degradation_level="minimal")
 
 
 def hook_manage_fallback(action: str = "list", **kwargs: Any) -> dict[str, Any]:
@@ -767,11 +897,16 @@ def hook_manage_fallback(action: str = "list", **kwargs: Any) -> dict[str, Any]:
         }
         script = hook_scripts.get(kwargs["hook_name"])
         if script:
-            return _standardize_result(
-                run_script_fallback(script, args=["--format", "json"], timeout=30),
-                "hook_manage",
-            )
-    return _fallback_success("hook_manage", {"hooks": []})
+            script_result = run_script_fallback(script, args=["--format", "json"], timeout=30)
+            if not script_result.get("error"):
+                return _standardize_result(script_result, "hook_manage")
+    try:
+        from ..tools.hook_manage import _inline_hook_manage
+        inline_result = _inline_hook_manage(action, **kwargs)
+        return _fallback_success("hook_manage", inline_result, degradation_level="inline")
+    except Exception:
+        pass
+    return _fallback_success("hook_manage", {"hooks": []}, degradation_level="minimal")
 
 
 def resource_load_status_fallback(action: str = "status", **kwargs: Any) -> dict[str, Any]:
@@ -784,15 +919,27 @@ def resource_load_status_fallback(action: str = "status", **kwargs: Any) -> dict
             return _fallback_success("resource_load_status", {"resources": data})
     except Exception:
         pass
-    return _fallback_success("resource_load_status", {"resources": {}, "note": "持久化状态不可用"})
+    try:
+        from ..tools.resource_load_status import _inline_resource_load_status
+        inline_result = _inline_resource_load_status(action, **kwargs)
+        return _fallback_success("resource_load_status", inline_result, degradation_level="inline")
+    except Exception:
+        pass
+    return _fallback_success("resource_load_status", {"resources": {}}, degradation_level="minimal")
 
 
 def context_compress_fallback(content: str = "", strategy: str = "semantic", **kwargs: Any) -> dict[str, Any]:
     logger.warning("Tool %s using fallback", "context_compress")
-    return _standardize_result(
-        run_script_fallback("context-compressor.py", args=["--strategy", strategy, "--format", "json"], timeout=30),
-        "context_compress",
-    )
+    script_result = run_script_fallback("context-compressor.py", args=["--strategy", strategy, "--format", "json"], timeout=30)
+    if not script_result.get("error"):
+        return _standardize_result(script_result, "context_compress")
+    try:
+        from ..tools.context_compress import _inline_context_compress
+        inline_result = _inline_context_compress(content, strategy, **kwargs)
+        return _fallback_success("context_compress", inline_result, degradation_level="inline")
+    except Exception:
+        pass
+    return _fallback_success("context_compress", {"strategy": strategy, "compressed": False}, degradation_level="minimal")
 
 
 def server_health_fallback(**kwargs: Any) -> dict[str, Any]:
@@ -804,7 +951,13 @@ def server_health_fallback(**kwargs: Any) -> dict[str, Any]:
     )
     if not script_result.get("error"):
         return _standardize_result(script_result, "server_health")
-    return _fallback_success("server_health", {"status": "degraded", "mcp_available": False})
+    try:
+        from ..tools.server_health import _inline_server_health
+        inline_result = _inline_server_health(**kwargs)
+        return _fallback_success("server_health", inline_result, degradation_level="inline")
+    except Exception:
+        pass
+    return _fallback_success("server_health", {"status": "degraded", "mcp_available": False}, degradation_level="minimal")
 
 
 def fallback_decision_log(action: str, **kwargs: Any) -> dict[str, Any]:
@@ -816,9 +969,13 @@ def fallback_decision_log(action: str, **kwargs: Any) -> dict[str, Any]:
     )
     if not script_result.get("error"):
         return _standardize_result(script_result, "decision_log")
-    from ..tools.decision_log import _inline_decision_log
-    inline_result = _inline_decision_log(action, **kwargs)
-    return _fallback_success("decision_log", inline_result, degradation_level="inline")
+    try:
+        from ..tools.decision_log import _inline_decision_log
+        inline_result = _inline_decision_log(action, **kwargs)
+        return _fallback_success("decision_log", inline_result, degradation_level="inline")
+    except Exception:
+        pass
+    return _fallback_success("decision_log", {"action": action, "entries": []}, degradation_level="minimal")
 
 
 def fallback_token_budget(action: str, **kwargs: Any) -> dict[str, Any]:
@@ -830,9 +987,13 @@ def fallback_token_budget(action: str, **kwargs: Any) -> dict[str, Any]:
     )
     if not script_result.get("error"):
         return _standardize_result(script_result, "token_budget")
-    from ..tools.token_budget import _inline_token_budget
-    inline_result = _inline_token_budget(action, **kwargs)
-    return _fallback_success("token_budget", inline_result, degradation_level="inline")
+    try:
+        from ..tools.token_budget import _inline_token_budget
+        inline_result = _inline_token_budget(action, **kwargs)
+        return _fallback_success("token_budget", inline_result, degradation_level="inline")
+    except Exception:
+        pass
+    return _fallback_success("token_budget", {"action": action, "budget": {}}, degradation_level="minimal")
 
 
 def fallback_project_init(action: str, **kwargs: Any) -> dict[str, Any]:
@@ -844,14 +1005,19 @@ def fallback_project_init(action: str, **kwargs: Any) -> dict[str, Any]:
     )
     if not script_result.get("error"):
         return _standardize_result(script_result, "project_init")
-    from ..tools.project_init import _inline_project_init
-    inline_result = _inline_project_init(action, **kwargs)
-    return _fallback_success("project_init", inline_result, degradation_level="inline")
+    try:
+        from ..tools.project_init import _inline_project_init
+        inline_result = _inline_project_init(action, **kwargs)
+        return _fallback_success("project_init", inline_result, degradation_level="inline")
+    except Exception:
+        pass
+    return _fallback_success("project_init", {"action": action, "initialized": False}, degradation_level="minimal")
 
 
 FALLBACK_MAP = {
     "skill_analyze": skill_analyze_fallback,
     "knowledge_search": knowledge_search_fallback,
+    "knowledge_inject": knowledge_inject_fallback,
     "quality_gate_check": quality_gate_fallback,
     "spec_drift_detect": spec_drift_fallback,
     "security_scan": security_scan_fallback,
@@ -869,15 +1035,23 @@ FALLBACK_MAP = {
 }
 
 _INLINE_FALLBACK_MAP = {
+    "skill_analyze_fallback": skill_analyze_fallback,
+    "knowledge_search_fallback": knowledge_search_fallback,
+    "knowledge_inject_fallback": knowledge_inject_fallback,
     "quality_gate_fallback": quality_gate_fallback,
     "spec_drift_fallback": spec_drift_fallback,
     "security_scan_fallback": security_scan_fallback,
     "code_simplify_fallback": code_simplify_fallback,
+    "session_manage_fallback": session_manage_fallback,
     "workflow_dispatch_fallback": workflow_dispatch_fallback,
     "agent_status_fallback": agent_status_fallback,
     "hook_manage_fallback": hook_manage_fallback,
     "resource_load_status_fallback": resource_load_status_fallback,
+    "context_compress_fallback": context_compress_fallback,
     "server_health_fallback": server_health_fallback,
+    "decision_log_fallback": fallback_decision_log,
+    "token_budget_fallback": fallback_token_budget,
+    "project_init_fallback": fallback_project_init,
 }
 
 
@@ -905,23 +1079,100 @@ def _build_fallback_map_from_yaml(yaml_config: dict[str, Any]) -> dict[str, Call
     return built
 
 
+_fallback_config_mtime: float = 0.0
+
+
+def _get_fallback_config_mtime() -> float:
+    try:
+        if _FALLBACK_CONFIG_PATH.exists():
+            return _FALLBACK_CONFIG_PATH.stat().st_mtime
+    except OSError:
+        pass
+    return 0.0
+
+
 def _resolve_fallback_map() -> dict[str, Callable[..., Any]]:
-    yaml_config = _load_fallback_config_from_yaml()
-    if yaml_config is not None:
-        merged = _build_fallback_map_from_yaml(yaml_config)
-        for tool_name, fn in FALLBACK_MAP.items():
-            if tool_name not in merged:
-                merged[tool_name] = fn
-        return merged
+    global _fallback_config_mtime
+    current_mtime = _get_fallback_config_mtime()
+    if current_mtime != _fallback_config_mtime:
+        _fallback_config_mtime = current_mtime
+        yaml_config = _load_fallback_config_from_yaml()
+        if yaml_config is not None:
+            merged = _build_fallback_map_from_yaml(yaml_config)
+            for tool_name, fn in FALLBACK_MAP.items():
+                if tool_name not in merged:
+                    merged[tool_name] = fn
+            return merged
     return dict(FALLBACK_MAP)
 
 
 _RESOLVED_FALLBACK_MAP: dict[str, Callable[..., Any]] = _resolve_fallback_map()
 
 
+def _refresh_resolved_fallback_map() -> None:
+    global _RESOLVED_FALLBACK_MAP
+    _RESOLVED_FALLBACK_MAP = _resolve_fallback_map()
+
+
+_HAS_WATCHFILES_DEGR = False
+try:
+    import watchfiles as _watchfiles_degr_mod
+    _HAS_WATCHFILES_DEGR = True
+except ImportError:
+    _HAS_WATCHFILES_DEGR = False
+
+
+_fallback_watcher_thread: threading.Thread | None = None
+_fallback_watcher_stop = threading.Event()
+
+
+def _fallback_watcher_poll() -> None:
+    while not _fallback_watcher_stop.is_set():
+        _fallback_watcher_stop.wait(5.0)
+        _refresh_resolved_fallback_map()
+
+
+def _fallback_watcher_watchfiles() -> None:
+    watch_dir = _FALLBACK_CONFIG_PATH.parent if _FALLBACK_CONFIG_PATH.exists() else DATA_DIR
+    if not watch_dir.exists():
+        _fallback_watcher_poll()
+        return
+    try:
+        for _changes in _watchfiles_degr_mod.watch(watch_dir, stop_event=_fallback_watcher_stop):
+            _refresh_resolved_fallback_map()
+    except Exception as exc:
+        logger.warning("Fallback config watchfiles watcher failed, falling back to polling: %s", exc)
+        _fallback_watcher_poll()
+
+
+def start_fallback_watcher() -> None:
+    global _fallback_watcher_thread
+    target = _fallback_watcher_watchfiles if _HAS_WATCHFILES_DEGR else _fallback_watcher_poll
+    _fallback_watcher_thread = threading.Thread(target=target, daemon=True)
+    _fallback_watcher_thread.start()
+    logger.info("Fallback config watcher started (%s)", "watchfiles" if _HAS_WATCHFILES_DEGR else "polling")
+
+
+def stop_fallback_watcher() -> None:
+    _fallback_watcher_stop.set()
+
+
 def get_fallback(tool_name: str) -> Callable[..., Any] | None:
+    _refresh_resolved_fallback_map()
     fn = _RESOLVED_FALLBACK_MAP.get(tool_name)
     if fn:
         return cast(Callable[..., Any], fn)
     logger.warning("No fallback function for tool: %s", tool_name)
     return None
+
+
+def _atexit_persist_state() -> None:
+    global _MANAGER
+    if _MANAGER is not None:
+        try:
+            _MANAGER._persist_state()
+        except Exception:
+            pass
+
+
+atexit.register(_atexit_persist_state)

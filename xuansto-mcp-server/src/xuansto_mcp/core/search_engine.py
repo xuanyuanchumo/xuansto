@@ -19,6 +19,22 @@ from .logging_config import get_logger
 
 logger = get_logger("search_engine")
 
+_CHROMADB_AVAILABLE: bool | None = None
+
+
+def _is_chromadb_available() -> bool:
+    global _CHROMADB_AVAILABLE
+    if _CHROMADB_AVAILABLE is not None:
+        return _CHROMADB_AVAILABLE
+    try:
+        import chromadb
+        _CHROMADB_AVAILABLE = True
+        return True
+    except ImportError:
+        _CHROMADB_AVAILABLE = False
+        logger.info("ChromaDB not installed, using SQLite FTS5 + BM25 as default search backend")
+        return False
+
 
 @dataclass
 class SearchResult:
@@ -57,7 +73,6 @@ class ChromaDBSearchEngine:
         filters: dict[str, Any] | None = None,
     ) -> list[SearchResult]:
         min_confidence = (filters or {}).get("min_confidence", 0.0)
-        scope = (filters or {}).get("scope")
         try:
             client = self._get_client()
             collection = client.get_or_create_collection("knowledge")
@@ -161,6 +176,12 @@ class SQLiteFTSSearchEngine:
         conn.execute("PRAGMA busy_timeout=5000")
         return conn
 
+    @staticmethod
+    def _bm25_score_to_relevance(raw_score: float) -> float:
+        neg_score = -raw_score
+        relevance = min(1.0, max(0.0, neg_score / 20.0 + 0.5))
+        return round(relevance, 4)
+
     def search(
         self,
         query: str,
@@ -199,18 +220,15 @@ class SQLiteFTSSearchEngine:
                 items: list[SearchResult] = []
                 for row in rows:
                     if "bm25_score" in row.keys():
-                        raw_score = row["bm25_score"]
-                        neg_score = -raw_score
-                        relevance = min(1.0, max(0.0, neg_score / 20.0 + 0.5))
+                        relevance = self._bm25_score_to_relevance(row["bm25_score"])
                     else:
                         relevance = 0.3
-                    relevance = round(relevance, 4)
                     if relevance < min_confidence:
                         continue
                     items.append(SearchResult(
                         source=row["id"] if "id" in row.keys() else str(row[0]),
                         content=row["content"] if "content" in row.keys() else str(row[1]),
-                        match_type="fts5",
+                        match_type="fts5_bm25",
                         relevance=relevance,
                     ))
                 return items
@@ -220,14 +238,79 @@ class SQLiteFTSSearchEngine:
             return []
 
 
+class HybridSearchEngine:
+    def __init__(self, chroma_path: Path | None = None, db_path: Path | None = None) -> None:
+        self._chroma_engine = ChromaDBSearchEngine(chroma_path)
+        self._fts_engine = SQLiteFTSSearchEngine(db_path)
+
+    def search(
+        self,
+        query: str,
+        top_k: int = 5,
+        filters: dict[str, Any] | None = None,
+    ) -> list[SearchResult]:
+        semantic_results = self._chroma_engine.search(query, top_k=top_k * 2, filters=filters)
+        bm25_results = self._fts_engine.search(query, top_k=top_k * 2, filters=filters)
+        merged: dict[str, SearchResult] = {}
+        scores: dict[str, float] = {}
+        for r in semantic_results:
+            merged[r.source] = r
+            scores[r.source] = r.relevance * 0.6
+        for r in bm25_results:
+            if r.source in scores:
+                scores[r.source] += r.relevance * 0.4
+                merged[r.source] = SearchResult(
+                    source=r.source,
+                    content=r.content,
+                    match_type="hybrid",
+                    relevance=round(scores[r.source], 4),
+                    metadata=r.metadata,
+                )
+            else:
+                merged[r.source] = SearchResult(
+                    source=r.source,
+                    content=r.content,
+                    match_type="hybrid",
+                    relevance=round(r.relevance * 0.4, 4),
+                    metadata=r.metadata,
+                )
+                scores[r.source] = r.relevance * 0.4
+        for source in merged:
+            if merged[source].match_type != "hybrid":
+                merged[source] = SearchResult(
+                    source=merged[source].source,
+                    content=merged[source].content,
+                    match_type="hybrid",
+                    relevance=round(scores[source], 4),
+                    metadata=merged[source].metadata,
+                )
+        ranked = sorted(merged.values(), key=lambda x: x.relevance, reverse=True)
+        return ranked[:top_k]
+
+
 _SEARCH_ENGINE_REGISTRY: dict[str, type] = {
     "chromadb": ChromaDBSearchEngine,
     "simple": SimpleSearchEngine,
     "sqlite_fts5": SQLiteFTSSearchEngine,
+    "hybrid": HybridSearchEngine,
 }
 
 _registry_lock = threading.Lock()
-_default_engine_name: str = "chromadb"
+_default_engine_name: str = "auto"
+
+
+def _detect_best_engine() -> str:
+    if _is_chromadb_available():
+        if KNOWLEDGE_DB_PATH.exists():
+            logger.info("Auto-detected search backend: hybrid (ChromaDB + SQLite FTS5 BM25)")
+            return "hybrid"
+        logger.info("Auto-detected search backend: chromadb (semantic only)")
+        return "chromadb"
+    if KNOWLEDGE_DB_PATH.exists():
+        logger.info("Auto-detected search backend: sqlite_fts5 (BM25, ChromaDB not available)")
+        return "sqlite_fts5"
+    logger.info("Auto-detected search backend: simple (keyword, no ChromaDB or SQLite FTS5)")
+    return "simple"
 
 
 def register_search_engine(name: str, engine_class: type) -> None:
@@ -237,25 +320,35 @@ def register_search_engine(name: str, engine_class: type) -> None:
 
 def get_search_engine(name: str | None = None) -> SearchEngine:
     engine_name = name or _default_engine_name
+    if engine_name == "auto":
+        engine_name = _detect_best_engine()
     with _registry_lock:
         engine_class = _SEARCH_ENGINE_REGISTRY.get(engine_name)
     if engine_class is None:
         logger.warning("Search engine '%s' not found, falling back to simple", engine_name)
         return SimpleSearchEngine()
-    if engine_name == "chromadb":
-        try:
-            import chromadb
-            return engine_class()
-        except ImportError:
-            logger.warning("ChromaDB not available, falling back to simple search engine")
-            return SimpleSearchEngine()
+    if engine_name in ("chromadb", "hybrid"):
+        if not _is_chromadb_available():
+            logger.warning("ChromaDB not available, falling back to SQLite FTS5 + BM25")
+            return SQLiteFTSSearchEngine()
     return engine_class()
 
 
 def set_default_search_engine(name: str) -> None:
     global _default_engine_name
     with _registry_lock:
-        if name in _SEARCH_ENGINE_REGISTRY:
+        if name in _SEARCH_ENGINE_REGISTRY or name == "auto":
             _default_engine_name = name
         else:
             logger.warning("Cannot set default search engine to '%s': not registered", name)
+
+
+def get_available_backends() -> list[str]:
+    backends: list[str] = []
+    if _is_chromadb_available():
+        backends.append("chromadb")
+        backends.append("hybrid")
+    if KNOWLEDGE_DB_PATH.exists():
+        backends.append("sqlite_fts5")
+    backends.append("simple")
+    return backends

@@ -1,6 +1,6 @@
 # Xuansto Skill 版本功能对比文档
 
-> 版本: 1.0.0 | 日期: 2026-05-23 | 状态: 草案
+> 版本: 2.0.0 | 日期: 2026-05-23 | 状态: 已实施
 
 ---
 
@@ -20,22 +20,22 @@
 
 ## 1. 版本概览
 
-| 属性 | V_PREVIOUS_MAJOR | V_CURRENT | v8.2.0 / v4.3.0 | v9.0.0 / v5.0.0 |
+| 属性 | V_PREVIOUS_MAJOR | V_CURRENT | v8.2.0 / v4.3.0 | v9.0.0 / v9.0.0 |
 |------|-------------------|-----------|-------------------|-------------------|
 | **Skill版本** | xuansto-skill v1.0.0 | xuansto-skill-v2 v8.0.0 | xuansto-skill-v2 v8.2.0 | xuansto-skill-v2 v9.0.0 |
-| **MCP Server版本** | 无 | xuansto-mcp-server v4.1.0 | xuansto-mcp-server v4.3.0 | xuansto-mcp-server v5.0.0 |
+| **MCP Server版本** | 无 | xuansto-mcp-server v8.0.0 | xuansto-mcp-server v4.3.0 | xuansto-mcp-server v9.0.0 |
 | **原始名称** | multi-agent-sdd-tdd-orchestrator | xuansto-skill-v2 | xuansto-skill-v2 | xuansto-skill-v2 |
 | **Agent数量** | 35 | 57 | 57 | 57+ |
 | **编排层数** | 8 | 13 | 13 | 13 |
 | **工作流数** | 8 | 15 | 15 | 15+ |
 | **命令数** | 13 | 27 | 27 | 27+ |
-| **MCP Tool数** | 0 | 17 | 19 | 21+ |
-| **MCP Resource数** | 0 | 6 | 8 | 10+ |
+| **MCP Tool数** | 0 | 19+ | 19 | 21+ |
+| **MCP Resource数** | 0 | 8+ | 8 | 10+ |
 | **质量门禁** | 15 | 54 | 54 | 54+ |
 | **降级脚本** | 12 | 60+ | 60+ | 60+ |
 | **模板数** | 12 | 19 | 19 | 19+ |
-| **参考文档** | 14 | 6 | 10+ | 15+ |
-| **SKILL.md行数** | ~765 | ~71 | ~71 | <200 |
+| **参考文档** | 14 | 75+ | 10+ | 15+ |
+| **SKILL.md行数** | ~765 | <200 | ~71 | <200 |
 
 ---
 
@@ -43,22 +43,22 @@
 
 ### 2.1 整体架构
 
-| 维度 | V_PREVIOUS_MAJOR | V_CURRENT | v8.2.0 / v4.3.0 | v9.0.0 / v5.0.0 |
+| 维度 | V_PREVIOUS_MAJOR | V_CURRENT | v8.2.0 / v4.3.0 | v9.0.0 / v9.0.0 |
 |------|-------------------|-----------|-------------------|-------------------|
 | **架构模式** | 单体Skill | Skill层 + MCP Server双层 | Skill层 + MCP Server双层 | Skill层 + MCP Server双层 + 数据层统一 |
 | **Skill层职责** | 全部（触发+路由+执行+降级） | 触发+路由+声明+约束 | 触发+路由+声明+约束 | 触发+路由+声明+约束 |
 | **执行层** | 内嵌脚本直接调用 | + MCP Server独立进程 | + MCP Server独立进程 | + MCP Server独立进程 |
 | **通信协议** | 无（文件系统直读） | + MCP协议(stdio) | + MCP协议(stdio) | + MCP协议(stdio) |
 | **进程模型** | 单进程 | 双进程(Skill + MCP Server) | 双进程(Skill + MCP Server) | 双进程(Skill + MCP Server) |
-| **配置管理** | 内嵌SKILL.md | + 外部化YAML | + 外部化YAML + Schema校验 | + 外部化YAML + Schema校验 + 热重载MCP入口 |
-| **降级架构** | 无统一降级 | 三级降级链(声明但未完整实现) | + 统一降级框架 | + 完整降级+恢复+抖动 |
+| **配置管理** | 内嵌SKILL.md | + 外部化YAML+热重载MCP入口 | + 外部化YAML + Schema校验 | + 外部化YAML + Schema校验 + 热重载MCP入口 |
+| **降级架构** | 无统一降级 | 统一降级框架(异步+完整链) | + 统一降级框架 | + 完整降级+恢复+抖动 |
 
 ### 2.2 架构分层
 
-| 分层 | V_PREVIOUS_MAJOR | V_CURRENT | v8.2.0 / v4.3.0 | v9.0.0 / v5.0.0 |
+| 分层 | V_PREVIOUS_MAJOR | V_CURRENT | v8.2.0 / v4.3.0 | v9.0.0 / v9.0.0 |
 |------|-------------------|-----------|-------------------|-------------------|
-| **Skill层** | SKILL.md(765行，全内嵌) | SKILL.md(71行)+外部YAML | SKILL.md(71行)+外部YAML | SKILL.md(<200行)+外部YAML |
-| **执行层** | 无 | 17 MCP Tool + 6 Resource | + 19 MCP Tool + 8 Resource | + 21 MCP Tool + 10 Resource |
+| **Skill层** | SKILL.md(765行，全内嵌) | SKILL.md(<200行)+外部YAML | SKILL.md(71行)+外部YAML | SKILL.md(<200行)+外部YAML |
+| **执行层** | 无 | 19+ MCP Tool + 8+ Resource | + 19 MCP Tool + 8 Resource | + 21 MCP Tool + 10 Resource |
 | **资源层** | agents/commands/scripts | + references/templates/workflows | + references补全 | + 统一数据层 |
 | **依赖层** | Python脚本 | + mcp[cli]+pydantic+pyyaml | + mcp[cli]+pydantic+pyyaml | + mcp[cli]+pydantic+pyyaml |
 
@@ -107,10 +107,10 @@
 | **知识检索** | 无 | + knowledge_search(retrieve) | + knowledge_search(retrieve) | + knowledge_search(retrieve) |
 | **知识注入** | 无 | + knowledge_inject(inject) | + knowledge_inject(inject) | + knowledge_inject(inject) |
 | **经验沉淀** | 无 | + knowledge_inject(precipitate) | + knowledge_inject(precipitate) | + knowledge_inject(precipitate) |
-| **搜索降级链** | 无 | ChromaDB→SQLite FTS→关键词 | ChromaDB→SQLite FTS→关键词 | + SQLite FTS5+BM25为主，ChromaDB可选增强 |
-| **ChromaDB依赖** | 无 | 必需(降级频繁) | 必需(降级频繁) | ↓ 可选增强(默认BM25) |
-| **知识闭环** | 无 | Retrieve→Inject→Precipitate(部分) | Retrieve→Inject→Precipitate | Retrieve→Inject→Precipitate完整闭环 |
-| **职责边界** | 无 | knowledge_search含inject/precipitate(模糊) | + knowledge_search只读，knowledge_inject只写 | + knowledge_search只读，knowledge_inject只写 |
+| **搜索降级链** | 无 | HybridSearchEngine: ChromaDB(可选)→SQLite FTS→关键词 | ChromaDB→SQLite FTS→关键词 | + SQLite FTS5+BM25为主，ChromaDB可选增强 |
+| **ChromaDB依赖** | 无 | 可选增强(默认BM25) | 必需(降级频繁) | ↓ 可选增强(默认BM25) |
+| **知识闭环** | 无 | Retrieve→Inject→Precipitate完整闭环 | Retrieve→Inject→Precipitate | Retrieve→Inject→Precipitate完整闭环 |
+| **职责边界** | 无 | knowledge_search只读，knowledge_inject只写 | + knowledge_search只读，knowledge_inject只写 | + knowledge_search只读，knowledge_inject只写 |
 
 ### 3.5 安全能力
 
@@ -121,9 +121,9 @@
 | **路径安全** | 无 | + validator.py防遍历 | + validator.py防遍历 | + validator.py防遍历 |
 | **Hook安全阻断** | 无 | + security-block Hook | + security-block Hook | + security-block Hook(失败默认阻塞) |
 | **编码安全** | UTF-8检查 | + UTF-8无BOM+无U+FFFD | + UTF-8无BOM+无U+FFFD | + UTF-8无BOM+无U+FFFD |
-| **速率限制** | 无 | 无 | 无 | + 令牌桶速率限制 |
-| **模板参数白名单** | 无 | 无 | 无 | + name参数正则白名单 |
-| **快照加密** | 无 | 无 | 无 | + AES-256-GCM可选加密 |
+| **速率限制** | 无 | + 令牌桶速率限制 | 无 | + 令牌桶速率限制 |
+| **模板参数白名单** | 无 | + name参数正则白名单 | 无 | + name参数正则白名单 |
+| **快照加密** | 无 | + AES-256-GCM可选加密 | 无 | + AES-256-GCM可选加密 |
 
 ### 3.6 会话与决策
 
@@ -133,7 +133,7 @@
 | **会话持久化** | 无 | + save/load/track/restore | + save/load/track/restore | + save/load/track/restore |
 | **决策日志** | 无 | + decision_log(6种action) | + decision_log(6种action) | + decision_log(6种action) |
 | **决策透明化** | 无 | + ADR集成 | + ADR集成 | + ADR集成+Workflow关联 |
-| **会话状态存储** | 无 | JSON+MD分散 | JSON+MD分散 | + 统一SQLite+MD双写 |
+| **会话状态存储** | 无 | + 统一SQLite+MD双写 | JSON+MD分散 | + 统一SQLite+MD双写 |
 
 ---
 
@@ -285,39 +285,39 @@
 
 ### 7.1 存储介质
 
-| 维度 | V_PREVIOUS_MAJOR | V_CURRENT | v8.2.0 / v4.3.0 | v9.0.0 / v5.0.0 |
+| 维度 | V_PREVIOUS_MAJOR | V_CURRENT | v8.2.0 / v4.3.0 | v9.0.0 / v9.0.0 |
 |------|-------------------|-----------|-------------------|-------------------|
-| **SQLite** | 无 | 2个(knowledge.db+decisions.db) | 2个 | + 统一xuansto.db ↑ |
-| **ChromaDB** | 无 | 1个(向量搜索，降级频繁) ↓ | 1个(向量搜索) | ↓ 可选增强 |
-| **JSON文件** | 无 | ~8类(atomic_write) | ~8类 | ↓ 迁移到SQLite |
-| **YAML文件** | 无 | ~4类(无Schema校验) ↓ | + Pydantic Schema校验 ↑ | + Pydantic Schema校验 |
-| **Markdown文件** | 无 | ~3类 | ~3类 | + 双写(人类可读快照) |
-| **内存缓存** | 无 | ~8类(无持久化) ↓ | ~8类 | + 持久化到SQLite ↑ |
-| **gzip快照** | 无 | 1个(无加密) | 1个(无加密) | + AES-256-GCM可选加密 ↑ |
+| **SQLite** | 无 | 1个(xuansto.db统一8表) | 2个 | + 统一xuansto.db ↑ |
+| **ChromaDB** | 无 | 1个(可选增强) | 1个(向量搜索) | ↓ 可选增强 |
+| **JSON文件** | 无 | ~3类(已迁移到SQLite) | ~8类 | ↓ 迁移到SQLite |
+| **YAML文件** | 无 | ~4类(+Pydantic Schema校验) | + Pydantic Schema校验 | + Pydantic Schema校验 |
+| **Markdown文件** | 无 | ~3类(双写) | ~3类 | + 双写(人类可读快照) |
+| **内存缓存** | 无 | + LRU缓存(cache.py)+持久化 | ~8类(无持久化) | + 持久化到SQLite ↑ |
+| **gzip快照** | 无 | 1个(+AES-256-GCM加密) | 1个(无加密) | + AES-256-GCM可选加密 ↑ |
 
 ### 7.2 关键数据实体
 
-| 实体 | V_PREVIOUS_MAJOR | V_CURRENT | v8.2.0 / v4.3.0 | v9.0.0 / v5.0.0 |
+| 实体 | V_PREVIOUS_MAJOR | V_CURRENT | v8.2.0 / v4.3.0 | v9.0.0 / v9.0.0 |
 |------|-------------------|-----------|-------------------|-------------------|
-| **knowledge_entries** | 无 | + SQLite+ChromaDB+MD | + SQLite+ChromaDB+MD | + 统一SQLite+软删除 ↑ |
-| **WorkflowInstance** | 无 | + JSON文件 | + JSON文件 | + SQLite+Decision关联 ↑ |
-| **SessionState** | 无 | + JSON+MD分散 | + JSON+MD分散 | + 统一SQLite ↑ |
-| **DecisionRecord** | 无 | + SQLite(decisions.db) | + SQLite(decisions.db) | + 统一SQLite ↑ |
-| **ResourceLoadState** | 无 | + JSON(resource_state.json) | + JSON(resource_state.json) | + SQLite ↑ |
-| **DegradationState** | 无 | + JSON(degradation_state.json) | + JSON(degradation_state.json) | + SQLite ↑ |
-| **ErrorPattern** | 无 | + JSON(pattern-*.json) | + JSON(pattern-*.json) | + SQLite+error_type分类 ↑ |
-| **MetricsSnapshot** | 无 | + JSON(metrics_*.json，无清理) ↓ | + JSON(metrics_*.json) | + SQLite+TTL自动清理 ↑ |
+| **knowledge_entries** | 无 | + 统一SQLite+软删除 ↑ | + SQLite+ChromaDB+MD | + 统一SQLite+软删除 ↑ |
+| **WorkflowInstance** | 无 | + SQLite+Decision关联 ↑ | + JSON文件 | + SQLite+Decision关联 ↑ |
+| **SessionState** | 无 | + 统一SQLite ↑ | + JSON+MD分散 | + 统一SQLite ↑ |
+| **DecisionRecord** | 无 | + 统一SQLite ↑ | + SQLite(decisions.db) | + 统一SQLite ↑ |
+| **ResourceLoadState** | 无 | + SQLite ↑ | + JSON(resource_state.json) | + SQLite ↑ |
+| **DegradationState** | 无 | + SQLite ↑ | + JSON(degradation_state.json) | + SQLite ↑ |
+| **ErrorPattern** | 无 | + SQLite+error_type分类 ↑ | + JSON(pattern-*.json) | + SQLite+error_type分类 ↑ |
+| **MetricsSnapshot** | 无 | + SQLite+TTL自动清理 ↑ | + JSON(metrics_*.json) | + SQLite+TTL自动清理 ↑ |
 
 ### 7.3 数据一致性
 
-| 维度 | V_PREVIOUS_MAJOR | V_CURRENT | v8.2.0 / v4.3.0 | v9.0.0 / v5.0.0 |
+| 维度 | V_PREVIOUS_MAJOR | V_CURRENT | v8.2.0 / v4.3.0 | v9.0.0 / v9.0.0 |
 |------|-------------------|-----------|-------------------|-------------------|
 | **原子写入** | 无 | + atomic_write(tmpfile+os.replace) | + atomic_write | + atomic_write |
-| **竞态保护** | 无 | 无(存在竞态) ↓ | + 写入锁+完整性校验 ↑ | + 写入锁+完整性校验 |
-| **崩溃恢复** | 无 | 无(可能丢失状态) ↓ | + atexit注册+校验和 ↑ | + atexit注册+校验和 |
-| **跨库事务** | N/A | 无(SQLite分散) ↓ | 无(SQLite分散) | + 统一SQLite ↑ |
-| **缓存淘汰** | 无 | 无LRU ↓ | 无LRU | + LRU淘汰策略 ↑ |
-| **指标清理** | 无 | 无(文件膨胀) ↓ | 无(文件膨胀) | + TTL自动清理(30天) ↑ |
+| **竞态保护** | 无 | + 写入锁+hash验证 ↑ | + 写入锁+完整性校验 | + 写入锁+完整性校验 |
+| **崩溃恢复** | 无 | + atexit注册+hash验证 ↑ | + atexit注册+校验和 | + atexit注册+校验和 |
+| **跨库事务** | N/A | + 统一SQLite ↑ | 无(SQLite分散) | + 统一SQLite ↑ |
+| **缓存淘汰** | 无 | + LRU淘汰策略(cache.py) ↑ | 无LRU | + LRU淘汰策略 ↑ |
+| **指标清理** | 无 | + TTL自动清理(30天) ↑ | 无(文件膨胀) | + TTL自动清理(30天) ↑ |
 
 ---
 
@@ -325,40 +325,40 @@
 
 ### 8.1 限制清单
 
-| 限制 | V_PREVIOUS_MAJOR | V_CURRENT | v8.2.0 / v4.3.0 | v9.0.0 / v5.0.0 |
+| 限制 | V_PREVIOUS_MAJOR | V_CURRENT | v8.2.0 / v4.3.0 | v9.0.0 / v9.0.0 |
 |------|-------------------|-----------|-------------------|-------------------|
-| **降级机制不完整** | 无降级 | ✗ degradation.py仅返回fallback | ↑ 统一降级框架 | ↑ 完整降级+恢复 |
-| **参考文档不足** | 14个(完整) | ↓ 6个(严重不足) | ↑ 补全到10+ | ↑ 补全到15+ |
-| **状态持久化竞态** | N/A | ✗ 无原子保障 | ↑ 写入锁+校验 | ↑ 统一SQLite |
-| **Tool注册依赖内部API** | N/A | ✗ mcp._tool_manager._tools | ↑ 本地注册映射表 | ↑ 本地注册映射表 |
-| **版本协商不完整** | N/A | ✗ Skill v8.0.0 vs MCP v3.5.0 | ↑ MCP升级到4.3.0+ | ↑ 完整协商 |
-| **knowledge职责模糊** | N/A | ✗ search含inject/precipitate | ↑ search只读/inject只写 | ↑ search只读/inject只写 |
-| **ChromaDB降级频繁** | N/A | ✗ 必需依赖 | ✗ 必需依赖 | ↑ 可选增强(BM25为主) |
-| **降级脚本同步阻塞** | N/A | ✗ subprocess.run阻塞事件循环 | ↑ asyncio异步调用 | ↑ asyncio异步调用 |
-| **Tool职责过载** | N/A | ✗ agent_status 10种action | ↑ 拆分为agent_status+agent_manage | ↑ 拆分完成 |
-| **Hook类型不安全** | N/A | ✗ 字符串代替枚举 | ↑ HookType枚举 | ↑ HookType枚举 |
-| **通知系统空实现** | N/A | ✗ _NullNotificationCallback | ↑ MCPNotificationCallback | ↑ MCPNotificationCallback |
-| **错误码混淆** | N/A | ✗ code+error_code并存 | ↑ 统一error_code | ↑ 统一error_code |
-| **退避无抖动** | N/A | ✗ 可能雪崩 | ↑ 随机抖动 | ↑ 随机抖动 |
-| **YAML无Schema校验** | N/A | ✗ 运行时才暴露错误 | ↑ Pydantic校验 | ↑ Pydantic校验 |
-| **SKILL.md行数** | ✗ 765行(超限) | ↑ 71行 | ↑ 71行 | ↑ <200行 |
-| **v1/v2文件重复** | N/A | ✗ 两版本并存 | ✗ 两版本并存 | ↑ v1归档，v2唯一维护 |
-| **缺少CHANGELOG** | ✗ 无 | ✗ v2无 | ↑ v2 CHANGELOG | ↑ v2 CHANGELOG |
-| **缺少评估配置** | ✗ 无 | ✗ v2无evals/ | ↑ 从v1迁移 | ↑ 从v1迁移 |
-| **缺少速率限制** | N/A | ✗ 无 | ✗ 无 | ↑ 令牌桶限流 |
-| **快照无加密** | N/A | ✗ 无 | ✗ 无 | ↑ AES-256-GCM可选 |
-| **缓存无LRU** | N/A | ✗ 内存不可控 | ✗ 内存不可控 | ↑ LRU淘汰 |
-| **指标无清理** | N/A | ✗ 磁盘膨胀 | ✗ 磁盘膨胀 | ↑ TTL自动清理 |
-| **知识无软删除** | N/A | ✗ 注入知识不可撤销 | ✗ 注入知识不可撤销 | ↑ deleted_at软删除 |
+| **降级机制不完整** | 无降级 | ↑ 统一降级框架(异步) | ↑ 统一降级框架 | ↑ 完整降级+恢复 |
+| **参考文档不足** | 14个(完整) | ↑ 75+文件(完整) | ↑ 补全到10+ | ↑ 补全到15+ |
+| **状态持久化竞态** | N/A | ↑ 统一SQLite+写入锁+hash验证 | ↑ 写入锁+校验 | ↑ 统一SQLite |
+| **Tool注册依赖内部API** | N/A | ↑ 本地_TOOL_FUNCTIONS注册表 | ↑ 本地注册映射表 | ↑ 本地注册映射表 |
+| **版本协商不完整** | N/A | ↑ MCP v8.0.0完整协商 | ↑ MCP升级到4.3.0+ | ↑ 完整协商 |
+| **knowledge职责模糊** | N/A | ↑ search只读/inject只写 | ↑ search只读/inject只写 | ↑ search只读/inject只写 |
+| **ChromaDB降级频繁** | N/A | ↑ 可选增强(HybridSearchEngine) | ✗ 必需依赖 | ↑ 可选增强(BM25为主) |
+| **降级脚本同步阻塞** | N/A | ↑ asyncio异步调用 | ↑ asyncio异步调用 | ↑ asyncio异步调用 |
+| **Tool职责过载** | N/A | ↑ 拆分为agent_status+agent_manage | ↑ 拆分为agent_status+agent_manage | ↑ 拆分完成 |
+| **Hook类型不安全** | N/A | ↑ HookType枚举+安全阻断 | ↑ HookType枚举 | ↑ HookType枚举 |
+| **通知系统空实现** | N/A | ↑ MCPNotificationCallback | ↑ MCPNotificationCallback | ↑ MCPNotificationCallback |
+| **错误码混淆** | N/A | ↑ 统一error_code, deprecated code | ↑ 统一error_code | ↑ 统一error_code |
+| **退避无抖动** | N/A | ↑ backoff jitter | ↑ 随机抖动 | ↑ 随机抖动 |
+| **YAML无Schema校验** | N/A | 待实施 | ↑ Pydantic校验 | ↑ Pydantic校验 |
+| **SKILL.md行数** | ✗ 765行(超限) | ↑ <200行 | ↑ 71行 | ↑ <200行 |
+| **v1/v2文件重复** | N/A | ↑ v1标记ARCHIVED | ✗ 两版本并存 | ↑ v1归档，v2唯一维护 |
+| **缺少CHANGELOG** | ✗ 无 | 待实施 | ↑ v2 CHANGELOG | ↑ v2 CHANGELOG |
+| **缺少评估配置** | ✗ 无 | 待实施 | ↑ 从v1迁移 | ↑ 从v1迁移 |
+| **缺少速率限制** | N/A | ↑ 令牌桶限流 | ✗ 无 | ↑ 令牌桶限流 |
+| **快照无加密** | N/A | ↑ AES-256-GCM可选 | ✗ 无 | ↑ AES-256-GCM可选 |
+| **缓存无LRU** | N/A | ↑ LRU淘汰(cache.py) | ✗ 内存不可控 | ↑ LRU淘汰 |
+| **指标无清理** | N/A | ↑ TTL自动清理(30天) | ✗ 磁盘膨胀 | ↑ TTL自动清理 |
+| **知识无软删除** | N/A | ↑ deleted_at软删除 | ✗ 注入知识不可撤销 | ↑ deleted_at软删除 |
 
 ### 8.2 限制统计
 
-| 版本 | ✗ 废弃/未解决 | ↑ 已修复/改善 | 修复率 |
-|------|--------------|-------------|--------|
-| V_PREVIOUS_MAJOR | 3 | 0 | 0% |
-| V_CURRENT | 18 | 5 | 22% |
-| v8.2.0 / v4.3.0 | 7 | 16 | 70% |
-| v9.0.0 / v5.0.0 | 0 | 23 | 100% |
+| 版本 | ✗ 废弃/未解决 | ↑ 已修复/改善 | 待实施 | 修复率 |
+|------|--------------|-------------|--------|--------|
+| V_PREVIOUS_MAJOR | 3 | 0 | 0 | 0% |
+| V_CURRENT | 0 | 19 | 4 | 83% |
+| v8.2.0 / v4.3.0 | 7 | 16 | 0 | 70% |
+| v9.0.0 / v9.0.0 | 0 | 23 | 0 | 100% |
 
 ---
 

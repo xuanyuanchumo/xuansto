@@ -15,8 +15,6 @@ min_version: 1.0.0
 license: MIT
 ---
 
-<!-- PHASE_0_START -->
-
 # Xuansto Skill v8.0.0 (MCP Edition)
 
 > 57 Agents/13层 | 54 Gates | 31 Cmds | 9 Phase | 17 MCP工具驱动
@@ -27,20 +25,16 @@ license: MIT
 
 ## MCP依赖
 
-最低兼容: xuansto-mcp-server >= 4.0.0 | API版本: 2.0.0
+最低兼容: xuansto-mcp-server >= 4.0.0 | API版本: 3.0.0
 MCP不可用时自动降级到 scripts/ 目录Python脚本，详见 {{include:constraints.yaml}}
 
 ## 核心约束
 
-1. **Spec > Test > Code**：先规格再测试最后代码，覆盖率≥80% — 规格锚定意图防止实现偏移，测试先行保障回归安全
-2. **Karpathy准则**：Think Before Coding | Simplicity First | Surgical Changes — 避免过度工程，每次变更最小化影响面
-3. **增量约束**：分解→实现→测试→重复；3-Strike Protocol — 小步快跑降低返工成本，三次失败自动升级避免死循环
-4. **脚本规范**：Python优先 | UTF-8无BOM+无U+FFFD | 验证后删除临时脚本 — 统一技术栈减少上下文切换，编码一致防止乱码
-5. **跨平台**：Web+Desktop(Electron/Tauri/Flutter)，桌面端需IPC安全+代码签名 — 桌面端暴露更大攻击面，需额外安全防线
-
-<!-- PHASE_0_END -->
-
-<!-- PHASE_1_START -->
+1. **Spec > Test > Code**：先规格再测试最后代码，覆盖率≥80%
+2. **Karpathy准则**：Think Before Coding | Simplicity First | Surgical Changes
+3. **增量约束**：分解→实现→测试→重复；3-Strike Protocol
+4. **脚本规范**：Python优先 | UTF-8无BOM+无U+FFFD | 验证后删除临时脚本
+5. **跨平台**：Web+Desktop(Electron/Tauri/Flutter)，桌面端需IPC安全+代码签名
 
 ## 执行入口
 
@@ -49,95 +43,6 @@ MCP不可用时自动降级到 scripts/ 目录Python脚本，详见 {{include:co
 3. **工作流选择** → full/medium/fast
 4. **MCP+知识检索** → skill_analyze → knowledge_search → 注入Agent上下文
 5. **执行Phase 0** → 按Phase顺序推进
-
-## 工作流Phase概览
-
-| Phase | 名称 | MCP工具 | 关键门禁 |
-|-------|------|---------|----------|
-| 0 | 初始化 | skill_analyze, workflow_dispatch, agent_status, resource_load_status | DESIGN-SYSTEM-COMPLETE, ANTI-PATTERN-CHECK |
-| 1 | 需求分析 | knowledge_search, resource_load_status | BRAINSTORM-COMPLETE, GATE-001~002 |
-| 2 | 架构设计 | knowledge_search, resource_load_status | PLAN-ATOMIC, GATE-003~004 |
-| 3 | 测试先行 | — | TEST-FIRST |
-| 4 | 代码实现 | quality_gate_check, agent_status | GATE-007, TEST-PASS, FILE-ENCODING |
-| 5 | 测试验证 | security_scan, spec_drift_detect, agent_status | AI-PENTEST, SPEC-CONSISTENCY |
-| 6 | 验收确认 | quality_gate_check | GATE-013~014, UX-ACCEPTANCE |
-| 7 | 持续重构 | code_simplify, context_compress | SIMPLIFICATION-BEHAVIOR, GATE-015 |
-| 8 | 部署交付 | — | DESKTOP-BUILD/SIGN/UPDATE/CROSS |
-
-## 命令路由表（精简）
-
-| 意图 | 命令 | MCP工具链 | Phase |
-|------|------|-----------|-------|
-| 从零开始新项目 | /init | skill_analyze, knowledge_search, workflow_dispatch, project_init, decision_log | 0 |
-| 头脑风暴/需求探索 | /brainstorm | knowledge_search, workflow_dispatch | 1 |
-| 澄清需求 | /clarify | knowledge_search, workflow_dispatch, quality_gate_check | 1 |
-| 规划架构 | /plan | skill_analyze, knowledge_search, agent_status, workflow_dispatch, decision_log, token_budget | 2 |
-| 写规格文档 | /spec | workflow_dispatch, quality_gate_check, spec_drift_detect | 2 |
-| 设计 | /design | quality_gate_check, knowledge_search, workflow_dispatch | 2 |
-| 设计系统 | /design-system | quality_gate_check, knowledge_search, workflow_dispatch | 2 |
-| 写代码 | /implement | workflow_dispatch, quality_gate_check, hook_manage | 4 |
-| 跑测试 | /test | quality_gate_check, workflow_dispatch | 5 |
-| 代码审查 | /review | quality_gate_check, security_scan, code_simplify | 5 |
-| 安全审计 | /audit | security_scan, quality_gate_check, spec_drift_detect | 5 |
-| 修复Bug | /fix | session_manage, quality_gate_check, hook_manage | 4 |
-| 验收确认 | /accept | quality_gate_check, workflow_dispatch | 6 |
-| 代码简化 | /simplify | code_simplify, quality_gate_check, context_compress | 7 |
-| 代码重构 | /refactor | code_simplify, quality_gate_check, context_compress | 7 |
-| 部署交付 | /deploy | quality_gate_check, server_health, workflow_dispatch | 8 |
-| 构建项目 | /build | skill_analyze, quality_gate_check, server_health | 8 |
-| 桌面构建 | /build-desktop | quality_gate_check, skill_analyze, workflow_dispatch | 8 |
-| 桌面发布 | /release-desktop | quality_gate_check, workflow_dispatch | 8 |
-| 冲刺 | /sprint | workflow_dispatch, session_manage, resource_load_status, token_budget, project_init | 0 |
-| 知识学习 | /learn | knowledge_search, knowledge_inject, session_manage | — |
-| 执行计划 | /execute-plan | workflow_dispatch, session_manage | — |
-| 自主循环 | /loop | workflow_dispatch, session_manage, resource_load_status, token_budget, decision_log | — |
-| 取消循环 | /cancel-loop | workflow_dispatch, session_manage | — |
-| 查询Agent | /agent-status | agent_status | — |
-| 查询进度 | /status | workflow_dispatch, session_manage, server_health | — |
-| 回滚 | /rollback | session_manage, workflow_dispatch | — |
-| 中等SDD+TDD | /sdd-tdd-medium | skill_analyze, workflow_dispatch, resource_load_status | 0 |
-| 快速SDD+TDD | /sdd-tdd-fast | workflow_dispatch, resource_load_status | 1 |
-| 决策记录 | /decision | decision_log | — |
-| Token预算 | /budget | token_budget, resource_load_status | — |
-
-## 核心Agent索引（编排+产品+工程层）
-
-| 层级 | Agent | Phase | 模型路由 |
-|------|-------|-------|----------|
-| 编排 | Orchestrator | 0,1,2 | deep |
-| 编排 | Subagent Dispatcher | 0,4,5 | standard |
-| 编排 | Task Coordinator | 0,4,5 | standard |
-| 产品 | Product Manager | 1,6 | standard |
-| 产品 | Brainstorming Facilitator | 1 | standard |
-| 产品 | System Architect | 2 | deep |
-| 产品 | Technical Writer | 1,6 | standard |
-| 工程 | Backend Developer | 4 | standard |
-| 工程 | Database Engineer | 4 | standard |
-| 工程 | DevOps Engineer | 4,8 | standard |
-| 工程 | Frontend Developer | 4 | standard |
-| 工程 | Fullstack Engineer | 4 | standard |
-| 工程 | Mobile Developer | 4 | standard |
-
-<!-- PHASE_1_END -->
-
-<!-- PHASE_2_START -->
-
-## 完整命令路由表（含降级策略）
-
-{{include:commands/routes.yaml}}
-
-## 完整Agent角色索引表（13层57个Agent）
-
-{{include:agents/registry.yaml}}
-
-## 外部参考文件
-
-| 文件 | 内容 |
-|------|------|
-| {{include:triggers.yaml}} | 触发条件完整定义(phrases/keywords/not_for) |
-| {{include:constraints.yaml}} | 核心约束(Token预算/门禁摘要/披露规则/降级规则) |
-| references/mcp-tools.md | 17个MCP工具完整参数与返回值 |
-| references/workflow-phases.md | 9阶段工作流目标、步骤和门禁详情 |
 
 ## MCP工具摘要
 
@@ -161,38 +66,18 @@ MCP不可用时自动降级到 scripts/ 目录Python脚本，详见 {{include:co
 | knowledge_inject | 知识注入到上下文 | action, content, scope |
 | project_init | 项目初始化 | action, name, stack |
 
-<!-- PHASE_2_END -->
+## 外部参考文件
 
-<!-- PHASE_3_START -->
-
-## Hook系统
-
-三级配置: minimal / standard / strict
-
-| 事件 | minimal | standard | strict |
-|------|---------|----------|--------|
-| PreToolUse | security-block | +token-budget-check | +dangerous-cmd-confirm |
-| PostToolUse | — | auto-format, encoding-check | +console-log-detect, type-check |
-| SessionStart | — | load-context, kb-health-check | +platform-detect |
-| Stop | session-save | +git-status-check, experience-precipitate | +pattern-detect |
-| PreCompact | — | save-state | +decision-log-persist |
-
-关键Hook:
-- **security-block**: 拦截 rm -rf / git push --force / DROP TABLE 等危险操作
-- **token-budget-check**: 使用率>80%警告，>95%阻止
-- **encoding-check**: UTF-8无BOM+无U+FFFD验证
-
-## 模型路由
-
-| 路由级别 | 适用场景 | 典型Agent |
-|----------|----------|-----------|
-| fast | 搜索/简单编辑 | Unit Tester, Data Seeder, Token Optimizer, Quality Monitor, Progress Tracker, Decision Logger, Bug Scanner, Comment Verifier, Doc Reviewer, Monitor Specialist |
-| standard | 多文件实现 | Product Manager, Frontend Developer, Backend Developer, Code Reviewer 等 |
-| deep | 架构设计/安全分析 | Orchestrator, System Architect, Design System Generator, AI Penetration Tester, Security Auditor, Penetration Tester, Test Architect, IPC Specialist, Native Module Developer |
+| 文件 | 内容 |
+|------|------|
+| {{include:triggers.yaml}} | 触发条件完整定义 |
+| {{include:constraints.yaml}} | 核心约束与降级规则 |
+| {{include:commands/routes.yaml}} | 完整命令路由表(含降级策略) |
+| {{include:agents/registry.yaml}} | 完整Agent角色索引(13层57个) |
+| references/mcp-tools.md | 17个MCP工具完整参数与返回值 |
+| references/workflow-phases.md | 9阶段工作流目标、步骤、门禁和命令路由详情 |
 
 ## 关键规则
 
 2-Action Research | 3-Strike Error | Chesterton's Fence | Loop Enforcement | Confidence≥80 | 三级仲裁(L1技术→L2策略ADR→L3安全人工)
 UTF-8无BOM+LF | Python优先 | 业务注释中文 | Git:`<类型>(<范围>): <中文描述>` | 禁止Shell(.sh) | 五步闭环
-
-<!-- PHASE_3_END -->

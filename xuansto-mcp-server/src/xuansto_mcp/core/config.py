@@ -12,6 +12,19 @@ logger = get_logger("config")
 
 _config_lock = threading.Lock()
 
+_CONFIG_VALIDATION_RESULTS: dict[str, dict[str, Any]] = {}
+
+def _validate_config(data: dict, model_class: type, config_name: str) -> list[str]:
+    errors: list[str] = []
+    try:
+        model_class(**data)
+        _CONFIG_VALIDATION_RESULTS[config_name] = {"valid": True, "errors": []}
+    except Exception as e:
+        errors.append(str(e))
+        logger.warning("Config validation failed for %s: %s. Using defaults where possible.", config_name, e)
+        _CONFIG_VALIDATION_RESULTS[config_name] = {"valid": False, "errors": errors}
+    return errors
+
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 def _find_project_root() -> Path:
@@ -110,7 +123,7 @@ GATE_SCRIPTS_MAP = _CONFIG.get("gate_scripts", DEFAULT_GATE_SCRIPTS_MAP)
 QUALITY_GATES_PHASE_MAP = _CONFIG.get("gates_by_phase", DEFAULT_QUALITY_GATES_PHASE_MAP)
 HOOK_SCRIPTS_MAP = _CONFIG.get("hook_scripts", DEFAULT_HOOK_SCRIPTS_MAP)
 
-def _validate_config(config: dict) -> list[str]:
+def _validate_config_legacy(config: dict) -> list[str]:
     errors: list[str] = []
     if "gate_scripts" in config and not isinstance(config["gate_scripts"], dict):
         errors.append("gate_scripts must be a dict")
@@ -165,6 +178,13 @@ def reload_config() -> dict[str, Any]:
             validation_warnings.append(warning)
             logger.warning("Config validation warning: %s", warning)
             del _new_config[field]
+
+    try:
+        from ..models.config_models import SkillConfigModel
+        pydantic_errors = _validate_config(_new_config, SkillConfigModel, ".xuansto-config.yaml")
+        validation_warnings.extend(pydantic_errors)
+    except ImportError:
+        pass
 
     with _config_lock:
         GATE_SCRIPTS_MAP = _new_config.get("gate_scripts", DEFAULT_GATE_SCRIPTS_MAP)
@@ -257,6 +277,18 @@ KNOWLEDGE_WORKSPACE_DIR = KNOWLEDGE_DIR / "workspace"
 KNOWLEDGE_EXPERIENCE_DIR = KNOWLEDGE_DIR / "experience"
 KNOWLEDGE_DB_PATH = KNOWLEDGE_DIR / "index" / "knowledge.db"
 KNOWLEDGE_CHROMA_PATH = KNOWLEDGE_DIR / "index" / "chroma_db"
+
+if not KNOWLEDGE_CHROMA_PATH.exists():
+    logger.warning("KNOWLEDGE_CHROMA_PATH does not exist: %s", KNOWLEDGE_CHROMA_PATH)
+
+if not AGENTS_DIR.exists():
+    logger.warning("AGENTS_DIR does not exist: %s", AGENTS_DIR)
+
+if not REFERENCES_DIR.exists():
+    logger.warning("REFERENCES_DIR does not exist: %s", REFERENCES_DIR)
+
+if not COMMANDS_DIR.exists():
+    logger.warning("COMMANDS_DIR does not exist: %s", COMMANDS_DIR)
 
 _CHROMA_LEGACY_PATH = KNOWLEDGE_DIR / "index" / "chroma"
 

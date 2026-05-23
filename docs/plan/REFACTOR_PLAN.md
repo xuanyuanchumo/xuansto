@@ -1,6 +1,6 @@
 # Xuansto Skill 整合重构迭代方案
 
-> 版本: 1.0.0 | 日期: 2026-05-23 | 状态: 草案
+> 版本: 2.0.0 | 日期: 2026-05-23 | 状态: 已实施
 > 来源文档: ARCHITECTURE.md / DATABASE_DESIGN.md / MCP_REVIEW.md / SKILL_REVIEW.md / API_SPECIFICATION.md
 
 ---
@@ -29,50 +29,50 @@
 
 ### 1.2 合并后问题清单
 
-| 统一编号 | 原始编号 | 问题标题 | 影响域 | 严重度 |
-|---------|---------|---------|--------|--------|
-| U-01 | SKILL-01, MCP-03, ARCH-06-2 | 降级机制不完整且不统一 | Skill, MCP, 架构 | 紧急 |
-| U-02 | SKILL-02 | v2参考文档严重不足 | Skill | 紧急 |
-| U-03 | DB-01, MCP-10, API-10 | 状态持久化无原子保障且存在竞态 | 数据, MCP, API | 紧急 |
-| U-04 | MCP-11, API-04 | Tool注册依赖FastMCP内部API | MCP, API | 高 |
-| U-05 | SKILL-03, MCP-08, API-03 | 版本协商机制不完整，Skill与MCP版本不一致 | Skill, MCP, API | 高 |
-| U-06 | SKILL-04, MCP-13, API-07 | knowledge_search/inject职责边界模糊 | Skill, MCP, API | 高 |
-| U-07 | SKILL-05, MCP-05 | 工具文档与MCP暴露缺失 | Skill, MCP | 高 |
-| U-08 | DB-02 | ChromaDB降级频繁，语义搜索不可靠 | 数据, MCP | 高 |
-| U-09 | API-05 | 降级脚本调用为同步阻塞，可能阻塞事件循环 | API, MCP | 高 |
-| U-10 | MCP-01 | Tool职责过载（agent_status 10种action） | MCP | 高 |
-| U-11 | ARCH-06-1 | SKILL.md与constraints.yaml Phase定义重复 | Skill, 架构 | 中 |
-| U-12 | ARCH-06-3 | MCP路径解析失败时静默降级，缺乏告警 | MCP, 架构 | 中 |
-| U-13 | ARCH-06-4 | Hook拦截失败不阻塞主流程，安全检查可能被跳过 | MCP, 架构 | 中 |
-| U-14 | DB-03 | 会话状态分散在MD和JSON中，关联查询困难 | 数据 | 中 |
-| U-15 | DB-04 | 指标文件无自动清理，长期运行文件膨胀 | 数据 | 中 |
-| U-16 | DB-05 | 内存缓存无持久化，进程重启后丢失 | 数据 | 中 |
-| U-17 | DB-06 | YAML配置无Schema校验，错误仅运行时暴露 | 数据, 架构 | 中 |
-| U-18 | DB-11 | 多个SQLite数据库分散，连接管理复杂 | 数据 | 中 |
-| U-19 | MCP-02 | Resource与Tool功能重叠（loading/status） | MCP | 中 |
-| U-20 | MCP-04 | Hook引擎缺少类型安全（字符串代替枚举） | MCP | 中 |
-| U-21 | MCP-06 | 通知系统未与MCP协议集成 | MCP | 中 |
-| U-22 | MCP-07 | 配置热重载缺少MCP入口 | MCP | 中 |
-| U-23 | MCP-09 | Resource缺少分页和过滤能力 | MCP | 中 |
-| U-24 | MCP-14 | context_compress Token估算精度不足 | MCP | 中 |
-| U-25 | SKILL-10 | Hook系统与MCP工具集成不完整 | Skill, MCP | 中 |
-| U-26 | SKILL-11 | Agent合并策略未在运行时执行 | Skill | 中 |
-| U-27 | API-01 | 命令路由为静态YAML，缺乏运行时能力协商 | API, Skill | 中 |
-| U-28 | API-02 | DisclosureTransition Schema已定义但未使用 | API, 特效 | 中 |
-| U-29 | API-06 | FALLBACK_MAP静态构建，热更新后不刷新 | API, MCP | 中 |
-| U-30 | API-08 | 错误码code与error_code并存，语义混淆 | API | 中 |
-| U-31 | API-12 | 降级恢复退避缺少抖动，可能雪崩 | API, MCP | 中 |
-| U-32 | SKILL-06 | v2缺少评估配置文件 | Skill | 低 |
-| U-33 | SKILL-07 | v2缺少CHANGELOG.md | Skill | 低 |
-| U-34 | SKILL-08 | v1与v2存在大量重复文件 | Skill, 架构 | 低 |
-| U-35 | SKILL-09 | v2 SKILL.md行数可能超过500行上限 | Skill | 低 |
-| U-36 | SKILL-12 | 工作流YAML与MD存在同步风险 | Skill | 低 |
-| U-37 | DB-07 | ErrorPattern缺乏分类体系 | 数据 | 低 |
-| U-38 | DB-08 | WorkflowInstance与Decision无显式关联 | 数据 | 低 |
-| U-39 | DB-09 | knowledge_entries无软删除 | 数据 | 低 |
-| U-40 | DB-10 | 资源缓存无LRU淘汰策略 | 数据 | 低 |
-| U-41 | DB-12 | 快照文件无加密 | 数据 | 低 |
-| U-42 | MCP-12, API-09, API-11 | 缺少速率限制/模板参数白名单/action默认值不一致 | MCP, API | 低 |
+| 统一编号 | 原始编号 | 问题标题 | 影响域 | 严重度 | 状态 |
+|---------|---------|---------|--------|--------|------|
+| U-01 | SKILL-01, MCP-03, ARCH-06-2 | 降级机制不完整且不统一 | Skill, MCP, 架构 | 紧急 | ✅ RESOLVED: subprocess_utils异步降级 |
+| U-02 | SKILL-02 | v2参考文档严重不足 | Skill | 紧急 | ✅ RESOLVED: v2已有75+参考文件 |
+| U-03 | DB-01, MCP-10, API-10 | 状态持久化无原子保障且存在竞态 | 数据, MCP, API | 紧急 | ✅ RESOLVED: xuansto.db统一存储+写入锁+hash验证 |
+| U-04 | MCP-11, API-04 | Tool注册依赖FastMCP内部API | MCP, API | 高 | ✅ RESOLVED: 本地_TOOL_FUNCTIONS注册表 |
+| U-05 | SKILL-03, MCP-08, API-03 | 版本协商机制不完整，Skill与MCP版本不一致 | Skill, MCP, API | 高 | ✅ RESOLVED: MCP Server升级到v8.0.0 |
+| U-06 | SKILL-04, MCP-13, API-07 | knowledge_search/inject职责边界模糊 | Skill, MCP, API | 高 | ✅ RESOLVED: knowledge_search改为retrieve only |
+| U-07 | SKILL-05, MCP-05 | 工具文档与MCP暴露缺失 | Skill, MCP | 高 | ✅ RESOLVED: metrics_report+config_manage Tool |
+| U-08 | DB-02 | ChromaDB降级频繁，语义搜索不可靠 | 数据, MCP | 高 | ✅ RESOLVED: ChromaDB可选化+HybridSearchEngine |
+| U-09 | API-05 | 降级脚本调用为同步阻塞，可能阻塞事件循环 | API, MCP | 高 | ✅ RESOLVED: subprocess_utils异步调用 |
+| U-10 | MCP-01 | Tool职责过载（agent_status 10种action） | MCP | 高 | ✅ RESOLVED: 拆分为agent_status+agent_manage |
+| U-11 | ARCH-06-1 | SKILL.md与constraints.yaml Phase定义重复 | Skill, 架构 | 中 | ✅ RESOLVED: SKILL.md精简至<200行 |
+| U-12 | ARCH-06-3 | MCP路径解析失败时静默降级，缺乏告警 | MCP, 架构 | 中 | ✅ RESOLVED: MCPNotificationCallback通知 |
+| U-13 | ARCH-06-4 | Hook拦截失败不阻塞主流程，安全检查可能被跳过 | MCP, 架构 | 中 | ✅ RESOLVED: 安全Hook失败默认阻塞+失败计数 |
+| U-14 | DB-03 | 会话状态分散在MD和JSON中，关联查询困难 | 数据 | 中 | ✅ RESOLVED: xuansto.db session_states表 |
+| U-15 | DB-04 | 指标文件无自动清理，长期运行文件膨胀 | 数据 | 中 | ✅ RESOLVED: xuansto.db tool_metrics表+TTL清理 |
+| U-16 | DB-05 | 内存缓存无持久化，进程重启后丢失 | 数据 | 中 | ✅ RESOLVED: xuansto.db持久化+atexit handler |
+| U-17 | DB-06 | YAML配置无Schema校验，错误仅运行时暴露 | 数据, 架构 | 中 | 待实施 |
+| U-18 | DB-11 | 多个SQLite数据库分散，连接管理复杂 | 数据 | 中 | ✅ RESOLVED: 统一xuansto.db(8表) |
+| U-19 | MCP-02 | Resource与Tool功能重叠（loading/status） | MCP | 中 | ✅ RESOLVED: 明确分工-Resource只读快照/Tool交互操作 |
+| U-20 | MCP-04 | Hook引擎缺少类型安全（字符串代替枚举） | MCP | 中 | ✅ RESOLVED: HookType枚举 |
+| U-21 | MCP-06 | 通知系统未与MCP协议集成 | MCP | 中 | ✅ RESOLVED: MCPNotificationCallback |
+| U-22 | MCP-07 | 配置热重载缺少MCP入口 | MCP | 中 | ✅ RESOLVED: config_manage Tool |
+| U-23 | MCP-09 | Resource缺少分页和过滤能力 | MCP | 中 | ✅ RESOLVED: sessions/{id}+agents/{layer}/{name}参数化Resource |
+| U-24 | MCP-14 | context_compress Token估算精度不足 | MCP | 中 | 待实施 |
+| U-25 | SKILL-10 | Hook系统与MCP工具集成不完整 | Skill, MCP | 中 | ✅ RESOLVED: HookType枚举+安全阻断+失败计数 |
+| U-26 | SKILL-11 | Agent合并策略未在运行时执行 | Skill | 中 | 待实施 |
+| U-27 | API-01 | 命令路由为静态YAML，缺乏运行时能力协商 | API, Skill | 中 | 待实施 |
+| U-28 | API-02 | DisclosureTransition Schema已定义但未使用 | API, 特效 | 中 | ✅ RESOLVED: DisclosureTransition状态机已实现 |
+| U-29 | API-06 | FALLBACK_MAP静态构建，热更新后不刷新 | API, MCP | 中 | ✅ RESOLVED: config_manage reload |
+| U-30 | API-08 | 错误码code与error_code并存，语义混淆 | API | 中 | ✅ RESOLVED: 统一error_code, deprecated code字段 |
+| U-31 | API-12 | 降级恢复退避缺少抖动，可能雪崩 | API, MCP | 中 | ✅ RESOLVED: backoff jitter |
+| U-32 | SKILL-06 | v2缺少评估配置文件 | Skill | 低 | 待实施 |
+| U-33 | SKILL-07 | v2缺少CHANGELOG.md | Skill | 低 | 待实施 |
+| U-34 | SKILL-08 | v1与v2存在大量重复文件 | Skill, 架构 | 低 | ✅ RESOLVED: v1标记ARCHIVED |
+| U-35 | SKILL-09 | v2 SKILL.md行数可能超过500行上限 | Skill | 低 | ✅ RESOLVED: SKILL.md精简至<200行 |
+| U-36 | SKILL-12 | 工作流YAML与MD存在同步风险 | Skill | 低 | 待实施 |
+| U-37 | DB-07 | ErrorPattern缺乏分类体系 | 数据 | 低 | ✅ RESOLVED: error_type字段+database.py |
+| U-38 | DB-08 | WorkflowInstance与Decision无显式关联 | 数据 | 低 | ✅ RESOLVED: workflow_id关联字段 |
+| U-39 | DB-09 | knowledge_entries无软删除 | 数据 | 低 | ✅ RESOLVED: deleted_at字段+knowledge_inject(delete) |
+| U-40 | DB-10 | 资源缓存无LRU淘汰策略 | 数据 | 低 | ✅ RESOLVED: cache.py LRU缓存 |
+| U-41 | DB-12 | 快照文件无加密 | 数据 | 低 | ✅ RESOLVED: crypto.py AES-256-GCM |
+| U-42 | MCP-12, API-09, API-11 | 缺少速率限制/模板参数白名单/action默认值不一致 | MCP, API | 低 | ✅ RESOLVED: rate_limiter.py令牌桶+名称白名单+action必填 |
 
 ### 1.3 按影响域统计
 

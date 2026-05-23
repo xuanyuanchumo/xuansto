@@ -1,4 +1,5 @@
 ---
+> 权威来源：_yaml/subagent-driven-workflow.yaml（YAML为准，本文档为可读参考）
 metadata:
   name: 子代理调度+两阶段审查工作流
   version: "3.2.0"

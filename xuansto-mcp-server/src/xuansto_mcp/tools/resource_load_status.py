@@ -12,10 +12,11 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core import atomic_write
+from ..core.cache import LRUCache
 from ..core.config import SKILL_ROOT, REFERENCES_DIR, AGENTS_DIR, COMMANDS_DIR, TEMPLATES_DIR, WORK_DIR
-from ..core.errors import make_error_response, make_success_response, XuanstoMCPError
+from ..core.errors import make_error_response, make_success_response, XuanstoMCPError, ERR_VALIDATION
 from ..core.logging_config import get_logger
-from ..core.notifications import notify
+from ..core.notifications import notify, send_mcp_notification
 from ..core.validator import validate_input
 from ..models.schemas import ResourceLoadStatusInput, DisclosureTransition
 
@@ -140,12 +141,12 @@ _LOADED_PROGRESS = {
 
 _loaded_resources: set[str] | None = None
 
-_RESOURCE_CACHE: dict[str, dict[str, Any]] = {}
-
-_cache_lock = threading.Lock()
-
 _CACHE_TTL_SECONDS = 3600
 _CACHE_MAX_ENTRIES = 100
+
+_resource_lru = LRUCache(maxsize=_CACHE_MAX_ENTRIES)
+
+_cache_lock = threading.Lock()
 
 _MAX_RESOURCE_SIZE_BYTES = 10 * 1024 * 1024
 _MAX_SINGLE_FILE_BYTES = 1 * 1024 * 1024
@@ -166,6 +167,22 @@ _LOADING_PHASE_MAP: dict[str, int] = {
 }
 
 _LOADING_PHASE_NAMES: dict[int, str] = {v: k for k, v in _LOADING_PHASE_MAP.items()}
+
+PHASE_SKELETON = 0
+PHASE_FUNCTIONAL = 1
+PHASE_ENHANCED = 2
+PHASE_FULL = 3
+
+PHASE_TOKEN_BUDGETS: dict[int, int] = {0: 2000, 1: 5000, 2: 10000, 3: 20000}
+
+PHASE_NAMES: dict[int, str] = {0: "skeleton", 1: "functional", 2: "enhanced", 3: "full"}
+
+PHASE_RESOURCES: dict[int, list[str]] = {
+    0: ["skill_core", "triggers", "routes_index", "registry_index"],
+    1: ["commands_detail", "workflow_phases", "quality_gates_summary", "core_agents"],
+    2: ["agent_registry_full", "knowledge_search", "mcp_tools", "workflow_yaml"],
+    3: ["all_agent_definitions", "templates", "scripts_index", "full_references"],
+}
 
 _DISCLOSURE_NOTES: dict[int, str] = {
     0: "骨架阶段：仅核心元数据可用，命令路由受限，无Agent详情",
@@ -201,6 +218,10 @@ _TOKEN_METRICS_LOCK = threading.Lock()
 _PHASE_TOKEN_USAGE: dict[int, dict[str, Any]] = {}
 
 _PHASE_TOKEN_USAGE_LOCK = threading.Lock()
+
+_current_phase: int = 0
+
+_phase_lock = threading.RLock()
 
 
 def _get_loading_disclosure() -> dict[str, Any]:
@@ -341,9 +362,9 @@ def _resolve_uri_source_path(uri: str) -> Path | None:
 
 def _is_cache_valid(cache_key: str) -> tuple[bool, str]:
     with _cache_lock:
-        if cache_key not in _RESOURCE_CACHE:
+        entry = _resource_lru.get(cache_key)
+        if entry is None:
             return False, "not_cached"
-        entry = _RESOURCE_CACHE[cache_key]
     ttl = entry.get("ttl_seconds", _CACHE_TTL_SECONDS)
     if (time.time() - entry["cached_at"]) > ttl:
         return False, "expired"
@@ -358,24 +379,19 @@ def _is_cache_valid(cache_key: str) -> tuple[bool, str]:
 def _cleanup_cache() -> None:
     with _cache_lock:
         expired_keys = [
-            k for k, v in _RESOURCE_CACHE.items()
+            k for k, v in _resource_lru.items()
             if (time.time() - v["cached_at"]) > v.get("ttl_seconds", _CACHE_TTL_SECONDS)
         ]
         for k in expired_keys:
-            del _RESOURCE_CACHE[k]
-        if len(_RESOURCE_CACHE) > _CACHE_MAX_ENTRIES:
-            sorted_keys = sorted(_RESOURCE_CACHE.keys(), key=lambda k: _RESOURCE_CACHE[k]["cached_at"])
-            overflow = len(_RESOURCE_CACHE) - _CACHE_MAX_ENTRIES
-            for k in sorted_keys[:overflow]:
-                del _RESOURCE_CACHE[k]
+            _resource_lru.delete(k)
 
 
 def _read_resource_content(uri: str) -> dict[str, Any]:
     with _cache_lock:
-        if uri in _RESOURCE_CACHE:
-            entry = _RESOURCE_CACHE[uri]
+        entry = _resource_lru.get(uri)
+        if entry is not None:
             if (time.time() - entry["cached_at"]) > entry.get("ttl_seconds", _CACHE_TTL_SECONDS):
-                del _RESOURCE_CACHE[uri]
+                _resource_lru.delete(uri)
                 return {"content": None, "truncated": False, "skipped_large_files": []}
             entry["access_count"] += 1
             return {"content": entry["content"], "truncated": False, "skipped_large_files": []}
@@ -418,11 +434,23 @@ def _get_state_file() -> Path:
 def _load_resource_state() -> set[str]:
     state_file = _get_state_file()
     if state_file.exists():
-        data = json.loads(state_file.read_text(encoding="utf-8"))
+        try:
+            data = json.loads(state_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return set()
         if isinstance(data, list):
             _save_resource_state(set(data))
             return set(data)
         if isinstance(data, dict):
+            stored_hash = data.get("_hash")
+            if stored_hash is not None:
+                resources_data = data.get("resources", {})
+                computed_hash = hashlib.sha256(json.dumps(resources_data, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+                if computed_hash != stored_hash:
+                    logger.warning("Resource state hash mismatch, resetting state")
+                    return set()
+            else:
+                logger.warning("Resource state file has no integrity hash, loading without verification")
             if "resources" in data and isinstance(data["resources"], list):
                 loaded = set(data.get("loaded", []))
                 for r in data["resources"]:
@@ -453,7 +481,9 @@ def _save_resource_state(state: set[str]) -> None:
         "phase": _LOADING_PHASE_NAMES.get(current_phase, "skeleton"),
         "loaded": sorted(state),
         "resources": resource_map,
+        "_timestamp": time.time(),
     }
+    payload["_hash"] = hashlib.sha256(json.dumps(resource_map, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
     atomic_write(state_file, json.dumps(payload, ensure_ascii=False, indent=2))
 
 
@@ -474,8 +504,8 @@ def _set_loaded_resources(resources: set[str]) -> None:
 
 def _check_resource_status(resource_id: str, resource_path: str) -> str:
     with _cache_lock:
-        if resource_id in _RESOURCE_CACHE:
-            entry = _RESOURCE_CACHE[resource_id]
+        entry = _resource_lru.get(resource_id)
+        if entry is not None:
             ttl = entry.get("ttl_seconds", _CACHE_TTL_SECONDS)
             if (time.time() - entry["cached_at"]) > ttl:
                 return "expired"
@@ -522,7 +552,151 @@ def _estimate_resource_tokens(resource: dict[str, str]) -> int:
     return 0
 
 
+def can_advance_to(target_phase: int) -> bool:
+    if target_phase < 0 or target_phase > 3:
+        return False
+    with _phase_lock:
+        return target_phase > _current_phase
+
+
+def advance_phase(target_phase: int) -> dict[str, Any]:
+    global _current_phase
+    if not can_advance_to(target_phase):
+        return {"success": False, "reason": "invalid_target", "current_phase": _current_phase, "target_phase": target_phase}
+    with _phase_lock:
+        from_phase = _current_phase
+        _current_phase = target_phase
+    from_name = PHASE_NAMES.get(from_phase, "skeleton")
+    to_name = PHASE_NAMES.get(target_phase, "skeleton")
+    resources = PHASE_RESOURCES.get(target_phase, [])
+    _record_transition(from_name, to_name, resources, "completed")
+    send_mcp_notification("phase_transition", {
+        "from": from_name,
+        "to": to_name,
+        "status": "complete",
+        "loaded_resources": resources,
+    })
+    notify(f"Phase advanced: {from_name} -> {to_name}", "info")
+    state_file = _get_state_file()
+    try:
+        state_data = json.loads(state_file.read_text(encoding="utf-8")) if state_file.exists() else {}
+        state_data["phase"] = to_name
+        atomic_write(state_file, json.dumps(state_data, ensure_ascii=False, indent=2))
+    except (json.JSONDecodeError, OSError):
+        pass
+    return {"success": True, "from_phase": from_name, "to_phase": to_name, "loaded_resources": resources}
+
+
+def degrade_phase() -> dict[str, Any]:
+    global _current_phase
+    with _phase_lock:
+        if _current_phase <= 0:
+            return {"success": False, "reason": "already_at_minimum", "current_phase": _current_phase}
+        from_phase = _current_phase
+        _current_phase -= 1
+        to_phase = _current_phase
+    from_name = PHASE_NAMES.get(from_phase, "skeleton")
+    to_name = PHASE_NAMES.get(to_phase, "skeleton")
+    _record_transition(from_name, to_name, [], "completed")
+    send_mcp_notification("phase_degradation", {
+        "from": from_name,
+        "to": to_name,
+        "reason": "token_budget",
+    })
+    notify(f"Phase degraded: {from_name} -> {to_name} (token budget)", "warning")
+    state_file = _get_state_file()
+    try:
+        state_data = json.loads(state_file.read_text(encoding="utf-8")) if state_file.exists() else {}
+        state_data["phase"] = to_name
+        atomic_write(state_file, json.dumps(state_data, ensure_ascii=False, indent=2))
+    except (json.JSONDecodeError, OSError):
+        pass
+    return {"success": True, "from_phase": from_name, "to_phase": to_name, "reason": "token_budget"}
+
+
+def check_token_budget() -> dict[str, Any]:
+    with _phase_lock:
+        current = _current_phase
+    budget = PHASE_TOKEN_BUDGETS.get(current, 2000)
+    with _PHASE_TOKEN_USAGE_LOCK:
+        usage_data = _PHASE_TOKEN_USAGE.get(current, {"estimated_tokens": 0})
+    estimated_tokens = usage_data.get("estimated_tokens", 0) if isinstance(usage_data, dict) else 0
+    usage_ratio = estimated_tokens / budget if budget > 0 else 0
+    exceeded = usage_ratio >= 0.8
+    result: dict[str, Any] = {
+        "current_phase": current,
+        "token_budget": budget,
+        "estimated_tokens": estimated_tokens,
+        "usage_ratio": round(usage_ratio, 4),
+        "budget_exceeded_80pct": exceeded,
+    }
+    if exceeded and current > 0:
+        degradation = degrade_phase()
+        result["degradation"] = degradation
+    return result
+
+
+def auto_advance_on_command() -> dict[str, Any] | None:
+    with _phase_lock:
+        if _current_phase == PHASE_SKELETON:
+            return advance_phase(PHASE_FUNCTIONAL)
+    return None
+
+
+def require_phase(required_phase: int) -> DisclosureTransition | None:
+    with _phase_lock:
+        if _current_phase >= required_phase:
+            return None
+        current = _current_phase
+    current_name = PHASE_NAMES.get(current, "skeleton")
+    target_name = PHASE_NAMES.get(required_phase, "full")
+    required_resources: list[str] = []
+    for p in range(current + 1, required_phase + 1):
+        for r in PHASE_RESOURCES.get(p, []):
+            if r not in required_resources:
+                required_resources.append(r)
+    estimated = 0
+    for p in range(current + 1, required_phase + 1):
+        for r in PHASE_RESOURCE_MAP.get(p, []):
+            estimated += _estimate_resource_tokens(r)
+    alternatives: list[str] = []
+    for p in range(current + 1, required_phase):
+        name = PHASE_NAMES.get(p, "")
+        if name:
+            alternatives.append(name)
+    hint = _UPGRADE_HINTS.get(current, "")
+    return DisclosureTransition(
+        current_phase=current_name,
+        target_phase=target_name,
+        required_resources=required_resources,
+        estimated_tokens=estimated,
+        available_alternatives=alternatives,
+        transition_hint=hint,
+    )
+
+
+def check_phase_for_capability(capability: str) -> DisclosureTransition | None:
+    with _phase_lock:
+        current = _current_phase
+    available = PHASE_AVAILABLE_FUNCTIONS.get(current, PHASE_AVAILABLE_FUNCTIONS[0])
+    if available.get(capability, False):
+        return None
+    required_phase: int | None = None
+    for p in range(current + 1, 4):
+        phase_available = PHASE_AVAILABLE_FUNCTIONS.get(p, {})
+        if phase_available.get(capability, False):
+            required_phase = p
+            break
+    if required_phase is None:
+        return None
+    return require_phase(required_phase)
+
+
 def register(mcp: FastMCP) -> None:
+    global _current_phase
+    with _phase_lock:
+        _current_phase = _get_current_phase_index()
+
     @mcp.tool(
         annotations=ToolAnnotations(
             readOnlyHint=True,
@@ -539,9 +713,10 @@ def register(mcp: FastMCP) -> None:
         priority: str = "normal",
         batch_mode: bool = False,
         auto_upgrade: bool = False,
+        target_phase: str | None = None,
     ) -> dict[str, Any]:
-        """渐进式加载状态管理：查询指定Phase的资源加载状态，预加载指定Phase的资源。返回资源ID、状态(loaded/available/missing/stale/expired)和路径。priority控制预加载优先级(critical/normal/background)，batch_mode启用批量并发加载，auto_upgrade启用Token预算超限时自动升级阶段。"""
-        validated, err = validate_input(ResourceLoadStatusInput, action=action, phase=phase, resource_ids=resource_ids, resource_uris=resource_uris, priority=priority, batch_mode=batch_mode, auto_upgrade=auto_upgrade)
+        """渐进式加载状态管理：查询指定Phase的资源加载状态，预加载指定Phase的资源。返回资源ID、状态(loaded/available/missing/stale/expired)和路径。priority控制预加载优先级(critical/normal/background)，batch_mode启用批量并发加载，auto_upgrade启用Token预算超限时自动升级阶段。disclosure_transition返回阶段转换所需资源和估算。"""
+        validated, err = validate_input(ResourceLoadStatusInput, action=action, phase=phase, resource_ids=resource_ids, resource_uris=resource_uris, priority=priority, batch_mode=batch_mode, auto_upgrade=auto_upgrade, target_phase=target_phase)
         if err:
             return err
         logger.info("resource_load_status called: action=%s", action)
@@ -620,7 +795,7 @@ def register(mcp: FastMCP) -> None:
                                 continue
                             if validity in ("stale", "expired"):
                                 with _cache_lock:
-                                    _RESOURCE_CACHE.pop(uri, None)
+                                    _resource_lru.delete(uri)
                                 refreshed_count += 1
                             result = _read_resource_content(uri)
                             content = result["content"]
@@ -632,14 +807,14 @@ def register(mcp: FastMCP) -> None:
                                 source_path = _resolve_uri_source_path(uri)
                                 source_hash = _compute_path_hash(source_path) if source_path else None
                                 with _cache_lock:
-                                    _RESOURCE_CACHE[uri] = {
+                                    _resource_lru.put(uri, {
                                         "content": content,
                                         "cached_at": time.time(),
                                         "access_count": 0,
                                         "content_hash": source_hash or hashlib.sha256(content.encode("utf-8")).hexdigest(),
                                         "ttl_seconds": _CACHE_TTL_SECONDS,
                                         "source_path": str(source_path) if source_path else None,
-                                    }
+                                    })
                                     _LOADED_PROGRESS["loaded_resources"] += 1
                                 loaded_count += 1
                                 total_size += len(content)
@@ -667,9 +842,42 @@ def register(mcp: FastMCP) -> None:
                         "priority": priority,
                         "batch_mode": batch_mode,
                     })
-                if phase is None:
+                if phase is None and target_phase is None:
                     return make_error_response(ValueError("preload操作需要phase或resource_uris参数"), error_code=ERR_VALIDATION)
-                actual_phase = phase
+                if phase is not None:
+                    actual_phase = phase
+                elif target_phase is not None:
+                    if target_phase.isdigit():
+                        actual_phase = int(target_phase)
+                    else:
+                        actual_phase = _LOADING_PHASE_MAP.get(target_phase, 0)
+                else:
+                    actual_phase = 0
+                original_target = actual_phase
+                with _phase_lock:
+                    if actual_phase <= _current_phase:
+                        current_name = PHASE_NAMES.get(_current_phase, "skeleton")
+                        target_name = PHASE_NAMES.get(actual_phase, "skeleton")
+                        disclosure = DisclosureTransition(
+                            current_phase=current_name,
+                            target_phase=target_name,
+                            required_resources=[],
+                            estimated_tokens=0,
+                            available_alternatives=[PHASE_NAMES.get(p, "") for p in range(_current_phase + 1, 4) if PHASE_NAMES.get(p)],
+                            transition_hint=_UPGRADE_HINTS.get(_current_phase, ""),
+                        )
+                        return make_success_response({
+                            "action": "preload",
+                            "phase": actual_phase,
+                            "preloaded": [],
+                            "total": 0,
+                            "priority": priority,
+                            "batch_mode": batch_mode,
+                            "validation_error": "target_phase_must_be_higher_than_current",
+                            "current_phase": current_name,
+                            "current_phase_index": _current_phase,
+                            "disclosure_transition": disclosure.model_dump(),
+                        })
                 if auto_upgrade:
                     current_phase_idx = _get_current_phase_index()
                     resources_to_load = _collect_resources_up_to_phase(actual_phase)
@@ -689,6 +897,12 @@ def register(mcp: FastMCP) -> None:
                     if total_estimated > budget and actual_phase < 3:
                         next_phase = actual_phase + 1
                         hint = _UPGRADE_HINTS.get(actual_phase, "")
+                        send_mcp_notification("token_budget_exceeded", {
+                            "phase": actual_phase,
+                            "estimated_tokens": total_estimated,
+                            "token_budget": budget,
+                            "suggested_phase": next_phase,
+                        })
                         return make_success_response({
                             "action": "preload",
                             "phase": actual_phase,
@@ -725,7 +939,7 @@ def register(mcp: FastMCP) -> None:
                             continue
                         if validity in ("stale", "expired"):
                             with _cache_lock:
-                                _RESOURCE_CACHE.pop(r["id"], None)
+                                _resource_lru.delete(r["id"])
                         source_hash = _compute_path_hash(full_path)
                         content = None
                         if full_path.is_file():
@@ -748,14 +962,14 @@ def register(mcp: FastMCP) -> None:
                             _update_phase_token_usage(actual_phase, res_tokens)
                         current.add(r["id"])
                         with _cache_lock:
-                            _RESOURCE_CACHE[r["id"]] = {
+                            _resource_lru.put(r["id"], {
                                 "content": content or "",
                                 "cached_at": time.time(),
                                 "access_count": 0,
                                 "content_hash": source_hash or hashlib.sha256((content or "").encode("utf-8")).hexdigest(),
                                 "ttl_seconds": _CACHE_TTL_SECONDS,
                                 "source_path": str(full_path),
-                            }
+                            })
                             _LOADED_PROGRESS["loaded_resources"] += 1
                         preloaded.append({"id": r["id"], "status": "loaded", "cache": "refreshed" if validity in ("stale", "expired") else "new"})
                     else:
@@ -763,46 +977,37 @@ def register(mcp: FastMCP) -> None:
                         with _cache_lock:
                             _LOADED_PROGRESS["loaded_resources"] += 1
                 _set_loaded_resources(current)
-                from_phase = _get_current_phase_name()
-                to_phase = _phase_index_to_name(actual_phase)
-                if from_phase != to_phase:
-                    affected = [r["id"] for r in resources]
-                    _record_transition(from_phase, to_phase, affected, "completed")
-                    notify(f"Resource phase transition: {from_phase} -> {to_phase} ({len(affected)} resources)", "info")
-                state_file = _get_state_file()
-                try:
-                    state_data = json.loads(state_file.read_text(encoding="utf-8")) if state_file.exists() else {}
-                    state_data["phase"] = to_phase
-                    atomic_write(state_file, json.dumps(state_data, ensure_ascii=False, indent=2))
-                except (json.JSONDecodeError, OSError):
-                    pass
+                transition_result = advance_phase(actual_phase)
                 with _cache_lock:
                     _LOADED_PROGRESS["loading"] = False
                     _LOADED_PROGRESS["completed_at"] = datetime.now(timezone.utc).isoformat()
                 with _cache_lock:
                     transitions = list(_TRANSITION_HISTORY)
                 disclosure = _get_loading_disclosure()
+                budget_check = check_token_budget()
                 result_data: dict[str, Any] = {
                     "phase": actual_phase,
-                    "phase_name": to_phase,
+                    "phase_name": transition_result.get("to_phase", _phase_index_to_name(actual_phase)),
                     "preloaded": preloaded,
                     "total": len(preloaded),
                     "priority": priority,
                     "batch_mode": batch_mode,
                     "auto_upgrade": auto_upgrade,
                     "estimated_tokens": phase_estimated_tokens,
-                    "token_budget": PHASE_TOKEN_BUDGET.get(actual_phase, PHASE_TOKEN_BUDGET[3]),
+                    "token_budget": PHASE_TOKEN_BUDGETS.get(actual_phase, PHASE_TOKEN_BUDGETS[3]),
                     "disclosure_note": disclosure["disclosure_note"],
                     "upgrade_hint": disclosure["upgrade_hint"],
                     "available_commands": disclosure["available_commands"],
                     "transitions": transitions[-5:],
+                    "transition_result": transition_result,
+                    "budget_check": budget_check,
                 }
-                if auto_upgrade and actual_phase != phase:
-                    result_data["auto_upgraded_from"] = phase
+                if auto_upgrade and actual_phase != original_target:
+                    result_data["auto_upgraded_from"] = original_target
                 return make_success_response(result_data)
             elif action == "cache":
                 with _cache_lock:
-                    cache_snapshot = dict(_RESOURCE_CACHE)
+                    cache_snapshot = dict(_resource_lru.items())
                 expired_count = sum(
                     1 for v in cache_snapshot.values()
                     if isinstance(v, dict) and (time.time() - v["cached_at"]) > v.get("ttl_seconds", _CACHE_TTL_SECONDS)
@@ -826,12 +1031,12 @@ def register(mcp: FastMCP) -> None:
                 })
             elif action == "clear_cache":
                 with _cache_lock:
-                    count = len(_RESOURCE_CACHE)
+                    count = _resource_lru.size()
                     expired_count = sum(
-                        1 for v in _RESOURCE_CACHE.values()
+                        1 for _, v in _resource_lru.items()
                         if isinstance(v, dict) and (time.time() - v["cached_at"]) > v.get("ttl_seconds", _CACHE_TTL_SECONDS)
                     )
-                    _RESOURCE_CACHE.clear()
+                    _resource_lru.clear()
                 return make_success_response({
                     "action": "clear_cache",
                     "cleared_entries": count,
@@ -843,15 +1048,49 @@ def register(mcp: FastMCP) -> None:
                 total = progress["total_resources"]
                 loaded = progress["loaded_resources"]
                 progress_percent = (loaded / total * 100) if total > 0 else 0
+                with _phase_lock:
+                    current_phase_idx = _current_phase
+                target_phase_idx = progress.get("current_phase") or current_phase_idx
+                loaded_list = sorted(_get_loaded_resources())
+                pending_list = []
+                for pid, res_list in PHASE_RESOURCE_MAP.items():
+                    if pid > current_phase_idx:
+                        for r in res_list:
+                            if r["id"] not in loaded_list:
+                                pending_list.append(r["id"])
+                target_resources = PHASE_RESOURCES.get(target_phase_idx, [])
+                target_loaded = sum(1 for r in target_resources if r in loaded_list)
+                target_total = len(target_resources)
+                target_progress = (target_loaded / target_total) if target_total > 0 else (1.0 if current_phase_idx >= target_phase_idx else 0.0)
+                started_at = progress.get("started_at")
+                elapsed_ms = 0
+                if started_at:
+                    try:
+                        from datetime import datetime as _dt
+                        started_dt = _dt.fromisoformat(started_at)
+                        elapsed_ms = int((time.time() - started_dt.timestamp()) * 1000)
+                    except (ValueError, OSError):
+                        pass
+                remaining = max(0, total - loaded)
+                estimated_remaining_ms = int((elapsed_ms / max(loaded, 1)) * remaining) if loaded > 0 and remaining > 0 else 0
+                budget_status = check_token_budget()
                 return make_success_response({
-                    "action": "loading_progress",
+                    "current_phase": current_phase_idx,
+                    "target_phase": target_phase_idx,
+                    "progress": round(target_progress, 4),
+                    "loaded_resources": loaded_list,
+                    "pending_resources": pending_list,
+                    "estimated_time_remaining_ms": estimated_remaining_ms,
                     "total_resources": total,
-                    "loaded_resources": loaded,
+                    "loaded_count": loaded,
                     "progress_percent": round(progress_percent, 2),
-                    "current_phase": progress["current_phase"],
+                    "target_phase_progress": round(target_progress, 4),
+                    "target_phase_loaded": target_loaded,
+                    "target_phase_total": target_total,
                     "loading": progress["loading"],
-                    "started_at": progress["started_at"],
-                    "completed_at": progress["completed_at"],
+                    "started_at": progress.get("started_at"),
+                    "completed_at": progress.get("completed_at"),
+                    "budget_status": budget_status,
                 })
             elif action == "token_report":
                 with _TOKEN_METRICS_LOCK:
@@ -882,8 +1121,51 @@ def register(mcp: FastMCP) -> None:
                         "estimate_method": f"char_count/{_TOKEN_ESTIMATE_RATIO}",
                     },
                 })
+            elif action == "disclosure_transition":
+                with _phase_lock:
+                    current_phase_idx = _current_phase
+                current_phase_name = PHASE_NAMES.get(current_phase_idx, "skeleton")
+                target_phase_name = target_phase or "full"
+                target_phase_idx = _LOADING_PHASE_MAP.get(target_phase_name, 3)
+                required_resources: list[str] = []
+                for pid in range(current_phase_idx + 1, target_phase_idx + 1):
+                    for r in PHASE_RESOURCE_MAP.get(pid, []):
+                        if r["id"] not in required_resources:
+                            required_resources.append(r["id"])
+                    for r in PHASE_RESOURCES.get(pid, []):
+                        if r not in required_resources:
+                            required_resources.append(r)
+                estimated = 0
+                for pid in range(current_phase_idx + 1, target_phase_idx + 1):
+                    for r in PHASE_RESOURCE_MAP.get(pid, []):
+                        estimated += _estimate_resource_tokens(r)
+                available_alternatives: list[str] = []
+                for pid in range(current_phase_idx + 1, target_phase_idx):
+                    alt_name = PHASE_NAMES.get(pid, "")
+                    if alt_name:
+                        available_alternatives.append(alt_name)
+                hint = _UPGRADE_HINTS.get(current_phase_idx, "")
+                can_advance = can_advance_to(target_phase_idx)
+                disclosure = DisclosureTransition(
+                    current_phase=current_phase_name,
+                    target_phase=target_phase_name,
+                    required_resources=required_resources,
+                    estimated_tokens=estimated,
+                    available_alternatives=available_alternatives,
+                    transition_hint=hint,
+                )
+                return make_success_response({
+                    "current_phase": current_phase_name,
+                    "target_phase": target_phase_name,
+                    "required_resources": required_resources,
+                    "estimated_tokens": estimated,
+                    "available_alternatives": available_alternatives,
+                    "transition_hint": hint,
+                    "can_advance": can_advance,
+                    "disclosure_transition": disclosure.model_dump(),
+                })
             else:
-                return make_error_response(ValueError(f"未知操作: {action}，支持: status, preload, cache, clear_cache, loading_progress, token_report"), error_code=ERR_VALIDATION)
+                return make_error_response(ValueError(f"未知操作: {action}，支持: status, preload, cache, clear_cache, loading_progress, token_report, disclosure_transition"), error_code=ERR_VALIDATION)
         except Exception as e:
             logger.error("resource_load_status error: %s", e)
             return make_error_response(e)

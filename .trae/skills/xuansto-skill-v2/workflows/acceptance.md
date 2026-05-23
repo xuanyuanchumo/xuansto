@@ -1,4 +1,5 @@
 ---
+> 权威来源：_yaml/acceptance.yaml（YAML为准，本文档为可读参考）
 metadata:
   name: 用户验收与部署验证工作流
   version: "3.2.0"

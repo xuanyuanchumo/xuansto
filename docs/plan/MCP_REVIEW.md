@@ -1,6 +1,6 @@
 # Xuansto Skill MCP 详细分析文档
 
-> 版本: v4.1.0 | 日期: 2026-05-23 | 问题编号前缀: MCP-
+> 版本: v8.0.0 | 日期: 2026-05-23 | 问题编号前缀: MCP-
 
 ---
 
@@ -18,29 +18,32 @@
 
 ## 1. 现有MCP调用盘点
 
-### 1.1 Tool清单（17个）
+### 1.1 Tool清单（19+个）
 
 | # | Tool名称 | 功能描述 | 核心action | 降级策略 |
 |---|---------|---------|-----------|---------|
 | 1 | `skill_analyze` | 分析技能项目结构、YAML元数据、Agent注册表、脚本依赖 | 单一调用 | `scripts/skill-test.py --analyze` |
-| 2 | `knowledge_search` | 三层知识库混合检索（retrieve/inject/precipitate） | retrieve, inject, precipitate | ChromaDB→SQLite FTS5→keyword |
-| 3 | `knowledge_inject` | 知识注入与经验沉淀 | inject, list_available, precipitate | `scripts/knowledge_server/main.py --inject` |
+| 2 | `knowledge_search` | 知识检索（retrieve only，只读） | retrieve | HybridSearchEngine: ChromaDB(可选)→SQLite FTS5→keyword |
+| 3 | `knowledge_inject` | 知识注入与经验沉淀（所有写入操作，含软删除） | inject, list_available, precipitate, delete | `scripts/knowledge_server/main.py --inject` |
 | 4 | `quality_gate_check` | 54项质量门禁检查 | 单一调用 | `scripts/skill-test.py --gate` → 逐门禁脚本 |
 | 5 | `spec_drift_detect` | 规格文档与代码实现偏差检测 | 单一调用 | `scripts/spec-drift-detector.py` → 内联漂移检测 |
 | 6 | `security_scan` | OWASP Agentic Top 10 + 依赖漏洞扫描 | 单一调用 | `scripts/agentic-security-scanner.py` → 内联agentic+dependency |
 | 7 | `code_simplify` | 代码简化分析（死代码/重复/复杂度/命名） | 单一调用 | `scripts/code-simplifier.py` → 内联simplify+dedup |
 | 8 | `session_manage` | 会话状态管理（save/load/list/detect/verify/track/restore） | 7种action | `scripts/init-session.py` / `session-catchup.py` / `session-persist.py` |
 | 9 | `workflow_dispatch` | 工作流调度（start/status/abort/phase/recover/snapshots） | 6种action | `scripts/project-initializer.py` → 内联Phase推进 |
-| 10 | `agent_status` | Agent状态查询（list/by_phase/detail/create/match/assign/release/instance_status/destroy/schedule） | 10种action | 静态注册表查询 → `scripts/skill-test.py --agents` |
-| 11 | `hook_manage` | Hook管理（list/execute） | 2种action | 内联Hook执行 |
-| 12 | `resource_load_status` | 渐进式加载状态管理（status/preload/cache/clear_cache/loading_progress/token_report） | 6种action | 内联状态检查 |
-| 13 | `context_compress` | 上下文压缩（semantic/selective/lossless） | 单一调用 | `scripts/context-compressor.py` |
-| 14 | `server_health` | 服务器健康检查与版本协商 | check, negotiate_version | `scripts/health-checker.py` → 降级状态返回 |
-| 15 | `decision_log` | 决策日志管理（log/list/query/update/export/stats） | 6种action | `scripts/decision-log.py` → 内联JSON记录 |
-| 16 | `token_budget` | Token预算管理（status/set_budget/recommend/report） | 4种action | `scripts/token-budget-guard.py` → 内联估算 |
-| 17 | `project_init` | 项目初始化（create/validate/detect_stack） | 3种action | `scripts/project-initializer.py` → 内联模板生成 |
+| 10 | `agent_status` | Agent状态查询（list/by_phase/detail/match，只读） | 4种action | 静态注册表查询 → `scripts/skill-test.py --agents` |
+| 11 | `agent_manage` | Agent管理（create/assign/release/destroy/schedule，变更操作） | 5种action | 内联Agent管理 |
+| 12 | `hook_manage` | Hook管理（list/execute） | 2种action | 内联Hook执行 |
+| 13 | `resource_load_status` | 渐进式加载状态管理（status/preload/cache/clear_cache/loading_progress/token_report） | 6种action | 内联状态检查 |
+| 14 | `context_compress` | 上下文压缩（semantic/selective/lossless） | 单一调用 | `scripts/context-compressor.py` |
+| 15 | `server_health` | 服务器健康检查与版本协商 | check, negotiate_version | `scripts/health-checker.py` → 降级状态返回 |
+| 16 | `decision_log` | 决策日志管理（log/list/query/update/export/stats） | 6种action | `scripts/decision-log.py` → 内联JSON记录 |
+| 17 | `token_budget` | Token预算管理（status/set_budget/recommend/report） | 4种action | `scripts/token-budget-guard.py` → 内联估算 |
+| 18 | `project_init` | 项目初始化（create/validate/detect_stack） | 3种action | `scripts/project-initializer.py` → 内联模板生成 |
+| 19 | `metrics_report` | 指标报告（按Tool/时间/类型查询+导出） | summary, by_tool, by_time, export | 内联指标聚合 |
+| 20 | `config_manage` | 配置管理（reload/status/validate） | 3种action | 内联配置操作 |
 
-### 1.2 Resource清单（6个）
+### 1.2 Resource清单（8+个）
 
 | # | URI | 类型 | 功能描述 | 内容类型 |
 |---|-----|------|---------|---------|
@@ -51,6 +54,10 @@
 | 5 | `xuansto://templates/{name}` | 模板 | 模板文件（动态参数name） | Markdown文本 |
 | 6 | `xuansto://sessions/latest` | 静态 | 最新会话记录 | Markdown文本 |
 | 7 | `xuansto://loading/status` | 静态 | 渐进式加载状态（含当前Phase、可用功能、资源映射） | JSON |
+| 8 | `xuansto://metrics/summary` | 静态 | 指标摘要（系统级指标概览） | JSON |
+| 9 | `xuansto://degradation/status` | 静态 | 降级状态（组件降级级别和恢复信息） | JSON |
+| 10 | `xuansto://sessions/{id}` | 参数化 | 指定会话记录（按ID查询） | Markdown文本 |
+| 11 | `xuansto://agents/{layer}/{name}` | 参数化 | Agent定义（按层级和名称查询） | Markdown文本 |
 
 > **注意**: `xuansto://loading/status` 虽然注册为Resource，但其返回的是JSON结构化数据，包含`current_phase`、`available_functions`、`loaded_resources`等关键状态信息，是渐进式加载机制的核心状态暴露点。
 
@@ -58,13 +65,18 @@
 
 | 模块 | 文件 | 职责 |
 |------|------|------|
-| Hook引擎 | `core/hook_engine.py` | Pre/Post Hook拦截、动态注册、配置文件加载 |
+| Hook引擎 | `core/hook_engine.py` | Pre/Post Hook拦截(HookType枚举)、动态注册、安全阻断、失败计数 |
 | 降级管理 | `core/degradation.py` | 三级降级(L1_NORMAL/L2_LOCAL_SEMANTIC/L3_BM25_ONLY)、健康监控、自动恢复 |
-| 通知系统 | `core/notifications.py` | 可插拔通知回调(NotificationCallback Protocol) |
-| 指标收集 | `core/metrics.py` | 工具调用延迟/成功率、降级事件、质量门禁结果、Phase转换、Token用量 |
-| 验证器 | `core/validator.py` | 路径安全验证(防遍历/防绝对路径)、Pydantic输入校验 |
-| 错误处理 | `core/errors.py` | 统一错误响应、重试机制(瞬态/永久错误分类)、i18n消息 |
+| 通知系统 | `core/notifications.py` | MCPNotificationCallback(MCP协议通知)、可插拔通知回调 |
+| 指标收集 | `core/metrics.py` | 工具调用延迟/成功率、降级事件、质量门禁结果、Phase转换、Token用量、TTL清理 |
+| 验证器 | `core/validator.py` | 路径安全验证(防遍历/防绝对路径)、名称白名单校验、Pydantic输入校验 |
+| 错误处理 | `core/errors.py` | 统一error_code(仅)、deprecated code字段、重试机制(瞬态/永久错误分类)、backoff jitter |
 | 配置管理 | `core/config.py` | 路径解析、YAML配置热重载(watchfiles/polling)、API版本管理 |
+| 统一存储 | `core/database.py` | xuansto.db统一SQLite(8表)、WAL模式、写入锁、hash验证 |
+| 缓存管理 | `core/cache.py` | LRU缓存淘汰策略 |
+| 加密模块 | `core/crypto.py` | AES-256-GCM加密(快照/敏感数据) |
+| 速率限制 | `core/rate_limiter.py` | 令牌桶速率限制 |
+| 搜索引擎 | `core/search_engine.py` | HybridSearchEngine自动检测(ChromaDB可选/SQLite/Keyword) |
 
 ---
 
@@ -112,7 +124,7 @@
 | 属性 | 值 |
 |------|-----|
 | Server名称 | `xuansto-mcp-server` |
-| 版本 | v4.1.0 |
+| 版本 | v8.0.0 |
 | 协议 | MCP (Model Context Protocol) |
 | 传输方式 | stdio |
 | 入口函数 | `xuansto_mcp.server:main` |
@@ -175,23 +187,19 @@
 
 #### 3.2.2 knowledge_search
 
-**描述**: 三层知识库混合检索引擎，支持retrieve/inject/precipitate三种操作。
+**描述**: 知识检索引擎（retrieve only，只读）。所有写入操作请使用 `knowledge_inject`。
 
 **参数JSON Schema**:
 ```json
 {
   "type": "object",
   "properties": {
-    "action": { "type": "string", "enum": ["retrieve", "inject", "precipitate"], "default": "retrieve" },
+    "action": { "type": "string", "enum": ["retrieve"], "default": "retrieve" },
     "query": { "type": ["string", "null"], "description": "搜索查询文本" },
     "top_k": { "type": "integer", "minimum": 1, "maximum": 50, "default": 5 },
     "search_type": { "type": "string", "enum": ["hybrid", "semantic_only", "keyword_only"], "default": "hybrid" },
     "scope": { "type": ["string", "null"], "enum": ["general", "workspace", "experience", null] },
-    "min_confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0, "default": 0.0 },
-    "content": { "type": ["string", "null"], "description": "注入的知识内容(inject时使用)" },
-    "knowledge_type": { "type": "string", "enum": ["general", "workspace", "experience"], "default": "general" },
-    "metadata": { "type": ["object", "null"], "description": "附加元数据(inject时使用)" },
-    "pattern_ids": { "type": ["array", "null"], "items": { "type": "string" }, "description": "模式ID列表(precipitate时使用)" }
+    "min_confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0, "default": 0.0 }
   }
 }
 ```
@@ -415,26 +423,45 @@
 
 #### 3.2.10 agent_status
 
-**描述**: Agent状态查询，支持10种操作。
+**描述**: Agent状态查询（只读），支持4种操作。变更操作请使用 `agent_manage`。
 
 **参数JSON Schema**:
 ```json
 {
   "type": "object",
   "properties": {
-    "action": { "type": "string", "enum": ["list", "by_phase", "detail", "create", "match", "assign", "release", "instance_status", "destroy", "schedule"] },
+    "action": { "type": "string", "enum": ["list", "by_phase", "detail", "match"] },
     "phase": { "type": ["integer", "null"], "minimum": 0, "maximum": 8 },
     "agent_name": { "type": ["string", "null"] },
     "agent_type": { "type": ["string", "null"] },
-    "capabilities": { "type": ["array", "null"], "items": { "type": "string" } },
-    "agent_id": { "type": ["string", "null"] },
-    "task": { "type": ["string", "null"] }
+    "capabilities": { "type": ["array", "null"], "items": { "type": "string" } }
   },
   "required": ["action"]
 }
 ```
 
 **返回值**: 包含`agents`数组、`total_agents`、`available_count`等。
+
+#### 3.2.11 agent_manage
+
+**描述**: Agent管理（变更操作），支持5种操作。只读查询请使用 `agent_status`。
+
+**参数JSON Schema**:
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": { "type": "string", "enum": ["create", "assign", "release", "destroy", "schedule"] },
+    "agent_name": { "type": ["string", "null"] },
+    "agent_id": { "type": ["string", "null"] },
+    "task": { "type": ["string", "null"] },
+    "capabilities": { "type": ["array", "null"], "items": { "type": "string" } }
+  },
+  "required": ["action"]
+}
+```
+
+**返回值**: 包含`agent_id`、`status`、`assigned_task`等。
 
 #### 3.2.11 hook_manage
 
@@ -536,9 +563,9 @@
   "api_version": "2.0.0",
   "data": {
     "server_status": "HEALTHY|DEGRADED|UNAVAILABLE",
-    "version": "4.1.0",
+    "version": "8.0.0",
     "uptime_seconds": 0,
-    "tools_available": 17,
+    "tools_available": 19,
     "tools_status": {},
     "memory_usage_mb": 0.0,
     "active_workflows": 0,
@@ -640,18 +667,25 @@
 | `xuansto://templates/{name}` | 模板Resource | 模板文件（按名称动态获取） | `text/markdown` | 路径安全验证（防遍历/防绝对路径），限制在TEMPLATES_DIR内 |
 | `xuansto://sessions/latest` | 静态Resource | 最新会话记录 | `text/markdown` | 仅读取SESSION_DIR |
 | `xuansto://loading/status` | 静态Resource | 渐进式加载状态 | `application/json` | 仅读取WORK_DIR下状态文件 |
+| `xuansto://metrics/summary` | 静态Resource | 指标摘要 | `application/json` | 仅读取xuansto.db |
+| `xuansto://degradation/status` | 静态Resource | 降级状态 | `application/json` | 仅读取xuansto.db |
+| `xuansto://sessions/{id}` | 参数化Resource | 指定会话记录 | `text/markdown` | 名称白名单校验+路径安全验证 |
+| `xuansto://agents/{layer}/{name}` | 参数化Resource | Agent定义 | `text/markdown` | 名称白名单校验+路径安全验证 |
 
 ### 3.4 权限与安全边界
 
 | 安全机制 | 实现位置 | 描述 |
 |---------|---------|------|
 | 路径安全验证 | `core/validator.py` | 防止路径遍历(`..`)、绝对路径、null字节注入 |
+| 名称白名单校验 | `core/validator.py` | Resource参数名称白名单验证，防止注入 |
 | 目录白名单 | `skill_resources.py` | Resource读取限制在SKILL_ROOT子目录内 |
-| Pydantic输入校验 | `models/schemas.py` | 所有Tool输入通过Pydantic BaseModel严格校验，`extra="forbid"`拒绝未知字段 |
-| Hook拦截 | `server.py` → `_with_hook_interception` | Pre-Hook可阻止危险操作（`status: "block"`） |
+| Pydantic输入校验 | `models/schemas.py` | 所有Tool输入通过Pydantic BaseModel严格校验，`extra="forbid"`拒绝未知字段，`action`参数必填 |
+| Hook拦截 | `server.py` → `_with_hook_interception` | Pre-Hook可阻止危险操作（`status: "block"`），安全Hook失败默认阻塞 |
 | 降级隔离 | `core/degradation.py` | 降级模式下不暴露完整功能，限制在安全子集内 |
 | Token预算 | `token_budget` Tool | 防止资源过度消耗 |
 | 脚本执行超时 | `degradation.py` → `run_script_fallback` | 默认60秒超时，安全脚本30秒 |
+| 速率限制 | `core/rate_limiter.py` | 令牌桶速率限制，防止高频调用耗尽资源 |
+| 统一错误码 | `core/errors.py` | 统一error_code，deprecated code字段 |
 
 ---
 
@@ -846,13 +880,14 @@ Skill (LLM Agent)
 ```json
 {
   "error": true,
-  "code": "VALIDATION_ERROR | PATH_NOT_FOUND | TIMEOUT | ...",
+  "error_code": "ERR_VALIDATION | ERR_NOT_FOUND | ERR_TIMEOUT | ...",
   "message": "中文错误描述",
   "details": { ... },
-  "error_code": "ERR_VALIDATION | ERR_NOT_FOUND | ERR_TIMEOUT | ...",
   "language": "zh"
 }
 ```
+
+> **注意**: `code` 字段已废弃(deprecated)，统一使用 `error_code` 字段。
 
 #### 降级响应
 
@@ -873,7 +908,7 @@ Skill (LLM Agent)
 | 永久错误(VALIDATION_ERROR/PATH_NOT_FOUND/PERMISSION_DENIED) | 不重试，立即返回 | 0次 |
 | 未知错误 | 不重试 | 0次 |
 
-退避公式: `delay = base_delay * (2 ^ attempt)`，base_delay=1.0s
+退避公式: `delay = base_delay * (2 ^ attempt) + jitter`，base_delay=1.0s，jitter为随机抖动
 
 ### 6.5 Hook拦截协议
 
@@ -899,7 +934,7 @@ Skill调用Tool
 
 ```
 1. server_health(action="check")
-   ← { server_status: "HEALTHY", tools_available: 17 }
+   ← { server_status: "HEALTHY", tools_available: 19 }
 
 2. project_init(action="create", name="my-app", stack=["python", "react"])
    ← { name: "my-app", directory: "...", config_path: "..." }
@@ -949,13 +984,11 @@ Skill调用Tool
 
 ## 7. 问题清单
 
-### MCP-01: Tool职责过载
+### MCP-01: Tool职责过载 ✅ 已解决
 
 **问题**: `knowledge_search` 同时承担 retrieve/inject/precipitate 三种语义不同的操作，违反单一职责原则。`agent_status` 承担10种action，包含查询(list/by_phase/detail)和变更(create/assign/release/destroy)两类截然不同的操作。
 
-**影响**: 参数校验复杂度高，调用者容易误用，文档理解成本大。
-
-**建议**: 考虑将变更类操作（create/assign/release/destroy）从 `agent_status` 拆分为独立的 `agent_manage` Tool；将 `knowledge_search` 的inject/precipitate拆分为独立Tool（已有 `knowledge_inject`，但 `knowledge_search` 仍保留inject/precipitate参数）。
+**解决**: `agent_status` 已拆分为 `agent_status`(只读: list/by_phase/detail/match) 和 `agent_manage`(变更: create/assign/release/destroy/schedule)。`knowledge_search` 已改为 retrieve only，所有写入操作统一通过 `knowledge_inject` 处理。
 
 ### MCP-02: Resource与Tool功能重叠
 
@@ -977,37 +1010,29 @@ Skill调用Tool
 
 **建议**: 建立统一的降级框架：MCP调用 → 脚本降级 → 内联降级 → 最小响应。降级脚本路径应从配置文件读取而非硬编码。
 
-### MCP-04: Hook引擎缺少类型安全
+### MCP-04: Hook引擎缺少类型安全 ✅ 已解决
 
-**问题**: `HookEngine` 的 `register_hook` 方法接受 `hook_type: str` 参数，仅支持 "pre" 和 "post" 两种值，但使用字符串而非枚举。Hook handler的返回类型也不统一（同步返回tuple，异步返回Awaitable）。
+**问题**: `HookEngine` 的 `register_hook` 方法接受 `hook_type: str` 参数，仅支持 "pre" 和 "post" 两种值，但使用字符串而非枚举。
 
-**影响**: 容易因拼写错误导致Hook注册失败，且难以在编译期发现类型错误。
+**解决**: 已引入 `HookType` 枚举类型，安全Hook失败默认阻塞，增加失败计数机制。
 
-**建议**: 将 `hook_type` 改为枚举类型 `HookType`；统一Hook handler的返回类型协议。
+### MCP-05: 指标系统缺少MCP暴露 ✅ 已解决
 
-### MCP-05: 指标系统缺少MCP暴露
+**问题**: `MetricsCollector` 收集了丰富的运行时指标，但缺少独立的查询接口。
 
-**问题**: `MetricsCollector` 收集了丰富的运行时指标（工具调用延迟/成功率、降级事件、质量门禁结果、Phase转换、Token用量），但这些指标目前仅通过 `server_health` 部分暴露，缺少独立的查询接口。
+**解决**: 新增 `metrics_report` Tool（summary/by_tool/by_time/export）和 `xuansto://metrics/summary` Resource。
 
-**影响**: 无法按时间范围查询指标、无法获取特定Tool的详细性能数据、无法导出指标用于外部监控。
+### MCP-06: 通知系统未与MCP协议集成 ✅ 已解决
 
-**建议**: 新增 `metrics_report` Tool，支持按Tool/时间范围/指标类型查询，支持导出为JSON/Markdown格式。同时新增 `xuansto://metrics/summary` Resource 暴露系统级指标摘要。
+**问题**: `notifications.py` 实现了可插拔的通知回调机制，但当前仅使用 `_NullNotificationCallback`（空实现）。
 
-### MCP-06: 通知系统未与MCP协议集成
+**解决**: 已实现 `MCPNotificationCallback`，通过MCP协议的Notification机制向客户端推送关键事件（降级、Phase转换、Token预算超限）。
 
-**问题**: `notifications.py` 实现了可插拔的通知回调机制，但当前仅使用 `_NullNotificationCallback`（空实现）。MCP协议支持Notification消息，但未被利用。
+### MCP-07: 配置热重载缺少MCP入口 ✅ 已解决
 
-**影响**: 降级事件、Phase转换、Token预算超限等关键事件无法实时通知客户端。
+**问题**: `core/config.py` 实现了配置热重载功能，但没有MCP Tool入口让客户端主动触发重载或查询当前配置状态。
 
-**建议**: 实现 `MCPNotificationCallback`，通过MCP协议的Notification机制向客户端推送关键事件。需在 `server.py` 的 `main()` 中注册此回调。
-
-### MCP-07: 配置热重载缺少MCP入口
-
-**问题**: `core/config.py` 实现了配置热重载功能（watchfiles/polling/SIGHUP），但没有MCP Tool入口让客户端主动触发重载或查询当前配置状态。
-
-**影响**: 运维人员无法通过MCP协议主动触发配置重载，只能依赖文件变更检测或信号。
-
-**建议**: 新增 `config_manage` Tool，支持 `reload`（触发重载）、`status`（查询当前配置）、`validate`（验证配置文件）三种action。
+**解决**: 新增 `config_manage` Tool，支持 reload/status/validate 三种action。
 
 ### MCP-08: 版本协商机制不完整
 
@@ -1017,45 +1042,35 @@ Skill调用Tool
 
 **建议**: 实现语义化版本比较逻辑，在 `negotiate_version` 中返回兼容的功能列表和降级建议。维护完整的API CHANGELOG。
 
-### MCP-09: Resource缺少分页和过滤
+### MCP-09: Resource缺少分页和过滤 ✅ 已解决
 
 **问题**: `xuansto://sessions/latest` 仅返回最新一条会话记录，无法查看历史会话。`xuansto://references/agent-registry` 返回完整注册表，无法按条件过滤。
 
-**影响**: 大型项目中会话记录和Agent注册表可能很大，一次性加载浪费Token。
+**解决**: 新增参数化Resource `xuansto://sessions/{id}` 和 `xuansto://agents/{layer}/{name}`，支持按ID/层级/名称查询。
 
-**建议**: 为Resource引入查询参数支持（MCP协议的Template Resource），如 `xuansto://sessions/{id}` 和 `xuansto://agents/{layer}/{name}`。
+### MCP-10: 降级状态持久化与恢复竞态 ✅ 已解决
 
-### MCP-10: 降级状态持久化与恢复竞态
+**问题**: `DegradationManager` 在 `_persist_state` 和 `load_state` 之间可能存在竞态条件。
 
-**问题**: `DegradationManager` 在 `_persist_state` 和 `load_state` 之间可能存在竞态条件。健康监控线程在后台持续检查和降级，同时 `_persist_state` 使用 `atomic_write`，但如果Server在写入过程中崩溃，可能留下不完整的降级状态。
+**解决**: 统一存储到 xuansto.db，使用写入锁和hash验证确保状态完整性。
 
-**影响**: Server重启后可能恢复到错误的降级级别。
+### MCP-11: Tool注册依赖内部API ✅ 已解决
 
-**建议**: 在 `load_state` 中增加状态完整性校验（如校验和或时间戳验证），确保只加载完整的持久化状态。
+**问题**: `server.py` 中通过 `mcp._tool_manager._tools` 访问已注册的Tool列表，这是FastMCP的内部API。
 
-### MCP-11: Tool注册依赖内部API
+**解决**: 改用本地 `_TOOL_FUNCTIONS` 注册表，不再依赖 `_tool_manager._tools`。
 
-**问题**: `server.py` 中通过 `mcp._tool_manager._tools` 访问已注册的Tool列表和Tool Entry对象，这是FastMCP的内部API，可能在版本升级时变更。
+### MCP-12: 缺少速率限制 ✅ 已解决
 
-**影响**: MCP SDK升级可能导致Tool注册和Hook拦截机制失效。
+**问题**: 当前MCP Server没有实现速率限制机制。
 
-**建议**: 向FastMCP贡献公开的Tool注册表API，或在本地维护一份Tool注册映射表，避免依赖内部属性。
+**解决**: 新增 `core/rate_limiter.py`，实现令牌桶速率限制，可通过配置文件设置不同Tool的调用频率上限。
 
-### MCP-12: 缺少速率限制
+### MCP-13: knowledge_search与knowledge_inject职责边界模糊 ✅ 已解决
 
-**问题**: 当前MCP Server没有实现速率限制机制。虽然错误码中定义了 `ERR_RATE_LIMIT`，但没有实际的限流逻辑。
+**问题**: `knowledge_search` 的Schema中包含 `action` 参数支持 `inject` 和 `precipitate`，而 `knowledge_inject` Tool专门处理这些操作。
 
-**影响**: 恶意或异常客户端可能通过高频调用耗尽Server资源。
-
-**建议**: 实现基于令牌桶或滑动窗口的速率限制，可通过配置文件设置不同Tool的调用频率上限。
-
-### MCP-13: knowledge_search与knowledge_inject职责边界模糊
-
-**问题**: `knowledge_search` 的Schema中包含 `action` 参数支持 `inject` 和 `precipitate`，而 `knowledge_inject` Tool专门处理这些操作。两个Tool的 `precipitate` 功能存在重叠。
-
-**影响**: 调用者不确定应该使用哪个Tool进行知识注入和经验沉淀。
-
-**建议**: 从 `knowledge_search` 中移除 `inject` 和 `precipitate` action，仅保留 `retrieve`。所有写入操作统一通过 `knowledge_inject` 处理。保持单一职责。
+**解决**: `knowledge_search` 已改为 retrieve only（只读），所有写入操作（inject/precipitate/delete）统一通过 `knowledge_inject` 处理。
 
 ### MCP-14: context_compress的Token估算精度
 

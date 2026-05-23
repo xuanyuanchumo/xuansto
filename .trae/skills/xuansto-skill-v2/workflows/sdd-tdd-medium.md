@@ -1,4 +1,5 @@
 ---
+> 权威来源：_yaml/sdd-tdd-medium.yaml（YAML为准，本文档为可读参考）
 metadata:
   name: SDD+TDD中等规模开发工作流
   version: "3.2.0"

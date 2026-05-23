@@ -1,4 +1,5 @@
 ---
+> 权威来源：_yaml/flutter-desktop-workflow.yaml（YAML为准，本文档为可读参考）
 metadata:
   name: Flutter桌面应用开发工作流
   version: "3.2.0"

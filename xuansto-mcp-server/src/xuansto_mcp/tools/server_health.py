@@ -8,7 +8,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from ..core.config import DATA_DIR, SKILL_ROOT, WORK_DIR, KNOWLEDGE_CHROMA_PATH, MCP_API_VERSION, MCP_MIN_SUPPORTED_VERSION, API_CHANGELOG
+from ..core.config import DATA_DIR, SKILL_ROOT, WORK_DIR, KNOWLEDGE_CHROMA_PATH, MCP_API_VERSION, MCP_MIN_SUPPORTED_VERSION, API_CHANGELOG, AGENTS_DIR, REFERENCES_DIR, COMMANDS_DIR
 from ..core.errors import make_success_response, make_error_response, ERR_VALIDATION
 from ..core import atomic_write
 from ..core.logging_config import get_logger
@@ -198,50 +198,95 @@ def _calculate_percentile(values: list[float], percentile: float) -> float:
 
 def _negotiate_api_version(client_version: str) -> dict[str, Any]:
     server_major = MCP_API_VERSION.split(".")[0]
-    server_minor = MCP_API_VERSION.split(".")[1]
+    server_minor = int(MCP_API_VERSION.split(".")[1])
     min_major = MCP_MIN_SUPPORTED_VERSION.split(".")[0]
+
+    def _features_between(low_ver: str, high_ver: str) -> list[str]:
+        features: list[str] = []
+        for ver, items in API_CHANGELOG.items():
+            parts = ver.split(".")
+            v_major, v_minor = int(parts[0]), int(parts[1]) if len(parts) > 1 else 0
+            low_parts = low_ver.split(".")
+            low_maj, low_min = int(low_parts[0]), int(low_parts[1]) if len(low_parts) > 1 else 0
+            high_parts = high_ver.split(".")
+            high_maj, high_min = int(high_parts[0]), int(high_parts[1]) if len(high_parts) > 1 else 0
+            if (v_major, v_minor) > (low_maj, low_min) and (v_major, v_minor) <= (high_maj, high_min):
+                features.extend(items)
+        return features
+
+    base_result = {
+        "server_version": MCP_API_VERSION,
+        "client_version": client_version,
+        "min_supported_version": MCP_MIN_SUPPORTED_VERSION,
+    }
+
     try:
         client_parts = client_version.split(".")
         client_major = client_parts[0]
         client_minor = int(client_parts[1]) if len(client_parts) > 1 else 0
         if not client_major.isdigit():
             return {
+                **base_result,
                 "compatible": False,
-                "negotiated_version": MCP_API_VERSION,
-                "server_version": MCP_API_VERSION,
-                "min_supported_version": MCP_MIN_SUPPORTED_VERSION,
-                "reason": "invalid_client_version",
+                "deprecated_features": [],
+                "new_features": _features_between(client_version, MCP_API_VERSION),
+                "upgrade_suggestion": "Invalid client version format. Please provide a valid semver version.",
             }
     except (ValueError, IndexError):
         return {
+            **base_result,
             "compatible": False,
-            "negotiated_version": MCP_API_VERSION,
-            "server_version": MCP_API_VERSION,
-            "min_supported_version": MCP_MIN_SUPPORTED_VERSION,
-            "reason": "invalid_client_version",
+            "deprecated_features": [],
+            "new_features": _features_between(client_version, MCP_API_VERSION),
+            "upgrade_suggestion": "Invalid client version format. Please provide a valid semver version.",
         }
-    if client_major == server_major:
+
+    client_maj_int = int(client_major)
+
+    if client_maj_int == int(server_major):
+        if client_minor < server_minor:
+            new_feats = _features_between(client_version, MCP_API_VERSION)
+            return {
+                **base_result,
+                "compatible": True,
+                "deprecated_features": [],
+                "new_features": new_feats,
+                "upgrade_suggestion": f"Client is behind server by minor versions. New features available: {len(new_feats)}. Consider upgrading to {MCP_API_VERSION}.",
+            }
         return {
+            **base_result,
             "compatible": True,
-            "negotiated_version": MCP_API_VERSION,
-            "server_version": MCP_API_VERSION,
-            "min_supported_version": MCP_MIN_SUPPORTED_VERSION,
-            "reason": "major_version_match",
+            "deprecated_features": [],
+            "new_features": [],
+            "upgrade_suggestion": "Client is up to date with server version.",
         }
-    if client_major == min_major:
+
+    if client_maj_int == int(min_major):
+        depr_feats = _features_between(MCP_MIN_SUPPORTED_VERSION, client_version)
+        new_feats = _features_between(client_version, MCP_API_VERSION)
         return {
+            **base_result,
             "compatible": True,
-            "negotiated_version": MCP_MIN_SUPPORTED_VERSION,
-            "server_version": MCP_API_VERSION,
-            "min_supported_version": MCP_MIN_SUPPORTED_VERSION,
-            "reason": "min_supported_match",
+            "deprecated_features": depr_feats,
+            "new_features": new_feats,
+            "upgrade_suggestion": f"Client is on minimum supported version. {len(new_feats)} new features available. Upgrade to {MCP_API_VERSION} recommended.",
         }
+
+    if client_maj_int > int(server_major):
+        return {
+            **base_result,
+            "compatible": False,
+            "deprecated_features": [],
+            "new_features": [],
+            "upgrade_suggestion": f"Client version ({client_version}) is newer than server ({MCP_API_VERSION}). Please downgrade client or upgrade server.",
+        }
+
     return {
+        **base_result,
         "compatible": False,
-        "negotiated_version": MCP_API_VERSION,
-        "server_version": MCP_API_VERSION,
-        "min_supported_version": MCP_MIN_SUPPORTED_VERSION,
-        "reason": "major_version_mismatch",
+        "deprecated_features": [],
+        "new_features": _features_between(client_version, MCP_API_VERSION),
+        "upgrade_suggestion": f"Major version mismatch. Client ({client_version}) is not compatible with server ({MCP_API_VERSION}). Minimum supported: {MCP_MIN_SUPPORTED_VERSION}.",
     }
 
 
@@ -254,7 +299,7 @@ def register(mcp: FastMCP) -> None:
             openWorldHint=False,
         )
     )
-    async def server_health(action: str = "check", client_version: str | None = None) -> dict[str, Any]:
+    async def server_health(action: str, client_version: str | None = None) -> dict[str, Any]:
         """MCP Server 健康检查：返回服务器状态、版本、运行时间、配置路径和工具统计。支持API版本协商。"""
         validated, val_err = validate_input(ServerHealthInput, action=action, client_version=client_version)
         if val_err:
@@ -268,6 +313,43 @@ def register(mcp: FastMCP) -> None:
                 if not client_version:
                     return make_error_response(ValueError("negotiate_version操作需要client_version参数"), error_code=ERR_VALIDATION)
                 return make_success_response(_negotiate_api_version(client_version))
+
+            if action == "capabilities":
+                from ..server import _REGISTERED_TOOL_NAMES, _REGISTERED_RESOURCE_NAMES, _TOOL_REGISTRY
+                tool_capabilities = []
+                for tool_name in sorted(_REGISTERED_TOOL_NAMES):
+                    tool_fn = _TOOL_REGISTRY.get(tool_name)
+                    annotations = None
+                    if tool_fn is not None:
+                        try:
+                            annotations = getattr(tool_fn, "annotations", None)
+                        except Exception:
+                            pass
+                    tool_entry: dict[str, Any] = {"name": tool_name, "available": True}
+                    if annotations is not None:
+                        try:
+                            tool_entry["annotations"] = {
+                                "read_only": getattr(annotations, "readOnlyHint", None),
+                                "destructive": getattr(annotations, "destructiveHint", None),
+                                "idempotent": getattr(annotations, "idempotentHint", None),
+                            }
+                        except Exception:
+                            pass
+                    tool_capabilities.append(tool_entry)
+                resource_capabilities = []
+                for res_name in sorted(_REGISTERED_RESOURCE_NAMES):
+                    resource_capabilities.append({"name": res_name, "available": True})
+                with _metrics_lock:
+                    degradation_snapshot = dict(_DEGRADATION_COUNTS)
+                degraded_tools = [k for k, v in degradation_snapshot.items() if v > 0]
+                return make_success_response({
+                    "tools": tool_capabilities,
+                    "tools_count": len(tool_capabilities),
+                    "resources": resource_capabilities,
+                    "resources_count": len(resource_capabilities),
+                    "degraded_tools": degraded_tools,
+                    "api_version": MCP_API_VERSION,
+                })
 
             from .workflow_dispatch import _load_all_workflows, _cleanup_all_snapshots
 
@@ -321,6 +403,14 @@ def register(mcp: FastMCP) -> None:
                     "data_dir_exists": DATA_DIR.exists(),
                     "skill_root_exists": SKILL_ROOT.exists(),
                 },
+                "path_warnings": [
+                    w for w in [
+                        {"path": str(KNOWLEDGE_CHROMA_PATH), "exists": KNOWLEDGE_CHROMA_PATH.exists(), "type": "knowledge_chroma"} if not KNOWLEDGE_CHROMA_PATH.exists() else None,
+                        {"path": str(AGENTS_DIR), "exists": AGENTS_DIR.exists(), "type": "agents_dir"} if not AGENTS_DIR.exists() else None,
+                        {"path": str(REFERENCES_DIR), "exists": REFERENCES_DIR.exists(), "type": "references_dir"} if not REFERENCES_DIR.exists() else None,
+                        {"path": str(COMMANDS_DIR), "exists": COMMANDS_DIR.exists(), "type": "commands_dir"} if not COMMANDS_DIR.exists() else None,
+                    ] if w is not None
+                ],
             })
         except Exception as e:
             logger.error("server_health error: %s", e)

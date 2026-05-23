@@ -41,7 +41,7 @@
 ### 1.1 v5 SKILL.md 解析
 
 **文件路径**: `.trae/skills/xuansto-skill/SKILL.md`
-**版本**: 5.0.0 | **状态**: 已废弃(deprecated: true) | **迁移目标**: xuansto-skill-v2
+**版本**: 5.0.0 | **状态**: ARCHIVED | **迁移目标**: xuansto-skill-v2
 
 #### 1.1.1 Frontmatter 元数据
 
@@ -49,7 +49,7 @@
 |------|-----|------|
 | name | xuansto-skill | Skill标识符 |
 | version | 5.0.0 | 版本号 |
-| deprecated | true | 已废弃标记 |
+| deprecated | true | 已废弃标记(ARCHIVED) |
 | migrate_to | xuansto-skill-v2 | 迁移目标 |
 | agents_summary | "13 layers / 57 agents" | Agent规模 |
 | min_version | 1.0.0 | 最低平台版本 |
@@ -152,7 +152,7 @@ v2采用 `{{include:}}` 指令延迟加载外部文件：
 | `{{include:commands/routes.yaml}}` | 27命令路由表 |
 | `{{include:agents/registry.yaml}}` | 57 Agent注册表 |
 | `{{include:constraints.yaml}}` | 核心约束+Token预算+降级规则 |
-| `references/mcp-tools.md` | 17个MCP工具参数与返回值 |
+| `references/mcp-tools.md` | 19+个MCP工具参数与返回值 |
 | `references/workflow-phases.md` | 9阶段工作流详情 |
 | `references/quality-gates.md` | 54项质量门禁定义 |
 
@@ -162,9 +162,9 @@ v2核心约束与v5完全相同，但通过 `constraints.yaml` 外部化提供�
 
 #### 1.2.5 MCP依赖
 
-- 最低兼容: xuansto-mcp-server >= 4.0.0
+- 最低兼容: xuansto-mcp-server >= 8.0.0
 - API版本: 2.0.0
-- MCP不可用时自动降级到 scripts/ 目录Python脚本
+- MCP不可用时自动降级到 scripts/ 目录Python脚本（异步降级）
 
 #### 1.2.6 执行入口（5步，与v5逻辑相同但MCP驱动）
 
@@ -199,23 +199,23 @@ v2的Phase概览表增加了"MCP工具"列，明确标注每个Phase使用的MCP
 | 维度 | v5 (xuansto-skill) | v2 (xuansto-skill-v2) |
 |------|---------------------|------------------------|
 | **版本** | 5.0.0 | 8.0.0 |
-| **状态** | 已废弃 | 活跃 |
-| **SKILL.md行数** | ~310行 | ~71行 |
+| **状态** | ARCHIVED | 活跃 |
+| **SKILL.md行数** | ~310行 | <200行 |
 | **触发条件** | 内嵌frontmatter | 外部化 `triggers.yaml` |
 | **命令路由** | 内嵌SKILL.md | 外部化 `commands/routes.yaml` |
 | **Agent注册** | 内嵌SKILL.md | 外部化 `agents/registry.yaml` |
 | **约束配置** | 内嵌SKILL.md | 外部化 `constraints.yaml` |
-| **MCP工具数** | 13个（SKILL.md中声明16个） | 17个（含decision_log, token_budget, project_init） |
-| **MCP依赖** | 无明确版本要求 | xuansto-mcp-server >= 4.0.0 |
-| **降级策略** | 简单提及 | 完整三级降级链（constraints.yaml） |
-| **渐进式加载** | 无 | 4阶段加载（skeleton/functional/enhanced/full） |
-| **Hook系统** | 文字描述 | 完整JSON配置（hooks.json，3个profile） |
+| **MCP工具数** | 13个（SKILL.md中声明16个） | 19+个（含agent_manage, metrics_report, config_manage） |
+| **MCP依赖** | 无明确版本要求 | xuansto-mcp-server >= 8.0.0 |
+| **降级策略** | 简单提及 | 完整三级降级链+异步脚本降级 |
+| **渐进式加载** | 无 | 4阶段加载+DisclosureTransition状态机+Phase通知 |
+| **Hook系统** | 文字描述 | HookType枚举+安全阻断+失败计数+3个profile |
 | **Token预算** | 简单提及 | 完整配置（.skill-config.yaml + constraints.yaml） |
 | **脚本目录** | 引用49个脚本 | 实际包含60+脚本（含knowledge_server/子目录） |
-| **参考文件** | 72+引用 | 6个核心引用（按需加载） |
+| **参考文件** | 72+引用 | 75+文件（完整参考文档） |
 | **工作流定义** | SKILL.md内描述 | 独立YAML+MD文件（workflows/目录） |
 | **模板文件** | SKILL.md内引用 | 独立文件（templates/目录，19个模板） |
-| **问题清单** | 27个问题（全部已修复） | 9个问题（全部未修复） |
+| **问题清单** | 27个问题（全部已修复） | 12个问题（大部分已解决） |
 
 ---
 
@@ -410,26 +410,30 @@ Phase N 执行
 
 ### 2.5 MCP工具调用链
 
-#### 2.5.1 17个MCP工具一览
+#### 2.5.1 19+个MCP工具一览
 
 | 工具名 | 功能 | 降级脚本 |
 |--------|------|----------|
 | skill_analyze | 项目结构分析 | scripts/skill-test.py --analyze |
-| knowledge_search | 知识检索（retrieve/inject/precipitate） | scripts/knowledge-server.py --search |
+| knowledge_search | 知识检索（retrieve only，只读） | HybridSearchEngine: ChromaDB(可选)→SQLite FTS→keyword |
+| knowledge_inject | 知识注入+经验沉淀+软删除（所有写入） | scripts/knowledge-server.py --inject |
 | quality_gate_check | 54项质量门禁检查 | scripts/skill-test.py --gate |
 | spec_drift_detect | 规格漂移检测 | scripts/spec-drift-detector.py |
 | security_scan | OWASP+依赖漏洞扫描 | scripts/agentic-security-scanner.py |
 | code_simplify | 代码简化分析 | scripts/code-simplifier.py |
 | session_manage | 会话状态管理 | scripts/init-session.py / session-catchup.py / session-persist.py |
 | workflow_dispatch | 工作流调度 | scripts/project-initializer.py / 内联Phase推进 |
-| agent_status | Agent状态查询 | 静态注册表 / scripts/skill-test.py --agents |
-| hook_manage | Hook管理 | scripts/check-encoding.py / token-budget-guard.py / session-persist.py |
+| agent_status | Agent状态查询（只读） | 静态注册表 / scripts/skill-test.py --agents |
+| agent_manage | Agent管理（变更操作） | 内联Agent管理 |
+| hook_manage | Hook管理 | 内联Hook执行 |
 | resource_load_status | 渐进式加载状态 | 内联状态检查 |
 | context_compress | 上下文压缩 | scripts/context-compressor.py |
 | server_health | 服务器健康检查 | scripts/health-checker.py |
 | decision_log | 决策日志管理 | 内联JSON记录 |
 | token_budget | Token预算管理 | scripts/token-budget-guard.py / 内联估算 |
 | project_init | 项目初始化 | scripts/project-initializer.py / 内联模板生成 |
+| metrics_report | 指标报告 | 内联指标聚合 |
+| config_manage | 配置管理 | 内联配置操作 |
 
 **代码位置**: `.trae/skills/xuansto-skill-v2/references/mcp-tools.md`
 
@@ -477,7 +481,7 @@ MCP工具优先 → REST API降级 → 文件系统兜底
 #### 2.6.2 知识检索降级链
 
 ```
-ChromaDB（向量+关键词混合）→ SQLite FTS5（全文搜索）→ 关键词匹配
+HybridSearchEngine自动检测 → ChromaDB（可选，向量+关键词混合）→ SQLite FTS5（全文搜索）→ 关键词匹配
 ```
 
 **代码位置**: `.trae/skills/xuansto-skill-v2/constraints.yaml` L126
@@ -713,22 +717,23 @@ v2通过 `agents/registry.yaml` 为每个Agent定义了模型路由级别：
 | 资源优先级 | ✅ 已实现 | P0-P3四级优先级 |
 | 按需加载策略 | ✅ 已实现 | .skill-config.yaml配置lazy加载 |
 | Phase感知卸载 | ✅ 已实现 | phase_transition_rules定义了Phase间资源切换 |
-| 披露规则 | ✅ 已实现 | on_unavailable定义了3步披露流程 |
+| 披露规则 | ✅ 已实现 | DisclosureTransition状态机+on_unavailable定义了3步披露流程 |
 | Token预算控制 | ✅ 已实现 | 每阶段Token预算+三级压缩 |
+| Phase通知 | ✅ 已实现 | MCPNotificationCallback推送Phase转换事件 |
 
 #### 4.5.2 未实现/存在差距的特性
 
-| 特性 | 差距 | 问题编号 |
-|------|------|----------|
-| 降级脚本实际调用 | degradation.py仅返回fallback响应 | SKILL-01 |
-| 参考文档完整性 | v2仅6个参考文件，v1有72+ | SKILL-02 |
-| MCP版本一致性 | MCP Server v3.5.0 vs Skill v8.0.0 | SKILL-03 |
-| knowledge_search inject/precipitate | mcp-tools.md仅文档了retrieve | SKILL-04 |
-| server_health文档 | 工具已实现但未在mcp-tools.md列出 | SKILL-05 |
-| 评估配置 | v1有evals/目录，v2无 | SKILL-06 |
-| CHANGELOG | v2无版本变更追踪 | SKILL-07 |
-| v1/v2文件重复 | agents/commands/workflows在两版本中同时存在 | SKILL-08 |
-| SKILL.md行数 | v2增强后可能超过500行上限 | SKILL-09 |
+| 特性 | 差距 | 问题编号 | 状态 |
+|------|------|----------|------|
+| 降级脚本实际调用 | subprocess_utils异步降级已实现 | SKILL-01 | ✅ 已解决 |
+| 参考文档完整性 | v2已有75+参考文件 | SKILL-02 | ✅ 已解决 |
+| MCP版本一致性 | MCP Server已升级到v8.0.0 | SKILL-03 | ✅ 已解决 |
+| knowledge_search读写分离 | knowledge_search改为retrieve only，写入通过knowledge_inject | SKILL-04 | ✅ 已解决 |
+| server_health文档 | 已在mcp-tools.md中补充 | SKILL-05 | ✅ 已解决 |
+| 评估配置 | v2无evals/目录 | SKILL-06 | 待实施 |
+| CHANGELOG | v2无版本变更追踪 | SKILL-07 | 待实施 |
+| v1/v2文件重复 | v1已标记ARCHIVED | SKILL-08 | ✅ 已解决 |
+| SKILL.md行数 | 已精简至<200行 | SKILL-09 | ✅ 已解决 |
 
 ---
 
@@ -944,47 +949,35 @@ graph TD
 
 ## 7. 问题清单
 
-### SKILL-01: v2降级模式不可用
+### SKILL-01: v2降级模式不可用 ✅ 已解决
 
 - **严重级别**: P0 阻塞
-- **需求来源**: SKILL.md声明"MCP工具优先→脚本降级→文件系统兜底"
-- **当前状态**: MCP Server的degradation.py仅返回fallback响应，未实际调用scripts/目录下的Python脚本
-- **影响**: MCP Server不可用时，所有MCP工具调用将失败，系统完全无法运行
-- **修复方案**: 实现degradation.py到scripts/目录下Python脚本的实际调用链
-- **代码位置**: `scripts/knowledge_server/degradation.py`
+- **当前状态**: 已实现subprocess_utils异步降级调用链
+- **解决**: degradation.py已实现到scripts/目录下Python脚本的实际异步调用
 
-### SKILL-02: v2参考文档严重不足
+### SKILL-02: v2参考文档严重不足 ✅ 已解决
 
 - **严重级别**: P0 阻塞
-- **需求来源**: v1有72+参考文件，v2仅6个
-- **当前状态**: v2 references/仅包含mcp-tools.md、workflow-phases.md、quality-gates.md、agent-registry.md、knowledge-workflow-details.md、progressive-loading.md
-- **影响**: Agent和命令执行时无法获取详细参考（如编码规范、安全指南、桌面开发指南等）
-- **修复方案**: 从v1迁移关键参考文件到v2 references/，或通过MCP Resource提供
-- **代码位置**: `.trae/skills/xuansto-skill-v2/references/`
+- **当前状态**: v2 references/已扩展到75+文件
+- **解决**: 从v1迁移关键参考文件到v2 references/，并通过MCP Resource提供
 
-### SKILL-03: MCP Server版本与Skill版本不一致
+### SKILL-03: MCP Server版本与Skill版本不一致 ✅ 已解决
 
 - **严重级别**: P1 高
-- **当前状态**: MCP Server v3.5.0 vs Skill v8.0.0
-- **影响**: 用户难以判断版本兼容性，SKILL.md声明需要>=4.0.0但实际为3.5.0
-- **修复方案**: 在SKILL.md和MCP Server README中互相声明兼容版本；升级MCP Server到4.0.0+
-- **代码位置**: `.trae/skills/xuansto-skill-v2/SKILL.md` L43, `scripts/knowledge_server/mcp_server.py`
+- **当前状态**: MCP Server已升级到v8.0.0，与Skill版本一致
+- **解决**: 升级MCP Server到v8.0.0
 
-### SKILL-04: knowledge_search缺少inject/precipitate action文档
+### SKILL-04: knowledge_search读写分离 ✅ 已解决
 
 - **严重级别**: P1 高
-- **当前状态**: v1 SKILL.md声明knowledge_search支持retrieve/inject/precipitate三个action，v2 mcp-tools.md仅文档了retrieve
-- **影响**: 知识注入和经验沉淀功能无法使用
-- **修复方案**: 在mcp-tools.md中补充inject和precipitate action的参数和返回值文档
-- **代码位置**: `.trae/skills/xuansto-skill-v2/references/mcp-tools.md` L83-L148
+- **当前状态**: knowledge_search改为retrieve only（只读），所有写入操作通过knowledge_inject
+- **解决**: knowledge_search仅保留retrieve action，knowledge_inject处理inject/precipitate/delete
 
-### SKILL-05: server_health工具未在v2 mcp-tools.md中列出
+### SKILL-05: server_health工具未在v2 mcp-tools.md中列出 ✅ 已解决
 
 - **严重级别**: P1 高
-- **当前状态**: MCP Server实现了server_health工具，但v2 references/mcp-tools.md未包含
-- **影响**: 用户无法了解server_health工具的参数和返回值
-- **修复方案**: 在mcp-tools.md中补充server_health工具文档
-- **代码位置**: `.trae/skills/xuansto-skill-v2/references/mcp-tools.md`
+- **当前状态**: 已在mcp-tools.md中补充server_health工具文档
+- **解决**: 补充了server_health工具的参数和返回值文档
 
 ### SKILL-06: v2缺少评估配置文件
 
@@ -1048,8 +1041,8 @@ graph TD
 
 | 严重级别 | 数量 | 问题编号 |
 |----------|------|----------|
-| P0 阻塞 | 2 | SKILL-01, SKILL-02 |
-| P1 高 | 3 | SKILL-03, SKILL-04, SKILL-05 |
+| P0 阻塞 | 2 | SKILL-01 ✅, SKILL-02 ✅ |
+| P1 高 | 3 | SKILL-03 ✅, SKILL-04 ✅, SKILL-05 ✅ |
 | P2 中 | 3 | SKILL-06, SKILL-07, SKILL-10, SKILL-11 |
-| P3 低 | 3 | SKILL-08, SKILL-09, SKILL-12 |
-| **总计** | **12** | |
+| P3 低 | 3 | SKILL-08 ✅, SKILL-09 ✅, SKILL-12 |
+| **总计** | **12** | **7已解决，5待实施** |

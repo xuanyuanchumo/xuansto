@@ -7,7 +7,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from ..core.config import SKILL_ROOT, REFERENCES_DIR, TEMPLATES_DIR, SESSION_DIR, WORK_DIR, _resolve_skill_file
+from ..core.config import SKILL_ROOT, REFERENCES_DIR, TEMPLATES_DIR, SESSION_DIR, WORK_DIR, AGENTS_DIR, _resolve_skill_file
 from ..core.logging_config import get_logger
 from ..core.validator import validate_path_safety
 
@@ -30,6 +30,14 @@ def _degraded_resource(uri: str, error: str) -> str:
 
 
 def register(mcp: FastMCP) -> None:
+    """Register MCP Resources.
+
+    Resources are read-only snapshots of server state (e.g., config files,
+    reference documents, session history, metrics). They differ from Tools
+    which provide interactive operations with side effects. Use Resources
+    when clients need to inspect current state; use Tools (via config_manage,
+    agent_manage, etc.) when clients need to modify state or execute actions.
+    """
     @mcp.resource("xuansto://config/skill")
     def skill_config() -> str:
         try:
@@ -92,6 +100,41 @@ def register(mcp: FastMCP) -> None:
             return "# 无会话记录"
         except Exception as e:
             return _degraded_resource("xuansto://sessions/latest", str(e))
+
+    @mcp.resource("xuansto://sessions/{session_id}")
+    def session_by_id(session_id: str) -> str:
+        try:
+            safe_path, err = _is_safe_path(f"session-{session_id}.md", [SESSION_DIR])
+            if err or safe_path is None:
+                return f"Error: invalid session id '{session_id}' ({err})"
+            if safe_path.resolve().is_relative_to(SESSION_DIR.resolve()) and safe_path.exists():
+                return safe_path.read_text(encoding="utf-8")
+            SESSION_DIR.mkdir(parents=True, exist_ok=True)
+            for f in SESSION_DIR.glob(f"*{session_id}*"):
+                if f.is_file():
+                    return f.read_text(encoding="utf-8")
+            return f"Session '{session_id}' not found"
+        except Exception as e:
+            return _degraded_resource(f"xuansto://sessions/{session_id}", str(e))
+
+    @mcp.resource("xuansto://agents/{layer}/{name}")
+    def agent_by_layer_name(layer: str, name: str) -> str:
+        try:
+            agent_dir = AGENTS_DIR / layer
+            safe_path, err = _is_safe_path(f"{name}.md", [agent_dir])
+            if err or safe_path is None:
+                agent_dir_alt = AGENTS_DIR / layer
+                safe_path, err = _is_safe_path(f"{name}.md", [agent_dir_alt])
+                if err or safe_path is None:
+                    return f"Error: invalid agent path '{layer}/{name}' ({err})"
+            if safe_path.resolve().is_relative_to(AGENTS_DIR.resolve()) and safe_path.exists():
+                return safe_path.read_text(encoding="utf-8")
+            for f in AGENTS_DIR.rglob(f"{name}.md"):
+                if f.is_file():
+                    return f.read_text(encoding="utf-8")
+            return f"Agent '{layer}/{name}' not found"
+        except Exception as e:
+            return _degraded_resource(f"xuansto://agents/{layer}/{name}", str(e))
 
     @mcp.resource("xuansto://loading/status")
     def loading_status() -> str:
@@ -197,3 +240,44 @@ def register(mcp: FastMCP) -> None:
             return json.dumps(status, ensure_ascii=False, indent=2)
         except Exception as e:
             return _degraded_resource("xuansto://loading/status", str(e))
+
+    @mcp.resource("xuansto://metrics/summary")
+    def metrics_summary() -> str:
+        try:
+            metrics_path = WORK_DIR / "tool_metrics.json"
+            degr_path = WORK_DIR / "degradation_stats.json"
+            tool_metrics: dict[str, Any] = {}
+            degradation_stats: dict[str, int] = {}
+            if metrics_path.exists():
+                try:
+                    tool_metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, OSError):
+                    pass
+            if degr_path.exists():
+                try:
+                    degradation_stats = json.loads(degr_path.read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, OSError):
+                    pass
+            total_calls = sum(m.get("call_count", 0) for m in tool_metrics.values())
+            total_errors = sum(m.get("error_count", 0) for m in tool_metrics.values())
+            summary = {
+                "total_tools": len(tool_metrics),
+                "total_calls": total_calls,
+                "total_errors": total_errors,
+                "overall_error_rate": round(total_errors / max(total_calls, 1), 4),
+                "degradation_counts": degradation_stats,
+                "timestamp": time.time(),
+            }
+            return json.dumps(summary, ensure_ascii=False, indent=2)
+        except Exception as e:
+            return _degraded_resource("xuansto://metrics/summary", str(e))
+
+    @mcp.resource("xuansto://degradation/status")
+    def degradation_status() -> str:
+        try:
+            from ..core.degradation import get_degradation_manager
+            manager = get_degradation_manager()
+            status = manager.get_status()
+            return json.dumps(status, ensure_ascii=False, indent=2)
+        except Exception as e:
+            return _degraded_resource("xuansto://degradation/status", str(e))

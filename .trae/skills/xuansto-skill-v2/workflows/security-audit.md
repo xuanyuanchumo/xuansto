@@ -1,4 +1,5 @@
 ---
+> 权威来源：_yaml/security-audit.yaml（YAML为准，本文档为可读参考）
 metadata:
   name: 安全审计与合规验证工作流
   version: "3.2.0"

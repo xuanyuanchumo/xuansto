@@ -1,4 +1,5 @@
 ---
+> 权威来源：_yaml/sdd-tdd-fast.yaml（YAML为准，本文档为可读参考）
 metadata:
   name: SDD+TDD快速开发工作流
   version: "3.2.0"

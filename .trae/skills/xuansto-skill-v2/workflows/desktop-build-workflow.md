@@ -1,4 +1,5 @@
 ---
+> 权威来源：_yaml/desktop-build-workflow.yaml（YAML为准，本文档为可读参考）
 metadata:
   name: 桌面构建与发布工作流
   version: "3.2.0"

@@ -12,7 +12,24 @@ from ..models.schemas import ContextCompressInput
 
 logger = get_logger("context_compress")
 
+_HAS_TIKTOKEN = False
+_tiktoken_encoding = None
+try:
+    import tiktoken
+    _tiktoken_encoding = tiktoken.get_encoding("cl100k_base")
+    _HAS_TIKTOKEN = True
+except ImportError:
+    _HAS_TIKTOKEN = False
+except Exception:
+    _HAS_TIKTOKEN = False
+
+
 def _estimate_tokens(text: str) -> int:
+    if _HAS_TIKTOKEN and _tiktoken_encoding is not None:
+        try:
+            return len(_tiktoken_encoding.encode(text))
+        except Exception:
+            pass
     return max(1, len(text) // 4)
 
 def _split_into_semantic_chunks(content: str) -> list[dict[str, Any]]:
@@ -197,36 +214,52 @@ def register(mcp: FastMCP) -> None:
                     "compressed_tokens": original_tokens,
                     "compression_ratio": 1.0,
                     "strategy": strategy,
+                    "token_method": "tiktoken" if _HAS_TIKTOKEN else "char_estimate",
                 })
             if strategy == "semantic":
                 result = _semantic_compress(content, target_tokens)
+                actual_tokens = _estimate_tokens(result["compressed_content"])
+                deviation = actual_tokens - target_tokens
                 return make_success_response({
                     "compressed": result["compressed_content"],
                     "original_tokens": result["original_tokens"],
                     "compressed_tokens": result["compressed_tokens"],
+                    "actual_tokens": actual_tokens,
+                    "target_deviation": deviation,
                     "compression_ratio": result["ratio"],
                     "strategy": strategy,
+                    "token_method": "tiktoken" if _HAS_TIKTOKEN else "char_estimate",
                 })
             elif strategy == "selective":
                 result = _selective_compress(content, target_tokens, preserve_sections)
+                actual_tokens = _estimate_tokens(result["compressed_content"])
+                deviation = actual_tokens - target_tokens
                 return make_success_response({
                     "compressed": result["compressed_content"],
                     "original_tokens": result["original_tokens"],
                     "compressed_tokens": result["compressed_tokens"],
+                    "actual_tokens": actual_tokens,
+                    "target_deviation": deviation,
                     "compression_ratio": result["ratio"],
                     "strategy": strategy,
                     "preserved_chunks": result.get("preserved_chunks"),
                     "total_chunks": result.get("total_chunks"),
+                    "token_method": "tiktoken" if _HAS_TIKTOKEN else "char_estimate",
                 })
             elif strategy == "lossless":
                 compressed = _compress_lossless(content, target_tokens, preserve_sections)
                 compressed_tokens = _estimate_tokens(compressed)
+                actual_tokens = _estimate_tokens(compressed)
+                deviation = actual_tokens - target_tokens
                 return make_success_response({
                     "compressed": compressed,
                     "original_tokens": original_tokens,
                     "compressed_tokens": compressed_tokens,
+                    "actual_tokens": actual_tokens,
+                    "target_deviation": deviation,
                     "compression_ratio": round(compressed_tokens / original_tokens, 2) if original_tokens > 0 else 0,
                     "strategy": strategy,
+                    "token_method": "tiktoken" if _HAS_TIKTOKEN else "char_estimate",
                 })
             else:
                 return make_error_response(ValueError(f"未知策略: {strategy}，支持: semantic, selective, lossless"), error_code=ERR_VALIDATION)

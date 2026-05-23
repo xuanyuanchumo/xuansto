@@ -2,17 +2,23 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DisclosureTransition(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    from_phase: str = Field(description="源阶段名称")
-    to_phase: str = Field(description="目标阶段名称")
+    from_phase: str = Field(default="", description="源阶段名称")
+    to_phase: str = Field(default="", description="目标阶段名称")
     started_at: str | None = Field(default=None, description="转换开始时间(ISO8601)")
     completed_at: str | None = Field(default=None, description="转换完成时间(ISO8601)")
     resources_affected: list[str] = Field(default_factory=list, description="受影响的资源ID列表")
     status: Literal["pending", "in_progress", "completed", "failed"] = Field(default="pending", description="转换状态: pending/in_progress/completed/failed")
+    current_phase: str = Field(default="", description="当前阶段名称")
+    target_phase: str = Field(default="", description="目标阶段名称(状态机)")
+    required_resources: list[str] = Field(default_factory=list, description="转换所需资源列表")
+    estimated_tokens: int = Field(default=0, description="估算Token数量")
+    available_alternatives: list[str] = Field(default_factory=list, description="可用替代阶段列表")
+    transition_hint: str = Field(default="", description="转换提示信息")
 
 
 class SkillAnalyzeInput(BaseModel):
@@ -25,16 +31,12 @@ class SkillAnalyzeInput(BaseModel):
 
 class KnowledgeSearchInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["retrieve", "inject", "precipitate"] = Field(default="retrieve", description="操作类型: retrieve, inject, precipitate")
+    action: Literal["retrieve"] = Field(description="操作类型: retrieve")
     query: str | None = Field(default=None, description="搜索查询文本")
     top_k: int = Field(default=5, ge=1, le=50, description="返回结果数量上限")
     search_type: Literal["hybrid", "semantic_only", "keyword_only"] = Field(default="hybrid", description="搜索策略: hybrid, semantic_only, keyword_only")
     scope: Literal["general", "workspace", "experience"] | None = Field(default=None, description="限定搜索范围: general, workspace, experience")
     min_confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="最低置信度阈值")
-    content: str | None = Field(default=None, description="注入的知识内容(inject时使用)")
-    knowledge_type: Literal["general", "workspace", "experience"] = Field(default="general", description="知识类型(inject时使用): general, workspace, experience")
-    metadata: dict[str, Any] | None = Field(default=None, description="附加元数据(inject时使用)")
-    pattern_ids: list[str] | None = Field(default=None, description="模式ID列表(precipitate时使用)")
 
 
 class QualityGateCheckInput(BaseModel):
@@ -93,11 +95,18 @@ class WorkflowDispatchInput(BaseModel):
 
 class AgentStatusInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["list", "by_phase", "detail", "create", "match", "assign", "release", "instance_status", "destroy", "schedule"] = Field(description="操作类型: list, by_phase, detail, create, match, assign, release, instance_status, destroy, schedule")
+    action: Literal["list", "by_phase", "detail", "match", "merge"] = Field(description="操作类型: list, by_phase, detail, match, merge")
     phase: int | None = Field(default=None, ge=0, le=8, description="按阶段查询Agent(by_phase时使用, 0-8)")
     agent_name: str | None = Field(default=None, description="Agent名称(detail时使用)")
+    capabilities: list[str] | None = Field(default=None, description="Agent能力列表(match时使用)，如: ['code_review', 'testing']")
+    project_file_count: int | None = Field(default=None, ge=0, description="项目文件数量(merge时使用)，用于判断是否自动合并")
+
+
+class AgentManageInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    action: Literal["create", "assign", "release", "instance_status", "destroy", "schedule"] = Field(description="操作类型: create, assign, release, instance_status, destroy, schedule")
     agent_type: str | None = Field(default=None, description="Agent类型(create时使用)，如: developer, reviewer, tester")
-    capabilities: list[str] | None = Field(default=None, description="Agent能力列表(create/match时使用)，如: ['code_review', 'testing']")
+    capabilities: list[str] | None = Field(default=None, description="Agent能力列表(create时使用)，如: ['code_review', 'testing']")
     agent_id: str | None = Field(default=None, description="Agent实例ID(assign/release/instance_status/destroy时使用)")
     task: str | None = Field(default=None, description="分配的任务描述(assign时使用)")
 
@@ -112,18 +121,19 @@ class HookManageInput(BaseModel):
 
 class ResourceLoadStatusInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["status", "preload", "cache", "clear_cache", "loading_progress", "token_report"] = Field(description="操作类型: status, preload, cache, clear_cache, loading_progress, token_report")
+    action: Literal["status", "preload", "cache", "clear_cache", "loading_progress", "token_report", "disclosure_transition"] = Field(description="操作类型: status, preload, cache, clear_cache, loading_progress, token_report, disclosure_transition")
     phase: int | None = Field(default=None, ge=0, le=3, description="目标加载阶段(0-3): 0=骨架, 1=功能, 2=增强, 3=完整")
     resource_ids: list[str] | None = Field(default=None, description="指定资源ID列表")
     resource_uris: list[str] | None = Field(default=None, description="资源URI列表(preload时使用)")
     priority: Literal["critical", "normal", "background"] = Field(default="normal", description="预加载优先级(preload时使用): critical, normal, background")
     batch_mode: bool = Field(default=False, description="是否批量预加载模式(preload时使用)，批量模式并发加载多个资源")
     auto_upgrade: bool = Field(default=False, description="自动升级阶段(preload时使用)，当Token预算超限时自动推进到下一阶段")
+    target_phase: str | None = Field(default=None, description="目标阶段名称(disclosure_transition时使用): skeleton, functional, enhanced, full")
 
 
 class ServerHealthInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["check", "negotiate_version"] = Field(default="check", description="操作类型: check, negotiate_version")
+    action: Literal["check", "negotiate_version", "capabilities"] = Field(description="操作类型: check, negotiate_version, capabilities")
     client_version: str | None = Field(default=None, description="客户端API版本(negotiate_version时使用)")
 
 
@@ -181,13 +191,27 @@ class ProjectInitInput(BaseModel):
 
 class KnowledgeInjectInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["inject", "list_available", "precipitate"] = Field(default="inject", description="操作类型: inject, list_available, precipitate")
+    action: Literal["inject", "list_available", "precipitate", "add", "update"] = Field(description="操作类型: inject, list_available, precipitate, add, update")
     topics: list[str] | None = Field(default=None, description="知识主题列表(inject时使用)")
     scope: Literal["general", "workspace", "experience"] = Field(default="general", description="知识范围: general, workspace, experience")
     max_tokens: int = Field(default=5000, ge=100, le=50000, description="最大注入Token数量(inject时使用)")
     relevance_threshold: float = Field(default=0.5, ge=0.0, le=1.0, description="相关性阈值(inject时使用)")
     category: str | None = Field(default=None, description="经验分类(precipitate时使用)")
-    title: str | None = Field(default=None, description="经验标题(precipitate时使用)")
-    content: str | None = Field(default=None, description="经验内容(precipitate时使用)")
-    tags: list[str] | None = Field(default=None, description="标签列表(precipitate时使用)")
+    title: str | None = Field(default=None, description="经验标题(precipitate/add/update时使用)")
+    content: str | None = Field(default=None, description="经验内容(precipitate/add/update时使用)")
+    tags: list[str] | None = Field(default=None, description="标签列表(precipitate/add/update时使用)")
     confidence: float = Field(default=0.8, ge=0.0, le=1.0, description="置信度(precipitate时使用)")
+    entry_id: str | None = Field(default=None, description="知识条目ID(update时使用)")
+
+
+class MetricsReportInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    action: Literal["query", "summary"] = Field(description="操作类型: query, summary")
+    tool_name: str | None = Field(default=None, description="工具名称(query时使用)")
+    time_range: Literal["1h", "6h", "24h", "7d", "all"] = Field(default="all", description="时间范围: 1h, 6h, 24h, 7d, all")
+    metric_type: Literal["calls", "errors", "latency", "all"] = Field(default="all", description="指标类型: calls, errors, latency, all")
+
+
+class ConfigManageInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    action: Literal["reload", "status", "validate"] = Field(description="操作类型: reload, status, validate")

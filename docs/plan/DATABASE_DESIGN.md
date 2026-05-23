@@ -1,6 +1,6 @@
 # xuansto-skill 数据存储设计文档
 
-> 版本: 1.0.0 | 更新日期: 2026-05-23 | 状态: 草案
+> 版本: 2.0.0 | 更新日期: 2026-05-23 | 状态: 已实施
 
 ---
 
@@ -22,8 +22,8 @@
 
 | 介质 | 数量 | 用途 | 一致性保障 |
 |------|------|------|-----------|
-| SQLite (WAL) | 2 | 知识库索引、决策日志 | PRAGMA journal_mode=WAL + busy_timeout=5000 |
-| ChromaDB (PersistentClient) | 1 | 向量语义搜索 | PersistentClient 本地持久化 |
+| SQLite (WAL) | 1 | 统一存储(xuansto.db, 8表) | PRAGMA journal_mode=WAL + busy_timeout=5000 + 写入锁 |
+| ChromaDB (PersistentClient) | 1 (可选) | 向量语义搜索(可选增强) | PersistentClient 本地持久化, HybridSearchEngine自动检测 |
 | JSON 文件 | ~8类 | 会话状态、工作流状态、资源加载状态、降级状态、指标快照、模式文件 | atomic_write (tmpfile+os.replace) |
 | YAML 文件 | ~4类 | 技能配置、降级配置、Hook配置、工作流定义 | 直接读写 |
 | Markdown 文件 | ~3类 | 会话记录、知识文档、参考文档 | 直接读写 |
@@ -47,6 +47,7 @@
 │   └── scripts/*.py                         # 降级脚本
 │
 ├── .xuansto/                                # WORK_DIR (运行时工作目录)
+│   ├── xuansto.db                           # 统一SQLite存储(8表, WAL模式)
 │   ├── sessions/                            # 会话持久化
 │   │   ├── session-{timestamp}.md           # 会话快照
 │   │   └── current.json                     # 当前追踪状态
@@ -54,12 +55,8 @@
 │   │   └── pattern-{timestamp}.json
 │   ├── workflows/                           # 工作流实例
 │   │   └── {workflow_id}.json
-│   ├── workflow_states.json                 # 活跃工作流汇总
-│   ├── resource_state.json                  # 资源加载状态
-│   ├── degradation_state.json               # 降级管理器状态
-│   ├── decisions.db                         # 决策日志(SQLite)
-│   ├── decisions.json                       # 决策日志(旧格式,已迁移)
-│   └── metrics_{timestamp}.json             # 指标快照
+│   ├── workflow_snapshots/                  # 工作流快照(项目级)
+│   └── metrics_{timestamp}.json             # 指标快照(旧格式,已迁移到xuansto.db)
 │
 ├── .xuansto/workflow_snapshots/             # 工作流快照(项目级)
 │   └── {workflow_id}_phase{N}_{ts}.json.gz
@@ -71,8 +68,7 @@
         ├── workspace/                       # 工作区知识
         ├── experience/                      # 经验沉淀
         └── index/                           # 索引
-            ├── knowledge.db                 # SQLite FTS5
-            └── chroma_db/                   # ChromaDB向量索引
+            └── chroma_db/                   # ChromaDB向量索引(可选)
 ```
 
 ### 1.3 关键路径解析逻辑
@@ -89,7 +85,7 @@
 
 ### 2.1 知识库条目 (knowledge_entries)
 
-**存储**: SQLite (`knowledge.db`) + ChromaDB (`chroma_db/`) + Markdown 文件
+**存储**: xuansto.db (统一SQLite) + ChromaDB (可选, `chroma_db/`) + Markdown 文件
 
 ```json
 {
@@ -99,13 +95,14 @@
   "type": "general | workspace | experience",
   "metadata_json": "{\"source\": \"mcp_inject\"}",
   "created_at": "2026-05-23T12:00:00+00:00",
-  "updated_at": "2026-05-23T12:00:00+00:00"
+  "updated_at": "2026-05-23T12:00:00+00:00",
+  "deleted_at": null
 }
 ```
 
-**FTS5 虚拟表**: `knowledge_fts` (content, title, type, tokenize='unicode61')
+**FTS5 虚拟表**: `knowledge_fts` (content, title, type, tokenize='unicode61') — 位于 xuansto.db
 
-**ChromaDB 集合**: `knowledge` (ids, documents, metadatas)
+**ChromaDB 集合**: `knowledge` (ids, documents, metadatas) — 可选，HybridSearchEngine自动检测
 
 **Markdown 文件** (注入时生成):
 ```yaml
@@ -120,7 +117,7 @@ metadata: {"source": "mcp_inject"}
 
 ### 2.2 决策日志 (decisions)
 
-**存储**: SQLite (`decisions.db`) + 内存缓存
+**存储**: xuansto.db (统一SQLite) + 内存缓存
 
 ```json
 {
@@ -361,7 +358,7 @@ fallback_map:
 
 | 实体 | Create | Read | Update | Delete | 触发条件 |
 |------|--------|------|--------|--------|---------|
-| knowledge_entries | knowledge_search(inject) | knowledge_search(retrieve) | 无(仅insert) | 无 | 用户注入知识 |
+| knowledge_entries | knowledge_inject(inject) | knowledge_search(retrieve,只读) | 无(仅insert) | knowledge_inject(delete,软删除deleted_at) | 用户注入知识 |
 | decisions | decision_log(log) | decision_log(list/query) | decision_log(update) | 无 | 决策记录/状态变更 |
 | session快照 | session_manage(save) | session_manage(load) | 无(追加式) | _cleanup_old_sessions (max=10) | 会话保存/自动清理 |
 | session追踪 | session_manage(track) | session_manage(restore) | session_manage(track) | 无 | 阶段推进/任务变更 |
@@ -377,14 +374,14 @@ fallback_map:
 #### 知识检索降级链
 
 ```
-ChromaDB语义搜索 → SQLite FTS5 BM25 → 关键词匹配(TF-IDF)
-     ↓ 失败              ↓ 失败            ↓ 最终兜底
-   返回空            返回空            返回关键词结果
+HybridSearchEngine自动检测 → ChromaDB语义搜索(可选) → SQLite FTS5 BM25 → 关键词匹配(TF-IDF)
+     ↓ 失败                        ↓ 失败              ↓ 失败            ↓ 最终兜底
+   返回空                       返回空              返回空            返回关键词结果
 ```
 
 触发条件: `knowledge_search(action="retrieve")` 时按 `search_type` 参数选择策略:
-- `hybrid`: 依次尝试 ChromaDB → SQLite → 关键词
-- `semantic_only`: 仅 ChromaDB，失败回退 SQLite → 关键词
+- `hybrid`: HybridSearchEngine自动检测，依次尝试 ChromaDB(可选) → SQLite → 关键词
+- `semantic_only`: 仅 ChromaDB(可选)，失败回退 SQLite → 关键词
 - `keyword_only`: 仅 SQLite → 关键词
 
 #### 渐进式资源加载
@@ -424,7 +421,7 @@ knowledge/index/chroma/ (旧路径) → knowledge/index/chroma_db/ (新路径)
 |------|---------|---------|---------|
 | session快照 | `_cleanup_old_sessions` | 每次save后 | 保留最近10个 |
 | workflow快照 | `_cleanup_snapshots` | 每次save_snapshot后 | max=20/workflow, TTL=30天 |
-| metrics快照 | 无自动清理 | 手动 | 按时间戳命名，无上限 |
+| metrics快照 | TTL自动清理 | xuansto.db写入后 | TTL=30天, database.py自动清理 |
 | 资源缓存 | `_cleanup_cache` | preload时 | TTL=3600s, max=100条 |
 | 内存降级事件 | 列表截断 | record时 | max=200条 |
 | 内存质量门禁记录 | 列表截断 | record时 | max=500条 |
@@ -454,6 +451,7 @@ class KnowledgeEntry:
     token_count: int                 # 估算Token数(用于预算控制)
     embedding_status: str            # embedding状态: pending | indexed | failed
     file_path: str | None            # 关联Markdown文件路径
+    deleted_at: str | None           # 软删除时间(ISO8601), null=未删除
 ```
 
 #### DecisionRecord — 决策记录
@@ -692,6 +690,12 @@ class ToolMetric:
 | MIG-03 | FTS5 默认tokenizer | FTS5 unicode61 tokenizer | ✅ 已完成 | `_migrate_fts5_to_unicode61()` |
 | MIG-04 | knowledge_entries 缺失列 | MCP标准列 | ✅ 已完成 | schema migration in `_ensure_knowledge_index()` |
 | MIG-05 | resource_state.json v1(list) | v3(dict) | ✅ 已完成 | `_load_resource_state()` |
+| MIG-06 | SessionState 分散存储 | xuansto.db session_states表 | ✅ 已完成 | `database.py` 统一管理 |
+| MIG-07 | ErrorPattern 缺乏分类 | 增强字段(pattern_id/error_type/resolution) | ✅ 已完成 | `database.py` error_patterns表 |
+| MIG-08 | WorkflowInstance 关联缺失 | gate_results/phase_snapshots关联 | ✅ 已完成 | `database.py` workflow_instances表 |
+| MIG-09 | Metrics 分散JSON文件 | xuansto.db tool_metrics表+TTL清理 | ✅ 已完成 | `database.py` 统一存储+TTL |
+| MIG-10 | knowledge.db + decisions.db 分散 | 统一xuansto.db (8表) | ✅ 已完成 | `database.py` 合并为单一数据库 |
+| MIG-11 | knowledge_entries 无软删除 | 添加deleted_at字段 | ✅ 已完成 | `knowledge_inject(delete)` 软删除 |
 
 ### 5.2 重构迁移计划
 
@@ -787,104 +791,36 @@ def migrate_session_v1_to_v2():
 
 ### 6.2 推荐改进方案
 
-#### DB-01: SQLite 统一状态存储
+#### DB-01: SQLite 统一状态存储 ✅ 已实施
 
 **建议**: 将分散的 JSON 状态文件统一迁移到 SQLite
 
-**适用实体**: ResourceLoadState, DegradationState, WorkflowInstance, SessionState, ErrorPattern
+**实施结果**: 已创建 `database.py` 统一管理 `xuansto.db` (8表)，替代分散的 knowledge.db、decisions.db 和 JSON 文件
 
-**理由**:
-- 消除大量 `atomic_write` + JSON 序列化/反序列化开销
-- 获得 ACID 事务保障，无需手动实现原子写入
-- 支持索引查询，替代内存缓存的部分功能
-- WAL 模式支持读写并发
-
-**Schema 草案**:
+**Schema (已实施)**:
 ```sql
-CREATE TABLE IF NOT EXISTS workflow_instances (
-    workflow_id TEXT PRIMARY KEY,
-    workflow TEXT NOT NULL,
-    project_path TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'running',
-    current_phase INTEGER NOT NULL DEFAULT 0,
-    started_at TEXT NOT NULL,
-    completed_at TEXT,
-    aborted_at TEXT,
-    completed_phases TEXT NOT NULL DEFAULT '[]',
-    phase_definitions TEXT NOT NULL DEFAULT '[]',
-    gate_results TEXT NOT NULL DEFAULT '{}',
-    updated_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS session_states (
-    session_id TEXT PRIMARY KEY,
-    current_phase INTEGER,
-    current_task TEXT,
-    decisions TEXT NOT NULL DEFAULT '[]',
-    pending_tasks TEXT NOT NULL DEFAULT '[]',
-    completed_phases TEXT NOT NULL DEFAULT '[]',
-    project_path TEXT,
-    workflow_id TEXT,
-    token_usage TEXT NOT NULL DEFAULT '{}',
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS resource_states (
-    resource_id TEXT PRIMARY KEY,
-    phase INTEGER NOT NULL,
-    type TEXT NOT NULL,
-    path TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'available',
-    token_estimate INTEGER NOT NULL DEFAULT 0,
-    content_hash TEXT,
-    last_loaded_at TEXT,
-    cache_ttl INTEGER NOT NULL DEFAULT 3600
-);
-
-CREATE TABLE IF NOT EXISTS error_patterns (
-    pattern_id TEXT PRIMARY KEY,
-    error TEXT NOT NULL,
-    error_type TEXT NOT NULL DEFAULT 'unknown',
-    count INTEGER NOT NULL DEFAULT 1,
-    confidence REAL NOT NULL DEFAULT 0.4,
-    status TEXT NOT NULL DEFAULT 'draft',
-    resolution TEXT,
-    created_at TEXT NOT NULL,
-    verified INTEGER NOT NULL DEFAULT 0
-);
-
-CREATE TABLE IF NOT EXISTS degradation_states (
-    component_name TEXT PRIMARY KEY,
-    level TEXT NOT NULL DEFAULT 'normal',
-    last_check_time REAL NOT NULL DEFAULT 0.0,
-    last_check_healthy INTEGER NOT NULL DEFAULT 1,
-    recovery_attempts INTEGER NOT NULL DEFAULT 0,
-    next_recovery_time REAL NOT NULL DEFAULT 0.0,
-    degraded_since REAL,
-    updated_at TEXT NOT NULL
-);
+-- xuansto.db 8表:
+-- 1. knowledge_entries (含FTS5虚拟表knowledge_fts, 含deleted_at软删除)
+-- 2. decisions (含FTS5虚拟表decisions_fts)
+-- 3. session_states
+-- 4. workflow_instances
+-- 5. resource_states
+-- 6. error_patterns
+-- 7. degradation_states
+-- 8. tool_metrics (含TTL自动清理)
 ```
 
-#### DB-02: ChromaDB 可选化 + 嵌入模型解耦
+#### DB-02: ChromaDB 可选化 + 嵌入模型解耦 ✅ 已实施
 
 **建议**: 将 ChromaDB 从必需依赖降级为可选增强
 
-**方案**:
-1. 默认使用 SQLite FTS5 + BM25 作为主搜索引擎
-2. ChromaDB 作为可选语义增强层，仅在安装时启用
-3. 搜索引擎注册表机制已实现 (`SearchEngine` Protocol)，保持不变
-4. 添加本地嵌入模型支持 (如 `sentence-transformers`)，减少外部依赖
+**实施结果**: ChromaDB已改为可选依赖，HybridSearchEngine自动检测可用性；默认使用 SQLite FTS5 + BM25
 
-#### DB-03: 指标存储迁移到 SQLite
+#### DB-03: 指标存储迁移到 SQLite ✅ 已实施
 
-**建议**: 创建 `metrics.db` 替代时间戳命名的 JSON 文件
+**建议**: 创建 `xuansto.db` tool_metrics 表替代时间戳命名的 JSON 文件
 
-**优势**:
-- 支持时间范围查询
-- 自动清理过期数据
-- 聚合统计更高效
-- 避免文件系统膨胀
+**实施结果**: tool_metrics表已创建，支持时间范围查询、TTL自动清理(30天)、聚合统计
 
 #### DB-04: 会话快照双格式存储
 
@@ -922,14 +858,14 @@ CREATE TABLE IF NOT EXISTS degradation_states (
 
 | 实体 | 当前存储 | 推荐存储 | 理由 |
 |------|---------|---------|------|
-| KnowledgeEntry | SQLite + ChromaDB + MD | SQLite + ChromaDB(可选) + MD | 保持不变，ChromaDB降为可选 |
-| DecisionRecord | SQLite + 内存缓存 | SQLite | 保持不变，减少内存缓存依赖 |
-| SessionState | MD + JSON | SQLite + MD(双写) | SQLite索引+MD人类可读 |
-| WorkflowInstance | JSON + 内存 + gzip | SQLite + gzip快照 | SQLite主存储，gzip快照保留 |
-| ResourceLoadState | JSON | SQLite | 查询频繁，需事务保障 |
-| DegradationState | JSON + 内存 | SQLite + 内存 | SQLite持久化+内存热路径 |
-| ErrorPattern | JSON | SQLite | 结构化查询需求 |
-| MetricsSnapshot | JSON文件 | SQLite | 时间范围查询+自动清理 |
+| KnowledgeEntry | xuansto.db + ChromaDB(可选) + MD | xuansto.db + ChromaDB(可选) + MD | ✅ 已实施，ChromaDB降为可选，含软删除 |
+| DecisionRecord | xuansto.db + 内存缓存 | xuansto.db | ✅ 已实施，减少内存缓存依赖 |
+| SessionState | xuansto.db + MD(双写) | xuansto.db + MD(双写) | ✅ 已实施，SQLite索引+MD人类可读 |
+| WorkflowInstance | xuansto.db + gzip快照 | xuansto.db + gzip快照 | ✅ 已实施，SQLite主存储，gzip快照保留 |
+| ResourceLoadState | xuansto.db | xuansto.db | ✅ 已实施，查询频繁，需事务保障 |
+| DegradationState | xuansto.db + 内存 | xuansto.db + 内存 | ✅ 已实施，SQLite持久化+内存热路径 |
+| ErrorPattern | xuansto.db | xuansto.db | ✅ 已实施，结构化查询需求 |
+| MetricsSnapshot | xuansto.db (tool_metrics表) | xuansto.db | ✅ 已实施，时间范围查询+TTL自动清理 |
 | SkillConfig | YAML | YAML + Pydantic校验 | 保持人类可读，增加校验 |
 | FallbackConfig | YAML | YAML + Pydantic校验 | 同上 |
 
@@ -937,17 +873,17 @@ CREATE TABLE IF NOT EXISTS degradation_states (
 
 ## 7. 问题清单
 
-| 编号 | 严重度 | 描述 | 影响 | 建议 |
-|------|--------|------|------|------|
-| DB-01 | 高 | JSON状态文件无原子性保障 | 并发写入可能导致数据损坏 | 统一迁移到SQLite |
-| DB-02 | 高 | ChromaDB降级频繁，影响语义搜索 | 知识检索经常回退到BM25 | ChromaDB可选化+本地嵌入模型 |
-| DB-03 | 中 | 会话状态分散在MD和JSON中 | 关联查询困难，数据不一致 | SessionState双格式存储 |
-| DB-04 | 中 | 指标文件无自动清理 | 长期运行后文件系统膨胀 | 迁移到SQLite+TTL清理 |
-| DB-05 | 中 | 内存缓存无持久化 | 进程重启后缓存全部丢失 | 关键缓存持久化到SQLite |
-| DB-06 | 中 | YAML配置无Schema校验 | 配置错误仅在运行时暴露 | 添加Pydantic校验层 |
-| DB-07 | 低 | ErrorPattern缺乏分类体系 | 模式匹配效率低 | 添加error_type分类字段 |
-| DB-08 | 低 | WorkflowInstance与Decision无显式关联 | 无法追溯决策来源 | 添加workflow_id关联字段 |
-| DB-09 | 低 | knowledge_entries无软删除 | 注入的知识无法撤销 | 添加deleted_at字段实现软删除 |
-| DB-10 | 低 | 资源缓存无LRU淘汰策略 | 缓存可能占用过多内存 | 实现LRU缓存淘汰 |
-| DB-11 | 中 | 多个SQLite数据库分散 | 连接管理复杂，事务跨库困难 | 考虑合并为单一数据库 |
-| DB-12 | 低 | 快照文件无加密 | 敏感项目信息可能泄露 | 可选加密快照存储 |
+| 编号 | 严重度 | 描述 | 影响 | 建议 | 状态 |
+|------|--------|------|------|------|------|
+| DB-01 | 高 | JSON状态文件无原子性保障 | 并发写入可能导致数据损坏 | 统一迁移到SQLite | ✅ 已解决 |
+| DB-02 | 高 | ChromaDB降级频繁，影响语义搜索 | 知识检索经常回退到BM25 | ChromaDB可选化+HybridSearchEngine | ✅ 已解决 |
+| DB-03 | 中 | 会话状态分散在MD和JSON中 | 关联查询困难，数据不一致 | SessionState双格式存储 | ✅ 已解决 |
+| DB-04 | 中 | 指标文件无自动清理 | 长期运行后文件系统膨胀 | 迁移到SQLite+TTL清理 | ✅ 已解决 |
+| DB-05 | 中 | 内存缓存无持久化 | 进程重启后缓存全部丢失 | 关键缓存持久化到SQLite | ✅ 已解决 |
+| DB-06 | 中 | YAML配置无Schema校验 | 配置错误仅在运行时暴露 | 添加Pydantic校验层 | 待实施 |
+| DB-07 | 低 | ErrorPattern缺乏分类体系 | 模式匹配效率低 | 添加error_type分类字段 | ✅ 已解决 |
+| DB-08 | 低 | WorkflowInstance与Decision无显式关联 | 无法追溯决策来源 | 添加workflow_id关联字段 | ✅ 已解决 |
+| DB-09 | 低 | knowledge_entries无软删除 | 注入的知识无法撤销 | 添加deleted_at字段实现软删除 | ✅ 已解决 |
+| DB-10 | 低 | 资源缓存无LRU淘汰策略 | 缓存可能占用过多内存 | 实现LRU缓存淘汰 | ✅ 已解决(cache.py) |
+| DB-11 | 中 | 多个SQLite数据库分散 | 连接管理复杂，事务跨库困难 | 合并为单一数据库 | ✅ 已解决(xuansto.db) |
+| DB-12 | 低 | 快照文件无加密 | 敏感项目信息可能泄露 | 可选加密快照存储 | ✅ 已解决(crypto.py AES-256-GCM) |

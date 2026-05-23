@@ -1,36 +1,24 @@
 from __future__ import annotations
 
-import json
 import math
 import sqlite3
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from ..core import atomic_write
 from ..core.config import (
-    SKILL_ROOT,
-    KNOWLEDGE_DB_PATH,
     KNOWLEDGE_CHROMA_PATH,
+    KNOWLEDGE_DB_PATH,
+    KNOWLEDGE_EXPERIENCE_DIR,
     KNOWLEDGE_GENERAL_DIR,
     KNOWLEDGE_WORKSPACE_DIR,
-    KNOWLEDGE_EXPERIENCE_DIR,
-    WORK_DIR,
-    PATTERNS_DIR,
     REFERENCES_DIR,
 )
-from ..core.errors import make_error_response, make_success_response, ERR_VALIDATION
+from ..core.errors import ERR_VALIDATION, make_error_response, make_success_response
 from ..core.logging_config import get_logger
-from ..core.search_engine import (
-    SearchResult,
-    get_search_engine,
-    ChromaDBSearchEngine,
-    SimpleSearchEngine,
-    SQLiteFTSSearchEngine,
-)
+from ..core.search_engine import get_search_engine
 from ..core.validator import validate_input
 from ..models.schemas import KnowledgeSearchInput
 
@@ -71,7 +59,7 @@ def _migrate_fts5_to_unicode61(conn) -> None:
         conn.execute("DROP TABLE IF EXISTS knowledge_fts")
 
     conn.execute("""
-        CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts 
+        CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts
         USING fts5(content, title, type, content=knowledge_entries, content_rowid=rowid, tokenize='unicode61')
     """)
     conn.execute("""
@@ -301,182 +289,32 @@ def _keyword_fallback_search(query: str, top_k: int, scope: str | None) -> dict[
     return {"results": results, "total": len(results), "strategy": "keyword_tfidf"}
 
 
-def _inject_knowledge(content: str, knowledge_type: str, metadata: dict[str, Any] | None) -> dict[str, Any]:
-    type_dir_map = {
-        "general": KNOWLEDGE_GENERAL_DIR,
-        "workspace": KNOWLEDGE_WORKSPACE_DIR,
-        "experience": KNOWLEDGE_EXPERIENCE_DIR,
-    }
-    target_dir = type_dir_map.get(knowledge_type, KNOWLEDGE_GENERAL_DIR)
-    target_dir.mkdir(parents=True, exist_ok=True)
-
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    filename = f"injected-{timestamp}.md"
-    filepath = target_dir / filename
-
-    meta_str = json.dumps(metadata or {}, ensure_ascii=False)
-    frontmatter = (
-        f"---\n"
-        f"type: injected\n"
-        f"knowledge_type: {knowledge_type}\n"
-        f"injected_at: {timestamp}\n"
-        f"metadata: {meta_str}\n"
-        f"---\n"
-        f"{content}\n"
-    )
-    atomic_write(filepath, frontmatter)
-
-    indexed = False
-    try:
-        conn = _get_db_connection(KNOWLEDGE_DB_PATH)
-        try:
-            cursor = conn.cursor()
-            cursor.execute("PRAGMA table_info(knowledge_entries)")
-            existing_cols = {row[1] for row in cursor.fetchall()}
-            inject_cols = _MCP_STANDARD_COLUMNS & existing_cols
-            if not inject_cols.issuperset({"id", "title", "content"}):
-                logger.warning(
-                    "Cannot inject: table missing required columns (has %s, need id/title/content)",
-                    existing_cols,
-                )
-            else:
-                now = datetime.now(timezone.utc).isoformat()
-                col_values_map: dict[str, str] = {
-                    "id": filename,
-                    "title": filename,
-                    "content": content,
-                    "type": knowledge_type,
-                    "metadata_json": meta_str,
-                    "created_at": now,
-                    "updated_at": now,
-                }
-                ordered_cols = sorted(_MCP_STANDARD_COLUMNS & existing_cols)
-                values = [col_values_map[c] for c in ordered_cols]
-                col_list = ", ".join(ordered_cols)
-                placeholders = ", ".join("?" for _ in ordered_cols)
-                cursor.execute(
-                    f"INSERT INTO knowledge_entries ({col_list}) VALUES ({placeholders})",
-                    values,
-                )
-                conn.commit()
-                indexed = True
-        finally:
-            conn.close()
-    except Exception as exc:
-        logger.warning("Failed to index injected knowledge: %s", exc)
-
-    chroma_indexed = False
-    if indexed:
-        try:
-            import chromadb
-            client = chromadb.PersistentClient(path=str(KNOWLEDGE_CHROMA_PATH))
-            collection = client.get_or_create_collection("knowledge")
-            collection.upsert(
-                ids=[filename],
-                documents=[content],
-                metadatas=[{"title": filename, "type": knowledge_type, "source": "mcp_inject"}],
-            )
-            chroma_indexed = True
-        except ImportError:
-            logger.warning("ChromaDB not available, skipping vector index for injected knowledge")
-        except Exception as exc:
-            logger.warning("Failed to index injected knowledge in ChromaDB: %s", exc)
-
-    return {
-        "injected_id": filename,
-        "path": str(filepath),
-        "knowledge_type": knowledge_type,
-        "indexed": indexed,
-        "chroma_indexed": chroma_indexed,
-    }
-
-
-def _precipitate_experience(pattern_ids: list[str]) -> dict[str, Any]:
-    patterns_dir = PATTERNS_DIR
-    loaded_patterns: list[dict[str, Any]] = []
-    not_found: list[str] = []
-
-    for pid in pattern_ids:
-        pattern_file = patterns_dir / f"{pid}.json"
-        if pattern_file.exists():
-            try:
-                data = json.loads(pattern_file.read_text(encoding="utf-8"))
-                loaded_patterns.append(data)
-            except Exception:
-                not_found.append(pid)
-        else:
-            not_found.append(pid)
-
-    error_type_counts: dict[str, int] = {}
-    for pattern in loaded_patterns:
-        error_type = pattern.get("error_type", pattern.get("type", "unknown"))
-        error_type_counts[error_type] = error_type_counts.get(error_type, 0) + 1
-
-    themes: list[str] = []
-    for etype, count in sorted(error_type_counts.items(), key=lambda x: -x[1]):
-        themes.append(f"- {etype}: 出现 {count} 次")
-
-    recommendations: list[str] = []
-    if error_type_counts:
-        top_error = max(error_type_counts, key=lambda k: error_type_counts[k])
-        recommendations.append(f"- 重点关注 {top_error} 类问题，出现频率最高")
-        recommendations.append("- 建议针对高频错误类型编写防御性代码和自动化测试")
-    if not_found:
-        recommendations.append(f"- {len(not_found)} 个模式文件未找到，建议补充模式数据")
-
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    source_list = "\n".join(f"- {pid}" for pid in pattern_ids)
-    themes_section = "\n".join(themes) if themes else "- 无共性模式"
-    recommendations_section = "\n".join(recommendations) if recommendations else "- 暂无建议"
-
-    doc = (
-        f"# 经验沉淀 - {timestamp}\n"
-        f"\n"
-        f"## 模式来源\n"
-        f"{source_list}\n"
-        f"\n"
-        f"## 共性分析\n"
-        f"{themes_section}\n"
-        f"\n"
-        f"## 建议\n"
-        f"{recommendations_section}\n"
-    )
-
-    KNOWLEDGE_EXPERIENCE_DIR.mkdir(parents=True, exist_ok=True)
-    filename = f"precipitated-{timestamp}.md"
-    filepath = KNOWLEDGE_EXPERIENCE_DIR / filename
-    atomic_write(filepath, doc)
-
-    return {
-        "precipitated_id": filename,
-        "path": str(filepath),
-        "patterns_analyzed": len(loaded_patterns),
-        "themes_found": len(themes),
-    }
-
-
 def register(mcp: FastMCP) -> None:
     @mcp.tool(
         annotations=ToolAnnotations(
-            readOnlyHint=False,
+            readOnlyHint=True,
             destructiveHint=False,
-            idempotentHint=False,
-            openWorldHint=True,
+            idempotentHint=True,
+            openWorldHint=False,
         )
     )
     async def knowledge_search(
-        action: str = "retrieve",
+        action: str,
         query: str | None = None,
         top_k: int = 5,
         search_type: str = "hybrid",
         scope: str | None = None,
         min_confidence: float = 0.0,
-        content: str | None = None,
-        knowledge_type: str = "general",
-        metadata: dict[str, Any] | None = None,
-        pattern_ids: list[str] | None = None,
     ) -> dict[str, Any]:
-        """三层知识库（通用/工作区/经验）混合检索引擎。支持语义搜索(ChromaDB)、关键词搜索(SQLite FTS5)和混合模式，自动降级。同时支持inject注入知识和precipitate经验沉淀。"""
+        """三层知识库（通用/工作区/经验）混合检索引擎。支持语义搜索(ChromaDB)、关键词搜索(SQLite FTS5)和混合模式，自动降级。仅支持retrieve操作，写入操作请使用knowledge_inject工具。"""
+        if action in ("inject", "precipitate"):
+            return make_error_response(
+                ValueError(
+                    f"action='{action}' is not supported by knowledge_search. "
+                    f"Use the knowledge_inject tool for write operations (inject, precipitate, add, update)."
+                ),
+                error_code=ERR_VALIDATION,
+            )
         validated, err = validate_input(
             KnowledgeSearchInput,
             action=action,
@@ -485,29 +323,11 @@ def register(mcp: FastMCP) -> None:
             search_type=search_type,
             scope=scope,
             min_confidence=min_confidence,
-            content=content,
-            knowledge_type=knowledge_type,
-            metadata=metadata,
-            pattern_ids=pattern_ids,
         )
         if err:
             return err
         logger.info("knowledge_search called: action=%s query=%s", action, query)
         try:
-            if action == "inject":
-                _ensure_knowledge_index()
-                if not content:
-                    return make_error_response(ValueError("inject action requires content parameter"), error_code=ERR_VALIDATION)
-                result = _inject_knowledge(content, knowledge_type, metadata)
-                return make_success_response(data=result)
-
-            if action == "precipitate":
-                _ensure_knowledge_index()
-                if not pattern_ids:
-                    return make_error_response(ValueError("precipitate action requires pattern_ids parameter"), error_code=ERR_VALIDATION)
-                result = _precipitate_experience(pattern_ids)
-                return make_success_response(data=result)
-
             if not query:
                 return make_error_response(ValueError("retrieve action requires query parameter"), error_code=ERR_VALIDATION)
             _ensure_knowledge_index()

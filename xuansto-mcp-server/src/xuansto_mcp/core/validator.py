@@ -1,9 +1,26 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 from pydantic import BaseModel, ValidationError as PydanticValidationError
 from .errors import make_error_response, ERR_VALIDATION
+
+NAME_WHITELIST_PATTERN = re.compile(r'^[a-zA-Z0-9_\-./]+$')
+
+
+def validate_name_parameter(name: str) -> tuple[bool, str | None]:
+    if not name:
+        return False, "Name parameter must not be empty"
+    if "\x00" in name:
+        return False, f"Name contains null byte: {name!r}"
+    if ".." in name:
+        return False, f"Path traversal detected (..): {name!r}"
+    if Path(name).is_absolute():
+        return False, f"Absolute path not allowed in name: {name!r}"
+    if not NAME_WHITELIST_PATTERN.match(name):
+        return False, f"Name contains invalid characters: {name!r}"
+    return True, None
 
 
 def validate_path_safety(

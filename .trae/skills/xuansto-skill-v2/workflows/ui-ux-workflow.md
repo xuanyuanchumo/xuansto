@@ -1,4 +1,5 @@
 ---
+> 权威来源：_yaml/ui-ux-workflow.yaml（YAML为准，本文档为可读参考）
 metadata:
   name: UI/UX设计专项工作流
   version: "3.2.0"

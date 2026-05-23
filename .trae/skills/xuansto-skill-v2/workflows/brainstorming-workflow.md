@@ -1,4 +1,5 @@
 ---
+> 权威来源：_yaml/brainstorming-workflow.yaml（YAML为准，本文档为可读参考）
 metadata:
   name: 6阶段苏格拉底式需求探索工作流
   version: "3.2.0"

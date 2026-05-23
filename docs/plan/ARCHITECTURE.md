@@ -17,7 +17,7 @@ Xuansto Skill 是一个**多Agent自主开发编排引擎**，通过 MCP (Model 
 | 多Agent编排 | 57个Agent分13层（编排/产品/设计/工程/跨平台/数据/测试/安全/DevOps/质量/文档/知识/监控），按Phase动态调度 |
 | 9阶段工作流 | Phase 0初始化 → Phase 1需求分析 → Phase 2架构设计 → Phase 3测试先行 → Phase 4代码实现 → Phase 5测试验证 → Phase 6验收确认 → Phase 7持续重构 → Phase 8部署交付 |
 | 54项质量门禁 | 每阶段关键门禁（如 TEST-FIRST、AI-PENTEST、SPEC-CONSISTENCY），3-Strike恢复协议 |
-| MCP工具驱动 | 17个MCP原子工具 + 6个MCP Resource，MCP不可用时自动降级到Python脚本 |
+| MCP工具驱动 | 19+个MCP原子工具 + 8+个MCP Resource，MCP不可用时自动降级到Python脚本 |
 | 渐进式加载 | 4阶段Token预算控制（骨架≤2K → 功能≤5K → 增强≤10K → 完整≤20K），按需注入上下文 |
 | 知识闭环 | Retrieve → Inject → Precipitate 三阶段知识工作流，ChromaDB → SQLite FTS → 关键词三级降级 |
 | 跨平台桌面 | 支持 Electron / Tauri / Flutter 桌面构建，含IPC安全审计与代码签名 |
@@ -29,7 +29,7 @@ Xuansto Skill 是一个**多Agent自主开发编排引擎**，通过 MCP (Model 
 
 1. **自然语言触发** — 输入触发短语（如"帮我搭建项目"、"安全审计一下"），Skill自动匹配意图
 2. **斜杠命令** — 直接使用 `/init`、`/plan`、`/implement` 等27个命令
-3. **MCP工具调用** — IDE/Agent通过MCP协议直接调用17个原子工具
+3. **MCP工具调用** — IDE/Agent通过MCP协议直接调用19+个原子工具
 4. **CLI命令行** — 通过 `xuansto-cli` 命令行工具调用（health/invoke/gate/workflow/session/agent）
 
 ---
@@ -163,55 +163,66 @@ Xuansto Skill 是一个**多Agent自主开发编排引擎**，通过 MCP (Model 
 
 ```
 xuansto-mcp-server/
-├── pyproject.toml                    # 项目元数据(v4.1.0, Python>=3.10, deps: mcp/pydantic/pyyaml)
+├── pyproject.toml                    # 项目元数据(v8.0.0, Python>=3.10, deps: mcp/pydantic/pyyaml)
 ├── mcp-config.json                   # uvx启动配置(git+https://github.com/skiller-team/xuansto-mcp-server)
 ├── src/xuansto_mcp/
 │   ├── __init__.py
-│   ├── server.py                     # FastMCP入口, 17工具注册+Hook拦截+Resource注册
+│   ├── server.py                     # FastMCP入口, 19+工具注册+Hook拦截+Resource注册
 │   ├── cli.py                        # 命令行工具(health/invoke/gate/workflow/session/agent)
-│   ├── tools/                        # 17个MCP原子工具
+│   ├── tools/                        # 19+个MCP原子工具
 │   │   ├── __init__.py
 │   │   ├── skill_analyze.py          # 技能分析(项目结构/Agent/脚本扫描)
-│   │   ├── knowledge_search.py       # 知识检索(hybrid/semantic/keyword)
-│   │   ├── knowledge_inject.py       # 知识注入+经验沉淀
+│   │   ├── knowledge_search.py       # 知识检索(retrieve only, 只读)
+│   │   ├── knowledge_inject.py       # 知识注入+经验沉淀(所有写入操作)
 │   │   ├── quality_gate_check.py     # 质量门禁检查(54门禁,按Phase分组)
 │   │   ├── spec_drift_detect.py      # 规格漂移检测
 │   │   ├── security_scan.py          # 安全扫描(OWASP Agentic+依赖扫描)
 │   │   ├── code_simplify.py          # 代码简化+重复检测
 │   │   ├── session_manage.py         # 会话管理(save/load/list/track/restore)
 │   │   ├── workflow_dispatch.py      # 工作流调度(start/status/abort/phase/recover)
-│   │   ├── agent_status.py           # Agent状态(list/by_phase/detail/create/match)
+│   │   ├── agent_status.py           # Agent状态查询(list/by_phase/detail/match, 只读)
+│   │   ├── agent_manage.py           # Agent管理(create/assign/release/destroy/schedule, 变更)
 │   │   ├── hook_manage.py            # Hook管理(list/execute)
 │   │   ├── resource_load_status.py   # 资源加载状态(status/preload/cache/token_report)
 │   │   ├── context_compress.py       # 上下文压缩(semantic/selective/lossless)
 │   │   ├── server_health.py          # 服务器健康检查+版本协商
 │   │   ├── decision_log.py           # 决策日志(log/list/query/export/stats)
 │   │   ├── token_budget.py           # Token预算管理(status/set_budget/recommend/report)
-│   │   └── project_init.py           # 项目初始化(create/validate/detect_stack)
+│   │   ├── project_init.py           # 项目初始化(create/validate/detect_stack)
+│   │   ├── metrics_report.py         # 指标报告(按Tool/时间/类型查询+导出)
+│   │   └── config_manage.py          # 配置管理(reload/status/validate)
 │   ├── resources/
-│   │   └── skill_resources.py        # 6个MCP Resource注册
+│   │   └── skill_resources.py        # 8+个MCP Resource注册
 │   │       ├── xuansto://config/skill           # Skill配置
 │   │       ├── xuansto://references/quality-gates # 质量门禁文档
 │   │       ├── xuansto://references/agent-registry # Agent注册表
 │   │       ├── xuansto://references/workflow-phases # 工作流定义
 │   │       ├── xuansto://templates/{name}       # 模板文件(动态)
 │   │       ├── xuansto://sessions/latest        # 最新会话
-│   │       └── xuansto://loading/status         # 加载状态+披露
+│   │       ├── xuansto://loading/status         # 加载状态+披露
+│   │       ├── xuansto://metrics/summary        # 指标摘要(JSON)
+│   │       ├── xuansto://degradation/status     # 降级状态(JSON)
+│   │       ├── xuansto://sessions/{id}          # 指定会话(参数化)
+│   │       └── xuansto://agents/{layer}/{name}  # Agent定义(参数化)
 │   ├── core/                         # 核心基础设施
 │   │   ├── __init__.py
 │   │   ├── config.py                 # 配置管理(路径解析/YAML加载/热重载/watchfiles)
+│   │   ├── database.py               # 统一SQLite存储(xuansto.db, 8表)
+│   │   ├── cache.py                  # LRU缓存管理
+│   │   ├── crypto.py                 # AES-256-GCM加密(快照/敏感数据)
+│   │   ├── rate_limiter.py           # 令牌桶速率限制
 │   │   ├── degradation.py            # 降级策略管理
-│   │   ├── errors.py                 # 错误处理+重试+统一响应格式
-│   │   ├── hook_engine.py            # Hook引擎(pre/post回调链+动态注册)
+│   │   ├── errors.py                 # 统一错误处理(error_code only)+重试+抖动退避
+│   │   ├── hook_engine.py            # Hook引擎(HookType枚举+pre/post回调链+安全阻断+失败计数)
 │   │   ├── logging_config.py         # 日志配置
-│   │   ├── metrics.py                # 指标收集
-│   │   ├── notifications.py          # 通知回调系统
-│   │   ├── search_engine.py          # 搜索引擎抽象层(ChromaDB/SQLite/Keyword)
-│   │   ├── subprocess_utils.py       # 子进程工具(脚本降级调用)
-│   │   └── validator.py              # 路径安全验证
+│   │   ├── metrics.py                # 指标收集(TTL自动清理)
+│   │   ├── notifications.py          # MCP通知回调系统(MCPNotificationCallback)
+│   │   ├── search_engine.py          # 搜索引擎抽象层(ChromaDB可选/SQLite/Keyword/HybridSearchEngine)
+│   │   ├── subprocess_utils.py       # 子进程工具(异步脚本降级调用)
+│   │   └── validator.py              # 路径安全验证+名称白名单校验
 │   └── models/
 │       ├── __init__.py
-│       └── schemas.py                # Pydantic v2输入模型(17个Input Schema)
+│       └── schemas.py                # Pydantic v2输入模型(19+个Input Schema, action必填)
 └── tests/                            # 测试目录
 ```
 
@@ -249,9 +260,9 @@ xuansto-mcp-server/
 │  渐进式加载控制 + 降级策略声明                                 │
 ├─────────────────────────────────────────────────────────────┤
 │                     执行层 (xuansto-mcp-server)              │
-│  17个MCP Tool + 6个MCP Resource                              │
-│  Hook引擎(pre/post拦截) + 搜索引擎(ChromaDB/SQLite/Keyword)  │
-│  会话管理 + 工作流调度 + Agent状态 + Token预算                │
+│  19+个MCP Tool + 8+个MCP Resource                            │
+│  Hook引擎(HookType枚举+安全阻断) + 搜索引擎(ChromaDB可选/SQLite/Keyword) │
+│  统一SQLite存储(xuansto.db) + 会话管理 + 工作流调度 + Agent状态 + Token预算 │
 ├─────────────────────────────────────────────────────────────┤
 │                     资源层 (Skill目录文件系统)                 │
 │  agents/ (57个.md) + commands/ (27个.md) + references/       │
@@ -275,12 +286,13 @@ xuansto-mcp-server/
 
 ### 3.2 执行层职责
 
-- **MCP工具服务**: 17个原子工具通过FastMCP注册，stdio传输
-- **Hook拦截**: 每个工具调用经过pre-hook检查(可阻断)和post-hook处理
-- **搜索引擎**: 可插拔架构(ChromaDB → SQLite FTS → 关键词)，按可用性自动选择
-- **降级执行**: MCP不可用时通过 `subprocess_utils` 调用 `scripts/` 目录Python脚本
-- **配置热重载**: watchfiles事件驱动 + 线程轮询降级，支持SIGHUP信号
-- **会话持久化**: 会话状态保存/恢复/追踪，支持跨会话上下文恢复
+- **MCP工具服务**: 19+个原子工具通过FastMCP注册，stdio传输；本地 `_TOOL_FUNCTIONS` 注册表，不依赖 `_tool_manager._tools`
+- **Hook拦截**: 每个工具调用经过pre-hook检查(可阻断)和post-hook处理；HookType枚举类型安全；安全Hook失败默认阻塞
+- **搜索引擎**: 可插拔架构(ChromaDB可选 → SQLite FTS → 关键词)，HybridSearchEngine自动检测
+- **降级执行**: MCP不可用时通过 `subprocess_utils` 异步调用 `scripts/` 目录Python脚本
+- **配置热重载**: watchfiles事件驱动 + 线程轮询降级，支持SIGHUP信号；config_manage Tool提供MCP入口
+- **会话持久化**: 会话状态保存/恢复/追踪，支持跨会话上下文恢复；atexit handler确保状态落盘
+- **统一存储**: xuansto.db (SQLite WAL) 统一8表，替代分散的JSON/SQLite文件；hash验证+写入锁
 
 ### 3.3 资源层职责
 
@@ -295,6 +307,15 @@ xuansto-mcp-server/
 
 - **核心依赖**: mcp[cli] (MCP协议)、pydantic (数据校验)、pyyaml (配置解析)
 - **可选依赖**: chromadb (向量搜索)、fastapi+uvicorn (HTTP API)、sentence-transformers (嵌入)、openai (LLM)、watchfiles (配置热重载)
+
+### 3.5 数据流
+
+1. **配置加载** → `config.py` 解析YAML → `database.py` 初始化xuansto.db → Hook引擎注册 → 速率限制器初始化
+2. **工具调用** → FastMCP路由 → `_TOOL_FUNCTIONS`查找 → pre-hook(HookType枚举+安全阻断) → 执行 → post-hook → 返回
+3. **知识检索** → `knowledge_search`(只读retrieve) → `search_engine.py`(HybridSearchEngine自动检测ChromaDB可选/SQLite/Keyword) → 返回结果
+4. **知识写入** → `knowledge_inject`(所有写入) → `database.py`写入xuansto.db → `cache.py`更新LRU缓存 → 通知回调
+5. **降级路径** → MCP调用失败 → `degradation.py`判断 → `subprocess_utils.py`异步调用脚本 → 返回结果
+6. **状态持久化** → atexit handler → hash验证 → 写入锁 → xuansto.db落盘
 
 ---
 
@@ -481,15 +502,20 @@ sequenceDiagram
 | 1 | Skill入口 | SKILL.md约70行，外部引用{{include:}} | SKILL.md精简骨架，所有详情按需加载 | 已基本实现，但SKILL.md仍包含Phase概览表 | P2 |
 | 2 | 命令路由 | routes.yaml声明式路由，27命令 | 命令路由完全由Skill层声明，MCP仅执行 | 已实现 | — |
 | 3 | Agent注册 | registry.yaml声明57个Agent | Agent注册表由Skill层声明，MCP仅查询 | 已实现 | — |
-| 4 | MCP工具数 | 17个Tool + 6个Resource | 稳定17+6，按需扩展 | 已实现 | — |
-| 5 | 降级策略 | constraints.yaml声明+MCP执行脚本降级 | 每个MCP Tool都有脚本降级路径 | 已实现，但部分降级为"内联"而非独立脚本 | P3 |
-| 6 | 渐进式加载 | 4阶段Token预算+resource_load_status | 完整的渐进式加载+披露+自动推进 | Phase 0-1已实现，Phase 2-3的自动推进待完善 | P1 |
-| 7 | Hook系统 | hook_engine.py + hooks.json | 可插拔Hook引擎，支持动态注册 | 已实现 | — |
-| 8 | 搜索引擎 | search_engine.py可插拔(ChromaDB/SQLite/Keyword) | 三级降级自动切换 | 已实现 | — |
-| 9 | 配置热重载 | watchfiles + 线程轮询 + SIGHUP | 事件驱动优先，轮询降级 | 已实现 | — |
-| 10 | 知识闭环 | knowledge_search + knowledge_inject | Retrieve→Inject→Precipitate完整闭环 | Retrieve和Inject已实现，Precipitate待完善 | P1 |
-| 11 | v5废弃 | xuansto-skill v5仍存在目录 | 完全移除v5，统一到v2 | v5目录仍存在，SKILL.md标记deprecated | P2 |
+| 4 | MCP工具数 | 17个Tool + 6个Resource | 稳定19+Tool+8+Resource，按需扩展 | 已实现 | — |
+| 5 | 降级策略 | constraints.yaml声明+MCP执行脚本降级 | 每个MCP Tool都有脚本降级路径 | 已实现，异步降级 | P3 |
+| 6 | 渐进式加载 | 4阶段Token预算+resource_load_status+DisclosureTransition | 完整的渐进式加载+披露+自动推进+Phase通知 | 4阶段模型+DisclosureTransition状态机已实现 | P1 |
+| 7 | Hook系统 | hook_engine.py + HookType枚举 + hooks.json | 可插拔Hook引擎，支持动态注册+安全阻断+失败计数 | 已实现 | — |
+| 8 | 搜索引擎 | search_engine.py可插拔(ChromaDB可选/SQLite/Keyword/HybridSearchEngine) | 三级降级自动切换+HybridSearchEngine | 已实现 | — |
+| 9 | 配置热重载 | watchfiles + 线程轮询 + SIGHUP + config_manage Tool | 事件驱动优先，轮询降级，MCP入口 | 已实现 | — |
+| 10 | 知识闭环 | knowledge_search(只读retrieve) + knowledge_inject(所有写入) | Retrieve→Inject→Precipitate完整闭环，读写分离 | Retrieve和Inject已实现，读写分离完成 | P1 |
+| 11 | v5废弃 | xuansto-skill v5仍存在目录 | 完全移除v5，统一到v2 | v5目录已标记ARCHIVED | P2 |
 | 12 | CLI工具 | xuansto-cli基础命令(health/invoke/gate/workflow/session/agent) | 完整CLI覆盖所有MCP工具 | 基础命令已实现，部分工具需通过invoke调用 | P3 |
+| 13 | 统一存储 | xuansto.db (SQLite WAL) 8表 | 替代分散JSON/SQLite文件 | 已实现，database.py统一管理 | — |
+| 14 | 安全增强 | rate_limiter.py(令牌桶) + validator.py(名称白名单) + crypto.py(AES-256-GCM) | 多层安全防护 | 已实现 | — |
+| 15 | 错误统一 | errors.py统一error_code + deprecated code字段 + backoff jitter | 一致错误处理 | 已实现 | — |
+| 16 | 状态持久化 | atexit handler + hash验证 + 写入锁 | 进程退出时状态落盘 | 已实现 | — |
+| 17 | 工具注册 | 本地_TOOL_FUNCTIONS注册表 | 不依赖_tool_manager._tools | 已实现 | — |
 | 13 | 测试覆盖 | pytest+pytest-asyncio配置 | 核心模块测试覆盖率≥80% | 测试框架已配置，覆盖率待提升 | P1 |
 | 14 | Token预算 | token_budget工具+constraints.yaml声明 | 动态预算调整+Phase感知分配 | 基础功能已实现，动态调整待完善 | P2 |
 | 15 | 决策日志 | decision_log工具(log/list/query/export/stats) | 决策透明化+ADR集成 | 已实现 | — |

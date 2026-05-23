@@ -31,12 +31,13 @@
 
 ## 1. 概述
 
-xuansto-skill 项目通过 MCP (Model Context Protocol) Server 对外暴露 17 个 Tool 和 6 个 Resource，为 Skill 层提供全生命周期开发能力。系统采用 **Skill → MCP Server (Tool/Resource) → 内部模块/脚本** 的三层架构，并内置 Hook 拦截、自动重试、多级降级等容错机制。
+xuansto-skill 项目通过 MCP (Model Context Protocol) Server 对外暴露 19+ 个 Tool 和 8+ 个 Resource，为 Skill 层提供全生命周期开发能力。系统采用 **Skill → MCP Server (Tool/Resource) → 内部模块/脚本** 的三层架构，并内置 Hook 拦截(HookType枚举+安全阻断)、自动重试(backoff jitter)、多级降级、速率限制(令牌桶)等容错机制。
 
 **当前版本关键数据：**
 - MCP API 版本: `2.0.0`，最低兼容: `1.0.0`
-- 注册 Tool 数量: 17
-- 注册 Resource 数量: 6（含1个模板参数化Resource）
+- MCP Server 版本: `8.0.0`
+- 注册 Tool 数量: 19+
+- 注册 Resource 数量: 8+（含2个模板参数化Resource+2个参数化Resource）
 - 降级组件: 4（search_engine / knowledge_base / hooks / resources）
 - 降级级别: L1_NORMAL → L2_LOCAL_SEMANTIC → L3_BM25_ONLY
 
@@ -51,22 +52,25 @@ xuansto-skill 项目通过 MCP (Model Context Protocol) Server 对外暴露 17 �
 | # | Tool名称 | 传输方式 | 核心action | 认证 | 降级脚本 |
 |---|---------|---------|-----------|------|---------|
 | 1 | `skill_analyze` | MCP/stdio | analyze | 无 | `scripts/skill-test.py --analyze` |
-| 2 | `knowledge_search` | MCP/stdio | retrieve/inject/precipitate | 无 | `scripts/knowledge-server.py --search` |
-| 3 | `knowledge_inject` | MCP/stdio | inject/list_available/precipitate | 无 | `scripts/knowledge_server/main.py --inject` |
+| 2 | `knowledge_search` | MCP/stdio | retrieve(只读) | 无 | HybridSearchEngine: ChromaDB(可选)→SQLite FTS→keyword |
+| 3 | `knowledge_inject` | MCP/stdio | inject/list_available/precipitate/delete | 无 | `scripts/knowledge_server/main.py --inject` |
 | 4 | `quality_gate_check` | MCP/stdio | check(54项门禁) | 无 | `scripts/skill-test.py --gate` |
 | 5 | `spec_drift_detect` | MCP/stdio | detect | 无 | `scripts/spec-drift-detector.py` → 内联漂移检测 |
 | 6 | `security_scan` | MCP/stdio | scan | 无 | `scripts/agentic-security-scanner.py` → 内联agentic+dependency扫描 |
 | 7 | `code_simplify` | MCP/stdio | simplify | 无 | `scripts/code-simplifier.py` → 内联simplify+dedup |
 | 8 | `session_manage` | MCP/stdio | save/load/list/detect/verify/track/restore | 无 | `scripts/init-session.py` / `session-catchup.py` / `session-persist.py` |
 | 9 | `workflow_dispatch` | MCP/stdio | start/status/abort/phase/recover/snapshots | 无 | `scripts/project-initializer.py` / 内联Phase推进 |
-| 10 | `agent_status` | MCP/stdio | list/by_phase/detail/create/match/assign/release/instance_status/destroy/schedule | 无 | 静态注册表查询 / `scripts/skill-test.py --agents` |
-| 11 | `hook_manage` | MCP/stdio | list/execute | 无 | `scripts/check-encoding.py` / `token-budget-guard.py` / `session-persist.py` / 内联Hook |
+| 10 | `agent_status` | MCP/stdio | list/by_phase/detail/match(只读) | 无 | 静态注册表查询 / `scripts/skill-test.py --agents` |
+| 11 | `agent_manage` | MCP/stdio | create/assign/release/destroy/schedule(变更) | 无 | 内联Agent管理 |
+| 12 | `hook_manage` | MCP/stdio | list/execute | 无 | 内联Hook执行 |
 | 12 | `resource_load_status` | MCP/stdio | status/preload/cache/clear_cache/loading_progress/token_report | 无 | 内联状态检查(`resource_state.json`) |
 | 13 | `context_compress` | MCP/stdio | compress | 无 | `scripts/context-compressor.py` |
 | 14 | `server_health` | MCP/stdio | check/negotiate_version | 无 | `scripts/health-checker.py` → 降级状态返回 |
 | 15 | `decision_log` | MCP/stdio | log/list/query/update/export/stats | 无 | `scripts/decision-log.py` / 内联JSON记录 |
 | 16 | `token_budget` | MCP/stdio | status/set_budget/recommend/report | 无 | `scripts/token-budget-guard.py` / 内联估算 |
 | 17 | `project_init` | MCP/stdio | create/validate/detect_stack | 无 | `scripts/project-initializer.py` / 内联模板生成 |
+| 18 | `metrics_report` | MCP/stdio | summary/by_tool/by_time/export | 无 | 内联指标聚合 |
+| 19 | `config_manage` | MCP/stdio | reload/status/validate | 无 | 内联配置操作 |
 
 **请求方式：** MCP Tool Call（stdio JSON-RPC）
 **认证方式：** 无（本地进程间通信，信任边界为宿主机）
@@ -85,6 +89,10 @@ Resource 通过 MCP 协议的 `resources/read` 方法访问，返回文本内容
 | 5 | `xuansto://templates/{name}` | 参数化 | 模板文件（按名称加载） | 返回 `Template 'name' not found` |
 | 6 | `xuansto://sessions/latest` | 静态 | 最新会话记录 | 返回 `# 无会话记录` |
 | 7 | `xuansto://loading/status` | 静态 | 渐进式加载状态(JSON) | 返回降级JSON |
+| 8 | `xuansto://metrics/summary` | 静态 | 指标摘要(JSON) | 返回空JSON |
+| 9 | `xuansto://degradation/status` | 静态 | 降级状态(JSON) | 返回空JSON |
+| 10 | `xuansto://sessions/{id}` | 参数化 | 指定会话记录 | 返回 `Session not found` |
+| 11 | `xuansto://agents/{layer}/{name}` | 参数化 | Agent定义文件 | 返回 `Agent not found` |
 
 **`xuansto://loading/status` 返回结构：**
 
@@ -117,18 +125,19 @@ Resource 通过 MCP 协议的 `resources/read` 方法访问，返回文本内容
 
 | 调用方 | 被调用方 | 调用方式 | 说明 |
 |-------|---------|---------|------|
-| `server.py` → `_with_hook_interception` | `hook_engine.execute_pre_hooks` | async call | 每次Tool调用前执行Pre-Hook链 |
-| `server.py` → `_with_hook_interception` | `retry_tool_call` | async call | 包装Tool调用，带指数退避重试 |
+| `server.py` → `_with_hook_interception` | `hook_engine.execute_pre_hooks` | async call | 每次Tool调用前执行Pre-Hook链(HookType枚举+安全阻断) |
+| `server.py` → `_with_hook_interception` | `retry_tool_call` | async call | 包装Tool调用，带指数退避+抖动重试 |
 | `server.py` → `_with_hook_interception` | `hook_engine.execute_post_hooks` | async call | 每次Tool调用后执行Post-Hook链 |
 | `server.py` → `_with_hook_interception` | `server_health.record_tool_call` | sync call | 记录Tool调用延迟和成功/失败 |
 | `server.py` → `_with_hook_interception` | `resource_load_status.record_token_usage` | sync call | 记录Token使用量 |
-| `server.py` → `_with_hook_interception` | `notifications.notify` | sync call | 发送通知（blocked/failed事件） |
+| `server.py` → `_with_hook_interception` | `notifications.notify` | sync call | 发送通知(MCPNotificationCallback) |
+| `server.py` → `_with_hook_interception` | `rate_limiter.check` | sync call | 令牌桶速率限制检查 |
 | `retry_tool_call` | `is_transient_error` / `is_permanent_error` | sync call | 判断错误类型决定是否重试 |
 | `degradation.py` → `DegradationManager` | `_check_*` / `_recover_*` | sync call | 健康检查和恢复函数 |
-| `degradation.py` → `DegradationManager` | `atomic_write` | sync call | 持久化降级状态到JSON |
-| `degradation.py` → `run_script_fallback` | `subprocess.run` | sync call | 执行Python脚本降级 |
-| `skill_resources.py` | `validator.validate_path_safety` | sync call | 验证Resource路径安全性 |
-| `hook_engine.py` → `load_hooks_from_config` | `importlib.import_module` | sync call | 从JSON配置动态加载Hook |
+| `degradation.py` → `DegradationManager` | `database.persist_state` | sync call | 持久化降级状态到xuansto.db(写入锁+hash验证) |
+| `degradation.py` → `run_script_fallback` | `subprocess_utils.run_async` | async call | 异步执行Python脚本降级 |
+| `skill_resources.py` | `validator.validate_path_safety` / `validate_name_whitelist` | sync call | 验证Resource路径安全性和名称白名单 |
+| `hook_engine.py` → `load_hooks_from_config` | `importlib.import_module` | sync call | 从JSON配置动态加载Hook(HookType枚举) |
 | `server_health.py` → `negotiate_version` | `MCP_API_VERSION` / `MCP_MIN_SUPPORTED_VERSION` | sync call | 版本协商逻辑 |
 
 ---
@@ -161,6 +170,7 @@ graph TB
         SM["session_manage"]
         WD["workflow_dispatch"]
         AS["agent_status"]
+        AM["agent_manage"]
         HM["hook_manage"]
         RLS["resource_load_status"]
         CC["context_compress"]
@@ -168,6 +178,8 @@ graph TB
         DL["decision_log"]
         TB["token_budget"]
         PI["project_init"]
+        MR["metrics_report"]
+        CM["config_manage"]
     end
 
     subgraph "MCP Server - Resource 层"
@@ -178,14 +190,22 @@ graph TB
         R_TPL["xuansto://templates/{name}"]
         R_SESS["xuansto://sessions/latest"]
         R_LS["xuansto://loading/status"]
+        R_MS["xuansto://metrics/summary"]
+        R_DS["xuansto://degradation/status"]
+        R_SID["xuansto://sessions/{id}"]
+        R_AG["xuansto://agents/{layer}/{name}"]
     end
 
     subgraph "核心基础设施"
-        HE["HookEngine"]
+        HE["HookEngine(HookType枚举)"]
         DM["DegradationManager"]
-        RT["retry_tool_call"]
-        NT["NotificationSystem"]
-        ERR["ErrorSystem"]
+        RT["retry_tool_call(backoff jitter)"]
+        NT["NotificationSystem(MCPNotificationCallback)"]
+        ERR["ErrorSystem(error_code only)"]
+        RL["RateLimiter(令牌桶)"]
+        DB["Database(xuansto.db)"]
+        CR["Crypto(AES-256-GCM)"]
+        CA["Cache(LRU)"]
     end
 
     subgraph "降级层"
@@ -345,11 +365,9 @@ graph TB
 ```json
 {
   "error": true,
-  "code": "VALIDATION_ERROR",
+  "error_code": "ERR_VALIDATION",
   "message": "参数校验失败: 2个错误",
   "details": { },
-  "error_code": "ERR_VALIDATION",
-  "message_i18n": "Validation failed",
   "language": "zh"
 }
 ```
@@ -357,12 +375,12 @@ graph TB
 | 字段 | 类型 | 必选 | 说明 |
 |------|------|------|------|
 | `error` | bool | 是 | 固定为 `true` |
-| `code` | string | 是 | 业务错误码 |
+| `error_code` | string | 是 | 统一标准化错误码（ERR_*前缀） |
 | `message` | string | 是 | 中文错误描述 |
 | `details` | object | 是 | 错误详情 |
-| `error_code` | string | 否 | 标准化错误码（i18n映射用） |
-| `message_i18n` | string | 否 | 英文错误描述（language!="zh"时出现） |
 | `language` | string | 是 | 响应语言 |
+
+> **注意**: `code` 字段已废弃(deprecated)，统一使用 `error_code` 字段。`message_i18n` 已移除，使用 `language` 字段控制语言。
 
 **Hook拦截响应（特殊）：**
 

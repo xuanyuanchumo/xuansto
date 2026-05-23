@@ -1,6 +1,75 @@
 # 9阶段工作流详细参考
 
 > 本文件由SKILL.md按需加载
+> 权威来源：对应的工作流YAML文件位于 workflows/_yaml/ 目录，YAML为准
+
+## 工作流Phase概览
+
+| Phase | 名称 | MCP工具 | 关键门禁 |
+|-------|------|---------|----------|
+| 0 | 初始化 | skill_analyze, workflow_dispatch, agent_status, resource_load_status | DESIGN-SYSTEM-COMPLETE, ANTI-PATTERN-CHECK |
+| 1 | 需求分析 | knowledge_search, resource_load_status | BRAINSTORM-COMPLETE, GATE-001~002 |
+| 2 | 架构设计 | knowledge_search, resource_load_status | PLAN-ATOMIC, GATE-003~004 |
+| 3 | 测试先行 | — | TEST-FIRST |
+| 4 | 代码实现 | quality_gate_check, agent_status | GATE-007, TEST-PASS, FILE-ENCODING |
+| 5 | 测试验证 | security_scan, spec_drift_detect, agent_status | AI-PENTEST, SPEC-CONSISTENCY |
+| 6 | 验收确认 | quality_gate_check | GATE-013~014, UX-ACCEPTANCE |
+| 7 | 持续重构 | code_simplify, context_compress | SIMPLIFICATION-BEHAVIOR, GATE-015 |
+| 8 | 部署交付 | — | DESKTOP-BUILD/SIGN/UPDATE/CROSS |
+
+## 命令路由表（精简）
+
+| 意图 | 命令 | MCP工具链 | Phase |
+|------|------|-----------|-------|
+| 从零开始新项目 | /init | skill_analyze, knowledge_search, workflow_dispatch, project_init, decision_log | 0 |
+| 头脑风暴/需求探索 | /brainstorm | knowledge_search, workflow_dispatch | 1 |
+| 澄清需求 | /clarify | knowledge_search, workflow_dispatch, quality_gate_check | 1 |
+| 规划架构 | /plan | skill_analyze, knowledge_search, agent_status, workflow_dispatch, decision_log, token_budget | 2 |
+| 写规格文档 | /spec | workflow_dispatch, quality_gate_check, spec_drift_detect | 2 |
+| 设计 | /design | quality_gate_check, knowledge_search, workflow_dispatch | 2 |
+| 设计系统 | /design-system | quality_gate_check, knowledge_search, workflow_dispatch | 2 |
+| 写代码 | /implement | workflow_dispatch, quality_gate_check, hook_manage | 4 |
+| 跑测试 | /test | quality_gate_check, workflow_dispatch | 5 |
+| 代码审查 | /review | quality_gate_check, security_scan, code_simplify | 5 |
+| 安全审计 | /audit | security_scan, quality_gate_check, spec_drift_detect | 5 |
+| 修复Bug | /fix | session_manage, quality_gate_check, hook_manage | 4 |
+| 验收确认 | /accept | quality_gate_check, workflow_dispatch | 6 |
+| 代码简化 | /simplify | code_simplify, quality_gate_check, context_compress | 7 |
+| 代码重构 | /refactor | code_simplify, quality_gate_check, context_compress | 7 |
+| 部署交付 | /deploy | quality_gate_check, server_health, workflow_dispatch | 8 |
+| 构建项目 | /build | skill_analyze, quality_gate_check, server_health | 8 |
+| 桌面构建 | /build-desktop | quality_gate_check, skill_analyze, workflow_dispatch | 8 |
+| 桌面发布 | /release-desktop | quality_gate_check, workflow_dispatch | 8 |
+| 冲刺 | /sprint | workflow_dispatch, session_manage, resource_load_status, token_budget, project_init | 0 |
+| 知识学习 | /learn | knowledge_search, knowledge_inject, session_manage | — |
+| 执行计划 | /execute-plan | workflow_dispatch, session_manage | — |
+| 自主循环 | /loop | workflow_dispatch, session_manage, resource_load_status, token_budget, decision_log | — |
+| 取消循环 | /cancel-loop | workflow_dispatch, session_manage | — |
+| 查询Agent | /agent-status | agent_status | — |
+| 查询进度 | /status | workflow_dispatch, session_manage, server_health | — |
+| 回滚 | /rollback | session_manage, workflow_dispatch | — |
+| 中等SDD+TDD | /sdd-tdd-medium | skill_analyze, workflow_dispatch, resource_load_status | 0 |
+| 快速SDD+TDD | /sdd-tdd-fast | workflow_dispatch, resource_load_status | 1 |
+| 决策记录 | /decision | decision_log | — |
+| Token预算 | /budget | token_budget, resource_load_status | — |
+
+## 核心Agent索引（编排+产品+工程层）
+
+| 层级 | Agent | Phase | 模型路由 |
+|------|-------|-------|----------|
+| 编排 | Orchestrator | 0,1,2 | deep |
+| 编排 | Subagent Dispatcher | 0,4,5 | standard |
+| 编排 | Task Coordinator | 0,4,5 | standard |
+| 产品 | Product Manager | 1,6 | standard |
+| 产品 | Brainstorming Facilitator | 1 | standard |
+| 产品 | System Architect | 2 | deep |
+| 产品 | Technical Writer | 1,6 | standard |
+| 工程 | Backend Developer | 4 | standard |
+| 工程 | Database Engineer | 4 | standard |
+| 工程 | DevOps Engineer | 4,8 | standard |
+| 工程 | Frontend Developer | 4 | standard |
+| 工程 | Fullstack Engineer | 4 | standard |
+| 工程 | Mobile Developer | 4 | standard |
 
 ## Phase 0: 初始化
 

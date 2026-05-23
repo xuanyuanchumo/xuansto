@@ -1,6 +1,6 @@
 # Xuansto Skill Git 管理策略
 
-> 版本: 1.0.0 | 日期: 2026-05-23 | 状态: 草案
+> 版本: 2.0.0 | 日期: 2026-05-23 | 状态: 已实施
 > 关联文档: REFACTOR_PLAN.md / setup-worktree.ps1
 
 ---
@@ -30,9 +30,9 @@ Xuansto Skill 项目包含三个紧密耦合的组件（v1 Skill / v2 Skill / MC
 ```
 D:\Projects\TraeProjects\
 ├── skiller\                          ← 主工作树 (main 分支，稳定基线)
-│   ├── .trae/skills/xuansto-skill/       (v5, deprecated)
-│   ├── .trae/skills/xuansto-skill-v2/    (v7, current)
-│   └── xuansto-mcp-server/               (MCP Server)
+│   ├── .trae/skills/xuansto-skill/       (v5, ARCHIVED)
+│   ├── .trae/skills/xuansto-skill-v2/    (v8.0.0, current)
+│   └── xuansto-mcp-server/               (MCP Server v8.0.0)
 │
 ├── skiller-dev\                      ← 开发工作树 (develop 分支)
 │   └── (同上结构)
@@ -315,14 +315,14 @@ git add -f docs/plan/v-git.md
 
 ### 4.1 映射总表
 
-| 重构阶段 | 对应分支 | 解决问题 | 周期 | 前置依赖 |
-|---------|---------|---------|------|---------|
-| **P0: 紧急修复** | `feature/p0-fixes` | U-01, U-02, U-03 | 第1周 | 无 |
-| **P1-A/D/E/F: MCP 核心** | `feature/mcp-core` | U-04, U-08, U-09, U-10 | 第2-3周 | P0 |
-| **P1-B/C/G: 接口治理** | `feature/p1-api-governance` | U-05, U-06, U-07 | 第2-3周 | P0 |
-| **P2-A/B/C/E/G: 架构加固(上)** | `develop/v8` 直接提交 | U-11~U-18, U-20, U-24~U-26 | 第4周 | P1 |
-| **P2-D/F: 渐进式加载** | `feature/progressive-loading` | U-19, U-22, U-23, U-27~U-29 | 第4-5周 | P1 |
-| **P3: 优化收尾** | `develop/v8` 直接提交 | U-32~U-42 | 第6周+ | P2 |
+| 重构阶段 | 对应分支 | 解决问题 | 周期 | 前置依赖 | 状态 |
+|---------|---------|---------|------|---------|------|
+| **P0: 紧急修复** | `feature/p0-fixes` | U-01, U-02, U-03 | 第1周 | 无 | ✅ 已完成 |
+| **P1-A/D/E/F: MCP 核心** | `feature/mcp-core` | U-04, U-08, U-09, U-10 | 第2-3周 | P0 | ✅ 已完成 |
+| **P1-B/C/G: 接口治理** | `feature/p1-api-governance` | U-05, U-06, U-07 | 第2-3周 | P0 | ✅ 已完成 |
+| **P2-A/B/C/E/G: 架构加固(上)** | `develop/v8` 直接提交 | U-11~U-18, U-20, U-24~U-26 | 第4周 | P1 | ✅ 大部分完成 |
+| **P2-D/F: 渐进式加载** | `feature/progressive-loading` | U-19, U-22, U-23, U-27~U-29 | 第4-5周 | P1 | ✅ 已完成 |
+| **P3: 优化收尾** | `develop/v8` 直接提交 | U-32~U-42 | 第6周+ | P2 | ✅ 大部分完成 |
 
 ### 4.2 详细映射
 
@@ -390,12 +390,12 @@ P3 为优化收尾，改动范围小且互不依赖，直接在 `develop/v8` 上
 
 ### 4.3 阶段里程碑与 Tag
 
-| 时间点 | Tag | 包含阶段 | 验收要点 |
-|--------|-----|---------|---------|
-| 第1周末 | `v8.0.0-p0` | P0 | 降级链可达、文档覆盖、持久化原子性 |
-| 第3周末 | `v8.0.0-p1` | P0 + P1 | Tool 注册解耦、版本协商、knowledge 只读/只写分离 |
-| 第5周末 | `v8.0.0-p2` | P0 + P1 + P2 | 数据层统一、渐进式加载完善、Hook 加固 |
-| 第6周+ | `v8.0.0` | 全部 | 全部 42 个问题解决、测试覆盖率 ≥80% |
+| 时间点 | Tag | 包含阶段 | 验收要点 | 状态 |
+|--------|-----|---------|---------|------|
+| 第1周末 | `v8.0.0-p0` | P0 | 降级链可达、文档覆盖、持久化原子性 | ✅ 已完成 |
+| 第3周末 | `v8.0.0-p1` | P0 + P1 | Tool 注册解耦、版本协商、knowledge 只读/只写分离 | ✅ 已完成 |
+| 第5周末 | `v8.0.0-p2` | P0 + P1 + P2 | 数据层统一、渐进式加载完善、Hook 加固 | ✅ 大部分完成 |
+| 第6周+ | `v8.0.0` | 全部 | 全部 42 个问题解决、测试覆盖率 ≥80% | ✅ 34/42已解决 |
 
 ---
 

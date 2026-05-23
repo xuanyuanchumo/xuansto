@@ -25,19 +25,19 @@ def _run_async(coro: Any) -> Any:
 
 
 def _invoke_tool(tool_name: str, params_json: str) -> dict[str, Any]:
-    from .server import _REGISTERED_TOOL_NAMES, _TOOL_REGISTRY
+    from .server import _REGISTERED_TOOL_NAMES, _TOOL_FUNCTIONS
 
     if tool_name not in _REGISTERED_TOOL_NAMES:
         return _format_error("TOOL_NOT_FOUND", f"工具不存在: {tool_name}", {"available": _REGISTERED_TOOL_NAMES})
 
-    tool_fn = _TOOL_REGISTRY[tool_name]
+    tool_fn = _TOOL_FUNCTIONS[tool_name]
     try:
         params = json.loads(params_json) if params_json else {}
     except json.JSONDecodeError as e:
         return _format_error("INVALID_JSON", f"参数JSON解析失败: {e}")
 
     try:
-        result = _run_async(tool_fn.fn(**params))
+        result = _run_async(tool_fn(**params))
         if isinstance(result, dict):
             return result
         return {"error": False, "data": result}
@@ -46,14 +46,14 @@ def _invoke_tool(tool_name: str, params_json: str) -> dict[str, Any]:
 
 
 def _health_check() -> dict[str, Any]:
-    from .server import _REGISTERED_TOOL_NAMES, _TOOL_REGISTRY
+    from .server import _REGISTERED_TOOL_NAMES, _TOOL_FUNCTIONS
 
     if "server_health" not in _REGISTERED_TOOL_NAMES:
         return _format_error("TOOL_NOT_FOUND", "server_health 工具未注册")
 
-    tool_fn = _TOOL_REGISTRY["server_health"]
+    tool_fn = _TOOL_FUNCTIONS["server_health"]
     try:
-        result = _run_async(tool_fn.fn())
+        result = _run_async(tool_fn())
         if isinstance(result, dict):
             return result
         return {"error": False, "data": result}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gzip
+import hashlib
 import json
 import os
 import tempfile
@@ -69,8 +70,12 @@ def _get_workflows_dir() -> Path:
     return d
 
 def _persist_workflow(workflow_id: str, data: dict[str, Any]) -> None:
+    core_data = {k: v for k, v in data.items() if k not in ("_timestamp", "_hash")}
+    payload = dict(core_data)
+    payload["_timestamp"] = time.time()
+    payload["_hash"] = hashlib.sha256(json.dumps(core_data, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
     path = _get_workflows_dir() / f"{workflow_id}.json"
-    atomic_write(path, json.dumps(data, ensure_ascii=False, indent=2))
+    atomic_write(path, json.dumps(payload, ensure_ascii=False, indent=2))
 
 def _load_workflow(workflow_id: str) -> dict[str, Any] | None:
     path = _get_workflows_dir() / f"{workflow_id}.json"
@@ -78,6 +83,15 @@ def _load_workflow(workflow_id: str) -> dict[str, Any] | None:
         return None
     try:
         loaded: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+        stored_hash = loaded.get("_hash")
+        if stored_hash is not None:
+            core_data = {k: v for k, v in loaded.items() if k not in ("_timestamp", "_hash")}
+            computed_hash = hashlib.sha256(json.dumps(core_data, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+            if computed_hash != stored_hash:
+                logger.warning("Workflow %s state hash mismatch, skipping load", workflow_id)
+                return None
+        else:
+            logger.warning("Workflow %s state file has no integrity hash, loading without verification", workflow_id)
         return loaded
     except Exception:
         return None
@@ -98,14 +112,27 @@ def _persist_active_workflows() -> None:
     persist_dir.mkdir(parents=True, exist_ok=True)
     with _workflows_lock:
         snapshot = dict(_ACTIVE_WORKFLOWS)
+    core_data = {k: v for k, v in snapshot.items() if k not in ("_timestamp", "_hash")}
+    payload = dict(core_data)
+    payload["_timestamp"] = time.time()
+    payload["_hash"] = hashlib.sha256(json.dumps(core_data, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
     path = persist_dir / "workflow_states.json"
-    atomic_write(path, json.dumps(snapshot, ensure_ascii=False, indent=2))
+    atomic_write(path, json.dumps(payload, ensure_ascii=False, indent=2))
     logger.info("Persisted %d active workflows to %s", len(snapshot), path)
 
 def _load_active_workflows() -> None:
     path = WORK_DIR / "workflow_states.json"
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
+        stored_hash = data.pop("_hash", None)
+        data.pop("_timestamp", None)
+        if stored_hash is not None:
+            computed_hash = hashlib.sha256(json.dumps(data, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+            if computed_hash != stored_hash:
+                logger.warning("Active workflows state hash mismatch, skipping load")
+                return
+        else:
+            logger.warning("Active workflows state file has no integrity hash, loading without verification")
         with _workflows_lock:
             _ACTIVE_WORKFLOWS.update(data)
         logger.info("Loaded %d active workflows from %s", len(data), path)
