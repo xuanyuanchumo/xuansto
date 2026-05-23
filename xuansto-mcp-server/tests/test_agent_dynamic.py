@@ -4,17 +4,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from xuansto_mcp.tools.agent_status import _AGENT_INSTANCES, _AgentInstance
+from xuansto_mcp.tools.agent_manage import _AGENT_INSTANCES, _AgentInstance
 
 
 @pytest.mark.asyncio
 async def test_agent_create():
-    from xuansto_mcp.tools.agent_status import register
+    from xuansto_mcp.tools.agent_manage import register
     from mcp.server.fastmcp import FastMCP
 
     test_mcp = FastMCP("test")
     register(test_mcp)
-    tool_fn = test_mcp._tool_manager._tools["agent_status"].fn
+    tool_fn = test_mcp._tool_manager._tools["agent_manage"].fn
 
     _AGENT_INSTANCES.clear()
     result = await tool_fn(action="create", agent_type="Backend Developer", capabilities=["python", "fastapi"])
@@ -27,19 +27,22 @@ async def test_agent_create():
 
 
 @pytest.mark.asyncio
-async def test_agent_match():
-    from xuansto_mcp.tools.agent_status import register
+async def test_agent_match_via_agent_status():
+    from xuansto_mcp.tools.agent_manage import register as manage_register
+    from xuansto_mcp.tools.agent_status import register as status_register
     from mcp.server.fastmcp import FastMCP
 
     test_mcp = FastMCP("test")
-    register(test_mcp)
-    tool_fn = test_mcp._tool_manager._tools["agent_status"].fn
+    manage_register(test_mcp)
+    status_register(test_mcp)
+    manage_fn = test_mcp._tool_manager._tools["agent_manage"].fn
+    status_fn = test_mcp._tool_manager._tools["agent_status"].fn
 
     _AGENT_INSTANCES.clear()
-    await tool_fn(action="create", agent_type="Backend", capabilities=["python", "fastapi", "sql"])
-    await tool_fn(action="create", agent_type="Frontend", capabilities=["typescript", "react"])
+    await manage_fn(action="create", agent_type="Backend", capabilities=["python", "fastapi", "sql"])
+    await manage_fn(action="create", agent_type="Frontend", capabilities=["typescript", "react"])
 
-    result = await tool_fn(action="match", capabilities=["python", "sql"])
+    result = await status_fn(action="match", capabilities=["python", "sql"])
     data = result.get("data", result)
     assert data.get("action") == "match"
     assert data.get("total", 0) >= 1
@@ -49,12 +52,12 @@ async def test_agent_match():
 
 @pytest.mark.asyncio
 async def test_agent_assign_and_status():
-    from xuansto_mcp.tools.agent_status import register
+    from xuansto_mcp.tools.agent_manage import register
     from mcp.server.fastmcp import FastMCP
 
     test_mcp = FastMCP("test")
     register(test_mcp)
-    tool_fn = test_mcp._tool_manager._tools["agent_status"].fn
+    tool_fn = test_mcp._tool_manager._tools["agent_manage"].fn
 
     _AGENT_INSTANCES.clear()
     create_result = await tool_fn(action="create", agent_type="Backend", capabilities=["python"])
@@ -72,12 +75,12 @@ async def test_agent_assign_and_status():
 
 @pytest.mark.asyncio
 async def test_agent_destroy():
-    from xuansto_mcp.tools.agent_status import register
+    from xuansto_mcp.tools.agent_manage import register
     from mcp.server.fastmcp import FastMCP
 
     test_mcp = FastMCP("test")
     register(test_mcp)
-    tool_fn = test_mcp._tool_manager._tools["agent_status"].fn
+    tool_fn = test_mcp._tool_manager._tools["agent_manage"].fn
 
     _AGENT_INSTANCES.clear()
     create_result = await tool_fn(action="create", agent_type="Backend", capabilities=["python"])
@@ -92,12 +95,12 @@ async def test_agent_destroy():
 
 @pytest.mark.asyncio
 async def test_agent_assign_busy_fails():
-    from xuansto_mcp.tools.agent_status import register
+    from xuansto_mcp.tools.agent_manage import register
     from mcp.server.fastmcp import FastMCP
 
     test_mcp = FastMCP("test")
     register(test_mcp)
-    tool_fn = test_mcp._tool_manager._tools["agent_status"].fn
+    tool_fn = test_mcp._tool_manager._tools["agent_manage"].fn
 
     _AGENT_INSTANCES.clear()
     create_result = await tool_fn(action="create", agent_type="Backend", capabilities=["python"])
@@ -110,12 +113,12 @@ async def test_agent_assign_busy_fails():
 
 @pytest.mark.asyncio
 async def test_agent_release_computes_duration():
-    from xuansto_mcp.tools.agent_status import register
+    from xuansto_mcp.tools.agent_manage import register
     from mcp.server.fastmcp import FastMCP
 
     test_mcp = FastMCP("test")
     register(test_mcp)
-    tool_fn = test_mcp._tool_manager._tools["agent_status"].fn
+    tool_fn = test_mcp._tool_manager._tools["agent_manage"].fn
 
     _AGENT_INSTANCES.clear()
     create_result = await tool_fn(action="create", agent_type="Backend", capabilities=["python"])
@@ -141,12 +144,12 @@ async def test_agent_release_computes_duration():
 
 @pytest.mark.asyncio
 async def test_agent_release_not_busy_fails():
-    from xuansto_mcp.tools.agent_status import register
+    from xuansto_mcp.tools.agent_manage import register
     from mcp.server.fastmcp import FastMCP
 
     test_mcp = FastMCP("test")
     register(test_mcp)
-    tool_fn = test_mcp._tool_manager._tools["agent_status"].fn
+    tool_fn = test_mcp._tool_manager._tools["agent_manage"].fn
 
     _AGENT_INSTANCES.clear()
     create_result = await tool_fn(action="create", agent_type="Backend", capabilities=["python"])

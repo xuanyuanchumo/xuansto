@@ -13,14 +13,16 @@
 7. [session_manage](#session_manage)
 8. [workflow_dispatch](#workflow_dispatch)
 9. [agent_status](#agent_status)
-10. [hook_manage](#hook_manage)
-11. [resource_load_status](#resource_load_status)
-12. [context_compress](#context_compress)
-13. [server_health](#server_health)
-14. [decision_log](#decision_log)
-15. [token_budget](#token_budget)
-16. [knowledge_inject](#knowledge_inject)
-17. [project_init](#project_init)
+10. [agent_manage](#agent_manage)
+11. [hook_manage](#hook_manage)
+12. [resource_load_status](#resource_load_status)
+13. [context_compress](#context_compress)
+14. [server_health](#server_health)
+15. [decision_log](#decision_log)
+16. [token_budget](#token_budget)
+17. [knowledge_inject](#knowledge_inject)
+18. [project_init](#project_init)
+19. [metrics_report](#metrics_report)
 
 ---
 
@@ -660,6 +662,70 @@ Agent状态查询：列出全部Agent、按Phase查询、查询单个Agent详情
 响应: {status: "success", data: {action: "detail", agent: {name: "Security Auditor", layer: "security", capabilities: [...], definition_file: "agents/security-auditor.md"}}, ...}
 ```
 
+## agent_manage
+
+Agent实例管理：创建/分配/释放/销毁Agent实例，查询实例状态，调度规划。从agent_status拆分出的独立工具，专注于实例生命周期管理。
+
+**参数：**
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| action | str | 必填 | 操作类型: create, assign, release, instance_status, destroy, schedule |
+| agent_type | str\|None | None | Agent类型(create时使用)，如: developer, reviewer, tester |
+| capabilities | list\|None | None | Agent能力列表(create时使用)，如: ['code_review', 'testing'] |
+| agent_id | str\|None | None | Agent实例ID(assign/release/instance_status/destroy时使用) |
+| task | str\|None | None | 分配的任务描述(assign时使用) |
+
+**完整返回值JSON Schema：**
+```json
+{
+  "status": "success",
+  "data": {
+    "action": "create",
+    "agent_id": "agent-a1b2c3d4",
+    "agent_type": "developer",
+    "capabilities": ["code_review", "testing"],
+    "status": "idle",
+    "created_at": "2025-01-22T14:30:00+00:00",
+    "last_active_at": "2025-01-22T14:30:00+00:00",
+    "task_count": 0,
+    "total_duration_ms": 0
+  },
+  "metadata": {
+    "tool": "agent_manage",
+    "latency_ms": 15,
+    "degraded": false
+  }
+}
+```
+
+**错误码定义：**
+| 错误码 | 说明 | 处理建议 |
+|--------|------|----------|
+| INVALID_INPUT | action不在允许列表中或缺少必要参数 | 使用create/assign/release/instance_status/destroy/schedule |
+| NOT_FOUND | agent_id对应的实例不存在 | 确认agent_id正确 |
+| RATE_LIMIT | Agent实例数量已达上限(20) | 释放或销毁不用的Agent实例 |
+| PERMISSION | Agent正忙无法分配新任务 | 先release当前任务再assign |
+
+**降级脚本路径：** 静态注册表查询 / `scripts/skill-test.py --agents` (兜底)
+
+**调用示例：**
+```
+调用: agent_manage(action="create", agent_type="developer", capabilities=["code_review", "testing"])
+响应: {status: "success", data: {action: "create", agent_id: "agent-a1b2c3d4", agent_type: "developer", capabilities: ["code_review", "testing"], status: "idle", ...}, ...}
+
+调用: agent_manage(action="assign", agent_id="agent-a1b2c3d4", task="实现用户认证模块")
+响应: {status: "success", data: {action: "assign", agent_id: "agent-a1b2c3d4", task: "实现用户认证模块", status: "busy", task_count: 1, ...}, ...}
+
+调用: agent_manage(action="release", agent_id="agent-a1b2c3d4")
+响应: {status: "success", data: {action: "release", agent_id: "agent-a1b2c3d4", status: "idle", completed_task: "实现用户认证模块", duration_ms: 15000, ...}, ...}
+
+调用: agent_manage(action="instance_status", agent_id="agent-a1b2c3d4")
+响应: {status: "success", data: {action: "instance_status", agent_id: "agent-a1b2c3d4", agent_type: "developer", status: "idle", task_count: 1, total_duration_ms: 15000, ...}, ...}
+
+调用: agent_manage(action="destroy", agent_id="agent-a1b2c3d4")
+响应: {status: "success", data: {action: "destroy", agent_id: "agent-a1b2c3d4", status: "destroyed", task_count: 1, total_duration_ms: 15000, ...}, ...}
+```
+
 ## hook_manage
 
 Hook管理：列出Hook配置、执行指定Hook。
@@ -1177,4 +1243,71 @@ Token预算管理：查询预算状态、设置预算、获取推荐、生成使
 
 调用: project_init(action="detect_stack", project_path="/path/to/my-project")
 响应: {status: "success", data: {project_path: "/path/to/my-project", detected_stacks: [{stack: "python", confidence: 0.75, markers_found: ["pyproject.toml"]}, {stack: "node", confidence: 1.0, markers_found: ["package.json"]}], primary_stack: "node", total_detected: 2}, ...}
+```
+
+## metrics_report
+
+指标报告：查询工具调用指标(按工具名/时间/类型)，汇总统计(总调用/错误率/延迟分布/降级计数)。
+
+**参数：**
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| action | str | 必填 | 操作类型: query, summary |
+| tool_name | str\|None | None | 工具名称(query时使用)，为空则查询全部工具 |
+| time_range | str | "all" | 时间范围: 1h, 6h, 24h, 7d, all |
+| metric_type | str | "all" | 指标类型: calls, errors, latency, all |
+
+**完整返回值JSON Schema：**
+```json
+{
+  "status": "success",
+  "data": {
+    "action": "query",
+    "tools": {
+      "skill_analyze": {
+        "call_count": 42,
+        "error_count": 1,
+        "error_rate": 0.0238,
+        "latency_p50_ms": 234.0,
+        "latency_p95_ms": 567.0,
+        "latency_p99_ms": 890.0,
+        "latency_avg_ms": 280.5
+      },
+      "context_compress": {
+        "call_count": 18,
+        "error_count": 0,
+        "error_rate": 0.0,
+        "latency_p50_ms": 180.0,
+        "latency_p95_ms": 320.0,
+        "latency_p99_ms": 450.0,
+        "latency_avg_ms": 195.2
+      }
+    },
+    "total_tools": 2,
+    "time_range": "all",
+    "metric_type": "all"
+  },
+  "metadata": {
+    "tool": "metrics_report",
+    "latency_ms": 12,
+    "degraded": false
+  }
+}
+```
+
+**错误码定义：**
+| 错误码 | 说明 | 处理建议 |
+|--------|------|----------|
+| INVALID_INPUT | action不在允许列表中或参数无效 | 使用query/summary |
+| DEGRADED | 降级模式执行(从持久化文件读取) | 检查MCP Server连接 |
+
+**降级脚本路径：** 内联指标读取（从tool_metrics.json持久化文件读取）
+
+**调用示例：**
+```
+调用: metrics_report(action="query", tool_name="skill_analyze", metric_type="all")
+响应: {status: "success", data: {tools: {skill_analyze: {call_count: 42, error_count: 1, error_rate: 0.0238, latency_p50_ms: 234.0, ...}}, total_tools: 1, time_range: "all", metric_type: "all"}, ...}
+
+调用: metrics_report(action="summary", time_range="24h")
+响应: {status: "success", data: {total_calls: 256, total_errors: 3, overall_error_rate: 0.0117, latency_p50_ms: 195.0, latency_p95_ms: 450.0, latency_p99_ms: 780.0, latency_avg_ms: 230.5, total_tools: 15, top_tools: [{tool_name: "skill_analyze", call_count: 42, ...}, ...], degradation_counts: {level_1: 2, level_2: 0}, time_range: "24h"}, ...}
 ```

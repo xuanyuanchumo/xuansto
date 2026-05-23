@@ -98,6 +98,33 @@ def _get_config_status() -> dict[str, Any]:
     }
 
 
+def _inline_config_manage(action: str, **kwargs: Any) -> dict[str, Any]:
+    if action == "status":
+        return {
+            "action": "status",
+            "config_files": {
+                ".xuansto-config.yaml": "not checked",
+                "fallback_config.yaml": "not checked",
+                "constraints.yaml": "not checked",
+            },
+            "managed": True,
+        }
+    elif action == "reload":
+        return {
+            "action": "reload",
+            "reloaded": False,
+            "note": "inline fallback cannot reload config",
+            "managed": True,
+        }
+    elif action == "validate":
+        return {
+            "action": "validate",
+            "validation_results": {},
+            "managed": True,
+        }
+    return {"action": action, "config": {}}
+
+
 def register(mcp: FastMCP) -> None:
     @mcp.tool(
         annotations=ToolAnnotations(

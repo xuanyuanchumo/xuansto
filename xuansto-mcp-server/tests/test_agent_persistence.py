@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from xuansto_mcp.tools.agent_status import (
+from xuansto_mcp.tools.agent_manage import (
     _AGENT_INSTANCES,
     _AgentInstance,
     _load_agent_instances,
@@ -23,7 +23,7 @@ from mcp.server.fastmcp import FastMCP
 def tmp_work_dir(tmp_path):
     work_dir = tmp_path / ".xuansto"
     work_dir.mkdir()
-    with patch("xuansto_mcp.tools.agent_status.WORK_DIR", work_dir):
+    with patch("xuansto_mcp.tools.agent_manage.WORK_DIR", work_dir):
         yield work_dir
 
 
@@ -38,7 +38,7 @@ def clean_instances():
 def mcp_tool():
     test_mcp = FastMCP("test")
     register(test_mcp)
-    return test_mcp._tool_manager._tools["agent_status"].fn
+    return test_mcp._tool_manager._tools["agent_manage"].fn
 
 
 @pytest.mark.asyncio

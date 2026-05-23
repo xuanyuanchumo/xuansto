@@ -3763,7 +3763,7 @@ wheels = [
 
 [[package]]
 name = "xuansto-mcp-server"
-version = "3.2.0"
+version = "8.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "mcp", extra = ["cli"] },
@@ -3783,6 +3783,7 @@ full = [
     { name = "openai" },
     { name = "sentence-transformers" },
     { name = "uvicorn" },
+    { name = "watchfiles" },
 ]
 
 [package.metadata]
@@ -3798,6 +3799,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "sentence-transformers", marker = "extra == 'full'", specifier = ">=2.0.0" },
     { name = "uvicorn", marker = "extra == 'full'", specifier = ">=0.20.0" },
+    { name = "watchfiles", marker = "extra == 'full'", specifier = ">=0.20.0" },
 ]
 provides-extras = ["full", "dev"]
 

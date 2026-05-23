@@ -41,14 +41,14 @@ def test_error_response_has_error_code_field():
 def test_error_response_no_code_field():
     err = XuanstoMCPError(code="TEST_ERROR", message="test error")
     result = make_error_response(err, error_code=ERR_INTERNAL)
-    assert "code" not in result or "_deprecated_code" in result
+    assert "code" not in result
 
 
-def test_error_response_has_deprecated_code():
+def test_error_response_has_deprecated_exception_type():
     err = XuanstoMCPError(code="TEST_ERROR", message="test error")
     result = make_error_response(err, error_code=ERR_INTERNAL)
-    assert "_deprecated_code" in result
-    assert result["_deprecated_code"] == "TEST_ERROR"
+    assert "_deprecated_exception_type" in result
+    assert result["_deprecated_exception_type"] == "TEST_ERROR"
 
 
 def test_error_response_has_migration_note():

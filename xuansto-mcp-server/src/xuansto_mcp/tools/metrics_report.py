@@ -153,6 +153,33 @@ def _summary_metrics(time_range: str) -> dict[str, Any]:
     }
 
 
+def _inline_metrics_report(action: str, **kwargs: Any) -> dict[str, Any]:
+    if action == "query":
+        return {
+            "action": "query",
+            "tools": {},
+            "total_tools": 0,
+            "time_range": kwargs.get("time_range", "all"),
+            "metric_type": kwargs.get("metric_type", "all"),
+        }
+    elif action == "summary":
+        return {
+            "action": "summary",
+            "total_calls": 0,
+            "total_errors": 0,
+            "overall_error_rate": 0.0,
+            "latency_p50_ms": 0.0,
+            "latency_p95_ms": 0.0,
+            "latency_p99_ms": 0.0,
+            "latency_avg_ms": 0.0,
+            "total_tools": 0,
+            "top_tools": [],
+            "degradation_counts": {},
+            "time_range": kwargs.get("time_range", "all"),
+        }
+    return {"action": action, "metrics": {}}
+
+
 def register(mcp: FastMCP) -> None:
     @mcp.tool(
         annotations=ToolAnnotations(

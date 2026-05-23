@@ -96,6 +96,54 @@ def load_on_startup() -> None:
     _load_agent_instances()
 
 
+def _inline_agent_manage(action: str, **kwargs: Any) -> dict[str, Any]:
+    if action == "create":
+        return {
+            "action": "create",
+            "agent_id": "inline-agent-0",
+            "agent_type": kwargs.get("agent_type", "unknown"),
+            "capabilities": kwargs.get("capabilities", []),
+            "status": "idle",
+            "managed": True,
+        }
+    elif action == "assign":
+        return {
+            "action": "assign",
+            "agent_id": kwargs.get("agent_id", ""),
+            "task": kwargs.get("task", ""),
+            "status": "busy",
+            "managed": True,
+        }
+    elif action == "release":
+        return {
+            "action": "release",
+            "agent_id": kwargs.get("agent_id", ""),
+            "status": "idle",
+            "managed": True,
+        }
+    elif action == "destroy":
+        return {
+            "action": "destroy",
+            "agent_id": kwargs.get("agent_id", ""),
+            "status": "destroyed",
+            "managed": True,
+        }
+    elif action == "instance_status":
+        return {
+            "action": "instance_status",
+            "agent_id": kwargs.get("agent_id", ""),
+            "status": "unknown",
+            "managed": True,
+        }
+    elif action == "schedule":
+        return {
+            "action": "schedule",
+            "status": "planned",
+            "managed": True,
+        }
+    return {"action": action, "managed": False}
+
+
 def register(mcp: FastMCP) -> None:
     @mcp.tool(
         annotations=ToolAnnotations(

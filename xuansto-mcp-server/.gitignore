@@ -11,6 +11,8 @@ build/
 .eggs/
 
 .venv/
+.venv2/
+.testvenv/
 venv/
 .uv/
 

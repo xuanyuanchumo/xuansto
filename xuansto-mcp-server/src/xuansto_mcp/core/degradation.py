@@ -461,7 +461,8 @@ def get_degradation_manager() -> DegradationManager:
     global _MANAGER
     with _MANAGER_LOCK:
         if _MANAGER is None:
-            _MANAGER = DegradationManager()
+            from .config import DEGRADATION_HEALTH_CHECK_INTERVAL
+            _MANAGER = DegradationManager(health_interval=DEGRADATION_HEALTH_CHECK_INTERVAL)
             _MANAGER.register_component(
                 "search_engine",
                 check_fn=_check_search_engine,
@@ -1014,6 +1015,46 @@ def fallback_project_init(action: str, **kwargs: Any) -> dict[str, Any]:
     return _fallback_success("project_init", {"action": action, "initialized": False}, degradation_level="minimal")
 
 
+def agent_manage_fallback(action: str, **kwargs: Any) -> dict[str, Any]:
+    logger.warning("Tool %s using fallback", "agent_manage")
+    try:
+        from ..tools.agent_manage import _inline_agent_manage
+        inline_result = _inline_agent_manage(action, **kwargs)
+        return _fallback_success("agent_manage", inline_result, degradation_level="inline")
+    except Exception:
+        pass
+    return _fallback_success("agent_manage", {"action": action, "managed": False}, degradation_level="minimal")
+
+
+def metrics_report_fallback(action: str, **kwargs: Any) -> dict[str, Any]:
+    logger.warning("Tool %s using fallback", "metrics_report")
+    script_result = run_script_fallback(
+        "test-reporter.py",
+        args=["--action", action, "--format", "json"],
+        timeout=30,
+    )
+    if not script_result.get("error"):
+        return _standardize_result(script_result, "metrics_report")
+    try:
+        from ..tools.metrics_report import _inline_metrics_report
+        inline_result = _inline_metrics_report(action, **kwargs)
+        return _fallback_success("metrics_report", inline_result, degradation_level="inline")
+    except Exception:
+        pass
+    return _fallback_success("metrics_report", {"action": action, "metrics": {}}, degradation_level="minimal")
+
+
+def config_manage_fallback(action: str, **kwargs: Any) -> dict[str, Any]:
+    logger.warning("Tool %s using fallback", "config_manage")
+    try:
+        from ..tools.config_manage import _inline_config_manage
+        inline_result = _inline_config_manage(action, **kwargs)
+        return _fallback_success("config_manage", inline_result, degradation_level="inline")
+    except Exception:
+        pass
+    return _fallback_success("config_manage", {"action": action, "config": {}}, degradation_level="minimal")
+
+
 FALLBACK_MAP = {
     "skill_analyze": skill_analyze_fallback,
     "knowledge_search": knowledge_search_fallback,
@@ -1032,6 +1073,9 @@ FALLBACK_MAP = {
     "decision_log": fallback_decision_log,
     "token_budget": fallback_token_budget,
     "project_init": fallback_project_init,
+    "agent_manage": agent_manage_fallback,
+    "metrics_report": metrics_report_fallback,
+    "config_manage": config_manage_fallback,
 }
 
 _INLINE_FALLBACK_MAP = {
@@ -1052,6 +1096,9 @@ _INLINE_FALLBACK_MAP = {
     "decision_log_fallback": fallback_decision_log,
     "token_budget_fallback": fallback_token_budget,
     "project_init_fallback": fallback_project_init,
+    "agent_manage_fallback": agent_manage_fallback,
+    "metrics_report_fallback": metrics_report_fallback,
+    "config_manage_fallback": config_manage_fallback,
 }
 
 

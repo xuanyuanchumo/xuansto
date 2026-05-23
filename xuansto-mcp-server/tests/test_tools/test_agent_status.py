@@ -16,10 +16,10 @@ def mcp_server():
 
 @pytest.fixture(autouse=True)
 def reset_agent_instances():
-    from xuansto_mcp.tools import agent_status as as_mod
-    as_mod._AGENT_INSTANCES.clear()
+    from xuansto_mcp.tools import agent_manage as am_mod
+    am_mod._AGENT_INSTANCES.clear()
     yield
-    as_mod._AGENT_INSTANCES.clear()
+    am_mod._AGENT_INSTANCES.clear()
 
 
 def test_parse_agent_registry_valid(tmp_path):
@@ -82,62 +82,11 @@ async def test_agent_status_detail_no_name(mcp_server):
 
 
 @pytest.mark.asyncio
-async def test_agent_status_create_positive(mcp_server):
-    register(mcp_server)
-    tool_fn = mcp_server._tool_manager._tools["agent_status"].fn
-    with patch("xuansto_mcp.tools.agent_status._persist_agent_instances"):
-        result = await tool_fn(action="create", agent_type="test_agent", capabilities=["coding"])
-        assert result.get("error") is False
-        assert result["data"]["agent_type"] == "test_agent"
-
-
-@pytest.mark.asyncio
-async def test_agent_status_create_no_type(mcp_server):
-    register(mcp_server)
-    tool_fn = mcp_server._tool_manager._tools["agent_status"].fn
-    result = await tool_fn(action="create", agent_type=None)
-    assert result.get("error") is True
-
-
-@pytest.mark.asyncio
 async def test_agent_status_match_no_capabilities(mcp_server):
     register(mcp_server)
     tool_fn = mcp_server._tool_manager._tools["agent_status"].fn
     result = await tool_fn(action="match", capabilities=None)
     assert result.get("error") is True
-
-
-@pytest.mark.asyncio
-async def test_agent_status_assign_no_id(mcp_server):
-    register(mcp_server)
-    tool_fn = mcp_server._tool_manager._tools["agent_status"].fn
-    result = await tool_fn(action="assign", agent_id=None, task="do stuff")
-    assert result.get("error") is True
-
-
-@pytest.mark.asyncio
-async def test_agent_status_release_no_id(mcp_server):
-    register(mcp_server)
-    tool_fn = mcp_server._tool_manager._tools["agent_status"].fn
-    result = await tool_fn(action="release", agent_id=None)
-    assert result.get("error") is True
-
-
-@pytest.mark.asyncio
-async def test_agent_status_destroy_no_id(mcp_server):
-    register(mcp_server)
-    tool_fn = mcp_server._tool_manager._tools["agent_status"].fn
-    result = await tool_fn(action="destroy", agent_id=None)
-    assert result.get("error") is True
-
-
-@pytest.mark.asyncio
-async def test_agent_status_schedule(mcp_server):
-    register(mcp_server)
-    tool_fn = mcp_server._tool_manager._tools["agent_status"].fn
-    result = await tool_fn(action="schedule")
-    assert result.get("error") is False
-    assert result["data"]["status"] == "planned"
 
 
 @pytest.mark.asyncio
@@ -149,13 +98,23 @@ async def test_agent_status_invalid_action(mcp_server):
 
 
 @pytest.mark.asyncio
-async def test_agent_status_create_assign_release_lifecycle(mcp_server):
+async def test_agent_status_match_with_agents(mcp_server):
+    from xuansto_mcp.tools.agent_manage import register as manage_register
+    manage_register(mcp_server)
+    register(mcp_server)
+    manage_fn = mcp_server._tool_manager._tools["agent_manage"].fn
+    status_fn = mcp_server._tool_manager._tools["agent_status"].fn
+
+    with patch("xuansto_mcp.tools.agent_manage._persist_agent_instances"):
+        await manage_fn(action="create", agent_type="Backend", capabilities=["python", "sql"])
+    result = await status_fn(action="match", capabilities=["python"])
+    assert result.get("error") is False
+    assert result["data"]["total"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_agent_status_merge(mcp_server):
     register(mcp_server)
     tool_fn = mcp_server._tool_manager._tools["agent_status"].fn
-    with patch("xuansto_mcp.tools.agent_status._persist_agent_instances"):
-        create_result = await tool_fn(action="create", agent_type="worker", capabilities=["test"])
-        agent_id = create_result["data"]["agent_id"]
-        assign_result = await tool_fn(action="assign", agent_id=agent_id, task="run tests")
-        assert assign_result["data"]["status"] == "busy"
-        release_result = await tool_fn(action="release", agent_id=agent_id)
-        assert release_result["data"]["status"] == "idle"
+    result = await tool_fn(action="merge")
+    assert result.get("error") is False

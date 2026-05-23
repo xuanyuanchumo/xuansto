@@ -19,7 +19,9 @@
 .xuansto/
 
 .venv/
+.venv2/
 .venv_test/
+.testvenv/
 __pycache__/
 *.py[cod]
 *$py.class

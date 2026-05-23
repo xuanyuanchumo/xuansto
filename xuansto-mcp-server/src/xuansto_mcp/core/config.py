@@ -123,6 +123,11 @@ GATE_SCRIPTS_MAP = _CONFIG.get("gate_scripts", DEFAULT_GATE_SCRIPTS_MAP)
 QUALITY_GATES_PHASE_MAP = _CONFIG.get("gates_by_phase", DEFAULT_QUALITY_GATES_PHASE_MAP)
 HOOK_SCRIPTS_MAP = _CONFIG.get("hook_scripts", DEFAULT_HOOK_SCRIPTS_MAP)
 
+_DEGRADATION_CONFIG = _CONFIG.get("degradation", {})
+if not isinstance(_DEGRADATION_CONFIG, dict):
+    _DEGRADATION_CONFIG = {}
+DEGRADATION_HEALTH_CHECK_INTERVAL: float = _DEGRADATION_CONFIG.get("health_check_interval", 30.0)
+
 def _validate_config_legacy(config: dict) -> list[str]:
     errors: list[str] = []
     if "gate_scripts" in config and not isinstance(config["gate_scripts"], dict):
@@ -134,7 +139,7 @@ def _validate_config_legacy(config: dict) -> list[str]:
     return errors
 
 def reload_config() -> dict[str, Any]:
-    global GATE_SCRIPTS_MAP, QUALITY_GATES_PHASE_MAP, HOOK_SCRIPTS_MAP
+    global GATE_SCRIPTS_MAP, QUALITY_GATES_PHASE_MAP, HOOK_SCRIPTS_MAP, DEGRADATION_HEALTH_CHECK_INTERVAL
     import yaml
 
     config_path = _resolve_skill_file(".xuansto-config.yaml")
@@ -145,6 +150,7 @@ def reload_config() -> dict[str, Any]:
             GATE_SCRIPTS_MAP = DEFAULT_GATE_SCRIPTS_MAP
             QUALITY_GATES_PHASE_MAP = DEFAULT_QUALITY_GATES_PHASE_MAP
             HOOK_SCRIPTS_MAP = DEFAULT_HOOK_SCRIPTS_MAP
+            DEGRADATION_HEALTH_CHECK_INTERVAL = 30.0
         return {
             "gate_scripts_count": len(GATE_SCRIPTS_MAP),
             "gates_by_phase_count": len(QUALITY_GATES_PHASE_MAP),
@@ -171,6 +177,7 @@ def reload_config() -> dict[str, Any]:
         "gate_scripts": dict,
         "gates_by_phase": dict,
         "hook_scripts": dict,
+        "degradation": dict,
     }
     for field, expected_type in field_validators.items():
         if field in _new_config and not isinstance(_new_config[field], expected_type):
@@ -190,6 +197,10 @@ def reload_config() -> dict[str, Any]:
         GATE_SCRIPTS_MAP = _new_config.get("gate_scripts", DEFAULT_GATE_SCRIPTS_MAP)
         QUALITY_GATES_PHASE_MAP = _new_config.get("gates_by_phase", DEFAULT_QUALITY_GATES_PHASE_MAP)
         HOOK_SCRIPTS_MAP = _new_config.get("hook_scripts", DEFAULT_HOOK_SCRIPTS_MAP)
+        _new_degradation = _new_config.get("degradation", {})
+        if not isinstance(_new_degradation, dict):
+            _new_degradation = {}
+        DEGRADATION_HEALTH_CHECK_INTERVAL = _new_degradation.get("health_check_interval", 30.0)
     return {
         "gate_scripts_count": len(GATE_SCRIPTS_MAP),
         "gates_by_phase_count": len(QUALITY_GATES_PHASE_MAP),

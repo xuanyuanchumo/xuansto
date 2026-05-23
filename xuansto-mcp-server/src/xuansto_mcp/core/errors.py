@@ -196,12 +196,12 @@ def make_error_response(error: Exception, error_code: str | None = None, languag
             "message": error.message,
             "details": error.details,
         }
-        result["_deprecated_code"] = error.code
+        result["_deprecated_exception_type"] = error.code
         if resolved_code:
             i18n_msg = _get_i18n_message(resolved_code, language)
             if i18n_msg and language != "zh":
                 result["message_i18n"] = i18n_msg
-        result["_migration_note"] = "Field 'code' is deprecated; use 'error_code' instead"
+        result["_migration_note"] = "Field 'code' is deprecated; use 'error_code' instead. Original exception type available in '_deprecated_exception_type'."
         result["language"] = language
         return result
     try:
@@ -214,12 +214,12 @@ def make_error_response(error: Exception, error_code: str | None = None, languag
                 "message": f"参数校验失败: {len(details)}个错误",
                 "details": {"errors": details},
             }
-            result["_deprecated_code"] = "VALIDATION_ERROR"
+            result["_deprecated_exception_type"] = "VALIDATION_ERROR"
             if resolved_code:
                 i18n_msg = _get_i18n_message(resolved_code, language)
                 if i18n_msg and language != "zh":
                     result["message_i18n"] = i18n_msg
-            result["_migration_note"] = "Field 'code' is deprecated; use 'error_code' instead"
+            result["_migration_note"] = "Field 'code' is deprecated; use 'error_code' instead. Original exception type available in '_deprecated_exception_type'."
             result["language"] = language
             return result
     except ImportError:
@@ -230,17 +230,17 @@ def make_error_response(error: Exception, error_code: str | None = None, languag
         "message": _get_i18n_message(ERR_INTERNAL, language) or "内部错误",
         "details": {},
     }
-    result["_deprecated_code"] = "INTERNAL_ERROR"
+    result["_deprecated_exception_type"] = "INTERNAL_ERROR"
     if isinstance(error, (ValueError, TypeError, KeyError)):
         result["message"] = str(error)
-        result["_deprecated_code"] = "VALIDATION_ERROR"
+        result["_deprecated_exception_type"] = "VALIDATION_ERROR"
         if not resolved_code:
             result["error_code"] = ERR_VALIDATION
     if resolved_code:
         i18n_msg = _get_i18n_message(resolved_code, language)
         if i18n_msg and language != "zh":
             result["message_i18n"] = i18n_msg
-    result["_migration_note"] = "Field 'code' is deprecated; use 'error_code' instead"
+    result["_migration_note"] = "Field 'code' is deprecated; use 'error_code' instead. Original exception type available in '_deprecated_exception_type'."
     result["language"] = language
     return result
 

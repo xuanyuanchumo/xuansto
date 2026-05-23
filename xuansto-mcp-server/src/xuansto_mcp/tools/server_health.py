@@ -229,7 +229,7 @@ def _negotiate_api_version(client_version: str) -> dict[str, Any]:
                 **base_result,
                 "compatible": False,
                 "deprecated_features": [],
-                "new_features": _features_between(client_version, MCP_API_VERSION),
+                "new_features": [],
                 "upgrade_suggestion": "Invalid client version format. Please provide a valid semver version.",
             }
     except (ValueError, IndexError):
@@ -237,7 +237,7 @@ def _negotiate_api_version(client_version: str) -> dict[str, Any]:
             **base_result,
             "compatible": False,
             "deprecated_features": [],
-            "new_features": _features_between(client_version, MCP_API_VERSION),
+            "new_features": [],
             "upgrade_suggestion": "Invalid client version format. Please provide a valid semver version.",
         }
 

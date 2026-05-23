@@ -5,6 +5,11 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class DegradationConfigModel(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    health_check_interval: float = Field(default=30.0, ge=1.0, le=3600.0)
+
+
 class SkillConfigModel(BaseModel):
     model_config = ConfigDict(extra="allow")
     gate_scripts: dict[str, str | None] = Field(default_factory=dict)
@@ -12,6 +17,7 @@ class SkillConfigModel(BaseModel):
     hook_scripts: dict[str, str | None] = Field(default_factory=dict)
     max_snapshots_per_workflow: int = Field(default=20, ge=1, le=1000)
     snapshot_ttl_days: int = Field(default=30, ge=1, le=365)
+    degradation: DegradationConfigModel = Field(default_factory=DegradationConfigModel)
 
 
 class FallbackEntryModel(BaseModel):

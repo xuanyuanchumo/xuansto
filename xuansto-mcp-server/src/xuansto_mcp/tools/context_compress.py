@@ -212,6 +212,8 @@ def register(mcp: FastMCP) -> None:
                     "compressed": content,
                     "original_tokens": original_tokens,
                     "compressed_tokens": original_tokens,
+                    "actual_tokens": original_tokens,
+                    "target_deviation": 0,
                     "compression_ratio": 1.0,
                     "strategy": strategy,
                     "token_method": "tiktoken" if _HAS_TIKTOKEN else "char_estimate",

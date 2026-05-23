@@ -25,9 +25,14 @@ def _load_spec_lock(filename: str) -> dict:
 class TestVersionCompatibilityMatrix:
     def test_server_version_matches_pyproject(self):
         pyproject_path = Path(__file__).resolve().parent.parent.parent / "pyproject.toml"
-        import tomllib
-        with open(pyproject_path, "rb") as f:
-            pyproject = tomllib.load(f)
+        try:
+            import tomllib
+            with open(pyproject_path, "rb") as f:
+                pyproject = tomllib.load(f)
+        except ModuleNotFoundError:
+            import tomli as tomllib
+            with open(pyproject_path, "rb") as f:
+                pyproject = tomllib.load(f)
         pyproject_version = pyproject["project"]["version"]
         assert __version__ == pyproject_version
 
@@ -74,12 +79,13 @@ class TestVersionCompatibilityMatrix:
         assert schema["required"] == ["name", "version", "description", "triggers", "tools"]
         assert schema["type"] == "object"
 
-    def test_tool_parameter_schemas_covers_all_16_tools(self):
+    def test_tool_parameter_schemas_covers_all_20_tools(self):
         schemas = _load_spec_lock("tool-parameter-schemas.json")
         tool_schemas = schemas["tool_schemas"]
         expected_tools = [
             "skill_analyze",
             "knowledge_search",
+            "knowledge_inject",
             "quality_gate_check",
             "spec_drift_detect",
             "security_scan",
@@ -87,6 +93,7 @@ class TestVersionCompatibilityMatrix:
             "session_manage",
             "workflow_dispatch",
             "agent_status",
+            "agent_manage",
             "hook_manage",
             "resource_load_status",
             "server_health",
@@ -94,16 +101,19 @@ class TestVersionCompatibilityMatrix:
             "decision_log",
             "token_budget",
             "project_init",
+            "metrics_report",
+            "config_manage",
         ]
         for tool_name in expected_tools:
             assert tool_name in tool_schemas, f"Missing tool schema: {tool_name}"
-        assert len(tool_schemas) == 16
+        assert len(tool_schemas) == 20
 
     def test_tool_parameter_schemas_definitions_match_pydantic(self):
         schemas = _load_spec_lock("tool-parameter-schemas.json")
         from xuansto_mcp.models.schemas import (
             SkillAnalyzeInput,
             KnowledgeSearchInput,
+            KnowledgeInjectInput,
             QualityGateCheckInput,
             SpecDriftDetectInput,
             SecurityScanInput,
@@ -111,6 +121,7 @@ class TestVersionCompatibilityMatrix:
             SessionManageInput,
             WorkflowDispatchInput,
             AgentStatusInput,
+            AgentManageInput,
             HookManageInput,
             ResourceLoadStatusInput,
             ServerHealthInput,
@@ -118,10 +129,13 @@ class TestVersionCompatibilityMatrix:
             DecisionLogInput,
             TokenBudgetInput,
             ProjectInitInput,
+            MetricsReportInput,
+            ConfigManageInput,
         )
         model_map = {
             "SkillAnalyzeInput": SkillAnalyzeInput,
             "KnowledgeSearchInput": KnowledgeSearchInput,
+            "KnowledgeInjectInput": KnowledgeInjectInput,
             "QualityGateCheckInput": QualityGateCheckInput,
             "SpecDriftDetectInput": SpecDriftDetectInput,
             "SecurityScanInput": SecurityScanInput,
@@ -129,6 +143,7 @@ class TestVersionCompatibilityMatrix:
             "SessionManageInput": SessionManageInput,
             "WorkflowDispatchInput": WorkflowDispatchInput,
             "AgentStatusInput": AgentStatusInput,
+            "AgentManageInput": AgentManageInput,
             "HookManageInput": HookManageInput,
             "ResourceLoadStatusInput": ResourceLoadStatusInput,
             "ServerHealthInput": ServerHealthInput,
@@ -136,6 +151,8 @@ class TestVersionCompatibilityMatrix:
             "DecisionLogInput": DecisionLogInput,
             "TokenBudgetInput": TokenBudgetInput,
             "ProjectInitInput": ProjectInitInput,
+            "MetricsReportInput": MetricsReportInput,
+            "ConfigManageInput": ConfigManageInput,
         }
         definitions = schemas["definitions"]
         for def_name, model_cls in model_map.items():

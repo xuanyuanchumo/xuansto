@@ -35,6 +35,11 @@
         "Enhanced loading_progress action with feature availability and token budget tracking",
         "Cumulative phase preloading (loads all resources up to target phase)",
         "Phase history tracking with trigger information",
+        "Split agent_status into agent_status (query) and agent_manage (lifecycle) tools",
+        "Split knowledge_search into knowledge_search (retrieve) and knowledge_inject (inject/precipitate) tools",
+        "Added agent_manage, metrics_report, config_manage, knowledge_inject tools (20 total)",
+        "Added disclosure_transition action to resource_load_status with target_phase support",
+        "Added capabilities action to server_health",
         "Backward compatible with v2.0.0 and v1.0.0 clients"
       ]
     }
