@@ -3,11 +3,6 @@ __pycache__/
 *$py.class
 *.so
 
-.agent_cache/
-.skill-logs/
-
-.knowledge/index/knowledge.db
-.knowledge/index/chroma_db/
 .knowledge/temp-scripts/*
 !.knowledge/temp-scripts/.gitkeep
 .knowledge/script-errors/*
@@ -35,3 +30,7 @@ Thumbs.db
 *.tmp
 *.temp
 .cache/
+
+node_modules/
+dist/
+build/
