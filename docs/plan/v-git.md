@@ -159,23 +159,59 @@ git branch -vv | Where-Object { $_ -match '\[gone\]' } | ForEach-Object {
 !.trae/skills/
 .trae/skills/*
 !.trae/skills/xuansto-skill-v2/
+
 .trae/skills/xuansto-skill-v2/.knowledge/temp-scripts/*
 !.trae/skills/xuansto-skill-v2/.knowledge/temp-scripts/.gitkeep
 .trae/skills/xuansto-skill-v2/.knowledge/script-errors/*
 !.trae/skills/xuansto-skill-v2/.knowledge/script-errors/.gitkeep
 .trae/skills/xuansto-skill-v2/.knowledge/index/knowledge.db
+
 .xuansto/
-.venv/ .venv2/ .venv_test/ .testvenv/
-__pycache__/ *.py[cod]
-.DS_Store Thumbs.db ._*
-.idea/ .vscode/ .claude/ .cursor/ .windsurf/
-.env .env.local .env.*.local
-*.log logs/
-*.db *.sqlite3
-xuansto-clean/ 副本/
-CHANGELOG.md CODE_WIKI.md xuansto-skill-WIKI.md
-_copy_helper.ps1 _copy_helper.py setup-worktree.ps1 test-path-resolve.ps1 test-syntax.ps1
-docs/
+
+.venv/
+.venv2/
+.venv_test/
+.testvenv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+.DS_Store
+Thumbs.db
+._*
+
+.idea/
+.vscode/
+.claude/
+.cursor/
+.windsurf/
+*.swp
+*.swo
+*~
+
+.env
+.env.local
+.env.*.local
+
+*.log
+logs/
+
+*.db
+*.sqlite3
+
+xuansto-clean/
+副本/
+
+CHANGELOG.md
+CODE_WIKI.md
+xuansto-skill-WIKI.md
+_copy_helper.ps1
+_copy_helper.py
+setup-worktree.ps1
+test-path-resolve.ps1
+test-syntax.ps1
+docs/*
+!docs/plan/
 ```
 
 ### 3.4 合理性分析

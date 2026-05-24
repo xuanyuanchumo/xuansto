@@ -33,7 +33,7 @@
 | **工作流数** | 8 | 15 ⬆️ | 15 ➡️ | 15+ ⬆️ |
 | **命令数** | 13 | 31 ⬆️ | 31 ➡️ | 31+ ⬆️ |
 | **MCP Tool数** | 0 | 20 🆕 | 20 ➡️ | 22+ ⬆️ |
-| **MCP Resource数** | 0 | 8 🆕 | 8 ➡️ | 10+ ⬆️ |
+| **MCP Resource数** | 0 | 11 🆕 | 11 ➡️ | 10+ ⬆️ |
 | **质量门禁** | 15 | 54 ⬆️ | 54 ➡️ | 54+ ⬆️ |
 | **降级脚本** | 12 | 60+ ⬆️ | 60+ ➡️ | 60+ ➡️ |
 | **模板数** | 12 | 19 ⬆️ | 19 ➡️ | 19+ ⬆️ |
@@ -68,7 +68,7 @@
 | 分层 | V_PREVIOUS_MAJOR | V_CURRENT | v8.1.0 | v9.0.0 |
 |------|-------------------|-----------|--------|--------|
 | **Skill层** | SKILL.md(765行，全内嵌) ⚠️已移除 | SKILL.md(<200行)+外部YAML ⬆️ | SKILL.md(<200行)+Phase标记+外部YAML ⬆️ | SKILL.md(<200行)+Phase标记+外部YAML ➡️ |
-| **执行层** | 无 | 20 MCP Tool + 8 Resource 🆕 | 20 MCP Tool + 8 Resource ➡️ | 22+ MCP Tool + 10+ Resource ⬆️ |
+| **执行层** | 无 | 20 MCP Tool + 11 Resource 🆕 | 20 MCP Tool + 11 Resource ➡️ | 22+ MCP Tool + 10+ Resource ⬆️ |
 | **资源层** | agents/commands/scripts | + references/templates/workflows ⬆️ | + references补全+evals修正 ⬆️ | + 统一数据层+插件资源 ⬆️ |
 | **依赖层** | Python脚本 | + mcp[cli]+pydantic+pyyaml ⬆️ | + mcp[cli]+pydantic+pyyaml ➡️ | + mcp[cli]+pydantic+pyyaml+watchfiles ⬆️ |
 
@@ -251,7 +251,7 @@
 | 维度 | V_PREVIOUS_MAJOR | V_CURRENT | v8.1.0 | v9.0.0 |
 |------|-------------------|-----------|--------|--------|
 | **Tool数量** | 0 | 20 🆕 | 20 ➡️ | 22+ ⬆️ |
-| **API版本** | N/A | 3.0.0(最低兼容1.0.0) | 3.0.0(最低兼容1.0.0) ➡️ | 4.0.0(最低兼容3.0.0) ⬆️ |
+| **API版本** | N/A | 3.0.0(最低兼容2.0.0) | 3.0.0(最低兼容2.0.0) ➡️ | 4.0.0(最低兼容3.0.0) ⬆️ |
 | **传输方式** | N/A | stdio | stdio ➡️ | stdio+SSE可选 ⬆️ |
 | **输入校验** | N/A | + Pydantic BaseModel(extra="forbid") 🆕 | + Pydantic BaseModel(extra="forbid") ➡️ | + Pydantic BaseModel(extra="forbid") ➡️ |
 | **Tool注册方式** | N/A | FastMCP装饰器+内部API ⬇️ | + 本地Tool注册映射表 ⬆️ | + 本地Tool注册映射表+插件注册 ⬆️ |
@@ -377,7 +377,7 @@
 | **退避无抖动** | N/A | ⬇️ 可能雪崩 | ⬆️ backoff jitter | ➡️ 随机抖动 |
 | **YAML无Schema校验** | N/A | 待实施 | ⬆️ Pydantic校验 | ➡️ Pydantic校验 |
 | **SKILL.md行数** | ❌ 765行(超限) | ✅ <200行 | ⬆️ <200行+Phase标记 | ➡️ <200行 |
-| **v1/v2文件重复** | N/A | ✅ v1标记ARCHIVED | ➡️ v1归档，v2唯一维护 | ➡️ v1归档 |
+| **v1/v2文件重复** | N/A | ✅ v1已从仓库移除 | ➡️ v1归档，v2唯一维护 | ➡️ v1归档 |
 | **缺少CHANGELOG** | ❌ 无 | ✅ CHANGELOG.md已存在 | ➡️ CHANGELOG.md | ➡️ CHANGELOG.md |
 | **缺少评估配置** | ❌ 无 | ✅ evals/目录已存在+Tool引用有效 | ➡️ evals修正(Tool引用有效) | ➡️ evals完整 |
 | **缺少速率限制** | N/A | ✅ 令牌桶限流 | ➡️ 令牌桶限流 | ➡️ 令牌桶限流 |
