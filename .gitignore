@@ -55,3 +55,4 @@ test-path-resolve.ps1
 test-syntax.ps1
 docs/*
 !docs/plan/
+!docs/amb/
