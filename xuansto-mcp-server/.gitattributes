@@ -1,0 +1,9 @@
+*.py text eol=lf diff=python
+*.pyi text eol=lf diff=python
+*.toml text eol=lf
+*.cfg text eol=lf
+
+*.db binary
+*.sqlite3 binary
+*.pkl binary
+*.parquet binary

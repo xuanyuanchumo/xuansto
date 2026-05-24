@@ -53,4 +53,5 @@ _copy_helper.py
 setup-worktree.ps1
 test-path-resolve.ps1
 test-syntax.ps1
-docs/
+docs/*
+!docs/plan/

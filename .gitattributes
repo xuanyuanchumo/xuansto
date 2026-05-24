@@ -1,0 +1,56 @@
+* text=auto eol=lf
+
+*.py text eol=lf diff=python
+*.pyx text eol=lf diff=python
+*.pyi text eol=lf diff=python
+
+*.md text eol=lf diff=markdown
+*.rst text eol=lf
+
+*.yaml text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+*.cfg text eol=lf
+*.ini text eol=lf
+
+*.js text eol=lf
+*.ts text eol=lf
+*.jsx text eol=lf
+*.tsx text eol=lf
+*.css text eol=lf
+*.scss text eol=lf
+*.html text eol=lf
+
+*.sh text eol=lf
+*.bash text eol=lf
+*.ps1 text eol=crlf
+
+*.xml text eol=lf
+*.svg text eol=lf
+
+*.gitignore text eol=lf
+*.gitattributes text eol=lf
+*.editorconfig text eol=lf
+
+LICENSE text eol=lf
+
+*.db binary
+*.sqlite3 binary
+*.so binary
+*.dll binary
+*.exe binary
+*.pyd binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.tar binary
+*.gz binary
+*.whl binary
+*.egg binary
+*.pkl binary
+*.parquet binary
