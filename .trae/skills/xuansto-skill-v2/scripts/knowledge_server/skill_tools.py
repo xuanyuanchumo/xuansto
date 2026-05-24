@@ -398,7 +398,7 @@ def get_skill_tool_definitions() -> list:
                     "available_count": {"type": "integer"},
                 },
             },
-            annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False),
+            annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
         ),
         Tool(
             name="hook_manage",

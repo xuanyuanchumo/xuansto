@@ -655,7 +655,7 @@ def register_mcp_tools(server, mcp_server):
                         "timestamp": {"type": "string"},
                     },
                 },
-                annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False),
+                annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
             ),
         ]
         return knowledge_tools + get_skill_tool_definitions()
@@ -676,107 +676,36 @@ def register_mcp_tools(server, mcp_server):
             except Exception as e:
                 logger.warning("operation=mcp_status_push, error=%s", e)
 
-        if name == "knowledge_search":
-            query = arguments.get("query", "")
-            top_k = arguments.get("top_k", 5)
-            search_type = arguments.get("search_type", "hybrid")
-            filters = arguments.get("filters", {})
-            min_confidence = filters.get("min_confidence", 0.0)
-            tag_filters = filters.get("tags")
-            type_filters = filters.get("type")
-            category_filters = filters.get("category")
-            effective_strategy = server.degradation.get_search_strategy()
-            if search_type != "keyword_only" and effective_strategy != "hybrid":
-                search_type = effective_strategy
-            result = server.retrieval.search(
-                query=query,
-                top_k=top_k,
-                strategy=search_type,
-                min_confidence=min_confidence,
-                tag_filters=tag_filters,
-                type_filters=type_filters,
-                category_filters=category_filters,
-            )
-            result["degradation_level"] = server.degradation.level
-            result["degradation_name"] = server.degradation.level_name
-            return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
-
-        elif name == "knowledge_add":
-            content = arguments.get("content", "")
-            metadata = arguments.get("metadata", {})
-            auto_dedup = arguments.get("auto_dedup", True)
-            has_sensitive, findings = SensitiveContentFilter.check(content)
-            if has_sensitive:
-                return [TextContent(type="text", text=json.dumps(make_error_response(
-                    code="SENSITIVE_CONTENT",
-                    message="Content contains sensitive information",
-                    details={"findings": findings, "mcp_error_code": APP_ERROR_CODES["SENSITIVE_CONTENT"]},
-                ), ensure_ascii=False))]
-            validation_errors = InputValidator.validate_all(content=content)
-            if validation_errors:
-                return [TextContent(type="text", text=json.dumps(make_error_response(
-                    code="BAD_REQUEST",
-                    message="Input validation failed",
-                    details={"validation_errors": validation_errors, "mcp_error_code": APP_ERROR_CODES["BAD_REQUEST"]},
-                ), ensure_ascii=False))]
-            entry_data = {
-                "title": metadata.get("title", "") or metadata.get("id", ""),
-                "content": content,
-                "scope": "workspace",
-                "tags": metadata.get("tags", []),
-                "confidence": metadata.get("confidence", 0.6),
-                "source_path": metadata.get("source"),
-                "type": metadata.get("type", "unknown"),
-                "category": metadata.get("category", "uncategorized"),
-            }
-            if auto_dedup:
-                dedup_result = server.dedup.check_duplicate(entry_data)
-                if dedup_result["action"] == "merge":
-                    existing = server.sqlite.get_entry(dedup_result["existing_id"])
-                    if existing:
-                        merged = server.dedup.merge_entries(existing, entry_data)
-                        server.sqlite.update_entry(existing["id"], merged)
-                        if server.chroma.available:
-                            try:
-                                server.chroma.add_embedding(existing["id"], content, {"scope": "workspace", "title": merged.get("title", "")})
-                                server.sqlite.update_embedding_status(existing["id"], "ready")
-                            except Exception:
-                                server.sqlite.update_embedding_status(existing["id"], "pending")
-                        server.exporter.export_entry(existing["id"])
-                        server._touch_change()
-                        return [TextContent(type="text", text=json.dumps(make_response("ok", {
-                            "id": existing["id"],
-                            "status": "merged",
-                            "dedup_status": "duplicate_merged",
-                        }), ensure_ascii=False))]
-                elif dedup_result["action"] == "skip":
-                    return [TextContent(type="text", text=json.dumps(make_response("conflict", {
-                        "id": dedup_result["existing_id"],
-                        "status": "duplicate_rejected",
-                        "dedup_status": "duplicate",
-                        "similarity_score": dedup_result["similarity_score"],
-                    }), ensure_ascii=False))]
-            result = server.sqlite.add_entry(entry_data)
-            if server.chroma.available:
-                try:
-                    server.chroma.add_embedding(result["id"], content, {"scope": "workspace", "title": entry_data.get("title", "")})
-                    server.sqlite.update_embedding_status(result["id"], "ready")
-                except Exception:
-                    server.sqlite.update_embedding_status(result["id"], "pending")
-            server.exporter.export_entry(result["id"])
-            server._touch_change()
-            return [TextContent(type="text", text=json.dumps(make_response("ok", {
-                "id": result["id"],
-                "status": "created",
-                "dedup_status": "new",
-            }), ensure_ascii=False))]
-
-        elif name == "knowledge_update":
-            entry_id = arguments.get("id", "")
-            content = arguments.get("content")
-            metadata = arguments.get("metadata", {})
-            updates = {}
-            if content is not None:
+        try:
+            if name == "knowledge_search":
+                query = arguments.get("query", "")
+                top_k = arguments.get("top_k", 5)
+                search_type = arguments.get("search_type", "hybrid")
+                filters = arguments.get("filters", {})
+                min_confidence = filters.get("min_confidence", 0.0)
+                tag_filters = filters.get("tags")
+                type_filters = filters.get("type")
+                category_filters = filters.get("category")
+                effective_strategy = server.degradation.get_search_strategy()
+                if search_type != "keyword_only" and effective_strategy != "hybrid":
+                    search_type = effective_strategy
+                result = server.retrieval.search(
+                    query=query,
+                    top_k=top_k,
+                    strategy=search_type,
+                    min_confidence=min_confidence,
+                    tag_filters=tag_filters,
+                    type_filters=type_filters,
+                    category_filters=category_filters,
+                )
+                result["degradation_level"] = server.degradation.level
+                result["degradation_name"] = server.degradation.level_name
+                return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+    
+            elif name == "knowledge_add":
+                content = arguments.get("content", "")
+                metadata = arguments.get("metadata", {})
+                auto_dedup = arguments.get("auto_dedup", True)
                 has_sensitive, findings = SensitiveContentFilter.check(content)
                 if has_sensitive:
                     return [TextContent(type="text", text=json.dumps(make_error_response(
@@ -784,283 +713,365 @@ def register_mcp_tools(server, mcp_server):
                         message="Content contains sensitive information",
                         details={"findings": findings, "mcp_error_code": APP_ERROR_CODES["SENSITIVE_CONTENT"]},
                     ), ensure_ascii=False))]
-                updates["content"] = content
-            if "type" in metadata:
-                updates["type"] = metadata["type"]
-            if "category" in metadata:
-                updates["category"] = metadata["category"]
-            if "tags" in metadata:
-                updates["tags"] = metadata["tags"]
-            if "confidence" in metadata:
-                updates["confidence"] = metadata["confidence"]
-            if not updates:
-                return [TextContent(type="text", text=json.dumps(make_error_response(
-                    code="BAD_REQUEST",
-                    message="No update fields provided",
-                    details={"mcp_error_code": APP_ERROR_CODES["BAD_REQUEST"]},
-                ), ensure_ascii=False))]
-            result = server.sqlite.update_entry(entry_id, updates)
-            if result is None:
-                return [TextContent(type="text", text=json.dumps(make_error_response(
-                    code="NOT_FOUND",
-                    message="Knowledge entry not found",
-                    details={"entry_id": entry_id, "mcp_error_code": APP_ERROR_CODES["NOT_FOUND"]},
-                ), ensure_ascii=False))]
-            if isinstance(result, dict) and result.get("error") == "version_conflict":
-                return [TextContent(type="text", text=json.dumps(make_error_response(
-                    code="VERSION_CONFLICT",
-                    message="Version conflict",
-                    details={
-                        "entry_id": entry_id,
-                        "current_version": result["current_version"],
-                        "expected_version": result["expected_version"],
-                        "mcp_error_code": APP_ERROR_CODES["VERSION_CONFLICT"],
-                    },
-                    retryable=True,
-                ), ensure_ascii=False))]
-            if server.chroma.available and content is not None:
-                try:
-                    server.chroma.add_embedding(entry_id, content, {"scope": result.get("scope", ""), "title": result.get("title", "")})
-                    server.sqlite.update_embedding_status(entry_id, "ready")
-                except Exception:
-                    server.sqlite.update_embedding_status(entry_id, "pending")
-            server.exporter.export_entry(entry_id)
-            server._touch_change()
-            return [TextContent(type="text", text=json.dumps(make_response("ok", {
-                "id": entry_id,
-                "status": "updated",
-            }), ensure_ascii=False))]
-
-        elif name == "knowledge_delete":
-            entry_id = arguments.get("id", "")
-            result = server.mcp_knowledge_delete(entry_id)
-            return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
-
-        elif name == "knowledge_stats":
-            detailed = arguments.get("detailed", False)
-            since = arguments.get("since")
-            counts = server.sqlite.count_entries()
-            embedding_status_counts = server.sqlite.count_by_embedding_status()
-            stats = {
-                "total_entries": counts.get("total", 0),
-                "by_scope": {k: v for k, v in counts.items() if k != "total"},
-                "embedding": {
-                    "pending": embedding_status_counts.get("pending", 0),
-                    "ready": embedding_status_counts.get("ready", 0),
-                },
-                "chroma_available": server.chroma.available,
-                "chroma_vector_count": server.chroma.get_vector_count() if server.chroma.available else 0,
-                "degradation_level": server.degradation.level,
-                "degradation_name": server.degradation.level_name,
-                "embedding_level": server.embedding_manager.level,
-                "embedding_level_name": server.embedding_manager.level_name,
-                "last_change_timestamp": server._last_change_timestamp,
-            }
-            if since:
-                try:
-                    since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
-                    last_dt = datetime.fromisoformat(server._last_change_timestamp.replace("Z", "+00:00"))
-                    stats["status_changed_since_last_check"] = last_dt > since_dt
-                except (ValueError, TypeError):
-                    stats["status_changed_since_last_check"] = None
-            if detailed:
-                all_entries = server.sqlite.get_all_entries()
-                type_counts = {}
-                category_counts = {}
-                for e in all_entries:
-                    t = e.get("type", "unknown")
-                    c = e.get("category", "uncategorized")
-                    type_counts[t] = type_counts.get(t, 0) + 1
-                    category_counts[c] = category_counts.get(c, 0) + 1
-                stats["by_type"] = type_counts
-                stats["by_category"] = category_counts
-            return [TextContent(type="text", text=json.dumps(make_response("ok", stats), ensure_ascii=False))]
-
-        elif name == "knowledge_rollback":
-            entry_id = arguments.get("id", "")
-            target_version = arguments.get("target_version", 1)
-            result = server.mcp_knowledge_rollback_version(entry_id, target_version)
-            return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
-
-        elif name == "knowledge_progressive_search":
-            query = arguments.get("query", "")
-            task_type = arguments.get("task_type", "feature")
-            tech_stack = arguments.get("tech_stack", {})
-            token_budget = arguments.get("token_budget", 2048)
-            result = server.mcp_knowledge_progressive_search(
-                query=query,
-                task_type=task_type,
-                tech_stack=tech_stack,
-                token_budget=token_budget,
-            )
-            return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
-
-        elif name == "knowledge_deep_load":
-            entry_id = arguments.get("entry_id", "")
-            result = server.mcp_knowledge_deep_load(entry_id)
-            return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
-
-        elif name == "knowledge_auto_retrieve":
-            task_type = arguments.get("task_type", "feature")
-            project_path = arguments.get("project_path", "")
-            query = arguments.get("query")
-            token_budget = arguments.get("token_budget", 2048)
-            if not project_path:
-                return [TextContent(type="text", text=json.dumps(make_error_response(
-                    code="BAD_REQUEST",
-                    message="project_path is required",
-                    details={"mcp_error_code": APP_ERROR_CODES["BAD_REQUEST"]},
-                ), ensure_ascii=False))]
-            try:
-                result = server.auto_retrieve(
-                    task_type=task_type,
-                    project_path=project_path,
-                    query=query,
-                    token_budget=token_budget,
-                )
-                return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
-            except Exception as e:
-                return [TextContent(type="text", text=json.dumps(make_error_response(
-                    code="INTERNAL_ERROR",
-                    message=f"Auto-retrieve failed: {e}",
-                    details={"mcp_error_code": MCP_ERROR_CODES["INTERNAL_ERROR"]},
-                ), ensure_ascii=False))]
-
-        elif name == "knowledge_web_update":
-            entry_id = arguments.get("entry_id")
-            category = arguments.get("category")
-            tags = arguments.get("tags")
-            if not entry_id and not category and not tags:
-                return [TextContent(type="text", text=json.dumps(make_error_response(
-                    code="BAD_REQUEST",
-                    message="At least one of entry_id, category, or tags must be provided",
-                    details={"mcp_error_code": APP_ERROR_CODES["BAD_REQUEST"]},
-                ), ensure_ascii=False))]
-            try:
-                from .web_search import search_official_docs, extract_and_structure
-            except ImportError:
-                return [TextContent(type="text", text=json.dumps(make_error_response(
-                    code="INTERNAL_ERROR",
-                    message="Web search module not available",
-                    details={"mcp_error_code": MCP_ERROR_CODES["INTERNAL_ERROR"]},
-                ), ensure_ascii=False))]
-            target_entry = None
-            query_parts = []
-            if entry_id:
-                target_entry = server.sqlite.get_entry(entry_id)
-                if target_entry is None:
+                validation_errors = InputValidator.validate_all(content=content)
+                if validation_errors:
+                    return [TextContent(type="text", text=json.dumps(make_error_response(
+                        code="BAD_REQUEST",
+                        message="Input validation failed",
+                        details={"validation_errors": validation_errors, "mcp_error_code": APP_ERROR_CODES["BAD_REQUEST"]},
+                    ), ensure_ascii=False))]
+                entry_data = {
+                    "title": metadata.get("title", "") or metadata.get("id", ""),
+                    "content": content,
+                    "scope": "workspace",
+                    "tags": metadata.get("tags", []),
+                    "confidence": metadata.get("confidence", 0.6),
+                    "source_path": metadata.get("source"),
+                    "type": metadata.get("type", "unknown"),
+                    "category": metadata.get("category", "uncategorized"),
+                }
+                if auto_dedup:
+                    dedup_result = server.dedup.check_duplicate(entry_data)
+                    if dedup_result["action"] == "merge":
+                        existing = server.sqlite.get_entry(dedup_result["existing_id"])
+                        if existing:
+                            merged = server.dedup.merge_entries(existing, entry_data)
+                            server.sqlite.update_entry(existing["id"], merged)
+                            if server.chroma.available:
+                                try:
+                                    server.chroma.add_embedding(existing["id"], content, {"scope": "workspace", "title": merged.get("title", "")})
+                                    server.sqlite.update_embedding_status(existing["id"], "ready")
+                                except Exception:
+                                    server.sqlite.update_embedding_status(existing["id"], "pending")
+                            server.exporter.export_entry(existing["id"])
+                            server._touch_change()
+                            return [TextContent(type="text", text=json.dumps(make_response("ok", {
+                                "id": existing["id"],
+                                "status": "merged",
+                                "dedup_status": "duplicate_merged",
+                            }), ensure_ascii=False))]
+                    elif dedup_result["action"] == "skip":
+                        return [TextContent(type="text", text=json.dumps(make_response("conflict", {
+                            "id": dedup_result["existing_id"],
+                            "status": "duplicate_rejected",
+                            "dedup_status": "duplicate",
+                            "similarity_score": dedup_result["similarity_score"],
+                        }), ensure_ascii=False))]
+                result = server.sqlite.add_entry(entry_data)
+                if server.chroma.available:
+                    try:
+                        server.chroma.add_embedding(result["id"], content, {"scope": "workspace", "title": entry_data.get("title", "")})
+                        server.sqlite.update_embedding_status(result["id"], "ready")
+                    except Exception:
+                        server.sqlite.update_embedding_status(result["id"], "pending")
+                server.exporter.export_entry(result["id"])
+                server._touch_change()
+                return [TextContent(type="text", text=json.dumps(make_response("ok", {
+                    "id": result["id"],
+                    "status": "created",
+                    "dedup_status": "new",
+                }), ensure_ascii=False))]
+    
+            elif name == "knowledge_update":
+                entry_id = arguments.get("id", "")
+                content = arguments.get("content")
+                metadata = arguments.get("metadata", {})
+                updates = {}
+                if content is not None:
+                    has_sensitive, findings = SensitiveContentFilter.check(content)
+                    if has_sensitive:
+                        return [TextContent(type="text", text=json.dumps(make_error_response(
+                            code="SENSITIVE_CONTENT",
+                            message="Content contains sensitive information",
+                            details={"findings": findings, "mcp_error_code": APP_ERROR_CODES["SENSITIVE_CONTENT"]},
+                        ), ensure_ascii=False))]
+                    updates["content"] = content
+                if "type" in metadata:
+                    updates["type"] = metadata["type"]
+                if "category" in metadata:
+                    updates["category"] = metadata["category"]
+                if "tags" in metadata:
+                    updates["tags"] = metadata["tags"]
+                if "confidence" in metadata:
+                    updates["confidence"] = metadata["confidence"]
+                if not updates:
+                    return [TextContent(type="text", text=json.dumps(make_error_response(
+                        code="BAD_REQUEST",
+                        message="No update fields provided",
+                        details={"mcp_error_code": APP_ERROR_CODES["BAD_REQUEST"]},
+                    ), ensure_ascii=False))]
+                result = server.sqlite.update_entry(entry_id, updates)
+                if result is None:
                     return [TextContent(type="text", text=json.dumps(make_error_response(
                         code="NOT_FOUND",
                         message="Knowledge entry not found",
                         details={"entry_id": entry_id, "mcp_error_code": APP_ERROR_CODES["NOT_FOUND"]},
                     ), ensure_ascii=False))]
-                query_parts.append(target_entry.get("title", ""))
-                if target_entry.get("category") and target_entry["category"] != "uncategorized":
-                    query_parts.append(target_entry["category"])
-            elif category:
-                query_parts.append(category)
-            if tags:
-                query_parts.extend(tags)
-            query = " ".join(query_parts)
-            tech_stack = tags if tags else None
-            try:
-                web_results = search_official_docs(query, tech_stack=tech_stack)
-            except Exception as e:
-                logger.warning("operation=mcp_web_update, search_error=%s", e)
-                web_results = []
-            if not web_results:
-                return [TextContent(type="text", text=json.dumps(make_response("ok", {
-                    "status": "no_results",
-                    "query": query,
-                    "message": "Web search returned no results, may be offline",
-                }), ensure_ascii=False))]
-            structured = extract_and_structure(web_results, existing_entry=target_entry)
-            if not structured:
-                return [TextContent(type="text", text=json.dumps(make_response("ok", {
-                    "status": "extraction_failed",
-                    "query": query,
-                    "sources_found": len(web_results),
-                    "message": "Could not extract valid content from search results",
-                }), ensure_ascii=False))]
-            if target_entry:
-                updates = {}
-                if structured.get("content"):
-                    updates["content"] = structured["content"]
-                if structured.get("title") and structured.get("title") != target_entry.get("title"):
-                    updates["title"] = structured["title"]
-                if structured.get("source_rating") and structured["source_rating"] > target_entry.get("source_rating", 0):
-                    updates["source_rating"] = structured["source_rating"]
-                if structured.get("source_path"):
-                    updates["source_path"] = structured["source_path"]
-                if structured.get("tags"):
-                    existing_tags = set(target_entry.get("tags", []))
-                    new_tags = list(existing_tags | set(structured["tags"]))
-                    updates["tags"] = new_tags
-                if structured.get("summary"):
-                    updates["summary"] = structured["summary"]
-                now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-                updates["last_validated"] = now
-                if updates:
-                    result = server.sqlite.update_entry(entry_id, updates)
-                    if result and not (isinstance(result, dict) and result.get("error")):
-                        if server.chroma.available and "content" in updates:
-                            try:
-                                server.chroma.add_embedding(
-                                    entry_id,
-                                    updates["content"],
-                                    {"scope": result.get("scope", "workspace"), "title": result.get("title", "")},
-                                )
-                                server.sqlite.update_embedding_status(entry_id, "ready")
-                            except Exception:
-                                server.sqlite.update_embedding_status(entry_id, "pending")
-                        server.exporter.export_entry(entry_id)
-                        logger.info("operation=mcp_web_update, entry_id=%s, status=updated", entry_id)
-                        return [TextContent(type="text", text=json.dumps(make_response("ok", {
-                            "id": entry_id,
-                            "status": "updated",
-                            "sources_found": len(web_results),
-                            "best_source_rating": max(r.get("source_rating", 0) for r in web_results),
-                            "updated_fields": list(updates.keys()),
-                        }), ensure_ascii=False))]
+                if isinstance(result, dict) and result.get("error") == "version_conflict":
+                    return [TextContent(type="text", text=json.dumps(make_error_response(
+                        code="VERSION_CONFLICT",
+                        message="Version conflict",
+                        details={
+                            "entry_id": entry_id,
+                            "current_version": result["current_version"],
+                            "expected_version": result["expected_version"],
+                            "mcp_error_code": APP_ERROR_CODES["VERSION_CONFLICT"],
+                        },
+                        retryable=True,
+                    ), ensure_ascii=False))]
+                if server.chroma.available and content is not None:
+                    try:
+                        server.chroma.add_embedding(entry_id, content, {"scope": result.get("scope", ""), "title": result.get("title", "")})
+                        server.sqlite.update_embedding_status(entry_id, "ready")
+                    except Exception:
+                        server.sqlite.update_embedding_status(entry_id, "pending")
+                server.exporter.export_entry(entry_id)
+                server._touch_change()
                 return [TextContent(type="text", text=json.dumps(make_response("ok", {
                     "id": entry_id,
-                    "status": "no_change",
-                    "sources_found": len(web_results),
-                    "message": "Search results did not yield any updates",
+                    "status": "updated",
                 }), ensure_ascii=False))]
-            else:
-                now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-                structured["last_validated"] = now
-                structured["confidence"] = min(structured.get("confidence", 0.6), 0.6)
-                try:
-                    result = server.sqlite.add_entry(structured)
-                    new_id = result["id"]
-                    if server.chroma.available:
-                        try:
-                            server.chroma.add_embedding(
-                                new_id,
-                                structured.get("content", ""),
-                                {"scope": structured.get("scope", "general"), "title": structured.get("title", "")},
-                            )
-                            server.sqlite.update_embedding_status(new_id, "ready")
-                        except Exception:
-                            server.sqlite.update_embedding_status(new_id, "pending")
-                    server.exporter.export_entry(new_id)
-                    logger.info("operation=mcp_web_update, new_entry_id=%s, status=created_pending_review", new_id)
-                    return [TextContent(type="text", text=json.dumps(make_response("ok", {
-                        "id": new_id,
-                        "status": "created_pending_review",
-                        "sources_found": len(web_results),
-                        "best_source_rating": max(r.get("source_rating", 0) for r in web_results),
-                    }), ensure_ascii=False))]
-                except ValueError as e:
+    
+            elif name == "knowledge_delete":
+                entry_id = arguments.get("id", "")
+                result = server.mcp_knowledge_delete(entry_id)
+                return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
+    
+            elif name == "knowledge_stats":
+                detailed = arguments.get("detailed", False)
+                since = arguments.get("since")
+                counts = server.sqlite.count_entries()
+                embedding_status_counts = server.sqlite.count_by_embedding_status()
+                stats = {
+                    "total_entries": counts.get("total", 0),
+                    "by_scope": {k: v for k, v in counts.items() if k != "total"},
+                    "embedding": {
+                        "pending": embedding_status_counts.get("pending", 0),
+                        "ready": embedding_status_counts.get("ready", 0),
+                    },
+                    "chroma_available": server.chroma.available,
+                    "chroma_vector_count": server.chroma.get_vector_count() if server.chroma.available else 0,
+                    "degradation_level": server.degradation.level,
+                    "degradation_name": server.degradation.level_name,
+                    "embedding_level": server.embedding_manager.level,
+                    "embedding_level_name": server.embedding_manager.level_name,
+                    "last_change_timestamp": server._last_change_timestamp,
+                }
+                if since:
+                    try:
+                        since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
+                        last_dt = datetime.fromisoformat(server._last_change_timestamp.replace("Z", "+00:00"))
+                        stats["status_changed_since_last_check"] = last_dt > since_dt
+                    except (ValueError, TypeError):
+                        stats["status_changed_since_last_check"] = None
+                if detailed:
+                    all_entries = server.sqlite.get_all_entries()
+                    type_counts = {}
+                    category_counts = {}
+                    for e in all_entries:
+                        t = e.get("type", "unknown")
+                        c = e.get("category", "uncategorized")
+                        type_counts[t] = type_counts.get(t, 0) + 1
+                        category_counts[c] = category_counts.get(c, 0) + 1
+                    stats["by_type"] = type_counts
+                    stats["by_category"] = category_counts
+                return [TextContent(type="text", text=json.dumps(make_response("ok", stats), ensure_ascii=False))]
+    
+            elif name == "knowledge_rollback":
+                entry_id = arguments.get("id", "")
+                target_version = arguments.get("target_version", 1)
+                result = server.mcp_knowledge_rollback_version(entry_id, target_version)
+                return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
+    
+            elif name == "knowledge_progressive_search":
+                query = arguments.get("query", "")
+                task_type = arguments.get("task_type", "feature")
+                tech_stack = arguments.get("tech_stack", {})
+                token_budget = arguments.get("token_budget", 2048)
+                result = server.mcp_knowledge_progressive_search(
+                    query=query,
+                    task_type=task_type,
+                    tech_stack=tech_stack,
+                    token_budget=token_budget,
+                )
+                return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
+    
+            elif name == "knowledge_deep_load":
+                entry_id = arguments.get("entry_id", "")
+                result = server.mcp_knowledge_deep_load(entry_id)
+                return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
+    
+            elif name == "knowledge_auto_retrieve":
+                task_type = arguments.get("task_type", "feature")
+                project_path = arguments.get("project_path", "")
+                query = arguments.get("query")
+                token_budget = arguments.get("token_budget", 2048)
+                if not project_path:
                     return [TextContent(type="text", text=json.dumps(make_error_response(
                         code="BAD_REQUEST",
-                        message=str(e),
+                        message="project_path is required",
                         details={"mcp_error_code": APP_ERROR_CODES["BAD_REQUEST"]},
                     ), ensure_ascii=False))]
+                try:
+                    result = server.auto_retrieve(
+                        task_type=task_type,
+                        project_path=project_path,
+                        query=query,
+                        token_budget=token_budget,
+                    )
+                    return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+                except Exception as e:
+                    return [TextContent(type="text", text=json.dumps(make_error_response(
+                        code="INTERNAL_ERROR",
+                        message=f"Auto-retrieve failed: {e}",
+                        details={"mcp_error_code": MCP_ERROR_CODES["INTERNAL_ERROR"]},
+                    ), ensure_ascii=False))]
+    
+            elif name == "knowledge_web_update":
+                entry_id = arguments.get("entry_id")
+                category = arguments.get("category")
+                tags = arguments.get("tags")
+                if not entry_id and not category and not tags:
+                    return [TextContent(type="text", text=json.dumps(make_error_response(
+                        code="BAD_REQUEST",
+                        message="At least one of entry_id, category, or tags must be provided",
+                        details={"mcp_error_code": APP_ERROR_CODES["BAD_REQUEST"]},
+                    ), ensure_ascii=False))]
+                try:
+                    from .web_search import search_official_docs, extract_and_structure
+                except ImportError:
+                    return [TextContent(type="text", text=json.dumps(make_error_response(
+                        code="INTERNAL_ERROR",
+                        message="Web search module not available",
+                        details={"mcp_error_code": MCP_ERROR_CODES["INTERNAL_ERROR"]},
+                    ), ensure_ascii=False))]
+                target_entry = None
+                query_parts = []
+                if entry_id:
+                    target_entry = server.sqlite.get_entry(entry_id)
+                    if target_entry is None:
+                        return [TextContent(type="text", text=json.dumps(make_error_response(
+                            code="NOT_FOUND",
+                            message="Knowledge entry not found",
+                            details={"entry_id": entry_id, "mcp_error_code": APP_ERROR_CODES["NOT_FOUND"]},
+                        ), ensure_ascii=False))]
+                    query_parts.append(target_entry.get("title", ""))
+                    if target_entry.get("category") and target_entry["category"] != "uncategorized":
+                        query_parts.append(target_entry["category"])
+                elif category:
+                    query_parts.append(category)
+                if tags:
+                    query_parts.extend(tags)
+                query = " ".join(query_parts)
+                tech_stack = tags if tags else None
+                try:
+                    web_results = search_official_docs(query, tech_stack=tech_stack)
+                except Exception as e:
+                    logger.warning("operation=mcp_web_update, search_error=%s", e)
+                    web_results = []
+                if not web_results:
+                    return [TextContent(type="text", text=json.dumps(make_response("ok", {
+                        "status": "no_results",
+                        "query": query,
+                        "message": "Web search returned no results, may be offline",
+                    }), ensure_ascii=False))]
+                structured = extract_and_structure(web_results, existing_entry=target_entry)
+                if not structured:
+                    return [TextContent(type="text", text=json.dumps(make_response("ok", {
+                        "status": "extraction_failed",
+                        "query": query,
+                        "sources_found": len(web_results),
+                        "message": "Could not extract valid content from search results",
+                    }), ensure_ascii=False))]
+                if target_entry:
+                    updates = {}
+                    if structured.get("content"):
+                        updates["content"] = structured["content"]
+                    if structured.get("title") and structured.get("title") != target_entry.get("title"):
+                        updates["title"] = structured["title"]
+                    if structured.get("source_rating") and structured["source_rating"] > target_entry.get("source_rating", 0):
+                        updates["source_rating"] = structured["source_rating"]
+                    if structured.get("source_path"):
+                        updates["source_path"] = structured["source_path"]
+                    if structured.get("tags"):
+                        existing_tags = set(target_entry.get("tags", []))
+                        new_tags = list(existing_tags | set(structured["tags"]))
+                        updates["tags"] = new_tags
+                    if structured.get("summary"):
+                        updates["summary"] = structured["summary"]
+                    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                    updates["last_validated"] = now
+                    if updates:
+                        result = server.sqlite.update_entry(entry_id, updates)
+                        if result and not (isinstance(result, dict) and result.get("error")):
+                            if server.chroma.available and "content" in updates:
+                                try:
+                                    server.chroma.add_embedding(
+                                        entry_id,
+                                        updates["content"],
+                                        {"scope": result.get("scope", "workspace"), "title": result.get("title", "")},
+                                    )
+                                    server.sqlite.update_embedding_status(entry_id, "ready")
+                                except Exception:
+                                    server.sqlite.update_embedding_status(entry_id, "pending")
+                            server.exporter.export_entry(entry_id)
+                            logger.info("operation=mcp_web_update, entry_id=%s, status=updated", entry_id)
+                            return [TextContent(type="text", text=json.dumps(make_response("ok", {
+                                "id": entry_id,
+                                "status": "updated",
+                                "sources_found": len(web_results),
+                                "best_source_rating": max(r.get("source_rating", 0) for r in web_results),
+                                "updated_fields": list(updates.keys()),
+                            }), ensure_ascii=False))]
+                    return [TextContent(type="text", text=json.dumps(make_response("ok", {
+                        "id": entry_id,
+                        "status": "no_change",
+                        "sources_found": len(web_results),
+                        "message": "Search results did not yield any updates",
+                    }), ensure_ascii=False))]
+                else:
+                    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                    structured["last_validated"] = now
+                    structured["confidence"] = min(structured.get("confidence", 0.6), 0.6)
+                    try:
+                        result = server.sqlite.add_entry(structured)
+                        new_id = result["id"]
+                        if server.chroma.available:
+                            try:
+                                server.chroma.add_embedding(
+                                    new_id,
+                                    structured.get("content", ""),
+                                    {"scope": structured.get("scope", "general"), "title": structured.get("title", "")},
+                                )
+                                server.sqlite.update_embedding_status(new_id, "ready")
+                            except Exception:
+                                server.sqlite.update_embedding_status(new_id, "pending")
+                        server.exporter.export_entry(new_id)
+                        logger.info("operation=mcp_web_update, new_entry_id=%s, status=created_pending_review", new_id)
+                        return [TextContent(type="text", text=json.dumps(make_response("ok", {
+                            "id": new_id,
+                            "status": "created_pending_review",
+                            "sources_found": len(web_results),
+                            "best_source_rating": max(r.get("source_rating", 0) for r in web_results),
+                        }), ensure_ascii=False))]
+                    except ValueError as e:
+                        return [TextContent(type="text", text=json.dumps(make_error_response(
+                            code="BAD_REQUEST",
+                            message=str(e),
+                            details={"mcp_error_code": APP_ERROR_CODES["BAD_REQUEST"]},
+                        ), ensure_ascii=False))]
+    
+            else:
+                pass
+        except Exception as e:
+            logger.error("operation=mcp_call_tool_error, tool=%s, error=%s", name, e)
+            return [TextContent(type="text", text=json.dumps(make_error_response(
+                code="INTERNAL_ERROR",
+                message=str(e),
+                details={"mcp_error_code": MCP_ERROR_CODES["INTERNAL_ERROR"]},
+            ), ensure_ascii=False))]
 
-        elif name == "resource_load_status":
+        if name == "resource_load_status":
             action = arguments.get("action", "status")
             loader = server.progressive_loader
             now_iso = datetime.now(timezone.utc).isoformat()
