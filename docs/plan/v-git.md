@@ -2,7 +2,7 @@
 
 > 版本: 4.0.0 | 日期: 2026-05-24 | 状态: 实施中
 > 仓库: https://github.com/xuanyuanchumo/xuansto
-> 关联文档: .editorconfig / .gitignore(×3) / .gitattributes(缺失) / .github/(缺失)
+> 关联文档: .editorconfig / .gitignore(×3) / .gitattributes(✅) / .git/info/exclude(✅) / .github/(✅)
 
 ---
 
@@ -12,9 +12,10 @@
 2. [本地分支管理](#2-本地分支管理)
 3. [.gitignore 合理性审查与优化](#3-gitignore-合理性审查与优化)
 4. [.gitattributes 审查与优化](#4-gitattributes-审查与优化)
-5. [.github/ 目录方案](#5-github-目录方案)
-6. [可执行命令序列](#6-可执行命令序列)
-7. [分支与重构阶段映射](#7-分支与重构阶段映射)
+5. [.git/info/exclude 本地忽略规则](#5-gitinfoexclude-本地忽略规则)
+6. [.github/ 目录方案](#6-github-目录方案)
+7. [可执行命令序列](#7-可执行命令序列)
+8. [分支与重构阶段映射](#8-分支与重构阶段映射)
 
 ---
 
@@ -600,15 +601,88 @@ git commit -m "chore: normalize line endings per .gitattributes"
 
 ---
 
-## 5. .github/ 目录方案
+## 5. .git/info/exclude 本地忽略规则
 
-### 5.1 当前状态
+### 5.1 三层忽略机制对比
+
+| 特性 | `.gitignore` | `.gitattributes` | `.git/info/exclude` |
+|------|-------------|-----------------|---------------------|
+| **纳入版本控制** | ✅ 是 | ✅ 是 | ❌ 否 |
+| **影响范围** | 所有克隆者 | 所有克隆者 | 仅当前克隆 |
+| **适用内容** | 团队共享忽略规则 | 文件属性/行尾/差异算法 | 个人偏好/本地临时文件 |
+| **优先级** | 中 | 高（属性声明） | 高（本地覆盖） |
+| **修改可见性** | 提交可见 | 提交可见 | 不进提交历史 |
+
+### 5.2 当前状态
+
+`.git/info/exclude` 原为 Git 默认模板（仅含注释），已补充项目适用的本地忽略规则。
+
+### 5.3 规则内容
+
+```gitignore
+# === 个人IDE/编辑器临时文件 ===
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+.settings/
+
+# === 本地调试/临时文件 ===
+*.tmp
+*.bak
+*.swp
+*.swo
+local_*.py
+scratch_*.py
+
+# === 本地环境特定路径 ===
+.local/
+local_config/
+
+# === 性能分析/覆盖率输出 ===
+.coverage
+htmlcov/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# === 操作系统缩略图 ===
+ehthumbs.db
+Desktop.ini
+```
+
+### 5.4 设计原则
+
+| 原则 | 说明 |
+|------|------|
+| **不与 .gitignore 重复** | 团队共享规则（如 `__pycache__/`、`.venv/`）已在 `.gitignore` 中，exclude 仅放个人/本地规则 |
+| **不进版本控制** | exclude 文件位于 `.git/info/` 下，不会被 `git add` 追踪，各开发者可独立维护 |
+| **IDE 中立** | 常见 IDE 临时文件（Sublime/Eclipse/MyEclipse）均覆盖，但不强制特定 IDE |
+| **调试友好** | `local_*.py`、`scratch_*.py` 允许开发者在项目内创建临时调试脚本而不被误提交 |
+
+### 5.5 与 .gitignore 的职责划分
+
+| 规则类型 | 放置位置 | 示例 |
+|----------|---------|------|
+| 项目构建产物 | `.gitignore` | `__pycache__/`, `*.pyc`, `*.egg-info/` |
+| 敏感信息 | `.gitignore` | `.env`, `.env.local` |
+| 团队IDE配置 | `.gitignore` | `.vscode/`, `.idea/` |
+| 个人IDE偏好 | `.git/info/exclude` | `*.sublime-project`, `.settings/` |
+| 本地调试脚本 | `.git/info/exclude` | `local_*.py`, `scratch_*.py` |
+| 性能分析输出 | `.git/info/exclude` | `.coverage`, `.mypy_cache/` |
+| 本地环境路径 | `.git/info/exclude` | `.local/`, `local_config/` |
+
+---
+
+## 6. .github/ 目录方案
+
+### 6.1 当前状态
 
 | 位置 | 状态 | 说明 |
 |------|------|------|
 | `.github/` | ❌ **缺失** | 需创建 Issue 模板、PR 模板、CI workflow |
 
-### 5.2 目录结构
+### 6.2 目录结构
 
 ```
 .github/
@@ -621,9 +695,9 @@ git commit -m "chore: normalize line endings per .gitattributes"
     └── ci.yml                  ← CI 工作流
 ```
 
-### 5.3 Issue 模板
+### 6.3 Issue 模板
 
-#### 5.3.1 `bug_report.yml`
+#### 6.3.1 `bug_report.yml`
 
 ```yaml
 name: Bug 报告
@@ -685,7 +759,7 @@ body:
       render: shell
 ```
 
-#### 5.3.2 `feature_request.yml`
+#### 6.3.2 `feature_request.yml`
 
 ```yaml
 name: 功能请求
@@ -723,14 +797,14 @@ body:
       label: 补充信息
 ```
 
-#### 5.3.3 `config.yml`
+#### 6.3.3 `config.yml`
 
 ```yaml
 blank_issues_enabled: false
 contact_links: []
 ```
 
-### 5.4 PR 模板
+### 6.4 PR 模板
 
 #### `PULL_REQUEST_TEMPLATE.md`
 
@@ -771,7 +845,7 @@ contact_links: []
 - [ ] 已更新相关文档（如需要）
 ```
 
-### 5.5 CI Workflow
+### 6.5 CI Workflow
 
 #### `workflows/ci.yml`
 
@@ -843,7 +917,7 @@ jobs:
           mypy src/ --ignore-missing-imports
 ```
 
-### 5.6 创建 `.github/` 目录的命令
+### 6.6 创建 `.github/` 目录的命令
 
 ```powershell
 $RepoRoot = "D:\Projects\TraeProjects\skiller"
@@ -853,7 +927,7 @@ Set-Location $RepoRoot
 New-Item -ItemType Directory -Force -Path ".github/ISSUE_TEMPLATE"
 New-Item -ItemType Directory -Force -Path ".github/workflows"
 
-# [2] 创建各模板文件（内容见 5.3~5.5 节）
+# [2] 创建各模板文件（内容见 6.3~6.5 节）
 # 手动创建以下文件：
 #   - .github/ISSUE_TEMPLATE/bug_report.yml
 #   - .github/ISSUE_TEMPLATE/feature_request.yml
@@ -868,11 +942,11 @@ git commit -m "chore: add GitHub issue/PR templates and CI workflow"
 
 ---
 
-## 6. 可执行命令序列
+## 7. 可执行命令序列
 
 > 以下命令基于当前实际 git 状态：仅 main 分支、仅 v8.0.0 标签、710 个文件。
 
-### 6.1 环境验证
+### 7.1 环境验证
 
 ```powershell
 $RepoRoot = "D:\Projects\TraeProjects\skiller"
@@ -902,7 +976,7 @@ git ls-tree --name-only HEAD
 git remote prune origin
 ```
 
-### 6.2 应用 .gitignore 优化
+### 7.2 应用 .gitignore 优化
 
 ```powershell
 Set-Location $RepoRoot
@@ -929,7 +1003,7 @@ git add -A
 git commit -m "chore: remove tracked cache files now covered by .gitignore"
 ```
 
-### 6.3 创建 .gitattributes
+### 7.3 创建 .gitattributes
 
 ```powershell
 Set-Location $RepoRoot
@@ -946,18 +1020,18 @@ git add --renormalize .
 git commit -m "chore: normalize line endings per .gitattributes"
 ```
 
-### 6.4 创建 .github/ 目录
+### 7.4 创建 .github/ 目录
 
 ```powershell
 Set-Location $RepoRoot
 
-# [1] 创建目录和文件（内容见第 5 节）
+# [1] 创建目录和文件（内容见第 6 节）
 # [2] 提交
 git add .github/
 git commit -m "chore: add GitHub issue/PR templates and CI workflow"
 ```
 
-### 6.5 推送到远程
+### 7.5 推送到远程
 
 ```powershell
 Set-Location $RepoRoot
@@ -972,7 +1046,7 @@ git push origin main
 git remote show origin
 ```
 
-### 6.6 功能开发工作流（日常使用）
+### 7.6 功能开发工作流（日常使用）
 
 ```powershell
 # ============================================================
@@ -1013,7 +1087,7 @@ git push origin main --tags
 git push origin --delete feature/<name> 2>$null
 ```
 
-### 6.7 紧急热修复流程
+### 7.7 紧急热修复流程
 
 ```powershell
 Set-Location $RepoRoot
@@ -1037,7 +1111,7 @@ git branch -d hotfix/<name>
 git push origin main
 ```
 
-### 6.8 日常状态查看
+### 7.8 日常状态查看
 
 ```powershell
 Set-Location $RepoRoot
@@ -1060,9 +1134,9 @@ git ls-files --eol
 
 ---
 
-## 7. 分支与重构阶段映射
+## 8. 分支与重构阶段映射
 
-### 7.1 映射总表
+### 8.1 映射总表
 
 | 重构阶段 | 原对应分支 | 解决问题 | 状态 |
 |---------|-----------|---------|------|
@@ -1074,7 +1148,7 @@ git ls-files --eol
 | **P3: 优化收尾** | `develop/v8` 直接提交 | U-32~U-42 | ✅ 已完成，分支已删除 |
 | **P4: v8.0.0 收尾** | `feature/p4-finalization` | U-43, U-44, U-45, U-46 | 🟡 部分完成，分支已删除 |
 
-### 7.2 P4 详细状态
+### 8.2 P4 详细状态
 
 | 子任务 | 统一编号 | 状态 | 说明 |
 |--------|---------|------|------|
@@ -1083,7 +1157,7 @@ git ls-files --eol
 | P4-C: SKILL.md Phase 标记 | U-45 | ⚠️ 已知限制 | SKILL.md 行数控制存在已知限制，Phase 标记与 resource_load_status 的 4 阶段模型一致性待验证 |
 | P4-D: 健康检查间隔可配置 | U-46 | ✅ 已解决 | 间隔已可配置 |
 
-### 7.3 仓库清理记录
+### 8.3 仓库清理记录
 
 | 清理项 | 原状态 | 清理后 | 说明 |
 |--------|--------|--------|------|
@@ -1093,7 +1167,7 @@ git ls-files --eol
 | v1 Skill | 存在 | 已移除 | `.trae/skills/xuansto-skill/` 已从仓库彻底移除 |
 | 仓库内容 | 多个组件 | 3 个核心 | 仅保留 xuansto-mcp-server/ + .trae/skills/xuansto-skill-v2/ + README.md + .gitignore + .editorconfig |
 
-### 7.4 阶段里程碑
+### 8.4 阶段里程碑
 
 | 阶段 | Tag | 包含问题 | 状态 |
 |------|-----|---------|------|
