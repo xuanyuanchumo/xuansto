@@ -25,10 +25,10 @@
 
 | 版本 | 代号 | 定位 | 核心变更 | 状态 |
 |------|------|------|----------|------|
-| **v5.0.0** | V_PREVIOUS_MAJOR | 纯Skill内嵌架构 | 基线版本，全量加载，无MCP依赖 | 已归档 |
+| **v5.0.0** | V_PREVIOUS_MAJOR | 纯Skill内嵌架构 | 基线版本，全量加载，无MCP依赖 | 已移除 |
 | **v8.0.0** | V_CURRENT | MCP Server + Skill 双层架构 | MCP工具驱动、渐进式加载声明、Token预算定义 | 当前版本 |
 | **v8.1.0** | 下一小版本 | 基础设施修复 + 渐进式加载落地 | 降级链实际实现、PHASE标记嵌入、Token预算强制执行 | 计划中(R0-R1) |
-| **v9.0.0** | 下一大版本 | 全功能MCP编排引擎 | MCP工具全量补全、结构化存储、Skill层瘦身、Hook完整实现 | 远期规划(R2-R4) |
+| **v9.0.0** | 下一大版本 | 全功能MCP编排引擎 | MCP工具扩展补全、结构化存储、Skill层瘦身、Hook完整实现 | 远期规划(R2-R4) |
 
 ---
 
@@ -60,8 +60,8 @@
 
 | 对比维度 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
 |----------|--------|--------|--------|--------|
-| 工具调用方式 | 内嵌脚本/内联逻辑 | 13→17个MCP原子工具 + 降级脚本 🟢 | 17个MCP工具 + 实际降级链 🟢 | 19+个MCP工具 + 完整降级链 🟢 |
-| MCP工具实现 | 无 ⚪ | 知识库9个本地实现，8个编排工具缺失 🔴 | 知识库9个 + 编排5个核心工具 🟢 | 全部19+工具完整实现 🟢 |
+| 工具调用方式 | 内嵌脚本/内联逻辑 | 26个MCP原子工具(11+15) + 降级脚本 🔵 | 26个MCP工具 + 实际降级链 🟢 | 26+个MCP工具 + 完整降级链 🟢 |
+| MCP工具实现 | 无 ⚪ | 11个mcp_server + 15个skill_tools全量实现 🟢 | 11个mcp_server + 15个skill_tools 🟢 | 全部26+工具完整实现 🟢 |
 | 降级链 | 无统一降级 🔴 | YAML声明降级路径，degradation.py未实际调用 🔴 | MCP→scripts/→内联 三级降级实际可用 🟢 | 三级降级 + 统一降级协调器 🟢 |
 | 降级结果格式 | 无统一格式 | 声明与MCP相同JSON结构 🔵 | 实际包装为MCP相同JSON结构 🟢 | 统一响应契约 + Schema校验 🟢 |
 | SkillToolCall协议 | 无 ⚪ | 无（仅声明mcp_tools列表） 🔴 | 基础调用时序定义 🔵 | 完整协议（时序+参数+超时+重试） 🟢 |
@@ -155,9 +155,10 @@
 | 工具 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
 |------|--------|--------|--------|--------|
 | knowledge_search / knowledge_stats / server_health | 全量可用 | 全量可用 | Phase 0起可用 | Phase 0起可用 |
-| skill_analyze / workflow_dispatch / session_manage / project_init | 全量可用 | 声明可用（实际缺失） 🔴 | Phase 1起可用 🟢 | Phase 1起可用 |
-| quality_gate_check / agent_status / resource_load_status / knowledge_inject / token_budget | 无 ⚪ | 声明可用（实际缺失） 🔴 | Phase 2起可用 🟢 | Phase 2起可用 |
-| security_scan / code_simplify / spec_drift_detect / context_compress / hook_manage / decision_log / agent_manage / metrics_report | 无 ⚪ | 声明可用（实际缺失） 🔴 | 声明可用（部分缺失） 🔴 | Phase 3起可用 🟢 |
+| knowledge_add / knowledge_update / knowledge_delete / knowledge_rollback / knowledge_auto_retrieve / knowledge_progressive_search / knowledge_deep_load / knowledge_web_update | 无 ⚪ | 全量可用 🔵 | Phase 1起可用 🟢 | Phase 1起可用 |
+| skill_analyze / workflow_dispatch / session_manage / project_init | 全量可用 | 全量可用 🟢 | Phase 1起可用 🟢 | Phase 1起可用 |
+| quality_gate_check / agent_status / resource_load_status / knowledge_inject / token_budget | 无 ⚪ | 全量可用 🟢 | Phase 2起可用 🟢 | Phase 2起可用 |
+| security_scan / code_simplify / spec_drift_detect / context_compress / hook_manage / decision_log / agent_manage / metrics_report | 无 ⚪ | 部分可用（6个skill_tools实现，agent_manage/metrics_report仅在xuansto-mcp-server） 🔴 | 声明可用（部分缺失） 🔴 | Phase 3起可用 🟢 |
 
 ---
 
@@ -168,10 +169,10 @@
 | 对比维度 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
 |----------|--------|--------|--------|--------|
 | API版本 | 无 | MCP API v3.0.0 🔵 | MCP API v3.0.0 | MCP API v4.0.0 🟢 |
-| MCP工具数 | 0 | 声明17个，实际9个 🔴 | 17个（5个核心编排补全） 🟢 | 19+个（全量实现） 🟢 |
+| MCP工具数 | 0 | 26个(11+15全量实现) 🟢 | 26个（工具链优化） 🟢 | 26+个（全量实现+扩展） 🟢 |
 | 工具列表动态更新 | 无 | listChanged: False 🔴 | listChanged: False | listChanged: True 🔵 |
-| Resource协议 | 无 ⚪ | 声明xuansto://loading/status 🔵 | xuansto://loading/status可用 🟢 | 12个Resource URI 🔵 |
-| Resource订阅 | 无 ⚪ | 无 🔴 | 无 | 支持订阅 🔵 |
+| Resource协议 | 无 ⚪ | 0 Resources ⚪ | 0 Resources | 计划Resource URI 🔵 |
+| Resource订阅 | 无 ⚪ | 无（0 Resources） | 无 | 支持订阅 🔵 |
 | Prompt模板 | 无 ⚪ | 未利用MCP Prompt协议 🔴 | 未利用 | 代码审查等场景复用 🔵 |
 | 工具Annotations | 无 | 无 | readOnlyHint/destructiveHint等 🔵 | 完整Annotations 🟢 |
 
@@ -242,7 +243,7 @@
 | 降级结果格式 | 无 | 声明与MCP相同JSON结构 | 实际包装为MCP相同JSON结构 🟢 | 统一响应契约 + Schema校验 🟢 |
 | 知识检索降级 | ChromaDB→SQLite→关键词 | 声明3级降级 | 3级降级 + FTS5可用性检测 🟢 | 3级降级 + 自动恢复 🟢 |
 | 嵌入降级 | 无 | OpenAI→ST→不可用（声明） | 3级嵌入降级实际可用 🟢 | 3级嵌入 + 自动恢复 🟢 |
-| MCP→脚本映射 | 无 | 17个工具声明降级脚本路径 🔵 | 全部工具可降级到脚本执行 🟢 | 全部工具 + 脚本健康检查 🟢 |
+| MCP→脚本映射 | 无 | 26个工具声明降级脚本路径 🔵 | 全部工具可降级到脚本执行 🟢 | 全部工具 + 脚本健康检查 🟢 |
 
 ### 9.2 降级脚本映射
 
@@ -312,7 +313,7 @@
 |----------|----------|--------|--------|--------|--------|
 | UNIFIED-01 | 降级链断裂：MCP→脚本→内联三级降级未实际实现 | N/A | ❌ 存在 | ✅ 修复 🟢 | ✅ 已修复 |
 | UNIFIED-02 | 参考文档不完整（v2 references/ 80+文件但SKILL.md仅列6个） | N/A | ❌ 存在 | ❌ 存在 | ✅ 修复 🟢 |
-| UNIFIED-03 | MCP工具实现严重不足（声明19个仅实现10个） | N/A | ❌ 存在 | ⚠️ 部分修复 | ✅ 修复 🟢 |
+| UNIFIED-03 | MCP工具数量声明不一致（实际26个全量实现，文档声明有误） | N/A | ❌ 存在 | ✅ 修复 🟢 | ✅ 已修复 |
 | UNIFIED-04 | 双引擎一致性风险（SQLite与ChromaDB无事务保证） | N/A | ❌ 存在 | ✅ 修复 🟢 | ✅ 已修复 |
 
 ### 11.2 高优先级问题 (P1)
@@ -337,7 +338,7 @@
 | 问题编号 | 问题描述 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
 |----------|----------|--------|--------|--------|--------|
 | UNIFIED-17 | server_health文档缺失 | N/A | ❌ 存在 | ❌ 存在 | ✅ 修复 🟢 |
-| UNIFIED-19 | Resource未暴露 | N/A | ❌ 存在 | ❌ 存在 | ✅ 修复 🟢 |
+| UNIFIED-19 | Resource未暴露（实际0个Resource，无@mcp.resource()装饰器） | N/A | ❌ 存在 | ❌ 存在 | ✅ 修复 🟢 |
 | UNIFIED-20 | Skill↔MCP Server缺乏显式调用协议 | N/A | ❌ 存在 | ❌ 存在 | ✅ 修复 🟢 |
 | UNIFIED-22 | Agent定义文件全量加载 | N/A | ❌ 存在 | ✅ 修复 🟢 | ✅ 已修复 |
 | UNIFIED-23 | Hook系统仅security-block有实际实现 | N/A | ❌ 存在 | ⚠️ 部分修复 | ✅ 修复 🟢 |
@@ -363,7 +364,7 @@
 |------|--------|-------------|----------|
 | **v8.0.0** | MCP双层架构 + 渐进式加载声明 + Token预算定义 | — | 已发布 |
 | **v8.1.0** | 降级链实际可用 + PHASE标记嵌入 + Token预算强制 + 版本对齐 | R0 + R1 | 15天 |
-| **v9.0.0** | MCP工具全量补全 + 结构化存储 + Hook完整实现 + Skill瘦身 | R2 + R3 + R4 | 40天 |
+| **v9.0.0** | MCP工具扩展补全 + 结构化存储 + Hook完整实现 + Skill瘦身 | R2 + R3 + R4 | 40天 |
 
 ### 12.3 关键依赖关系
 
@@ -386,7 +387,7 @@ v8.0.0 (当前)
   │  ═════════════════ v8.1.0 发布 ═════════════════          │
   │                                                           │
   ├── R2: MCP工具补全 ← R0 + R1 ────────────────────────────┤
-  │   ├── P0核心编排工具实现 (UNIFIED-03)                      │
+  │   ├── MCP工具数量文档对齐 (UNIFIED-03)                    │
   │   ├── P1质量安全工具实现                                    │
   │   ├── P2辅助工具实现                                       │
   │   ├── 异常处理统一 (UNIFIED-10)                            │

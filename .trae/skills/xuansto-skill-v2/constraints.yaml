@@ -144,7 +144,7 @@ disclosure:
         - "完整命令路由表(含降级策略, {{include:commands/routes.yaml}})"
         - "完整Agent注册表(13层57个, {{include:agents/registry.yaml}})"
         - "外部参考文件表({{include:triggers.yaml}}, {{include:constraints.yaml}}等)"
-        - "MCP工具摘要表(17个工具)"
+        - "MCP工具摘要表(26个工具)"
     P3_optional:
       loaded_from: "Phase 3"
       items:

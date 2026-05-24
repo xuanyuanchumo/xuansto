@@ -163,7 +163,7 @@ gantt
     P2辅助工具 (UNIFIED-03c)          :r2_3, after r2_2, 3d
     ChromaDB集合统一 (UNIFIED-13)     :r2_5, after r0_2, 2d
     会话/决策/Token结构化 (UNIFIED-14,15,16) :r2_6, after r0_2, 2d
-    Resource暴露 (UNIFIED-19)         :r2_7, after r2_1, 2d
+    Resource确认(0个) (UNIFIED-19)     :r2_7, after r2_1, 2d
     SkillToolCall协议 (UNIFIED-20)    :r2_8, after r2_1, 2d
 
     section v8.5.0 Skill层优化
@@ -204,6 +204,31 @@ gantt
 
 ## 4. 各版本详细规划
 
+### 4.0 v8.0.0 — 当前基线
+
+> 当前版本 | MCP Server 版本: 4.0.0 | API 版本: 3.0.0
+
+#### 当前状态
+
+| 指标 | 值 |
+|------|-----|
+| MCP 工具总数 | 26（mcp_server.py 11 + skill_tools.py 15） |
+| MCP Resource 数量 | 0（无 @mcp.resource() 装饰器） |
+| MCP Server 版本 | 4.0.0 |
+| API 版本 | 3.0.0 |
+
+#### 根目录结构
+
+```
+.gitattributes
+.github/
+docs/plan/
+.gitignore
+...
+```
+
+---
+
 ### 4.1 v8.1.0 — 基础设施修复
 
 > 重构阶段: Phase R0 | 预估工期: 8 天 | 前置依赖: 无
@@ -219,8 +244,8 @@ gantt
 | R0-1: 降级链实现 | `degradation.py` 实际调用 `scripts/` 脚本，返回与 MCP 相同 JSON 结构 | `degradation.py`, `scripts/*.py` |
 | R0-2: 双引擎一致性 | 双写确认机制 + 定时对账 + 不一致自动修复 | `db_engine.py`, `vector_engine.py` |
 | R0-3: 备份加密 | 默认启用 AES-256 加密，密钥自动生成 | `backup.py` |
-| R0-4: 版本对齐 | SKILL.md 声明 `mcp_server_min_version`，MCP Server 声明 `skill_min_version` | `SKILL.md`, `mcp_server.py` |
-| R0-5: 响应格式统一 | 统一 `make_response`/`make_error_response` 契约，SKILL.md 工具数更新为 19 | `mcp_server.py`, `api_routes.py`, `SKILL.md` |
+| R0-4: 版本对齐 | SKILL.md 声明 `mcp_server_min_version`（≥4.0.0），MCP Server 声明 `skill_min_version`；API 版本 3.0.0 | `SKILL.md`, `mcp_server.py` |
+| R0-5: 响应格式统一 | 统一 `make_response`/`make_error_response` 契约，SKILL.md 工具数更新为 26 | `mcp_server.py`, `api_routes.py`, `SKILL.md` |
 
 #### 关联问题编号
 
@@ -235,12 +260,12 @@ gantt
 
 #### 验收标准
 
-1. MCP Server 停止后，所有 19 个工具可降级到脚本执行，降级检测→脚本调用→结果包装全流程 ≤5s
+1. MCP Server 停止后，所有 26 个工具可降级到脚本执行，降级检测→脚本调用→结果包装全流程 ≤5s
 2. SQLite 写入成功后标记 pending，ChromaDB 写入成功后标记 ready，自动修复成功率 ≥95%
 3. 新建备份默认加密，备份元数据标记 `encrypted=true`
 4. `server_health` 返回版本兼容性检查结果
 5. MCP Tool 和 HTTP 端点使用相同 JSON Schema，错误响应包含 `code/message/details/retryable`
-6. SKILL.md 工具数更新为 19
+6. SKILL.md 工具数更新为 26
 
 ---
 
@@ -327,7 +352,7 @@ gantt
 
 #### 目标
 
-补全剩余 MCP 辅助工具，解决数据存储层问题，实现 MCP Resource 暴露和 SkillToolCall 协议，使 MCP 层功能完整。
+补全剩余 MCP 辅助工具，解决数据存储层问题，实现 SkillToolCall 协议，使 MCP 层功能完整。
 
 #### 主要变更
 
@@ -336,7 +361,7 @@ gantt
 | R2-3: P2 辅助工具 | 实现 `hook_manage`、`server_health`、`decision_log`、`agent_manage`、`metrics_report` 5 个工具 | `mcp_server.py`, `scripts/*.py` |
 | R2-5: ChromaDB 集合统一 | 单集合 + 元数据 `embedding_tier` 标记 | `vector_engine.py` |
 | R2-6: 会话/决策/Token 结构化存储 | SQLite `session_states`、`decision_logs`、`token_budget_states` 表 | `db_engine.py` |
-| R2-7: Resource 暴露 | `knowledge://`、`workflow://`、`agent://` 等 12 个 Resource | `mcp_server.py` |
+| R2-7: Resource 确认 | 确认 MCP Resource 数量为 0，当前无需暴露 | `mcp_server.py` |
 | R2-8: SkillToolCall 协议 | Skill→MCP Tool 调用时序规范 + 参数传递规则 | `commands/routes.yaml`, `constraints.yaml` |
 
 #### 关联问题编号
@@ -349,17 +374,17 @@ gantt
 | UNIFIED-15 | P1 | 决策日志无持久化 |
 | UNIFIED-17 | P2 | server_health 文档缺失 |
 | UNIFIED-18 | P2 | knowledge_search 缺少 inject/precipitate 文档 |
-| UNIFIED-19 | P2 | Resource 未暴露 |
+| UNIFIED-19 | P2 | Resource 数量为 0，无需暴露 |
 | UNIFIED-20 | P2 | Skill↔MCP Server 缺乏显式调用协议 |
 
 #### 验收标准
 
-1. 全部 19 个 MCP 工具实现完毕，通过 MCP 协议可调用
+1. 全部 26 个 MCP 工具实现完毕，通过 MCP 协议可调用
 2. 迁移后仅存在 `knowledge` 集合，元数据包含 `embedding_tier: "api"/"local"`
 3. 迁移脚本从 Markdown 解析到 SQLite，原文件保留为 `.migrated`
-4. `list_resources` 返回 12 个 Resource URI，`read_resource` 返回正确内容类型
+4. `list_resources` 返回 0 个 Resource URI（当前无 @mcp.resource() 装饰器）
 5. 定义链式调用参数传递规则、超时（30s/Tool, 120s/链）、重试策略（retryable 最多 2 次）
-6. MCP 工具总数 = 19，与 `mcp-tools.md` 文档一致
+6. MCP 工具总数 = 26，与 `mcp-tools.md` 文档一致
 
 ---
 
@@ -406,7 +431,7 @@ gantt
 4. `project_scale < medium` 时自动合并安全测试 Agent，合并后 Token 消耗降低 ≥30%
 5. `triggers.yaml` 标记为 deprecated，SKILL.md 使用单一来源
 6. YAML→MD 自动生成脚本，CI 中校验 YAML 与 MD 一致性
-7. SKILL.md ≤500 行，Phase 0 内容 ≤2K Token，外移内容通过 `{{include:}}` 或 MCP Resource 可访问
+7. SKILL.md ≤500 行，Phase 0 内容 ≤2K Token，外移内容通过 `{{include:}}` 可访问
 
 ---
 
@@ -425,7 +450,7 @@ gantt
 | R4-1: 重试机制完善 | 分层重试：同步重试 + 异步重试 | `mcp_server.py`, `api_routes.py` |
 | R4-2: 经验模式索引化 | SQLite `experience_patterns` 表 | `db_engine.py`, `.knowledge/experience/patterns/*.json` |
 | R4-3: FTS5 可用性检测 | 降级脚本中检测 FTS5 可用性，不可用时直接降级到关键词匹配 | `hybrid_search.py`, `scripts/*.py` |
-| R4-4: 文档补全 | `mcp-tools.md` 包含全部 19 个工具文档 + CHANGELOG.md | `references/mcp-tools.md`, `CHANGELOG.md` |
+| R4-4: 文档补全 | `mcp-tools.md` 包含全部 26 个工具文档 + CHANGELOG.md | `references/mcp-tools.md`, `CHANGELOG.md` |
 | R4-5: 低优先级批量处理 | Prompt 模板、工具列表动态更新、Resource 订阅、语义化版本、配置合并、Schema 回滚、评估框架、v1 归档 | 多文件 |
 
 #### 关联问题编号
@@ -451,7 +476,7 @@ gantt
 1. 版本冲突最多 3 次立即重试，可重试服务错误最多 2 次指数退避，嵌入失败后台异步重试
 2. 经验模式按错误类型/置信度/状态可查询
 3. FTS5 不可用时自动跳过 `bm25_only` 级别，日志记录降级原因
-4. `mcp-tools.md` 包含全部 19 个工具文档，CHANGELOG.md 记录 v8.0.0 → v8.6.0 变更
+4. `mcp-tools.md` 包含全部 26 个工具文档，CHANGELOG.md 记录 v8.0.0 → v8.6.0 变更
 5. 各低优先级问题独立验收
 6. 42 项 UNIFIED 问题全部标记为已解决
 
@@ -481,7 +506,7 @@ gantt
 |------|------|----------|
 | 统一响应格式 | 旧客户端解析 MCP TextContent(JSON) 的代码需适配 | 使用新 JSON Schema |
 | Phase 编号体系 | Phase 0-3 加载阶段与 v1 的 Phase 0-8 工作流阶段含义不同 | 参考 MIGRATION.md |
-| 19 个 MCP 工具 | 从 10 个扩展到 19 个，旧版 MCP Server 不兼容 | 升级 xuansto-mcp-server ≥4.0.0 |
+| 26 个 MCP 工具 | 从 10 个扩展到 26 个，旧版 MCP Server 不兼容 | 升级 xuansto-mcp-server ≥4.0.0 |
 | ChromaDB 单集合 | 双集合迁移到单集合 | 运行迁移脚本 |
 | 会话存储格式 | Markdown → SQLite | 运行迁移脚本，原文件保留为 `.migrated` |
 | 备份默认加密 | 旧备份需手动解密 | 设置 `KNOWLEDGE_BACKUP_KEY` |
@@ -524,9 +549,9 @@ timeline
                 : 异常处理统一
                 : /init命令可用
         v8.4.0 : MCP辅助能力与数据结构化
-                : 19个工具全部实现
+                : 26个工具全部实现
                 : ChromaDB单集合
-                : Resource暴露
+                : Resource确认(0个)
         v8.5.0 : Skill层优化
                 : 参考文档补全
                 : 安全门禁加固
@@ -574,8 +599,8 @@ xychart-beta
 | MCP Server 升级不兼容 | v8.3.0, v8.4.0 | 中 | 高 | v8.1.0 已实现版本对齐和兼容性检查 |
 | ChromaDB 迁移数据丢失 | v8.4.0 | 低 | 高 | 迁移前自动备份，原集合保留 7 天 |
 | Token 预算强制导致功能降级 | v8.2.0 | 中 | 中 | 预算阈值可配置，默认值经过压测验证 |
-| 19 个工具降级脚本维护成本 | v8.3.0~v8.4.0 | 高 | 中 | 脚本自动生成框架，从 MCP 工具定义自动生成降级脚本 |
-| SKILL.md 瘦身后信息丢失 | v8.5.0 | 低 | 中 | 外移内容通过 MCP Resource 和 `{{include:}}` 双通道可访问 |
+| 26 个工具降级脚本维护成本 | v8.3.0~v8.4.0 | 高 | 中 | 脚本自动生成框架，从 MCP 工具定义自动生成降级脚本 |
+| SKILL.md 瘦身后信息丢失 | v8.5.0 | 低 | 中 | 外移内容通过 `{{include:}}` 可访问 |
 | R2 阶段工期超预期 | v8.3.0, v8.4.0 | 高 | 高 | R2 拆分为两个版本，P0 编排工具优先，P2 辅助工具可延后 |
 
 ### 6.2 回退策略

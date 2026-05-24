@@ -299,61 +299,63 @@ branch_protection:
 
 | 行 | 规则 | 判定 | 理由 |
 |----|------|------|------|
-| 1 | `.trae/*` | ✅ 保留 | Trae IDE 配置，非项目必需 |
+| 1 | `.trae/*` | ✅ 保留 | Trae IDE 配置，非项目必需；选择性跟踪入口 |
 | 2 | `!.trae/skills/` | ✅ 保留 | 白名单：skill 定义需版本管理 |
 | 3 | `.trae/skills/*` | ✅ 保留 | 忽略其他 skill |
 | 4 | `!.trae/skills/xuansto-skill-v2/` | ✅ 保留 | 白名单：本项目 skill |
-| 6 | `.trae/.../temp-scripts/*` | ✅ 保留 | 临时脚本，可自动生成 |
-| 7 | `!.trae/.../temp-scripts/.gitkeep` | ✅ 保留 | 保留目录结构 |
-| 8-9 | `.trae/.../script-errors/*` + `.gitkeep` | ✅ 保留 | 运行时错误日志，非源文件 |
-| 10 | `.trae/.../knowledge.db` | ✅ 保留 | 数据库文件，可从源重建 |
-| 12 | `.xuansto/` | ✅ 保留 | 本地运行时目录 |
-| 14-17 | `.venv/`, `.venv2/`, `.venv_test/`, `.testvenv/` | ✅ 保留 | 虚拟环境，可重建 |
-| 18-20 | `__pycache__/`, `*.py[cod]`, `*$py.class` | ✅ 保留 | Python 编译缓存 |
-| 22-24 | `.DS_Store`, `Thumbs.db`, `._*` | ✅ 保留 | OS 元数据 |
-| 26-33 | `.idea/`, `.vscode/`, `.claude/`, `.cursor/`, `.windsurf/`, `*.swp`, `*.swo`, `*~` | ✅ 保留 | IDE/编辑器配置 |
-| 35-37 | `.env`, `.env.local`, `.env.*.local` | ✅ 保留 | 环境变量，含机密信息 |
-| 39-40 | `*.log`, `logs/` | ✅ 保留 | 日志文件，可自动生成 |
-| 42-43 | `*.db`, `*.sqlite3` | ✅ 保留 | 数据库文件，可从源重建 |
-| 45-46 | `xuansto-clean/`, `副本/` | ⚠️ 审查 | 含义不明，可能是个人目录 |
-| 48-50 | `CHANGELOG.md`, `CODE_WIKI.md`, `xuansto-skill-WIKI.md` | ⚠️ 审查 | 忽略文档有风险，应纳入版本管理 |
-| 51-55 | `*_helper.ps1/py`, `setup-worktree.ps1`, `test-*.ps1` | ⚠️ 审查 | 辅助脚本可能对团队有用 |
-| 56-57 | `docs/*` + `!docs/plan/` | ⚠️ 审查 | 忽略全部 docs 仅保留 plan/ 过于激进 |
+| 6-7 | `.trae/.../temp-scripts/*` + `.gitkeep` | ✅ 保留 | .knowledge/ 临时脚本，可自动生成；保留目录结构 |
+| 8-9 | `.trae/.../script-errors/*` + `.gitkeep` | ✅ 保留 | .knowledge/ 运行时错误日志，非源文件；保留目录结构 |
+| 10 | `.trae/.../knowledge.db` | ✅ 保留 | .knowledge/ 数据库文件，可从源重建 |
+| 11 | `.trae/.../backup/` | ✅ 保留 | .knowledge/ 备份目录，含敏感数据 |
+| 13 | `.xuansto/` | ✅ 保留 | 本地运行时目录 |
+| 15-18 | `.venv/`, `.venv2/`, `.venv_test/`, `.testvenv/` | ✅ 保留 | 虚拟环境，可重建 |
+| 19-21 | `__pycache__/`, `*.py[cod]`, `*$py.class` | ✅ 保留 | Python 编译缓存（含 Cython 半编译类） |
+| 22-23 | `*.egg-info/`, `*.whl` | ✅ 保留 | Python 包构建元数据与分发包，可自动生成 |
+| 25-27 | `.DS_Store`, `Thumbs.db`, `._*` | ✅ 保留 | OS 元数据 |
+| 29-33 | `.idea/`, `.vscode/`, `.claude/`, `.cursor/`, `.windsurf/` | ✅ 保留 | IDE/编辑器配置（含 Claude、Cursor、Windsurf 等 AI 编辑器） |
+| 34-36 | `*.swp`, `*.swo`, `*~` | ✅ 保留 | Vim 交换文件与备份文件 |
+| 38-40 | `.env`, `.env.local`, `.env.*.local` | ✅ 保留 | 环境变量，含机密信息 |
+| 42-43 | `*.log`, `logs/` | ✅ 保留 | 日志文件，可自动生成 |
+| 45-46 | `*.db`, `*.sqlite3` | ✅ 保留 | 数据库文件，可从源重建 |
+| 48-52 | `.mypy_cache/`, `.pytest_cache/`, `.ruff_cache/`, `htmlcov/`, `.coverage` | ✅ 保留 | Python 工具缓存与覆盖率报告 |
+| 54-58 | `*.bak`, `*.orig`, `*.tmp`, `*.temp`, `.cache/` | ✅ 保留 | 备份、冲突残留、临时文件与通用缓存 |
+| 60-62 | `node_modules/`, `dist/`, `build/` | ✅ 保留 | Node.js 依赖与构建产物 |
+
+> **注意**：`docs/` 目录**未**在 .gitignore 中，所有文档（含 `docs/plan/`）均纳入版本管理。
 
 ### 3.3 优化建议
 
-#### 应移除的忽略规则（应纳入版本管理）
+当前 .gitignore 已经过充分优化，所有规则均符合 §3.1 审查原则，无需增删。以下是对关键设计决策的说明：
 
-| 当前规则 | 原因 | 建议 |
-|----------|------|------|
-| `CHANGELOG.md` | 版本变更记录是项目核心文档，必须追踪 | 删除此忽略规则 |
-| `CODE_WIKI.md` | 代码知识库对团队有价值 | 删除此忽略规则 |
-| `xuansto-skill-WIKI.md` | Skill 文档应纳入版本管理 | 删除此忽略规则 |
-| `docs/*` + `!docs/plan/` | 文档应整体纳入管理，不应仅保留 plan/ | 改为选择性忽略 |
+#### 已正确实现的选择性跟踪
 
-#### 应新增的忽略规则
+| 设计决策 | 实现方式 | 说明 |
+|----------|----------|------|
+| `.trae/` 选择性跟踪 | `.trae/*` → `!.trae/skills/` → `.trae/skills/*` → `!.trae/skills/xuansto-skill-v2/` | 四行嵌套白名单，仅跟踪本项目 skill |
+| `.knowledge/` 临时文件排除 | `temp-scripts/*` + `.gitkeep`、`script-errors/*` + `.gitkeep` | 忽略运行时产物，保留目录骨架 |
+| `.knowledge/` 备份排除 | `.knowledge/backup/` | 备份含敏感数据，不纳入版本管理 |
+| Python 字节码全覆盖 | `__pycache__/`、`*.py[cod]`、`*$py.class` | 覆盖 CPython 字节码与 Cython 半编译类 |
+| Vim 交换/备份文件 | `*.swp`、`*.swo`、`*~` | 覆盖 Vim 编辑器临时文件 |
+| AI 编辑器配置排除 | `.claude/`、`.cursor/`、`.windsurf/` | 覆盖 Claude Code、Cursor、Windsurf 等 AI 编辑器 |
+| Python 工具缓存 | `.mypy_cache/`、`.pytest_cache/`、`.ruff_cache/`、`htmlcov/`、`.coverage` | 类型检查、测试、Lint 缓存与覆盖率报告 |
+| 临时/备份文件 | `*.bak`、`*.orig`、`*.tmp`、`*.temp`、`.cache/` | 覆盖手动备份、merge 残留、临时文件与通用缓存 |
+| Node.js 生态 | `node_modules/`、`dist/`、`build/` | 依赖目录与构建产物 |
+| `docs/` 不忽略 | — | `docs/` 目录未在 .gitignore 中，所有文档均纳入版本管理 |
 
-| 规则 | 原因 |
-|------|------|
-| `*.egg-info/` | Python 包构建元数据，可自动生成 |
-| `*.whl` | 分发包，可自动构建 |
-| `.mypy_cache/` | mypy 类型检查缓存 |
-| `.pytest_cache/` | pytest 缓存 |
-| `.ruff_cache/` | ruff 缓存 |
-| `htmlcov/` | 覆盖率 HTML 报告 |
-| `.coverage` | 覆盖率数据文件 |
-| `*.bak` | 备份文件 |
-| `*.orig` | merge 冲突残留 |
-| `.knowledge/backup/` | 知识库备份目录（含敏感数据） |
+#### 无需调整的说明
 
-#### 应清理的不明确规则
+此前版本可能存在以下问题规则，但当前 .gitignore 中已不存在：
 
-| 当前规则 | 建议 |
-|----------|------|
-| `xuansto-clean/` | 如为临时清理目录，保留忽略；否则删除 |
-| `副本/` | 如为个人备份目录，保留忽略；否则删除 |
+| 曾存在的问题规则 | 当前状态 | 说明 |
+|------------------|----------|------|
+| `xuansto-clean/`、`副本/` | ❌ 不存在 | 含义不明的个人目录，已移除 |
+| `CHANGELOG.md`、`CODE_WIKI.md`、`xuansto-skill-WIKI.md` | ❌ 不存在 | 文档不应被忽略，已移除 |
+| `*_helper.ps1/py`、`setup-worktree.ps1`、`test-*.ps1` | ❌ 不存在 | 辅助脚本不应被忽略，已移除 |
+| `docs/*` + `!docs/plan/` | ❌ 不存在 | 文档应整体纳入管理，已移除 |
 
-### 3.4 优化后的 .gitignore
+### 3.4 当前 .gitignore 完整内容
+
+> 以下为仓库根目录 `.gitignore` 的当前完整内容，已与 §3.2 审查结果一致，无需修改。
 
 ```gitignore
 .trae/*
@@ -432,9 +434,9 @@ build/
 | `.idea/`, `.vscode/` | ✅ | ✅ | Skill 级保留 |
 | `.env` 系列 | ✅ | ✅ | Skill 级保留 |
 | `*.log` | ✅ | ✅ | Skill 级保留 |
-| `node_modules/`, `dist/`, `build/` | ✅（新增） | ✅ | Skill 级保留 |
-| `*.tmp`, `*.temp`, `.cache/` | ❌ | ✅ | 补充到根级 |
-| `.knowledge/backup/` | ❌（新增） | ❌ | 根级新增 |
+| `node_modules/`, `dist/`, `build/` | ✅ | ✅ | Skill 级保留 |
+| `*.tmp`, `*.temp`, `.cache/` | ✅ | ✅ | 根级与 Skill 级均已覆盖 |
+| `.knowledge/backup/` | ✅ | ❌ | 根级已覆盖（`.trae/.../backup/`）；Skill 级无需重复 |
 
 ---
 
@@ -456,36 +458,37 @@ build/
 | 1 | `* text=auto eol=lf` | ✅ 保留 | 全局 LF 行尾，跨平台一致 |
 | 3-5 | `*.py/pyx/pyi text eol=lf diff=python` | ✅ 保留 | Python 文件正确标记 |
 | 7-8 | `*.md text eol=lf diff=markdown`, `*.rst text eol=lf` | ✅ 保留 | 文档文件 |
-| 10-15 | `*.yaml/yml/json/toml/cfg/ini text eol=lf` | ✅ 保留 | 配置文件 |
-| 17-22 | `*.js/ts/jsx/tsx/css/scss/html text eol=lf` | ✅ 保留 | 前端文件 |
-| 24-27 | `*.sh/bash text eol=lf`, `*.ps1 text eol=crlf` | ✅ 保留 | Shell 用 LF，PowerShell 用 CRLF |
-| 29-30 | `*.xml text eol=lf`, `*.svg text eol=lf` | ✅ 保留 | 标记语言 |
-| 32-34 | `*.gitignore/gitattributes/editorconfig text eol=lf` | ✅ 保留 | Git/编辑器配置 |
-| 36 | `LICENSE text eol=lf` | ✅ 保留 | 许可证 |
-| 38-56 | 二进制文件标记 | ✅ 保留 | 防止文本合并 |
+| 10-16 | `*.yaml/yml diff=yaml`, `*.json diff=json`, `*.toml diff=toml`, `*.cfg/ini/conf text eol=lf` | ✅ 保留 | 配置文件，含 diff 驱动 |
+| 18-24 | `*.js diff=javascript`, `*.ts diff=typescript`, `*.jsx diff=javascript`, `*.tsx diff=typescript`, `*.css diff=css`, `*.scss/html text eol=lf` | ✅ 保留 | 前端文件，含 diff 驱动 |
+| 26-28 | `*.sh/bash text eol=lf`, `*.ps1 text eol=crlf` | ✅ 保留 | Shell 用 LF，PowerShell 用 CRLF |
+| 30-31 | `*.xml text eol=lf`, `*.svg text eol=lf` | ✅ 保留 | 标记语言 |
+| 33-36 | `*.gitignore/gitattributes/editorconfig text eol=lf`, `.git-blame-ignore-revs text eol=lf` | ✅ 保留 | Git/编辑器配置 |
+| 38-40 | `*.lock text eol=lf merge=union`, `*.patch text eol=lf`, `*.env.example text eol=lf` | ✅ 保留 | 锁文件、补丁、环境变量模板 |
+| 42 | `LICENSE text eol=lf` | ✅ 保留 | 许可证 |
+| 44-69 | 二进制文件标记（含 `*.wasm`, `*.webp`, `*.woff2`, `*.ttf`, `*.otf`, `*.mp4`, `*.mp3` 等） | ✅ 保留 | 防止文本合并 |
+| 71 | `resource_state.json merge=union` | ✅ 保留 | JSON 状态文件，合并时取并集 |
 
-### 4.3 缺失规则补充
+### 4.3 已实现的规则补充
 
-| 规则 | 原因 |
-|------|------|
-| `*.yaml diff=yaml` | YAML 文件指定 diff 驱动，提升可读性 |
-| `*.json diff=json` | JSON 文件指定 diff 驱动 |
-| `*.toml diff=toml` | TOML 配置文件 |
-| `*.css diff=css` | CSS 文件 diff 驱动 |
-| `*.tsx diff=typescript` | TSX 文件使用 TypeScript diff |
-| `*.jsx diff=javascript` | JSX 文件使用 JavaScript diff |
-| `*.lock text eol=lf` | 锁文件（如 poetry.lock） |
-| `*.patch text eol=lf` | 补丁文件 |
-| `*.wasm binary` | WebAssembly 二进制 |
-| `*.webp binary` | WebP 图片 |
-| `*.woff2 binary` | 字体文件 |
-| `*.ttf binary` | 字体文件 |
-| `*.otf binary` | 字体文件 |
-| `*.mp4 binary` | 视频文件 |
-| `*.mp3 binary` | 音频文件 |
-| `.git-blame-ignore-revs text eol=lf` | blame 忽略修订 |
-| `*.conf text eol=lf` | 服务器配置文件 |
-| `*.env.example text eol=lf` | 环境变量模板（不含机密） |
+当前 .gitattributes 已包含以下此前可能缺失的规则，无需再添加：
+
+| 规则 | 当前状态 | 说明 |
+|------|----------|------|
+| `*.yaml diff=yaml` | ✅ 已存在 | YAML 文件 diff 驱动 |
+| `*.json diff=json` | ✅ 已存在 | JSON 文件 diff 驱动 |
+| `*.toml diff=toml` | ✅ 已存在 | TOML 配置文件 diff 驱动 |
+| `*.css diff=css` | ✅ 已存在 | CSS 文件 diff 驱动 |
+| `*.tsx diff=typescript` | ✅ 已存在 | TSX 文件使用 TypeScript diff |
+| `*.jsx diff=javascript` | ✅ 已存在 | JSX 文件使用 JavaScript diff |
+| `*.lock text eol=lf merge=union` | ✅ 已存在 | 锁文件行尾与合并策略 |
+| `*.patch text eol=lf` | ✅ 已存在 | 补丁文件 |
+| `*.wasm binary` | ✅ 已存在 | WebAssembly 二进制 |
+| `*.webp binary` | ✅ 已存在 | WebP 图片 |
+| `*.woff2/ttf/otf binary` | ✅ 已存在 | 字体文件 |
+| `*.mp4/mp3 binary` | ✅ 已存在 | 音视频文件 |
+| `.git-blame-ignore-revs text eol=lf` | ✅ 已存在 | blame 忽略修订 |
+| `*.conf text eol=lf` | ✅ 已存在 | 服务器配置文件 |
+| `*.env.example text eol=lf` | ✅ 已存在 | 环境变量模板（不含机密） |
 
 ### 4.4 合并策略声明
 
@@ -500,7 +503,9 @@ build/
 | `resource_state.json merge=union` | JSON 状态文件，合并时取并集 |
 | `*.lock merge=union` | 锁文件合并策略 |
 
-### 4.5 优化后的 .gitattributes
+### 4.5 当前 .gitattributes 完整内容
+
+> 以下为仓库根目录 `.gitattributes` 的当前完整内容，已与 §4.2 审查结果一致，无需修改。
 
 ```gitattributes
 * text=auto eol=lf
@@ -1146,14 +1151,14 @@ git commit -m "feat(skill): 嵌入 SKILL.md PHASE_0~3 标记 (UNIFIED-07)"
 cd <repo-root>
 
 # 更新 .gitignore
-# （手动编辑，按第 3.4 节优化后的内容替换）
+# （当前 .gitignore 已是优化状态，无需修改；如需调整参考第 3.4 节）
 
 # 更新 .gitattributes
-# （手动编辑，按第 4.5 节优化后的内容替换）
+# （当前 .gitattributes 已是优化状态，无需修改；如需调整参考第 4.5 节）
 
-# 提交
-git add .gitignore .gitattributes
-git commit -m "chore(git): 优化 .gitignore 和 .gitattributes 规则"
+# 提交（仅在实际修改时执行）
+# git add .gitignore .gitattributes
+# git commit -m "chore(git): 优化 .gitignore 和 .gitattributes 规则"
 
 # 更新 Skill 级文件
 git add .trae/skills/xuansto-skill-v2/.gitignore .trae/skills/xuansto-skill-v2/.gitattributes
