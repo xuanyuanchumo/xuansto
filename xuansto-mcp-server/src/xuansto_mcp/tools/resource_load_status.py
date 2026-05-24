@@ -576,6 +576,11 @@ def advance_phase(target_phase: int) -> dict[str, Any]:
         "status": "complete",
         "loaded_resources": resources,
     })
+    send_mcp_notification("tools/list_changed", {
+        "reason": "phase_transition",
+        "from_phase": from_name,
+        "to_phase": to_name,
+    })
     notify(f"Phase advanced: {from_name} -> {to_name}", "info")
     state_file = _get_state_file()
     try:
@@ -602,6 +607,11 @@ def degrade_phase() -> dict[str, Any]:
         "from": from_name,
         "to": to_name,
         "reason": "token_budget",
+    })
+    send_mcp_notification("tools/list_changed", {
+        "reason": "phase_degradation",
+        "from_phase": from_name,
+        "to_phase": to_name,
     })
     notify(f"Phase degraded: {from_name} -> {to_name} (token budget)", "warning")
     state_file = _get_state_file()

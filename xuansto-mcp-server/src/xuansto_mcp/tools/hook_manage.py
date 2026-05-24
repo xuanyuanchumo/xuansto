@@ -1,12 +1,21 @@
+"""
+Hook管理模块。
+
+hooks.json: 声明式配置文件，定义Hook名称、触发类型(matcher)、执行动作和参数。
+hook_manage.py: 运行时接口，提供INLINE_HOOK_LOGIC内嵌执行逻辑和MCP工具注册。
+
+两者关系: hooks.json描述"何时触发+做什么"，hook_manage.py实现"怎么做"。
+当脚本不可用时，INLINE_HOOK_LOGIC作为内嵌降级逻辑执行。
+"""
+
 from __future__ import annotations
 
 import asyncio
 import json
-import os
 import re
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -300,7 +309,175 @@ def _decision_log_persist_logic(project_path: str, context: dict[str, Any] | Non
     }
 
 
-INLINE_HOOK_LOGIC = {
+def _token_budget_check_logic(project_path: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
+    ratio = 0.0
+    if context:
+        ratio = float(context.get("token_usage_ratio", 0.0))
+    if ratio >= 0.95:
+        return {
+            "status": "block",
+            "message": f"Token预算严重超限: 使用率{ratio:.0%}，已阻断操作",
+            "details": {"token_usage_ratio": ratio, "threshold_block": 0.95},
+        }
+    if ratio >= 0.8:
+        return {
+            "status": "warn",
+            "message": f"Token预算警告: 使用率{ratio:.0%}",
+            "details": {"token_usage_ratio": ratio, "threshold_warn": 0.8},
+        }
+    return {"status": "pass", "message": f"Token预算正常: 使用率{ratio:.0%}", "details": {"token_usage_ratio": ratio}}
+
+
+def _encoding_check_logic(project_path: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
+    root = Path(project_path)
+    if not root.exists():
+        return {"status": "pass", "message": "项目路径不存在，跳过编码检查", "details": {}}
+    target_file = ""
+    if context:
+        target_file = context.get("file", "") or context.get("path", "")
+    check_path = root / target_file if target_file else root
+    if target_file and check_path.is_file():
+        try:
+            raw = check_path.read_bytes()
+            issues = []
+            if raw[:3] == b"\xef\xbb\xbf":
+                issues.append("UTF-8 BOM")
+            try:
+                raw.decode("utf-8")
+            except UnicodeDecodeError:
+                issues.append("非UTF-8编码")
+            if b"\xfffd" in raw.replace(b"\xef\xbb\xbf", b""):
+                issues.append("U+FFFD替换字符")
+            if issues:
+                return {"status": "warn", "message": f"编码问题: {', '.join(issues)}", "details": {"file": target_file, "issues": issues}}
+            return {"status": "pass", "message": "编码检查通过", "details": {"file": target_file}}
+        except OSError:
+            return {"status": "pass", "message": "无法读取文件，跳过编码检查", "details": {}}
+    return {"status": "pass", "message": "编码检查通过(无指定文件)", "details": {}}
+
+
+def _load_context_logic(project_path: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
+    root = Path(project_path)
+    logs_dir = root / ".skill-logs"
+    if not logs_dir.exists():
+        try:
+            logs_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass
+        return {"status": "pass", "message": "无历史会话日志，首次会话", "details": {"sessions_found": 0}}
+    sessions = sorted(logs_dir.glob("session-*.md"), reverse=True)
+    if sessions:
+        return {"status": "pass", "message": f"加载最近会话上下文: {sessions[0].name}", "details": {"sessions_found": len(sessions), "latest": sessions[0].name}}
+    return {"status": "pass", "message": "无历史会话日志", "details": {"sessions_found": 0}}
+
+
+def _kb_health_check_logic(project_path: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
+    root = Path(project_path)
+    kb_dir = root / ".knowledge"
+    if not kb_dir.exists():
+        return {"status": "warn", "message": "知识库目录不存在", "details": {"kb_exists": False}}
+    index_dir = kb_dir / "index"
+    has_index = index_dir.exists() and any(index_dir.iterdir()) if index_dir.exists() else False
+    if has_index:
+        return {"status": "pass", "message": "知识库健康", "details": {"kb_exists": True, "has_index": True}}
+    return {"status": "warn", "message": "知识库索引缺失，将使用文件系统降级", "details": {"kb_exists": True, "has_index": False}}
+
+
+def _platform_detect_logic(project_path: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
+    root = Path(project_path)
+    detected = []
+    if (root / "package.json").exists():
+        detected.append("node")
+    if (root / "Cargo.toml").exists():
+        detected.append("rust")
+    if (root / "go.mod").exists():
+        detected.append("go")
+    if (root / "pyproject.toml").exists() or (root / "setup.py").exists():
+        detected.append("python")
+    if (root / "pubspec.yaml").exists():
+        detected.append("flutter")
+    if not detected:
+        return {"status": "pass", "message": "未检测到已知平台", "details": {"platforms": []}}
+    return {"status": "pass", "message": f"检测到平台: {', '.join(detected)}", "details": {"platforms": detected}}
+
+
+def _session_save_logic(project_path: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
+    root = Path(project_path)
+    logs_dir = root / ".skill-logs"
+    try:
+        logs_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return {"status": "warn", "message": "无法创建会话日志目录", "details": {}}
+    from datetime import datetime
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    session_file = logs_dir / f"session-{ts}.md"
+    tasks = context.get("completed_tasks", []) if context else []
+    decisions = context.get("decisions", []) if context else []
+    content_parts = [f"# Session {ts}\n"]
+    if tasks:
+        content_parts.append("## Completed Tasks\n" + "\n".join(f"- {t}" for t in tasks))
+    if decisions:
+        content_parts.append("## Key Decisions\n" + "\n".join(f"- {d}" for d in decisions))
+    try:
+        session_file.write_text("\n".join(content_parts), encoding="utf-8")
+        return {"status": "pass", "message": f"会话已保存: {session_file.name}", "details": {"file": session_file.name}}
+    except OSError:
+        return {"status": "warn", "message": "无法写入会话文件", "details": {}}
+
+
+def _experience_precipitate_logic(project_path: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
+    root = Path(project_path)
+    exp_dir = root / ".knowledge" / "experience"
+    try:
+        exp_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return {"status": "warn", "message": "无法创建经验目录", "details": {}}
+    task_completed = False
+    if context:
+        task_completed = bool(context.get("task_completed", False) or context.get("completed_tasks"))
+    if not task_completed:
+        return {"status": "pass", "message": "无已完成任务，跳过经验沉淀", "details": {"precipitated": False}}
+    return {"status": "pass", "message": "经验沉淀触发条件满足", "details": {"precipitated": True, "target": str(exp_dir)}}
+
+
+def _pattern_detect_logic(project_path: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
+    root = Path(project_path)
+    patterns_dir = root / ".knowledge" / "experience" / "patterns"
+    error_count = 0
+    if context:
+        errors = context.get("session_errors", [])
+        error_count = len(errors) if isinstance(errors, list) else 0
+    if error_count >= 2:
+        try:
+            patterns_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass
+        return {"status": "warn", "message": f"检测到{error_count}个会话错误，建议分析模式", "details": {"error_count": error_count, "threshold": 2, "output": str(patterns_dir)}}
+    return {"status": "pass", "message": f"会话错误数({error_count})低于阈值", "details": {"error_count": error_count}}
+
+
+def _save_state_logic(project_path: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
+    root = Path(project_path)
+    cache_dir = root / ".agent_cache"
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return {"status": "warn", "message": "无法创建缓存目录", "details": {}}
+    state_file = cache_dir / "workflow-state.json"
+    import json as _json
+    state = {
+        "current_phase": context.get("current_phase", "") if context else "",
+        "workflow_state": context.get("workflow_state", "") if context else "",
+        "active_agents": context.get("active_agents", []) if context else [],
+    }
+    try:
+        state_file.write_text(_json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+        return {"status": "pass", "message": "工作流状态已保存", "details": {"file": str(state_file)}}
+    except OSError:
+        return {"status": "warn", "message": "无法写入状态文件", "details": {}}
+
+
+INLINE_HOOK_LOGIC: dict[str, Callable[..., dict[str, Any]]] = {
     "security-block": _security_block_logic,
     "dangerous-cmd-confirm": _dangerous_cmd_confirm_logic,
     "auto-format": _auto_format_logic,
@@ -308,6 +485,15 @@ INLINE_HOOK_LOGIC = {
     "type-check": _type_check_logic,
     "git-status-check": _git_status_check_logic,
     "decision-log-persist": _decision_log_persist_logic,
+    "token-budget-check": _token_budget_check_logic,
+    "encoding-check": _encoding_check_logic,
+    "load-context": _load_context_logic,
+    "kb-health-check": _kb_health_check_logic,
+    "platform-detect": _platform_detect_logic,
+    "session-save": _session_save_logic,
+    "experience-precipitate": _experience_precipitate_logic,
+    "pattern-detect": _pattern_detect_logic,
+    "save-state": _save_state_logic,
 }
 
 def register(mcp: FastMCP) -> None:
@@ -382,6 +568,15 @@ _HOOK_TOOL_MAP: dict[str, list[str]] = {
     "type-check": ["quality_gate_check"],
     "git-status-check": ["workflow_dispatch"],
     "decision-log-persist": ["workflow_dispatch", "session_manage"],
+    "token-budget-check": ["quality_gate_check", "token_budget"],
+    "encoding-check": ["quality_gate_check", "code_simplify"],
+    "load-context": ["session_manage"],
+    "kb-health-check": ["knowledge_search"],
+    "platform-detect": ["skill_analyze", "project_init"],
+    "session-save": ["session_manage", "workflow_dispatch"],
+    "experience-precipitate": ["knowledge_inject", "session_manage"],
+    "pattern-detect": ["session_manage", "metrics_report"],
+    "save-state": ["session_manage", "workflow_dispatch"],
 }
 
 

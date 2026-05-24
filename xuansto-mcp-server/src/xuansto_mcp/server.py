@@ -193,6 +193,14 @@ from .resources import skill_resources
 
 skill_resources.register(mcp)
 
+@mcp.prompt("xuansto_workflow")
+def xuansto_workflow_prompt(task_description: str) -> str:
+    return f"Execute xuansto workflow for: {task_description}"
+
+@mcp.prompt("xuansto_analysis")
+def xuansto_analysis_prompt(skill_path: str) -> str:
+    return f"Analyze skill at: {skill_path}"
+
 try:
     _REGISTERED_RESOURCE_NAMES = list(mcp._resource_manager._resources.keys())
     _REGISTERED_RESOURCE_NAMES.extend(mcp._resource_manager._templates.keys())

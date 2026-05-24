@@ -223,7 +223,7 @@ def _sqlite_search(query: str, top_k: int, scope: str | None, min_confidence: fl
                 rows = cursor.fetchall()
             items = []
             for row in rows:
-                if "bm25_score" in row.keys():
+                if "bm25_score" in row:
                     raw_score = row["bm25_score"]
                     neg_score = -raw_score
                     relevance = min(1.0, max(0.0, neg_score / 20.0 + 0.5))
@@ -233,8 +233,8 @@ def _sqlite_search(query: str, top_k: int, scope: str | None, min_confidence: fl
                 if relevance < min_confidence:
                     continue
                 items.append({
-                    "source": row["id"] if "id" in row.keys() else str(row[0]),
-                    "content": row["content"] if "content" in row.keys() else str(row[1]),
+                    "source": row["id"] if "id" in row else str(row[0]),
+                    "content": row["content"] if "content" in row else str(row[1]),
                     "match_type": "fts5",
                     "relevance": relevance,
                 })

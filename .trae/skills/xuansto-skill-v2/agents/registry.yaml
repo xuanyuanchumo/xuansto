@@ -8,14 +8,17 @@ layers:
     agents:
       - name: Orchestrator
         file: orchestrator/orchestrator.md
+        phase: 1
         phases: [0, 1, 2]
         model_routing: deep
       - name: Subagent Dispatcher
         file: orchestrator/subagent-dispatcher.md
+        phase: 1
         phases: [0, 4, 5]
         model_routing: standard
       - name: Task Coordinator
         file: orchestrator/task-coordinator.md
+        phase: 1
         phases: [0, 4, 5]
         model_routing: standard
 
@@ -24,18 +27,22 @@ layers:
     agents:
       - name: Product Manager
         file: product/product-manager.md
+        phase: 1
         phases: [1, 6]
         model_routing: standard
       - name: Brainstorming Facilitator
         file: product/brainstorming-facilitator.md
+        phase: 1
         phases: [1]
         model_routing: standard
       - name: System Architect
         file: product/system-architect.md
+        phase: 1
         phases: [2]
         model_routing: deep
       - name: Technical Writer
         file: product/technical-writer.md
+        phase: 1
         phases: [1, 6]
         model_routing: standard
 
@@ -44,18 +51,22 @@ layers:
     agents:
       - name: Design System Generator
         file: design/design-system-generator.md
+        phase: 2
         phases: [2]
         model_routing: deep
       - name: UX Designer
         file: design/ux-designer.md
+        phase: 2
         phases: [2]
         model_routing: standard
       - name: Frontend Stylist
         file: design/frontend-stylist.md
+        phase: 2
         phases: [4]
         model_routing: standard
       - name: UI Designer
         file: design/ui-designer.md
+        phase: 2
         phases: [2]
         model_routing: standard
 
@@ -64,26 +75,32 @@ layers:
     agents:
       - name: Backend Developer
         file: engineering/backend-developer.md
+        phase: 1
         phases: [4]
         model_routing: standard
       - name: Database Engineer
         file: engineering/database-engineer.md
+        phase: 1
         phases: [4]
         model_routing: standard
       - name: DevOps Engineer
         file: engineering/devops-engineer.md
+        phase: 1
         phases: [4, 8]
         model_routing: standard
       - name: Frontend Developer
         file: engineering/frontend-developer.md
+        phase: 1
         phases: [4]
         model_routing: standard
       - name: Fullstack Engineer
         file: engineering/fullstack-engineer.md
+        phase: 1
         phases: [4]
         model_routing: standard
       - name: Mobile Developer
         file: engineering/mobile-developer.md
+        phase: 1
         phases: [4]
         model_routing: standard
 
@@ -92,22 +109,27 @@ layers:
     agents:
       - name: Desktop Developer
         file: cross-platform/desktop-developer.md
+        phase: 2
         phases: [4, 8]
         model_routing: standard
       - name: Desktop UI Adapter
         file: cross-platform/desktop-ui-adapter.md
+        phase: 2
         phases: [4]
         model_routing: standard
       - name: Native Module Developer
         file: cross-platform/native-module-developer.md
+        phase: 2
         phases: [4]
         model_routing: deep
       - name: IPC Specialist
         file: cross-platform/ipc-specialist.md
+        phase: 2
         phases: [4, 5]
         model_routing: deep
       - name: Auto-Update Engineer
         file: cross-platform/auto-update-engineer.md
+        phase: 2
         phases: [8]
         model_routing: standard
 
@@ -116,14 +138,17 @@ layers:
     agents:
       - name: Data Modeler
         file: database/data-modeler.md
+        phase: 2
         phases: [2, 4]
         model_routing: standard
       - name: Data Seeder
         file: database/data-seeder.md
+        phase: 2
         phases: [4]
         model_routing: fast
       - name: DBA
         file: database/dba.md
+        phase: 2
         phases: [4, 8]
         model_routing: standard
 
@@ -132,42 +157,52 @@ layers:
     agents:
       - name: AI Penetration Tester
         file: testing/ai-penetration-tester.md
+        phase: 2
         phases: [5]
         model_routing: deep
       - name: Desktop Tester
         file: testing/desktop-tester.md
+        phase: 2
         phases: [5]
         model_routing: standard
       - name: E2E Tester
         file: testing/e2e-tester.md
+        phase: 2
         phases: [5]
         model_routing: standard
       - name: Integration Tester
         file: testing/integration-tester.md
+        phase: 2
         phases: [5]
         model_routing: standard
       - name: Performance Tester
         file: testing/performance-tester.md
+        phase: 2
         phases: [5]
         model_routing: standard
       - name: QA Engineer
         file: testing/qa-engineer.md
+        phase: 2
         phases: [5, 6]
         model_routing: standard
       - name: Security Tester
         file: testing/security-tester.md
+        phase: 2
         phases: [5]
         model_routing: deep
       - name: Test Architect
         file: testing/test-architect.md
+        phase: 2
         phases: [3]
         model_routing: deep
       - name: Test Maintainer
         file: testing/test-maintainer.md
+        phase: 2
         phases: [5, 7]
         model_routing: standard
       - name: Unit Tester
         file: testing/unit-tester.md
+        phase: 2
         phases: [3, 4]
         model_routing: fast
 
@@ -176,14 +211,17 @@ layers:
     agents:
       - name: Security Auditor
         file: security/security-auditor.md
+        phase: 2
         phases: [5]
         model_routing: deep
       - name: Compliance Officer
         file: security/compliance-officer.md
+        phase: 2
         phases: [5, 6]
         model_routing: standard
       - name: Penetration Tester
         file: security/penetration-tester.md
+        phase: 2
         phases: [5]
         model_routing: deep
 
@@ -192,18 +230,22 @@ layers:
     agents:
       - name: Build-Release Engineer
         file: devops/build-release-engineer.md
+        phase: 2
         phases: [8]
         model_routing: standard
       - name: CI/CD Specialist
         file: devops/cicd-specialist.md
+        phase: 2
         phases: [8]
         model_routing: standard
       - name: Monitor Specialist
         file: devops/monitor-specialist.md
+        phase: 2
         phases: [8]
         model_routing: fast
       - name: Runtime Supervisor
         file: devops/runtime-supervisor.md
+        phase: 2
         phases: [8]
         model_routing: standard
 
@@ -212,30 +254,37 @@ layers:
     agents:
       - name: Bug Scanner
         file: quality/bug-scanner.md
+        phase: 2
         phases: [5]
         model_routing: fast
       - name: Code Reviewer
         file: quality/code-reviewer.md
+        phase: 2
         phases: [5]
         model_routing: standard
       - name: Comment Verifier
         file: quality/comment-verifier.md
+        phase: 2
         phases: [5]
         model_routing: fast
       - name: Compliance Reviewer
         file: quality/compliance-reviewer.md
+        phase: 2
         phases: [5, 6]
         model_routing: standard
       - name: Doc Reviewer
         file: quality/doc-reviewer.md
+        phase: 2
         phases: [6]
         model_routing: fast
       - name: History Analyzer
         file: quality/history-analyzer.md
+        phase: 2
         phases: [5, 7]
         model_routing: standard
       - name: Refactoring Specialist
         file: quality/refactoring-specialist.md
+        phase: 2
         phases: [7]
         model_routing: standard
 
@@ -244,10 +293,12 @@ layers:
     agents:
       - name: Documentation Engineer
         file: documentation/documentation-engineer.md
+        phase: 2
         phases: [6]
         model_routing: standard
       - name: Specification Keeper
         file: documentation/specification-keeper.md
+        phase: 2
         phases: [2, 6]
         model_routing: standard
 
@@ -256,14 +307,17 @@ layers:
     agents:
       - name: Knowledge Manager
         file: knowledge/knowledge-manager.md
+        phase: 2
         phases: [0, 1]
         model_routing: standard
       - name: Learning Specialist
         file: knowledge/learning-specialist.md
+        phase: 2
         phases: [1, 7]
         model_routing: standard
       - name: Token Optimizer
         file: knowledge/token-optimizer.md
+        phase: 2
         phases: [0, 7]
         model_routing: fast
 
@@ -272,14 +326,17 @@ layers:
     agents:
       - name: Quality Monitor
         file: monitoring/quality-monitor.md
+        phase: 2
         phases: [0, 5]
         model_routing: fast
       - name: Progress Tracker
         file: monitoring/progress-tracker.md
+        phase: 2
         phases: [0, 6]
         model_routing: fast
       - name: Decision Logger
         file: monitoring/decision-logger.md
+        phase: 2
         phases: [0, 2, 6]
         model_routing: fast
 

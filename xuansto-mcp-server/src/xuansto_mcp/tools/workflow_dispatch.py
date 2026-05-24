@@ -632,7 +632,7 @@ def register(mcp: FastMCP) -> None:
                     "total": len(snapshots),
                 })
             else:
-                return make_error_response(ValueError(f"未知操作: {action}，支持: start, status, abort, phase"), error_code=ERR_VALIDATION)
+                return make_error_response(ValueError(f"未知操作: {action}，支持: start, status, abort, phase, recover, snapshots"), error_code=ERR_VALIDATION)
         except Exception as e:
             logger.error("workflow_dispatch error: %s", e)
             return make_error_response(e)

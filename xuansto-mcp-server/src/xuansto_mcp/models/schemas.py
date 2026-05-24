@@ -26,7 +26,7 @@ class SkillAnalyzeInput(BaseModel):
     skill_path: str = Field(description="技能根目录路径")
     include_scripts: bool = Field(default=True, description="是否分析scripts目录")
     include_agents: bool = Field(default=True, description="是否分析agents目录")
-    depth: Literal["basic", "full"] = Field(default="basic", description="分析深度: basic 或 full")
+    depth: str = Field(default="basic", description="分析深度: 1/basic=基础, 2/detailed=详细, 3/full/comprehensive=全面")
 
 
 class KnowledgeSearchInput(BaseModel):
@@ -95,8 +95,8 @@ class WorkflowDispatchInput(BaseModel):
 
 class AgentStatusInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["list", "by_phase", "detail", "match", "merge"] = Field(description="操作类型: list, by_phase, detail, match, merge")
-    phase: int | None = Field(default=None, ge=0, le=8, description="按阶段查询Agent(by_phase时使用, 0-8)")
+    action: Literal["list", "by_phase", "detail", "match", "merge", "merge_policy"] = Field(description="操作类型: list, by_phase, detail, match, merge, merge_policy")
+    phase: int | None = Field(default=None, ge=0, le=8, description="按阶段查询Agent(by_phase时使用0-8工作流阶段; list时使用1-2加载阶段过滤, phase<=值)")
     agent_name: str | None = Field(default=None, description="Agent名称(detail时使用)")
     capabilities: list[str] | None = Field(default=None, description="Agent能力列表(match时使用)，如: ['code_review', 'testing']")
     project_file_count: int | None = Field(default=None, ge=0, description="项目文件数量(merge时使用)，用于判断是否自动合并")
@@ -169,7 +169,7 @@ class DecisionLogInput(BaseModel):
 
 class TokenBudgetInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["status", "set_budget", "recommend", "report"] = Field(description="操作类型: status, set_budget, recommend, report")
+    action: Literal["status", "set_budget", "recommend", "report", "enforce"] = Field(description="操作类型: status, set_budget, recommend, report, enforce")
     total_budget: int | None = Field(default=None, ge=1000, description="总Token预算(set_budget时使用)")
     phase_allocations: dict[str, int] | None = Field(default=None, description="阶段分配(set_budget时使用)")
     project_size: Literal["small", "medium", "large"] | None = Field(default=None, description="项目规模(recommend时使用): small, medium, large")
@@ -180,13 +180,13 @@ class TokenBudgetInput(BaseModel):
 
 class ProjectInitInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["create", "validate", "detect_stack"] = Field(description="操作类型: create, validate, detect_stack")
-    name: str | None = Field(default=None, description="项目名称(create时使用)")
-    description: str | None = Field(default=None, description="项目描述(create时使用)")
-    stack: list[str] | None = Field(default=None, description="技术栈列表(create时使用)")
-    template: str | None = Field(default=None, description="项目模板(create时使用)")
-    directory: str | None = Field(default=None, description="项目目录(create时使用)")
-    project_path: str | None = Field(default=None, description="项目路径(validate/detect_stack时使用)")
+    action: Literal["create", "validate", "detect_stack", "init", "detect", "configure"] = Field(description="操作类型: create/init=创建项目, validate=验证配置, detect_stack/detect=检测技术栈, configure=配置项目")
+    name: str | None = Field(default=None, description="项目名称(create/init时使用)")
+    description: str | None = Field(default=None, description="项目描述(create/init/configure时使用)")
+    stack: list[str] | None = Field(default=None, description="技术栈列表(create/init/configure时使用)")
+    template: str | None = Field(default=None, description="项目模板(create/init时使用)")
+    directory: str | None = Field(default=None, description="项目目录(create/init时使用)")
+    project_path: str | None = Field(default=None, description="项目路径(validate/detect_stack/detect/configure时使用)")
 
 
 class KnowledgeInjectInput(BaseModel):
@@ -206,10 +206,11 @@ class KnowledgeInjectInput(BaseModel):
 
 class MetricsReportInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["query", "summary"] = Field(description="操作类型: query, summary")
+    action: Literal["query", "summary", "evaluate"] = Field(description="操作类型: query, summary, evaluate")
     tool_name: str | None = Field(default=None, description="工具名称(query时使用)")
     time_range: Literal["1h", "6h", "24h", "7d", "all"] = Field(default="all", description="时间范围: 1h, 6h, 24h, 7d, all")
     metric_type: Literal["calls", "errors", "latency", "all"] = Field(default="all", description="指标类型: calls, errors, latency, all")
+    criterion: Literal["error_rate", "availability", "latency", "all"] = Field(default="all", description="评估标准: error_rate, availability, latency, all")
 
 
 class ConfigManageInput(BaseModel):

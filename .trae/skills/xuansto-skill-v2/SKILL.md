@@ -2,7 +2,7 @@
 name: xuansto-skill-v2
 version: 8.0.0
 description: |
-  多Agent自主开发编排引擎，通过xuansto-mcp-server的26个MCP原子工具驱动9阶段全生命周期开发流程。务必在以下场景使用本技能：用户要求从零搭建项目、端到端开发功能、TDD/SDD驱动开发、多步骤结构化任务、代码审查+安全审计、规格驱动开发、桌面应用构建，即使用户没有明确说出"多Agent"或"全流程"。支持57个Agent/13层编排、54项质量门禁、31个命令，MCP工具优先不可用时自动降级到脚本调用。
+  多Agent自主开发编排引擎，通过xuansto-mcp-server的20个MCP原子工具驱动9阶段全生命周期开发流程。务必在以下场景使用本技能：用户要求从零搭建项目、端到端开发功能、TDD/SDD驱动开发、多步骤结构化任务、代码审查+安全审计、规格驱动开发、桌面应用构建，即使用户没有明确说出"多Agent"或"全流程"。支持57个Agent/13层编排、54项质量门禁、31个命令，MCP工具优先不可用时自动降级到脚本调用。
 agents_summary: "13 layers / 57 agents (via MCP v2)"
 triggers:
   phrases: ["build this properly", "write tests first", "plan my sprint", "review architecture", "implement properly", "build a full feature", "start a new project", "refactor this module", "set up a project", "create a new app", "build from scratch", "develop a feature end-to-end", "plan development", "write specs first", "develop feature", "create project", "add feature", "build app", "code quality", "quality check", "write code", "develop app", "帮我搭建项目", "先写测试再写代码", "做个代码审查", "安全审计一下", "重构这段代码", "帮我规划一下", "完整开发一个功能", "从需求到部署", "多agent协作", "TDD开发", "SDD驱动", "桌面打包", "渗透测试", "规格驱动开发", "搭建项目", "从零开发", "端到端开发", "开发一个功能", "先写规格", "做需求分析", "帮我开发", "写个功能", "添加功能", "新建项目", "创建项目", "代码质量", "质量检查", "写代码", "开发应用", "test-first", "spec-first", "full-stack feature", "multi-step task", "structured workflow", "全流程开发", "规格驱动", "测试先行", "brainstorm", "design system", "simplify code", "loop task", "security review", "vulnerability scan", "penetration test", "桌面应用", "desktop build", "app packaging", "pentest"]
@@ -12,7 +12,9 @@ triggers:
 author: skiller-team
 tags: [xuansto, multi-agent, sdd, tdd, orchestration, autonomous-development, quality-gates, cross-platform, desktop, electron, tauri, flutter, trinityguard, pentest, security-audit, brainstorm, design-system, simplify, loop, hooks, model-routing, parallelization, evaluation, mcp]
 compatible_mcp_server: ">=4.0.0"
+mcp_server_min_version: "4.0.0"
 min_version: 1.0.0
+v1_archived: true
 license: MIT
 ---
 
@@ -20,7 +22,7 @@ license: MIT
 
 # Xuansto Skill v8.0.0 (MCP Edition)
 
-> 57 Agents/13层 | 54 Gates | 31 Cmds | 9 Phase | 26 MCP工具驱动
+> 57 Agents/13层 | 54 Gates | 31 Cmds | 9 Phase | 20 MCP工具驱动
 
 ## 命令列表
 
@@ -142,11 +144,21 @@ MCP不可用时自动降级到 scripts/ 目录Python脚本，详见 {{include:co
 | {{include:commands/routes.yaml}} | 完整命令路由表(含降级策略) |
 | {{include:agents/registry.yaml}} | 完整Agent角色索引(13层57个) |
 
+### 核心参考文档索引
+
+| 文档 | 路径 | 内容摘要 |
+|------|------|----------|
+| 质量门禁 | references/quality-gates.md | 54项质量门禁详细定义与判定标准 |
+| Agent注册表 | references/agent-registry.md | 完整Agent注册表(57个Agent/13层)与角色详情 |
+| MCP工具 | references/mcp-tools.md | 20个MCP工具完整参数与返回值 |
+| 工作流 | references/workflows.md | 9阶段工作流目标、步骤、门禁和命令路由详情 |
+| 约束规则 | {{include:constraints.yaml}} | 核心约束与降级规则 |
+
 ### 核心工作流参考（P0 — Phase 0+加载）
 
 | 文件 | 内容 |
 |------|------|
-| references/mcp-tools.md | 26个MCP工具完整参数与返回值 |
+| references/mcp-tools.md | 20个MCP工具完整参数与返回值 |
 | references/workflow-phases.md | 9阶段工作流目标、步骤、门禁和命令路由详情 |
 | references/quality-gates.md | 54项质量门禁详细定义与判定标准 |
 | references/agent-registry.md | 完整Agent注册表(57个Agent/13层)与角色详情 |
@@ -186,6 +198,7 @@ MCP不可用时自动降级到 scripts/ 目录Python脚本，详见 {{include:co
 |------|------|----------|
 | skill_analyze | 项目结构分析 | skill_path, depth |
 | knowledge_search | 三层知识库检索 | action, query, top_k, search_type |
+| knowledge_inject | 知识注入到上下文 | action, content, scope |
 | quality_gate_check | 54项质量门禁 | gate_ids, phase, project_path |
 | spec_drift_detect | 规格偏差检测 | spec_dir, src_dir |
 | security_scan | OWASP+依赖扫描 | target, severity_threshold |
@@ -193,23 +206,16 @@ MCP不可用时自动降级到 scripts/ 目录Python脚本，详见 {{include:co
 | session_manage | 会话状态管理 | action, completed_tasks, decisions |
 | workflow_dispatch | 工作流调度 | action, workflow, project_path |
 | agent_status | Agent状态查询 | action, phase, agent_name |
+| agent_manage | Agent实例管理 | action, agent_type, agent_id |
 | hook_manage | Hook管理 | action, profile, hook_name |
 | resource_load_status | 渐进式加载状态 | action, phase, resource_ids |
 | context_compress | 上下文压缩 | content, strategy, target_tokens |
-| server_health | 服务器健康检查 | — |
+| server_health | 服务器健康检查 | action, include_details |
 | decision_log | 决策日志管理 | action, title, decision |
 | token_budget | Token预算管理 | action, total_budget |
-| knowledge_inject | 知识注入到上下文 | action, content, scope |
 | project_init | 项目初始化 | action, name, stack |
-| knowledge_add | 添加知识条目 | content, scope, metadata |
-| knowledge_update | 更新知识条目 | entry_id, content, scope |
-| knowledge_delete | 删除知识条目 | entry_id, scope |
-| knowledge_stats | 知识库统计 | scope |
-| knowledge_rollback | 知识库回滚 | entry_id, scope |
-| knowledge_auto_retrieve | 自动知识检索 | query, context, top_k |
-| knowledge_progressive_search | 渐进式搜索 | query, depth, scope |
-| knowledge_deep_load | 深度加载 | resource_ids, phase |
-| knowledge_web_update | Web知识更新 | url, scope |
+| metrics_report | 指标报告 | action, tool_name, time_range |
+| config_manage | 配置管理 | action, config_key, config_value |
 
 <!-- PHASE_2_END -->
 

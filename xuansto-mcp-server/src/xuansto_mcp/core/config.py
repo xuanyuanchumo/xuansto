@@ -336,6 +336,7 @@ _migrate_chroma_path()
 
 MCP_API_VERSION = "3.0.0"
 MCP_MIN_SUPPORTED_VERSION = "2.0.0"
+SKILL_MIN_VERSION = "8.0.0"
 
 API_CHANGELOG: dict[str, list[str]] = {
     "2.0.0": [
@@ -353,3 +354,21 @@ API_CHANGELOG: dict[str, list[str]] = {
         "Backward compatible with v2.0.0 and v1.0.0 clients",
     ],
 }
+
+
+def parse_version(version_str: str) -> tuple[int, int, int]:
+    parts = version_str.lstrip("v").split(".")
+    major = int(parts[0]) if len(parts) > 0 else 0
+    minor = int(parts[1]) if len(parts) > 1 else 0
+    patch = int(parts[2]) if len(parts) > 2 else 0
+    return (major, minor, patch)
+
+
+def _merge_configs(user_config: dict[str, Any], defaults: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(defaults)
+    for key, value in user_config.items():
+        if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
+            merged[key] = _merge_configs(value, merged[key])
+        else:
+            merged[key] = value
+    return merged

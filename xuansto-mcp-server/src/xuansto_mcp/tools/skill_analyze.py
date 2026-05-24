@@ -89,7 +89,18 @@ def _parse_yaml_frontmatter(file_path: Path) -> dict[str, Any]:
         return {"raw_frontmatter": match.group(1)}
 
 
-def _scan_directory(root: Path, depth: str) -> dict[str, Any]:
+_DEPTH_MAP = {
+    "1": 1, "basic": 1,
+    "2": 2, "detailed": 2,
+    "3": 3, "full": 3, "comprehensive": 3,
+}
+
+
+def _normalize_depth(depth: str) -> int:
+    return _DEPTH_MAP.get(depth, 1)
+
+
+def _scan_directory(root: Path, depth_level: int) -> dict[str, Any]:
     structure: dict[str, Any] = {
         "root": str(root),
         "exists": root.exists(),
@@ -101,9 +112,14 @@ def _scan_directory(root: Path, depth: str) -> dict[str, Any]:
     for item in sorted(root.iterdir()):
         if item.is_dir():
             sub: dict[str, Any] = {"name": item.name, "files_count": 0}
-            if depth == "full":
+            if depth_level >= 3:
                 sub_files = list(item.rglob("*"))
                 sub["files_count"] = sum(1 for f in sub_files if f.is_file())
+                sub["subdirs"] = [d.name for d in item.iterdir() if d.is_dir()]
+            elif depth_level >= 2:
+                sub_files = list(item.iterdir())
+                sub["files_count"] = sum(1 for f in sub_files if f.is_file())
+                sub["subdirs"] = [d.name for d in item.iterdir() if d.is_dir()]
             else:
                 sub["files_count"] = sum(1 for f in item.iterdir() if f.is_file())
             structure["directories"].append(sub)
@@ -183,12 +199,13 @@ def register(mcp: FastMCP) -> None:
         include_agents: bool = True,
         depth: str = "basic",
     ) -> dict[str, Any]:
-        """分析技能项目结构，提取YAML元数据、目录结构、Agent注册表、脚本依赖和验证问题。返回结构化分析结果，支持basic和full两种深度模式。"""
+        """分析技能项目结构，提取YAML元数据、目录结构、Agent注册表、脚本依赖和验证问题。返回结构化分析结果，支持basic(1)、detailed(2)、full/comprehensive(3)三种深度模式。"""
         validated, err = validate_input(SkillAnalyzeInput, skill_path=skill_path, include_scripts=include_scripts, include_agents=include_agents, depth=depth)
         if err:
             return err
-        logger.info("skill_analyze called: skill_path=%s", skill_path)
+        logger.info("skill_analyze called: skill_path=%s depth=%s", skill_path, depth)
         try:
+            depth_level = _normalize_depth(depth)
             safe_path, path_err = validate_path_safety(skill_path, allow_absolute=True)
             if path_err:
                 return make_error_response(ValueError(path_err), error_code=ERR_VALIDATION)
@@ -199,36 +216,45 @@ def register(mcp: FastMCP) -> None:
             skill_md = root / "SKILL.md"
             metadata = _parse_yaml_frontmatter(skill_md)
 
-            structure = _scan_directory(root, depth)
+            structure = _scan_directory(root, depth_level)
 
             agents: list[dict[str, Any]] = []
-            if include_agents:
+            if include_agents and depth_level >= 2:
                 registry = root / "references" / "agent-registry.md"
                 if not registry.exists():
                     registry = REFERENCES_DIR / "agent-registry.md"
                 agents = _parse_agent_registry(registry)
 
             dependencies: dict[str, Any] = {}
-            if include_scripts:
+            if include_scripts and depth_level >= 2:
                 scripts_dir = root / "scripts"
                 if not scripts_dir.exists():
                     scripts_dir = SCRIPTS_DIR
                 dependencies = _scan_script_dependencies(scripts_dir)
 
-            issues = _run_skill_validation(root)
+            issues: list[dict[str, Any]] = []
+            if depth_level >= 3:
+                issues = _run_skill_validation(root)
 
-            scale_assessment = _assess_project_scale(skill_path)
+            scale_assessment: dict[str, Any] = {}
+            if depth_level >= 3:
+                scale_assessment = _assess_project_scale(skill_path)
 
-            return make_success_response({
+            result: dict[str, Any] = {
                 "metadata": metadata,
                 "structure": structure,
-                "agents": agents,
-                "dependencies": dependencies,
-                "issues": issues,
-                "project_scale": scale_assessment["scale"],
-                "recommended_workflow": scale_assessment["recommended_workflow"],
-                "scale_details": scale_assessment,
-            })
+                "depth_level": depth_level,
+            }
+            if depth_level >= 2:
+                result["agents"] = agents
+                result["dependencies"] = dependencies
+            if depth_level >= 3:
+                result["issues"] = issues
+                result["project_scale"] = scale_assessment.get("scale", "unknown")
+                result["recommended_workflow"] = scale_assessment.get("recommended_workflow", "")
+                result["scale_details"] = scale_assessment
+
+            return make_success_response(result)
         except Exception as e:
             logger.error("skill_analyze error: %s", e)
             return make_error_response(e)

@@ -8,7 +8,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from ..core.config import DATA_DIR, SKILL_ROOT, WORK_DIR, KNOWLEDGE_CHROMA_PATH, MCP_API_VERSION, MCP_MIN_SUPPORTED_VERSION, API_CHANGELOG, AGENTS_DIR, REFERENCES_DIR, COMMANDS_DIR
+from ..core.config import DATA_DIR, SKILL_ROOT, WORK_DIR, KNOWLEDGE_CHROMA_PATH, MCP_API_VERSION, MCP_MIN_SUPPORTED_VERSION, API_CHANGELOG, AGENTS_DIR, REFERENCES_DIR, COMMANDS_DIR, SKILL_MIN_VERSION
 from ..core.errors import make_success_response, make_error_response, ERR_VALIDATION
 from ..core import atomic_write
 from ..core.logging_config import get_logger
@@ -380,6 +380,12 @@ def register(mcp: FastMCP) -> None:
             return make_success_response({
                 "status": "healthy",
                 "version": __version__,
+                "version_compatibility": {
+                    "mcp_server_version": __version__,
+                    "skill_min_version": SKILL_MIN_VERSION,
+                    "mcp_api_version": MCP_API_VERSION,
+                    "mcp_min_supported_version": MCP_MIN_SUPPORTED_VERSION,
+                },
                 "api_version": MCP_API_VERSION,
                 "api_changelog": API_CHANGELOG,
                 "uptime_seconds": round(time.time() - _START_TIME, 1),

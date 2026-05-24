@@ -56,6 +56,8 @@ class SearchEngine(Protocol):
 
 
 class ChromaDBSearchEngine:
+    _COLLECTION_NAME = "knowledge"
+
     def __init__(self, chroma_path: Path | None = None) -> None:
         self._chroma_path = chroma_path or KNOWLEDGE_CHROMA_PATH
         self._client: Any = None
@@ -75,8 +77,14 @@ class ChromaDBSearchEngine:
         min_confidence = (filters or {}).get("min_confidence", 0.0)
         try:
             client = self._get_client()
-            collection = client.get_or_create_collection("knowledge")
-            results = collection.query(query_texts=[query], n_results=top_k)
+            collection = client.get_or_create_collection(self._COLLECTION_NAME)
+            chroma_where = None
+            if filters and "embedding_tier" in filters:
+                chroma_where = {"embedding_tier": filters["embedding_tier"]}
+            query_kwargs: dict[str, Any] = {"query_texts": [query], "n_results": top_k}
+            if chroma_where is not None:
+                query_kwargs["where"] = chroma_where
+            results = collection.query(**query_kwargs)
             if not results["ids"] or not results["ids"][0]:
                 return []
             items: list[SearchResult] = []
@@ -85,11 +93,17 @@ class ChromaDBSearchEngine:
                 relevance = max(0, 1 - distance)
                 if relevance < min_confidence:
                     continue
+                metadata = {}
+                if results.get("metadatas") and results["metadatas"][0]:
+                    meta = results["metadatas"][0][i]
+                    if isinstance(meta, dict):
+                        metadata = meta
                 items.append(SearchResult(
                     source=doc_id,
                     content=results["documents"][0][i] if results["documents"] else "",
                     match_type="semantic",
                     relevance=round(relevance, 3),
+                    metadata=metadata,
                 ))
             return items
         except ImportError:
@@ -219,15 +233,15 @@ class SQLiteFTSSearchEngine:
                     rows = cursor.fetchall()
                 items: list[SearchResult] = []
                 for row in rows:
-                    if "bm25_score" in row.keys():
+                    if "bm25_score" in row:
                         relevance = self._bm25_score_to_relevance(row["bm25_score"])
                     else:
                         relevance = 0.3
                     if relevance < min_confidence:
                         continue
                     items.append(SearchResult(
-                        source=row["id"] if "id" in row.keys() else str(row[0]),
-                        content=row["content"] if "content" in row.keys() else str(row[1]),
+                        source=row["id"] if "id" in row else str(row[0]),
+                        content=row["content"] if "content" in row else str(row[1]),
                         match_type="fts5_bm25",
                         relevance=relevance,
                     ))

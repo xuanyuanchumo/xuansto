@@ -4,7 +4,7 @@
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/skiller-team/xuansto-mcp-server",
+        "git+https://github.com/xuanyuanchumo/xuansto#subdirectory=xuansto-mcp-server",
         "xuansto-mcp"
       ]
     }

@@ -1,17 +1,52 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from ..core.config import SKILL_ROOT, REFERENCES_DIR, TEMPLATES_DIR, SESSION_DIR, WORK_DIR, AGENTS_DIR, _resolve_skill_file
+from ..core.config import SKILL_ROOT, REFERENCES_DIR, TEMPLATES_DIR, SESSION_DIR, WORK_DIR, AGENTS_DIR, COMMANDS_DIR, HOOKS_PATH, KNOWLEDGE_DIR, KNOWLEDGE_DB_PATH, KNOWLEDGE_CHROMA_PATH, _resolve_skill_file
 from ..core.logging_config import get_logger
 from ..core.validator import validate_path_safety
 
 logger = get_logger("skill_resources")
+
+_resource_subscriptions: dict[str, list[str]] = {}
+_subscription_lock = threading.Lock()
+
+
+def subscribe_resource(uri: str, client_id: str) -> dict[str, Any]:
+    with _subscription_lock:
+        if uri not in _resource_subscriptions:
+            _resource_subscriptions[uri] = []
+        if client_id not in _resource_subscriptions[uri]:
+            _resource_subscriptions[uri].append(client_id)
+    return {"subscribed": True, "uri": uri, "client_id": client_id}
+
+
+def unsubscribe_resource(uri: str, client_id: str) -> dict[str, Any]:
+    with _subscription_lock:
+        if uri in _resource_subscriptions:
+            _resource_subscriptions[uri] = [
+                c for c in _resource_subscriptions[uri] if c != client_id
+            ]
+            if not _resource_subscriptions[uri]:
+                del _resource_subscriptions[uri]
+    return {"unsubscribed": True, "uri": uri, "client_id": client_id}
+
+
+def get_subscriptions(uri: str | None = None) -> dict[str, Any]:
+    with _subscription_lock:
+        if uri:
+            subscribers = list(_resource_subscriptions.get(uri, []))
+            return {"uri": uri, "subscribers": subscribers, "count": len(subscribers)}
+        return {
+            "subscriptions": {k: list(v) for k, v in _resource_subscriptions.items()},
+            "total_uris": len(_resource_subscriptions),
+        }
 
 
 def _is_safe_path(path_component: str, allowed_base_dirs: list[Path]) -> tuple[Path | None, str | None]:
@@ -281,3 +316,177 @@ def register(mcp: FastMCP) -> None:
             return json.dumps(status, ensure_ascii=False, indent=2)
         except Exception as e:
             return _degraded_resource("xuansto://degradation/status", str(e))
+
+    @mcp.resource("xuansto://skill/config")
+    def skill_config_unified() -> str:
+        try:
+            config_path = _resolve_skill_file(".skill-config.yaml")
+            if config_path.exists():
+                return config_path.read_text(encoding="utf-8")
+            return json.dumps({"status": "not_found", "message": "配置文件不存在"}, ensure_ascii=False, indent=2)
+        except Exception as e:
+            return _degraded_resource("xuansto://skill/config", str(e))
+
+    @mcp.resource("xuansto://skill/constraints")
+    def skill_constraints() -> str:
+        try:
+            constraints_path = _resolve_skill_file("constraints.md")
+            if constraints_path.exists():
+                return constraints_path.read_text(encoding="utf-8")
+            constraints = {
+                "max_retries": 3,
+                "timeout_seconds": 30,
+                "chain_timeout_seconds": 120,
+                "max_chain_retries": 2,
+            }
+            return json.dumps(constraints, ensure_ascii=False, indent=2)
+        except Exception as e:
+            return _degraded_resource("xuansto://skill/constraints", str(e))
+
+    @mcp.resource("xuansto://agents/registry")
+    def agents_registry() -> str:
+        try:
+            ref_path = REFERENCES_DIR / "agent-registry.md"
+            if ref_path.exists():
+                return ref_path.read_text(encoding="utf-8")
+            agents: list[dict[str, Any]] = []
+            if AGENTS_DIR.exists():
+                for agent_file in sorted(AGENTS_DIR.rglob("*.md")):
+                    agents.append({
+                        "name": agent_file.stem,
+                        "layer": agent_file.parent.name,
+                    })
+            return json.dumps({"agents": agents, "total": len(agents)}, ensure_ascii=False, indent=2)
+        except Exception as e:
+            return _degraded_resource("xuansto://agents/registry", str(e))
+
+    @mcp.resource("xuansto://gates/definitions")
+    def gates_definitions() -> str:
+        try:
+            ref_path = REFERENCES_DIR / "quality-gates.md"
+            if ref_path.exists():
+                return ref_path.read_text(encoding="utf-8")
+            from ..core.config import GATE_SCRIPTS_MAP
+            gates = {gate_id: {"script": script} for gate_id, script in GATE_SCRIPTS_MAP.items()}
+            return json.dumps({"gates": gates}, ensure_ascii=False, indent=2)
+        except Exception as e:
+            return _degraded_resource("xuansto://gates/definitions", str(e))
+
+    @mcp.resource("xuansto://workflows/definitions")
+    def workflows_definitions() -> str:
+        try:
+            ref_path = REFERENCES_DIR / "workflow-phases.md"
+            if ref_path.exists():
+                return ref_path.read_text(encoding="utf-8")
+            from ..core.config import WORKFLOWS_DIR
+            workflows: list[dict[str, Any]] = []
+            if WORKFLOWS_DIR.exists():
+                for wf_file in sorted(WORKFLOWS_DIR.glob("*.md")):
+                    workflows.append({"name": wf_file.stem, "path": str(wf_file.relative_to(WORKFLOWS_DIR))})
+            return json.dumps({"workflows": workflows}, ensure_ascii=False, indent=2)
+        except Exception as e:
+            return _degraded_resource("xuansto://workflows/definitions", str(e))
+
+    @mcp.resource("xuansto://hooks/definitions")
+    def hooks_definitions() -> str:
+        try:
+            if HOOKS_PATH.exists():
+                return HOOKS_PATH.read_text(encoding="utf-8")
+            from ..core.config import HOOK_SCRIPTS_MAP
+            hooks = {hook_id: {"script": script} for hook_id, script in HOOK_SCRIPTS_MAP.items()}
+            return json.dumps({"hooks": hooks}, ensure_ascii=False, indent=2)
+        except Exception as e:
+            return _degraded_resource("xuansto://hooks/definitions", str(e))
+
+    @mcp.resource("xuansto://knowledge/status")
+    def knowledge_status() -> str:
+        try:
+            status: dict[str, Any] = {
+                "knowledge_dir_exists": KNOWLEDGE_DIR.exists(),
+                "db_exists": KNOWLEDGE_DB_PATH.exists(),
+                "chroma_exists": KNOWLEDGE_CHROMA_PATH.exists(),
+            }
+            if KNOWLEDGE_DB_PATH.exists():
+                try:
+                    import sqlite3
+                    conn = sqlite3.connect(str(KNOWLEDGE_DB_PATH))
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT COUNT(*) FROM knowledge_entries WHERE deleted_at IS NULL")
+                    status["db_entry_count"] = cursor.fetchone()[0]
+                    conn.close()
+                except Exception:
+                    status["db_entry_count"] = -1
+            if KNOWLEDGE_CHROMA_PATH.exists():
+                try:
+                    import chromadb
+                    client = chromadb.PersistentClient(path=str(KNOWLEDGE_CHROMA_PATH))
+                    collection = client.get_or_create_collection("knowledge")
+                    status["chroma_entry_count"] = collection.count()
+                except Exception:
+                    status["chroma_entry_count"] = -1
+            status["timestamp"] = time.time()
+            return json.dumps(status, ensure_ascii=False, indent=2)
+        except Exception as e:
+            return _degraded_resource("xuansto://knowledge/status", str(e))
+
+    @mcp.resource("xuansto://templates/index")
+    def templates_index() -> str:
+        try:
+            templates: list[dict[str, Any]] = []
+            if TEMPLATES_DIR.exists():
+                for tmpl_file in sorted(TEMPLATES_DIR.glob("*.md")):
+                    templates.append({"name": tmpl_file.stem, "filename": tmpl_file.name})
+            return json.dumps({"templates": templates, "total": len(templates)}, ensure_ascii=False, indent=2)
+        except Exception as e:
+            return _degraded_resource("xuansto://templates/index", str(e))
+
+    @mcp.resource("xuansto://commands/routes")
+    def commands_routes() -> str:
+        try:
+            routes: list[dict[str, Any]] = []
+            if COMMANDS_DIR.exists():
+                for cmd_file in sorted(COMMANDS_DIR.rglob("*.md")):
+                    routes.append({
+                        "name": cmd_file.stem,
+                        "path": str(cmd_file.relative_to(COMMANDS_DIR)),
+                    })
+            return json.dumps({"routes": routes, "total": len(routes)}, ensure_ascii=False, indent=2)
+        except Exception as e:
+            return _degraded_resource("xuansto://commands/routes", str(e))
+
+    @mcp.resource("xuansto://session/state")
+    def session_state() -> str:
+        try:
+            from ..core.database import load_state
+            states = load_state("session_states")
+            if states:
+                latest = states[-1]
+                return json.dumps(latest, ensure_ascii=False, indent=2)
+            SESSION_DIR.mkdir(parents=True, exist_ok=True)
+            sessions = sorted(SESSION_DIR.glob("session-*.md"), reverse=True)
+            if sessions:
+                return sessions[0].read_text(encoding="utf-8")
+            return json.dumps({"status": "no_active_session"}, ensure_ascii=False, indent=2)
+        except Exception as e:
+            return _degraded_resource("xuansto://session/state", str(e))
+
+    @mcp.resource("xuansto://health/status")
+    def health_status() -> str:
+        try:
+            from ..core.degradation import get_degradation_manager
+            manager = get_degradation_manager()
+            degr_status = manager.get_status()
+            health: dict[str, Any] = {
+                "status": "healthy" if degr_status.get("overall_level") == "L1_NORMAL" else "degraded",
+                "degradation_level": degr_status.get("overall_level", "unknown"),
+                "components": {},
+                "timestamp": time.time(),
+            }
+            for comp_name, comp_data in degr_status.get("components", {}).items():
+                health["components"][comp_name] = {
+                    "level": comp_data.get("level", "unknown"),
+                    "healthy": comp_data.get("last_check_healthy", False),
+                }
+            return json.dumps(health, ensure_ascii=False, indent=2)
+        except Exception as e:
+            return _degraded_resource("xuansto://health/status", str(e))

@@ -5,9 +5,9 @@ import sqlite3
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
-from .config import WORK_DIR
+from .config import WORK_DIR, KNOWLEDGE_DIR
 from .logging_config import get_logger
 
 logger = get_logger("database")
@@ -78,7 +78,41 @@ CREATE TABLE IF NOT EXISTS knowledge_entries (
     content TEXT NOT NULL DEFAULT '',
     scope TEXT NOT NULL DEFAULT 'general',
     tags_json TEXT NOT NULL DEFAULT '[]',
+    sync_status TEXT NOT NULL DEFAULT 'ready',
     deleted_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS reconciliation_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entry_id TEXT NOT NULL DEFAULT '',
+    store TEXT NOT NULL DEFAULT '',
+    issue_type TEXT NOT NULL DEFAULT '',
+    details_json TEXT NOT NULL DEFAULT '{}',
+    resolved INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    resolved_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS token_budget_states (
+    id TEXT PRIMARY KEY,
+    total_budget INTEGER NOT NULL DEFAULT 0,
+    used INTEGER NOT NULL DEFAULT 0,
+    phase_allocations_json TEXT NOT NULL DEFAULT '{}',
+    usage_by_phase_json TEXT NOT NULL DEFAULT '{}',
+    session_id TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS experience_patterns (
+    id TEXT PRIMARY KEY,
+    error_type TEXT NOT NULL DEFAULT '',
+    pattern_json TEXT NOT NULL DEFAULT '{}',
+    confidence REAL NOT NULL DEFAULT 0.0,
+    status TEXT NOT NULL DEFAULT 'active',
+    occurrence_count INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -97,6 +131,11 @@ CREATE INDEX IF NOT EXISTS idx_metrics_metric_type ON metrics(metric_type);
 CREATE INDEX IF NOT EXISTS idx_decision_records_workflow_id ON decision_records(workflow_id);
 CREATE INDEX IF NOT EXISTS idx_knowledge_entries_scope ON knowledge_entries(scope);
 CREATE INDEX IF NOT EXISTS idx_knowledge_entries_deleted_at ON knowledge_entries(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_reconciliation_log_resolved ON reconciliation_log(resolved);
+CREATE INDEX IF NOT EXISTS idx_reconciliation_log_entry_id ON reconciliation_log(entry_id);
+CREATE INDEX IF NOT EXISTS idx_token_budget_states_session ON token_budget_states(session_id);
+CREATE INDEX IF NOT EXISTS idx_experience_patterns_error_type ON experience_patterns(error_type);
+CREATE INDEX IF NOT EXISTS idx_experience_patterns_status ON experience_patterns(status);
 """
 
 
@@ -117,6 +156,10 @@ def init_db() -> None:
         try:
             conn.executescript(_CREATE_TABLES_SQL)
             conn.executescript(_CREATE_INDEXES_SQL)
+            try:
+                conn.execute("ALTER TABLE knowledge_entries ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'ready'")
+            except Exception:
+                pass
             conn.commit()
             logger.info("Database initialized at %s", DB_PATH)
         except Exception as exc:
@@ -147,9 +190,10 @@ def persist_state(table: str, data: dict[str, Any]) -> None:
     _VALID_TABLES = {
         "workflow_instances", "session_states", "resource_load_states",
         "degradation_states", "error_patterns", "metrics",
-        "decision_records", "knowledge_entries",
+        "decision_records", "knowledge_entries", "reconciliation_log",
+        "token_budget_states", "experience_patterns",
     }
-    _AUTO_INCREMENT_TABLES = {"metrics"}
+    _AUTO_INCREMENT_TABLES = {"metrics", "reconciliation_log"}
     if table not in _VALID_TABLES:
         logger.warning("Attempted to persist to invalid table: %s", table)
         return
@@ -209,7 +253,8 @@ def load_state(table: str, query: dict[str, Any] | None = None) -> list[dict[str
     _VALID_TABLES = {
         "workflow_instances", "session_states", "resource_load_states",
         "degradation_states", "error_patterns", "metrics",
-        "decision_records", "knowledge_entries",
+        "decision_records", "knowledge_entries", "reconciliation_log",
+        "token_budget_states", "experience_patterns",
     }
     if table not in _VALID_TABLES:
         logger.warning("Attempted to load from invalid table: %s", table)
@@ -244,3 +289,157 @@ def load_state(table: str, query: dict[str, Any] | None = None) -> list[dict[str
         return []
     finally:
         conn.close()
+
+
+def persist_knowledge_dual_write(
+    entry_id: str,
+    data: dict[str, Any],
+    chroma_write_fn: Callable[[str, dict[str, Any]], bool] | None = None,
+) -> dict[str, Any]:
+    data["sync_status"] = "pending"
+    persist_state("knowledge_entries", {"id": entry_id, **data})
+
+    if chroma_write_fn is not None:
+        try:
+            success = chroma_write_fn(entry_id, data)
+            if success:
+                data["sync_status"] = "ready"
+                persist_state("knowledge_entries", {"id": entry_id, **data})
+                return {"status": "synced", "entry_id": entry_id}
+            else:
+                persist_state("reconciliation_log", {
+                    "entry_id": entry_id,
+                    "store": "chromadb",
+                    "issue_type": "write_failed",
+                    "details_json": {"reason": "chroma_write_returned_false"},
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                })
+                return {"status": "pending", "entry_id": entry_id}
+        except Exception as exc:
+            persist_state("reconciliation_log", {
+                "entry_id": entry_id,
+                "store": "chromadb",
+                "issue_type": "write_error",
+                "details_json": {"reason": str(exc)},
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+            return {"status": "pending", "entry_id": entry_id}
+
+    return {"status": "pending", "entry_id": entry_id}
+
+
+def reconcile_knowledge_stores(
+    chroma_write_fn: Callable[[str, dict[str, Any]], bool] | None = None,
+) -> dict[str, Any]:
+    conn = get_db()
+    try:
+        cursor = conn.execute("SELECT * FROM knowledge_entries WHERE deleted_at IS NULL")
+        all_entries = [dict(row) for row in cursor.fetchall()]
+    finally:
+        conn.close()
+
+    pending_entries = [e for e in all_entries if e.get("sync_status") != "ready"]
+
+    total = len(pending_entries)
+    repaired = 0
+    failed = 0
+
+    for entry in pending_entries:
+        entry_id = entry.get("id", "")
+        entry_data: dict[str, Any] = {}
+        for key, value in entry.items():
+            if key.endswith("_json") and isinstance(value, str):
+                try:
+                    entry_data[key] = json.loads(value)
+                except (json.JSONDecodeError, TypeError):
+                    entry_data[key] = value
+            else:
+                entry_data[key] = value
+
+        if chroma_write_fn is not None:
+            try:
+                success = chroma_write_fn(entry_id, entry_data)
+                if success:
+                    entry_data["sync_status"] = "ready"
+                    persist_state("knowledge_entries", {"id": entry_id, **entry_data})
+                    persist_state("reconciliation_log", {
+                        "entry_id": entry_id,
+                        "store": "chromadb",
+                        "issue_type": "repair_success",
+                        "details_json": {"original_status": entry.get("sync_status", "unknown")},
+                        "resolved": 1,
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    })
+                    repaired += 1
+                else:
+                    persist_state("reconciliation_log", {
+                        "entry_id": entry_id,
+                        "store": "chromadb",
+                        "issue_type": "repair_failed",
+                        "details_json": {"reason": "chroma_write_returned_false"},
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    })
+                    failed += 1
+            except Exception as exc:
+                persist_state("reconciliation_log", {
+                    "entry_id": entry_id,
+                    "store": "chromadb",
+                    "issue_type": "repair_failed",
+                    "details_json": {"reason": str(exc)},
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                })
+                failed += 1
+        else:
+            failed += 1
+
+    success_rate = (repaired / total * 100) if total > 0 else 100.0
+
+    return {
+        "total_pending": total,
+        "repaired": repaired,
+        "failed": failed,
+        "success_rate": round(success_rate, 1),
+    }
+
+
+def migrate_experience_patterns_from_json(json_path: Path | None = None) -> dict[str, Any]:
+    if json_path is None:
+        json_path = KNOWLEDGE_DIR / "experience_patterns.json"
+    if not json_path.exists():
+        return {"migrated": 0, "reason": "no_json_file"}
+    import json as json_mod
+    try:
+        data = json_mod.loads(json_path.read_text(encoding="utf-8"))
+    except (json_mod.JSONDecodeError, OSError):
+        return {"migrated": 0, "reason": "invalid_json"}
+
+    count = 0
+    patterns = data if isinstance(data, list) else data.get("patterns", [])
+    for pattern in patterns:
+        if isinstance(pattern, dict) and "id" in pattern:
+            persist_state("experience_patterns", pattern)
+            count += 1
+    return {"migrated": count}
+
+
+_FTS5_AVAILABLE: bool | None = None
+
+
+def is_fts5_available() -> bool:
+    global _FTS5_AVAILABLE
+    if _FTS5_AVAILABLE is not None:
+        return _FTS5_AVAILABLE
+    try:
+        import sqlite3 as _sqlite3
+        conn = _sqlite3.connect(":memory:")
+        conn.execute("CREATE VIRTUAL TABLE fts5_test USING fts5(content)")
+        conn.execute("DROP TABLE fts5_test")
+        conn.close()
+        _FTS5_AVAILABLE = True
+    except Exception:
+        _FTS5_AVAILABLE = False
+    return _FTS5_AVAILABLE
+
+
+def rollback_schema(version: str) -> dict[str, Any]:
+    return {"status": "not_supported", "version": version, "message": "Schema rollback is not yet supported. Use backup/restore instead."}

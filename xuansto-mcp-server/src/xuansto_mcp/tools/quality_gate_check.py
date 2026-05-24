@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-import shutil
 import subprocess
 import sys
 import threading
@@ -23,6 +22,36 @@ from ..core.validator import validate_input, validate_path_safety
 from ..models.schemas import QualityGateCheckInput
 
 logger = get_logger("quality_gate_check")
+
+_SECURITY_HARD_GATES: set[str] = {
+    "production_deploy",
+    "secret_key_rotation",
+    "database_schema_destructive_change",
+}
+
+
+def _load_hard_gates_from_config() -> set[str]:
+    try:
+        from ..core.config import _load_yaml_config, _resolve_skill_file
+        config_path = _resolve_skill_file("configs/default.yaml")
+        config = _load_yaml_config(config_path)
+        hc = config.get("human_collaboration", {})
+        hard_gates = hc.get("security_hard_gates", [])
+        if isinstance(hard_gates, list) and hard_gates:
+            return set(hard_gates)
+    except Exception:
+        pass
+    return _SECURITY_HARD_GATES
+
+
+_SECURITY_HARD_GATES = _load_hard_gates_from_config()
+
+
+def _check_hard_gate(gate_id: str) -> dict[str, Any]:
+    if gate_id in _SECURITY_HARD_GATES:
+        logger.info("hard_gate_triggered: gate_id=%s requires_manual_approval", gate_id)
+        return {"approved": False, "reason": "hard_gate_requires_manual_approval", "gate_id": gate_id}
+    return {"approved": True, "reason": "not_a_hard_gate", "gate_id": gate_id}
 
 
 def _resolve_gates(gate_ids: list[str] | None, phase: str | None) -> list[str]:
@@ -1112,8 +1141,23 @@ def register(mcp: FastMCP) -> None:
                     })
 
             checks: list[dict[str, Any]] = []
+            hard_gate_wait_start = time.time()
 
             for gate_id in gates_to_check:
+                hard_gate_result = _check_hard_gate(gate_id)
+                if not hard_gate_result["approved"]:
+                    wait_duration = time.time() - hard_gate_wait_start
+                    logger.info("hard_gate_wait_duration: gate_id=%s wait_seconds=%.2f", gate_id, wait_duration)
+                    checks.append({
+                        "gate_id": gate_id,
+                        "status": "BLOCKED",
+                        "source": "hard_gate",
+                        "message": "安全硬门禁：必须人工确认",
+                        "hard_gate": True,
+                        "auto_approve": False,
+                        "reason": hard_gate_result["reason"],
+                    })
+                    continue
                 script = GATE_SCRIPTS_MAP.get(gate_id)
                 if script:
                     script_path = SCRIPTS_DIR / script
@@ -1198,10 +1242,10 @@ def register(mcp: FastMCP) -> None:
 
             passed = sum(1 for c in checks if c["status"] == "PASS")
             failed = sum(1 for c in checks if c["status"] == "FAIL")
-            blocked = any(c["status"] == "FAIL" for c in checks)
+            blocked = any(c["status"] == "FAIL" for c in checks) or any(c.get("hard_gate") for c in checks)
 
             if blocked:
-                failed_ids = [c["gate_id"] for c in checks if c["status"] == "FAIL"]
+                failed_ids = [c["gate_id"] for c in checks if c["status"] == "FAIL" or c.get("hard_gate")]
                 notify(f"Quality gates blocked: {failed_ids}", "warning")
 
             _save_gate_cache(project_path, {
@@ -1221,6 +1265,7 @@ def register(mcp: FastMCP) -> None:
                     "failed": failed,
                     "skipped": sum(1 for c in checks if c["status"] == "SKIP"),
                     "blocked": blocked,
+                    "hard_gate_blocked": sum(1 for c in checks if c.get("hard_gate")),
                 },
                 "cache_info": {
                     "hit": cache_hit,

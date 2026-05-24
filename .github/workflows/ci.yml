@@ -61,12 +61,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
-      - name: Run unit tests
+      - name: Run tests
         working-directory: xuansto-mcp-server
-        run: pytest tests/ -m "unit" -x --tb=short --cov --cov-report=xml
-      - name: Run integration tests
-        working-directory: xuansto-mcp-server
-        run: pytest tests/ -m "integration" --tb=short
+        run: pytest tests/ -x --tb=short --cov --cov-report=xml
 
   degradation-test:
     needs: test
@@ -84,12 +81,17 @@ jobs:
           pip install -e ".[dev]"
       - name: Run degradation tests
         working-directory: xuansto-mcp-server
-        run: pytest tests/ -m "degradation" --tb=short
+        run: pytest tests/ -k "degradation" --tb=short
 
   skill-validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install PyYAML
+        run: pip install pyyaml
       - name: Validate Skill YAML
         run: |
           python -c "

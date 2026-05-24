@@ -13,6 +13,17 @@ ERR_INTERNAL = "ERR_INTERNAL"
 ERR_RATE_LIMIT = "ERR_RATE_LIMIT"
 ERR_PERMISSION = "ERR_PERMISSION"
 
+ERROR_CODE_TO_HTTP_STATUS: dict[str, int] = {
+    ERR_VALIDATION: 400,
+    ERR_NOT_FOUND: 404,
+    ERR_TIMEOUT: 408,
+    ERR_DEGRADATION: 503,
+    ERR_CONFIG: 500,
+    ERR_INTERNAL: 500,
+    ERR_RATE_LIMIT: 429,
+    ERR_PERMISSION: 403,
+}
+
 _ERROR_MESSAGES: dict[str, dict[str, str]] = {
     ERR_VALIDATION: {"zh": "参数校验失败", "en": "Validation failed"},
     ERR_NOT_FOUND: {"zh": "资源未找到", "en": "Resource not found"},
@@ -132,6 +143,18 @@ def is_permanent_error(error: Exception) -> bool:
     return False
 
 
+def is_retryable_error(error: Exception) -> bool:
+    return is_transient_error(error)
+
+
+def _determine_retryable(error: Exception) -> bool:
+    if is_transient_error(error):
+        return True
+    if is_permanent_error(error):
+        return False
+    return False
+
+
 async def retry_tool_call(
     tool_name: str,
     fn: Callable[..., Any],
@@ -195,7 +218,9 @@ def make_error_response(error: Exception, error_code: str | None = None, languag
             "error_code": resolved_code or _EXCEPTION_CODE_TO_ERR_CODE.get(error.code, ERR_INTERNAL),
             "message": error.message,
             "details": error.details,
+            "retryable": _determine_retryable(error),
         }
+        result["code"] = result["error_code"]
         result["_deprecated_exception_type"] = error.code
         if resolved_code:
             i18n_msg = _get_i18n_message(resolved_code, language)
@@ -213,7 +238,9 @@ def make_error_response(error: Exception, error_code: str | None = None, languag
                 "error_code": resolved_code or ERR_VALIDATION,
                 "message": f"参数校验失败: {len(details)}个错误",
                 "details": {"errors": details},
+                "retryable": False,
             }
+            result["code"] = result["error_code"]
             result["_deprecated_exception_type"] = "VALIDATION_ERROR"
             if resolved_code:
                 i18n_msg = _get_i18n_message(resolved_code, language)
@@ -229,7 +256,9 @@ def make_error_response(error: Exception, error_code: str | None = None, languag
         "error_code": resolved_code or ERR_INTERNAL,
         "message": _get_i18n_message(ERR_INTERNAL, language) or "内部错误",
         "details": {},
+        "retryable": _determine_retryable(error),
     }
+    result["code"] = result["error_code"]
     result["_deprecated_exception_type"] = "INTERNAL_ERROR"
     if isinstance(error, (ValueError, TypeError, KeyError)):
         result["message"] = str(error)
@@ -252,4 +281,39 @@ def make_success_response(data: Any = None, degradation_level: str | None = None
         result["data"] = data
     if degradation_level is not None:
         result["degradation_level"] = degradation_level
+        result["degraded"] = True
     return result
+
+
+class DegradationCoordinator:
+    def __init__(self):
+        self._handlers: dict[str, Callable[..., Any]] = {}
+
+    def register_handler(self, error_code: str, handler: Callable[..., Any]) -> None:
+        self._handlers[error_code] = handler
+
+    def handle(self, error: Exception, tool_name: str, **kwargs: Any) -> dict[str, Any]:
+        if isinstance(error, XuanstoMCPError):
+            handler = self._handlers.get(error.code)
+            if handler:
+                try:
+                    return handler(tool_name, error, **kwargs)
+                except Exception:
+                    pass
+        from .degradation import get_fallback
+        fallback = get_fallback(tool_name)
+        if fallback:
+            try:
+                result = fallback(**kwargs)
+                if isinstance(result, dict):
+                    result["degraded"] = True
+                return result
+            except Exception:
+                pass
+        return make_error_response(error)
+
+
+def is_tool_execution_error(error: Exception) -> bool:
+    if isinstance(error, XuanstoMCPError):
+        return error.code not in ("PROTOCOL_ERROR", "TRANSPORT_ERROR")
+    return not isinstance(error, (ConnectionError, OSError))

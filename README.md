@@ -114,7 +114,7 @@ xuansto/
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/xuanyuanchumo/xuansto",
+        "git+https://github.com/xuanyuanchumo/xuansto#subdirectory=xuansto-mcp-server",
         "xuansto-mcp"
       ]
     }
@@ -124,10 +124,12 @@ xuansto/
 
 将此 JSON 粘贴到 MCP 客户端（Trae、Claude Desktop 等）配置中。
 
+> **注意**：`#subdirectory=xuansto-mcp-server` 是必需的，因为 `pyproject.toml` 位于仓库的 `xuansto-mcp-server/` 子目录中。省略此参数会导致 `uvx` 报错 `Failed to resolve --with requirement / Git operation failed`。
+
 #### 方式二：pip
 
 ```bash
-pip install git+https://github.com/xuanyuanchumo/xuansto
+pip install "git+https://github.com/xuanyuanchumo/xuansto#subdirectory=xuansto-mcp-server"
 xuansto-mcp
 ```
 
@@ -199,7 +201,7 @@ uvx --from . xuansto-mcp
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/xuanyuanchumo/xuansto",
+        "git+https://github.com/xuanyuanchumo/xuansto#subdirectory=xuansto-mcp-server",
         "xuansto-mcp"
       ],
       "env": {

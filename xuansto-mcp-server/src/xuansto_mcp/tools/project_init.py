@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -128,6 +127,56 @@ def _detect_stack(project_path: str | None = None) -> dict[str, Any]:
     }
 
 
+def _configure_project(
+    project_path: str | None = None,
+    name: str | None = None,
+    description: str | None = None,
+    stack: list[str] | None = None,
+) -> dict[str, Any]:
+    if not project_path:
+        return {"error": True, "message": "项目路径不能为空"}
+    path = Path(project_path)
+    if not path.exists():
+        return {"error": True, "message": f"路径不存在: {project_path}"}
+    config_path = path / ".xuansto-config.yaml"
+    if config_path.exists():
+        try:
+            import yaml
+            existing = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            existing = {}
+    else:
+        existing = {}
+    if name:
+        existing["name"] = name
+    if description:
+        existing["description"] = description
+    if stack:
+        existing["stack"] = stack
+    if not existing.get("name"):
+        existing["name"] = path.name
+    if "created_at" not in existing:
+        existing["created_at"] = datetime.now().isoformat()
+    existing["updated_at"] = datetime.now().isoformat()
+    stack_items = "\n".join(f"  - {s}" for s in existing.get("stack", []))
+    content = CONFIG_TEMPLATE.format(
+        name=existing.get("name", ""),
+        description=existing.get("description", ""),
+        stack_items=stack_items or "  []",
+        template=existing.get("template", "default"),
+        created_at=existing.get("created_at", ""),
+    )
+    config_path.write_text(content, encoding="utf-8")
+    notify(f"Project configured: {existing.get('name', '')} at {path}", "info")
+    return {
+        "name": existing.get("name", ""),
+        "directory": str(path),
+        "config_path": str(config_path),
+        "stack": existing.get("stack", []),
+        "configured": True,
+    }
+
+
 def _inline_project_init(action: str, **kwargs: Any) -> dict[str, Any]:
     if action == "create":
         return _create_project(**{k: v for k, v in kwargs.items() if k in ("name", "description", "stack", "template", "directory")})
@@ -156,13 +205,13 @@ def register(mcp: FastMCP) -> None:
         directory: str | None = None,
         project_path: str | None = None,
     ) -> dict[str, Any]:
-        """项目初始化管理：创建项目、验证项目配置、检测技术栈。create操作初始化新项目(含名称/描述/技术栈/模板/目录)，validate操作验证项目配置完整性，detect_stack操作自动检测项目使用的技术栈。"""
+        """项目初始化管理：创建项目、验证项目配置、检测技术栈、配置已有项目。create/init操作初始化新项目(含名称/描述/技术栈/模板/目录)，validate操作验证项目配置完整性，detect_stack/detect操作自动检测项目使用的技术栈，configure操作配置已有项目。"""
         validated, err = validate_input(ProjectInitInput, action=action, name=name, description=description, stack=stack, template=template, directory=directory, project_path=project_path)
         if err:
             return err
         logger.info("project_init called: action=%s", action)
         try:
-            if action == "create":
+            if action in ("create", "init"):
                 if not name:
                     return make_error_response(ValueError("create操作需要name参数"), error_code=ERR_VALIDATION)
                 if directory:
@@ -183,9 +232,9 @@ def register(mcp: FastMCP) -> None:
                 if result.get("error"):
                     return make_error_response(ValueError(result["message"]), error_code=ERR_NOT_FOUND)
                 return make_success_response(result)
-            elif action == "detect_stack":
+            elif action in ("detect_stack", "detect"):
                 if not project_path:
-                    return make_error_response(ValueError("detect_stack操作需要project_path参数"), error_code=ERR_VALIDATION)
+                    return make_error_response(ValueError("detect操作需要project_path参数"), error_code=ERR_VALIDATION)
                 safe_path, path_err = validate_path_safety(project_path, allow_absolute=True)
                 if path_err:
                     return make_error_response(ValueError(path_err), error_code=ERR_VALIDATION)
@@ -193,8 +242,18 @@ def register(mcp: FastMCP) -> None:
                 if result.get("error"):
                     return make_error_response(ValueError(result["message"]), error_code=ERR_NOT_FOUND)
                 return make_success_response(result)
+            elif action == "configure":
+                if not project_path:
+                    return make_error_response(ValueError("configure操作需要project_path参数"), error_code=ERR_VALIDATION)
+                safe_path, path_err = validate_path_safety(project_path, allow_absolute=True)
+                if path_err:
+                    return make_error_response(ValueError(path_err), error_code=ERR_VALIDATION)
+                result = _configure_project(project_path, name, description, stack)
+                if result.get("error"):
+                    return make_error_response(ValueError(result["message"]), error_code=ERR_VALIDATION)
+                return make_success_response(result)
             else:
-                return make_error_response(ValueError(f"未知操作: {action}，支持: create, validate, detect_stack"), error_code=ERR_VALIDATION)
+                return make_error_response(ValueError(f"未知操作: {action}，支持: create, init, validate, detect_stack, detect, configure"), error_code=ERR_VALIDATION)
         except Exception as e:
             logger.error("project_init error: %s", e)
             return make_error_response(e)

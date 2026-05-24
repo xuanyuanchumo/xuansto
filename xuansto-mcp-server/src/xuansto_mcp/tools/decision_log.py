@@ -4,13 +4,13 @@ import json
 import sqlite3
 import threading
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core.config import WORK_DIR
+from ..core.database import persist_state, is_fts5_available
 from ..core.errors import make_error_response, make_success_response, ERR_VALIDATION, ERR_NOT_FOUND
 from ..core.logging_config import get_logger
 from ..core.notifications import notify
@@ -205,6 +205,22 @@ def _log_decision(
         finally:
             conn.close()
     notify(f"Decision logged: {entry_id} - {title or 'untitled'}", "info")
+    try:
+        persist_state("decision_records", {
+            "id": entry_id,
+            "workflow_id": "",
+            "decision_data_json": {
+                "title": title or "",
+                "context": context or "",
+                "decision": decision or "",
+                "rationale": rationale or "",
+                "alternatives": alternatives or [],
+                "status": valid_status,
+            },
+            "created_at": now_iso,
+        })
+    except Exception:
+        logger.debug("Failed to dual-write decision_record for %s", entry_id)
     return {"id": entry_id, "entry": entry, "total_decisions": _get_total_count()}
 
 
@@ -267,7 +283,7 @@ def _query_decisions(
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        if keyword:
+        if keyword and is_fts5_available():
             results = _fts_search(conn, cursor, keyword, date_from, date_to, limit, offset)
         else:
             results = _like_search(cursor, keyword, date_from, date_to, limit, offset)
@@ -410,7 +426,7 @@ def _update_decision(
 
 
 def _export_decisions(
-    format: str = "json",
+    export_format: str = "json",
     date_from: str | None = None,
     date_to: str | None = None,
 ) -> dict[str, Any]:
@@ -433,7 +449,7 @@ def _export_decisions(
     finally:
         conn.close()
 
-    if format == "markdown":
+    if export_format == "markdown":
         lines = ["# Architecture Decision Records\n"]
         for d in decisions:
             lines.append(f"## {d.get('id', '')}: {d.get('title', '')}\n")
@@ -519,12 +535,12 @@ def register(mcp: FastMCP) -> None:
         date_to: str | None = None,
         limit: int = 20,
         offset: int = 0,
-        format: str = "json",
+        export_format: str = "json",
         decision_id: str | None = None,
         status: str | None = None,
     ) -> dict[str, Any]:
         """决策日志管理：记录决策条目、搜索决策、导出决策记录。log操作记录一条决策(含标题/描述/上下文/备选方案/最终决策/理由/影响/决策者)，list操作分页列出决策，query操作按关键词/标签/日期范围搜索决策，update操作更新决策状态，export操作导出决策为JSON或Markdown ADR格式，stats操作返回决策统计信息。"""
-        validated, err = validate_input(DecisionLogInput, action=action, title=title, description=description, context=context, alternatives=alternatives, decision=decision, rationale=rationale, impact=impact, decided_by=decided_by, keyword=keyword, tag=tag, date_from=date_from, date_to=date_to, limit=limit, offset=offset, format=format, decision_id=decision_id, status=status)
+        validated, err = validate_input(DecisionLogInput, action=action, title=title, description=description, context=context, alternatives=alternatives, decision=decision, rationale=rationale, impact=impact, decided_by=decided_by, keyword=keyword, tag=tag, date_from=date_from, date_to=date_to, limit=limit, offset=offset, format=export_format, decision_id=decision_id, status=status)
         if err:
             return err
         logger.info("decision_log called: action=%s", action)
@@ -545,7 +561,7 @@ def register(mcp: FastMCP) -> None:
                     return make_error_response(ValueError(result["message"]), error_code=ERR_NOT_FOUND)
                 return make_success_response(result)
             elif action == "export":
-                return make_success_response(_export_decisions(format, date_from, date_to))
+                return make_success_response(_export_decisions(export_format, date_from, date_to))
             elif action == "stats":
                 return make_success_response(_stats_decisions(date_from, date_to))
             else:

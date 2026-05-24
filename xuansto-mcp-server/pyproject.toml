@@ -63,6 +63,11 @@ packages = ["src/xuansto_mcp"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "degradation: Degradation scenario tests",
+]
 
 [tool.ruff]
 line-length = 120

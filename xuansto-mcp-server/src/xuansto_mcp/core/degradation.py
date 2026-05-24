@@ -531,12 +531,13 @@ def run_script_fallback(
         )
         try:
             parsed = json.loads(result.stdout)
-            return {"error": False, "data": parsed, "fallback": True}
+            return {"error": False, "data": parsed, "fallback": True, "degraded": True}
         except json.JSONDecodeError:
             return {
                 "error": False,
                 "data": {"raw_output": result.stdout[:2000]},
                 "fallback": True,
+                "degraded": True,
             }
     except subprocess.TimeoutExpired:
         return {
@@ -577,9 +578,9 @@ async def run_script_fallback_async(
         output = stdout.decode("utf-8", errors="replace").strip()
         try:
             parsed = json.loads(output)
-            return {"error": False, "data": parsed, "fallback": True}
+            return {"error": False, "data": parsed, "fallback": True, "degraded": True}
         except json.JSONDecodeError:
-            return {"error": False, "data": {"raw_output": output[:2000]}, "fallback": True}
+            return {"error": False, "data": {"raw_output": output[:2000]}, "fallback": True, "degraded": True}
     except asyncio.TimeoutError:
         return {"error": True, "code": "TIMEOUT", "message": f"脚本执行超时({timeout}s): {script_name}", "fallback": True}
     except Exception as e:
@@ -594,11 +595,14 @@ def _fallback_success(
 ) -> dict[str, Any]:
     base = data if isinstance(data, dict) else {}
     enriched = {"tool": tool, "source": "fallback", **base, **extra}
+    enriched["degraded"] = True
     if "status" not in enriched:
         enriched["status"] = "degraded"
     if "note" not in enriched:
         enriched["note"] = "主工具不可用，使用降级响应"
-    return make_success_response(enriched, degradation_level=degradation_level)
+    result = make_success_response(enriched, degradation_level=degradation_level)
+    result["degraded"] = True
+    return result
 
 
 def _fallback_error(tool: str, code: str, message: str) -> dict[str, Any]:
@@ -623,6 +627,7 @@ def _standardize_result(
     data = result.get("data", {})
     if not isinstance(data, dict):
         data = {"result": data}
+    data["degraded"] = True
     return _fallback_success(tool, data, **extra)
 
 
@@ -855,26 +860,51 @@ def workflow_dispatch_fallback(action: str, **kwargs: Any) -> dict[str, Any]:
 def agent_status_fallback(action: str = "list", **kwargs: Any) -> dict[str, Any]:
     logger.warning("Tool %s using fallback", "agent_status")
     from .config import AGENTS_DIR
+    registry_yaml = AGENTS_DIR / "registry.yaml"
+    phase_map: dict[str, int] = {}
+    if registry_yaml.exists():
+        try:
+            import yaml
+            raw = yaml.safe_load(registry_yaml.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                for layer in raw.get("layers", []):
+                    for agent in layer.get("agents", []):
+                        name = agent.get("name", "")
+                        p = agent.get("phase", 2)
+                        if name:
+                            phase_map[name] = p
+        except Exception:
+            pass
     if action == "list" and AGENTS_DIR.exists():
         agents = []
         for agent_file in sorted(AGENTS_DIR.rglob("*.md")):
+            name = agent_file.stem
             agents.append({
-                "name": agent_file.stem,
+                "name": name,
                 "layer": agent_file.parent.name,
+                "phase": phase_map.get(name, 2),
                 "source": "static_registry",
             })
-        return _fallback_success("agent_status", {"agents": agents, "total": len(agents)})
+        phase_filter = kwargs.get("phase")
+        if phase_filter is not None:
+            try:
+                phase_val = int(phase_filter)
+                agents = [a for a in agents if a.get("phase", 2) <= phase_val]
+            except (ValueError, TypeError):
+                pass
+        return _fallback_success("agent_status", {"agents": agents, "total": len(agents), "phase_filter": phase_filter})
     if action in ("detail", "by_phase") and AGENTS_DIR.exists():
         agent_name = kwargs.get("agent_name", "")
         phase = kwargs.get("phase", "")
         if agent_name:
             for agent_file in AGENTS_DIR.rglob(f"{agent_name}.md"):
                 content = agent_file.read_text(encoding="utf-8", errors="replace")[:2000]
-                return _fallback_success("agent_status", {"name": agent_name, "content_preview": content, "source": "static_registry"})
+                return _fallback_success("agent_status", {"name": agent_name, "content_preview": content, "phase": phase_map.get(agent_name, 2), "source": "static_registry"})
         if phase:
             phase_agents = []
             for agent_file in sorted(AGENTS_DIR.rglob("*.md")):
-                phase_agents.append({"name": agent_file.stem, "layer": agent_file.parent.name})
+                name = agent_file.stem
+                phase_agents.append({"name": name, "layer": agent_file.parent.name, "phase": phase_map.get(name, 2)})
             return _fallback_success("agent_status", {"agents": phase_agents, "phase": phase, "source": "static_registry"})
     script_result = run_script_fallback("skill-test.py", args=["--agents", "--format", "json"], timeout=30)
     if not script_result.get("error"):
@@ -1077,6 +1107,65 @@ FALLBACK_MAP = {
     "metrics_report": metrics_report_fallback,
     "config_manage": config_manage_fallback,
 }
+
+
+class DegradationExecutor:
+    def __init__(self, scripts_dir: Path | None = None, timeout: int = 5) -> None:
+        self._scripts_dir = scripts_dir or SCRIPTS_DIR
+        self._timeout = timeout
+        self._fallback_map = FALLBACK_MAP
+
+    async def execute(self, tool_name: str, **kwargs: Any) -> dict[str, Any]:
+        fallback_fn = self._fallback_map.get(tool_name)
+        if fallback_fn is not None:
+            try:
+                result = await asyncio.wait_for(
+                    asyncio.get_event_loop().run_in_executor(None, lambda: fallback_fn(**kwargs)),
+                    timeout=self._timeout,
+                )
+                if isinstance(result, dict):
+                    result["degraded"] = True
+                return result
+            except asyncio.TimeoutError:
+                logger.error("DegradationExecutor timeout for %s (%ds)", tool_name, self._timeout)
+            except Exception as exc:
+                logger.error("Fallback execution failed for %s: %s", tool_name, exc)
+
+        return self._minimal_response(tool_name, kwargs)
+
+    def execute_sync(self, tool_name: str, **kwargs: Any) -> dict[str, Any]:
+        fallback_fn = self._fallback_map.get(tool_name)
+        if fallback_fn is not None:
+            try:
+                result = fallback_fn(**kwargs)
+                if isinstance(result, dict):
+                    result["degraded"] = True
+                return result
+            except Exception as exc:
+                logger.error("Fallback execution failed for %s: %s", tool_name, exc)
+
+        return self._minimal_response(tool_name, kwargs)
+
+    def _minimal_response(self, tool_name: str, kwargs: dict[str, Any]) -> dict[str, Any]:
+        return make_success_response({
+            "tool": tool_name,
+            "status": "unavailable",
+            "degraded": True,
+            "source": "minimal_fallback",
+        })
+
+
+_EXECUTOR: DegradationExecutor | None = None
+_EXECUTOR_LOCK = threading.Lock()
+
+
+def get_degradation_executor() -> DegradationExecutor:
+    global _EXECUTOR
+    with _EXECUTOR_LOCK:
+        if _EXECUTOR is None:
+            _EXECUTOR = DegradationExecutor()
+        return _EXECUTOR
+
 
 _INLINE_FALLBACK_MAP = {
     "skill_analyze_fallback": skill_analyze_fallback,

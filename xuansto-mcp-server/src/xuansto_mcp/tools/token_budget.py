@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -45,15 +44,17 @@ RECOMMENDATION_MAP = {
 
 
 def _load_budget() -> dict[str, Any]:
-    if not BUDGET_FILE.exists():
-        return {}
-    try:
-        data = json.loads(BUDGET_FILE.read_text(encoding="utf-8"))
-        if isinstance(data, dict):
-            return data
-        return {}
-    except (json.JSONDecodeError, OSError):
-        return {}
+    if BUDGET_FILE.exists():
+        try:
+            data = json.loads(BUDGET_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data
+        except (json.JSONDecodeError, OSError):
+            pass
+    sqlite_data = _restore_from_sqlite()
+    if sqlite_data is not None:
+        return sqlite_data
+    return {}
 
 
 def _save_budget(budget: dict[str, Any]) -> None:
@@ -62,6 +63,41 @@ def _save_budget(budget: dict[str, Any]) -> None:
         json.dumps(budget, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    _persist_to_sqlite(budget)
+
+
+def _persist_to_sqlite(budget: dict[str, Any]) -> None:
+    try:
+        from ..core.database import persist_state
+        session_id = budget.get("session_id", "default")
+        persist_state("token_budget_states", {
+            "id": f"budget_{session_id}",
+            "total_budget": budget.get("total_budget", 0),
+            "used": budget.get("used", 0),
+            "phase_allocations_json": budget.get("phase_allocations", DEFAULT_PHASE_ALLOCATIONS),
+            "usage_by_phase_json": budget.get("usage_by_phase", {}),
+            "session_id": session_id,
+        })
+    except Exception:
+        pass
+
+
+def _restore_from_sqlite(session_id: str = "default") -> dict[str, Any] | None:
+    try:
+        from ..core.database import load_state
+        results = load_state("token_budget_states", {"id": f"budget_{session_id}"})
+        if results:
+            row = results[0]
+            return {
+                "total_budget": row.get("total_budget", 0),
+                "used": row.get("used", 0),
+                "phase_allocations": row.get("phase_allocations_json", DEFAULT_PHASE_ALLOCATIONS),
+                "usage_by_phase": row.get("usage_by_phase_json", {}),
+                "session_id": row.get("session_id", session_id),
+            }
+    except Exception:
+        pass
+    return None
 
 
 def _get_status() -> dict[str, Any]:
@@ -102,10 +138,12 @@ def _set_budget(
         budget["usage_by_phase"] = {}
     _save_budget(budget)
     notify(f"Token budget updated: total={budget.get('total_budget', 0)}", "info")
+    enforcement = _check_and_enforce(budget.get("total_budget", 0), budget.get("used", 0))
     return {
         "total_budget": budget.get("total_budget", 0),
         "phase_allocations": budget.get("phase_allocations", DEFAULT_PHASE_ALLOCATIONS),
         "updated_at": budget["updated_at"],
+        "enforcement": enforcement,
     }
 
 
@@ -154,6 +192,19 @@ def _report(period: str = "session") -> dict[str, Any]:
     return report
 
 
+def _check_and_enforce(total_budget: int, used: int) -> dict[str, Any]:
+    if total_budget <= 0:
+        return {"action": "none", "usage_ratio": 0.0}
+    ratio = used / total_budget
+    if ratio >= 0.95:
+        logger.warning("Token usage at %.1f%% (>=95%%), triggering phase degradation", ratio * 100)
+        return {"action": "degrade_phase", "reason": "token_usage_95pct", "usage_ratio": round(ratio, 4)}
+    if ratio >= 0.8:
+        logger.warning("Token usage at %.1f%% (>=80%%), recommending context compression", ratio * 100)
+        return {"action": "context_compress", "reason": "token_usage_80pct", "usage_ratio": round(ratio, 4)}
+    return {"action": "none", "usage_ratio": round(ratio, 4)}
+
+
 def _inline_token_budget(action: str, **kwargs: Any) -> dict[str, Any]:
     if action == "status":
         return _get_status()
@@ -184,7 +235,7 @@ def register(mcp: FastMCP) -> None:
         team_size: int | None = None,
         period: str = "session",
     ) -> dict[str, Any]:
-        """Token预算管理：查询预算状态、设置预算、获取推荐、生成使用报告。status操作获取当前Token预算状态(总预算/已用/剩余/阶段分配)，set_budget操作设置Token总预算和阶段分配，recommend操作根据项目规模/复杂度/团队人数获取预算推荐，report操作生成Token使用报告。"""
+        """Token预算管理：查询预算状态、设置预算、获取推荐、生成使用报告、运行时强制执行。status操作获取当前Token预算状态(总预算/已用/剩余/阶段分配)，set_budget操作设置Token总预算和阶段分配，recommend操作根据项目规模/复杂度/团队人数获取预算推荐，report操作生成Token使用报告，enforce操作检查Token使用率并触发强制措施(80%触发context_compress，95%触发degrade_phase)。"""
         validated, err = validate_input(TokenBudgetInput, action=action, total_budget=total_budget, phase_allocations=phase_allocations, project_size=project_size, complexity=complexity, team_size=team_size, period=period)
         if err:
             return err
@@ -200,8 +251,21 @@ def register(mcp: FastMCP) -> None:
                 return make_success_response(_recommend(project_size, complexity, team_size))
             elif action == "report":
                 return make_success_response(_report(period))
+            elif action == "enforce":
+                status = _get_status()
+                total = status.get("total_budget", 0)
+                used = status.get("used", 0)
+                enforcement = _check_and_enforce(total, used)
+                if enforcement["action"] == "degrade_phase":
+                    from .resource_load_status import degrade_phase
+                    degradation = degrade_phase()
+                    enforcement["degradation_result"] = degradation
+                return make_success_response({
+                    "enforcement": enforcement,
+                    "status": status,
+                })
             else:
-                return make_error_response(ValueError(f"未知操作: {action}，支持: status, set_budget, recommend, report"), error_code=ERR_VALIDATION)
+                return make_error_response(ValueError(f"未知操作: {action}，支持: status, set_budget, recommend, report, enforce"), error_code=ERR_VALIDATION)
         except Exception as e:
             logger.error("token_budget error: %s", e)
             return make_error_response(e)
