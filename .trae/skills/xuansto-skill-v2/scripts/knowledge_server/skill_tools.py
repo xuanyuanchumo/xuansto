@@ -200,7 +200,7 @@ def get_skill_tool_definitions() -> list:
                     "scan_duration_ms": {"type": "integer"},
                 },
             },
-            annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False),
+            annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=True),
         ),
         Tool(
             name="code_simplify",
@@ -871,7 +871,7 @@ class SkillToolHandler:
                 code="INTERNAL_ERROR",
                 message=f"Tool execution failed: {e}",
                 details={"tool_name": name, "error": str(e)},
-            ), ensure_ascii=False))]
+            ), ensure_ascii=False), isError=True)]
 
     def _fallback_or_error(self, name: str, arguments: dict):
         fallback_result = self.fallback.call_tool(name, arguments)
@@ -881,7 +881,7 @@ class SkillToolHandler:
             code="UNKNOWN_TOOL",
             message=f"Unknown tool: {name}",
             details={"tool_name": name},
-        ), ensure_ascii=False))]
+        ), ensure_ascii=False), isError=True)]
 
     async def _handle_skill_analyze(self, arguments: dict):
         skill_path = arguments.get("skill_path", "")
@@ -894,7 +894,7 @@ class SkillToolHandler:
                 code="INVALID_INPUT",
                 message="skill_path is required",
                 details={},
-            ), ensure_ascii=False))]
+            ), ensure_ascii=False), isError=True)]
 
         root = Path(skill_path)
         if not root.exists():
@@ -902,7 +902,7 @@ class SkillToolHandler:
                 code="NOT_FOUND",
                 message=f"Skill directory not found: {skill_path}",
                 details={"skill_path": skill_path},
-            ), ensure_ascii=False))]
+            ), ensure_ascii=False), isError=True)]
 
         metadata = self._extract_skill_metadata(root)
         structure = self._analyze_structure(root, depth)
@@ -932,7 +932,7 @@ class SkillToolHandler:
                 code="PROJECT_NOT_FOUND",
                 message=f"Project path not found: {project_path}",
                 details={"project_path": project_path},
-            ), ensure_ascii=False))]
+            ), ensure_ascii=False), isError=True)]
 
         gates_to_check = list(_QUALITY_GATES)
         if gate_ids:
@@ -1004,7 +1004,7 @@ class SkillToolHandler:
                 code="INVALID_INPUT",
                 message=f"Spec directory not found: {spec_dir}",
                 details={"spec_dir": spec_dir},
-            ), ensure_ascii=False))]
+            ), ensure_ascii=False), isError=True)]
 
         drifts = []
         total_specs = 0
@@ -1052,7 +1052,7 @@ class SkillToolHandler:
                 code="NOT_FOUND",
                 message=f"Target path not found: {target}",
                 details={"target": target},
-            ), ensure_ascii=False))]
+            ), ensure_ascii=False), isError=True)]
 
         findings = []
         sensitive_patterns = [
@@ -1138,7 +1138,7 @@ class SkillToolHandler:
                 code="INVALID_INPUT",
                 message="target is required",
                 details={},
-            ), ensure_ascii=False))]
+            ), ensure_ascii=False), isError=True)]
 
         target_path = Path(target)
         if not target_path.exists():
@@ -1146,7 +1146,7 @@ class SkillToolHandler:
                 code="NOT_FOUND",
                 message=f"Target not found: {target}",
                 details={"target": target},
-            ), ensure_ascii=False))]
+            ), ensure_ascii=False), isError=True)]
 
         suggestions = []
         by_type = {"dead_code": 0, "duplication": 0, "complexity": 0, "naming": 0}
@@ -1191,7 +1191,7 @@ class SkillToolHandler:
                 code="INVALID_INPUT",
                 message=f"Invalid action: {action}. Valid: {sorted(valid_actions)}",
                 details={"action": action, "valid_actions": sorted(valid_actions)},
-            ), ensure_ascii=False))]
+            ), ensure_ascii=False), isError=True)]
 
         now_iso = datetime.now(timezone.utc).isoformat()
 
@@ -1219,7 +1219,7 @@ class SkillToolHandler:
                     code="NOT_FOUND",
                     message="No saved sessions found",
                     details={},
-                ), ensure_ascii=False))]
+                ), ensure_ascii=False), isError=True)]
             latest_id = max(self._sessions.keys())
             session = self._sessions[latest_id]
             result = {
@@ -1275,7 +1275,7 @@ class SkillToolHandler:
                     code="NOT_FOUND",
                     message="No saved sessions to restore",
                     details={},
-                ), ensure_ascii=False))]
+                ), ensure_ascii=False), isError=True)]
             latest_id = max(self._sessions.keys())
             session = self._sessions[latest_id]
             result = {
@@ -1294,7 +1294,7 @@ class SkillToolHandler:
                 code="INVALID_INPUT",
                 message=f"Invalid action: {action}. Valid: {sorted(valid_actions)}",
                 details={"action": action, "valid_actions": sorted(valid_actions)},
-            ), ensure_ascii=False))]
+            ), ensure_ascii=False), isError=True)]
 
         now_iso = datetime.now(timezone.utc).isoformat()
 
@@ -1332,7 +1332,7 @@ class SkillToolHandler:
                     code="NOT_FOUND",
                     message=f"Workflow not found: {workflow_id}",
                     details={"workflow_id": workflow_id},
-                ), ensure_ascii=False))]
+                ), ensure_ascii=False), isError=True)]
             result = {
                 "action": "status",
                 "workflow_id": workflow_id,
@@ -1352,7 +1352,7 @@ class SkillToolHandler:
                     code="NOT_FOUND",
                     message=f"Workflow not found: {workflow_id}",
                     details={"workflow_id": workflow_id},
-                ), ensure_ascii=False))]
+                ), ensure_ascii=False), isError=True)]
             wf["status"] = "ABORTED"
             result = {
                 "action": "abort",
@@ -1370,7 +1370,7 @@ class SkillToolHandler:
                     code="NOT_FOUND",
                     message=f"Workflow not found: {workflow_id}",
                     details={"workflow_id": workflow_id},
-                ), ensure_ascii=False))]
+                ), ensure_ascii=False), isError=True)]
             if phase_action == "advance":
                 current = wf["current_phase"]
                 next_phase = min(current + 1, 8)
@@ -1403,7 +1403,7 @@ class SkillToolHandler:
                     code="NOT_FOUND",
                     message=f"Workflow not found: {workflow_id}",
                     details={"workflow_id": workflow_id},
-                ), ensure_ascii=False))]
+                ), ensure_ascii=False), isError=True)]
             target = snapshot_phase if snapshot_phase is not None else wf["current_phase"]
             wf["current_phase"] = target
             wf["status"] = "RUNNING"
@@ -1427,10 +1427,10 @@ class SkillToolHandler:
             wf = self._workflows.get(workflow_id)
             if not wf:
                 return [TextContent(type="text", text=json.dumps(make_error_response(
-                    code="NOT_FOUND",
-                    message=f"Workflow not found: {workflow_id}",
-                    details={"workflow_id": workflow_id},
-                ), ensure_ascii=False))]
+                code="NOT_FOUND",
+                message=f"Workflow not found: {workflow_id}",
+                details={"workflow_id": workflow_id},
+            ), ensure_ascii=False), isError=True)]
             snapshots = []
             for p in wf["phases"]:
                 if p["status"] in ("COMPLETED", "IN_PROGRESS"):
@@ -1480,7 +1480,7 @@ class SkillToolHandler:
                     code="NOT_FOUND",
                     message=f"Agent not found: {agent_name}",
                     details={"agent_name": agent_name},
-                ), ensure_ascii=False))]
+                ), ensure_ascii=False), isError=True)]
             result = {
                 "action": "detail",
                 "agent": matched[0],
@@ -1514,7 +1514,7 @@ class SkillToolHandler:
                     code="NOT_FOUND",
                     message=f"Agent instance not found: {agent_id}",
                     details={"agent_id": agent_id},
-                ), ensure_ascii=False))]
+                ), ensure_ascii=False), isError=True)]
             now_iso = datetime.now(timezone.utc).isoformat()
             if action == "assign":
                 task = arguments.get("task", "")
@@ -1556,7 +1556,7 @@ class SkillToolHandler:
             code="INVALID_INPUT",
             message=f"Invalid action: {action}",
             details={"action": action},
-        ), ensure_ascii=False))]
+        ), ensure_ascii=False), isError=True)]
 
     async def _handle_hook_manage(self, arguments: dict):
         action = arguments.get("action", "list")
@@ -1582,7 +1582,7 @@ class SkillToolHandler:
                     code="INVALID_INPUT",
                     message="hook_name is required for execute action",
                     details={},
-                ), ensure_ascii=False))]
+                ), ensure_ascii=False), isError=True)]
             hooks = _HOOK_DEFINITIONS.get(profile, _HOOK_DEFINITIONS["standard"])
             matched = [h for h in hooks if h["name"] == hook_name]
             if not matched:
@@ -1590,7 +1590,7 @@ class SkillToolHandler:
                     code="NOT_FOUND",
                     message=f"Hook not found: {hook_name}",
                     details={"hook_name": hook_name, "profile": profile},
-                ), ensure_ascii=False))]
+                ), ensure_ascii=False), isError=True)]
             hook = matched[0]
             pre_results = [f"{cb}:ok" for cb in hook.get("pre_callbacks", [])]
             post_results = [f"{cb}:ok" for cb in hook.get("post_callbacks", [])]
@@ -1608,7 +1608,7 @@ class SkillToolHandler:
             code="INVALID_INPUT",
             message=f"Invalid action: {action}",
             details={"action": action},
-        ), ensure_ascii=False))]
+        ), ensure_ascii=False), isError=True)]
 
     async def _handle_context_compress(self, arguments: dict):
         content = arguments.get("content", "")
@@ -1621,7 +1621,7 @@ class SkillToolHandler:
                 code="INVALID_INPUT",
                 message="content is required",
                 details={},
-            ), ensure_ascii=False))]
+            ), ensure_ascii=False), isError=True)]
 
         original_tokens = self._estimate_tokens(content)
 
@@ -1667,7 +1667,7 @@ class SkillToolHandler:
                 "version": "4.0.0",
                 "api_version": "3.0.0",
                 "uptime_seconds": uptime,
-                "tools_available": 17,
+                "tools_available": 26,
                 "degradation_level": "none",
                 "last_check_timestamp": now_iso,
             }
@@ -1700,7 +1700,7 @@ class SkillToolHandler:
             code="INVALID_INPUT",
             message=f"Invalid action: {action}",
             details={"action": action},
-        ), ensure_ascii=False))]
+        ), ensure_ascii=False), isError=True)]
 
     async def _handle_decision_log(self, arguments: dict):
         action = arguments.get("action", "")
@@ -1710,7 +1710,7 @@ class SkillToolHandler:
                 code="INVALID_INPUT",
                 message=f"Invalid action: {action}. Valid: {sorted(valid_actions)}",
                 details={"action": action},
-            ), ensure_ascii=False))]
+            ), ensure_ascii=False), isError=True)]
 
         now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
 
@@ -1721,7 +1721,7 @@ class SkillToolHandler:
                     code="INVALID_INPUT",
                     message="title is required for log action",
                     details={},
-                ), ensure_ascii=False))]
+                ), ensure_ascii=False), isError=True)]
             decision_id = f"ADR-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{len(self._decisions)+1:03d}"
             entry = {
                 "id": decision_id,
@@ -1801,7 +1801,7 @@ class SkillToolHandler:
                 code="INVALID_INPUT",
                 message=f"Invalid action: {action}. Valid: {sorted(valid_actions)}",
                 details={"action": action},
-            ), ensure_ascii=False))]
+            ), ensure_ascii=False), isError=True)]
 
         if action == "status":
             result = dict(self._token_budget_state)
@@ -1815,7 +1815,7 @@ class SkillToolHandler:
                     code="INVALID_INPUT",
                     message="total_budget must be >= 1000",
                     details={"total_budget": total_budget},
-                ), ensure_ascii=False))]
+                ), ensure_ascii=False), isError=True)]
             if total_budget is not None:
                 self._token_budget_state["total_budget"] = total_budget
                 self._token_budget_state["remaining"] = total_budget - self._token_budget_state["used"]
@@ -1878,7 +1878,7 @@ class SkillToolHandler:
                 code="INVALID_INPUT",
                 message=f"Invalid action: {action}. Valid: {sorted(valid_actions)}",
                 details={"action": action},
-            ), ensure_ascii=False))]
+            ), ensure_ascii=False), isError=True)]
 
         if action == "inject":
             content = arguments.get("content", "")
@@ -1887,7 +1887,7 @@ class SkillToolHandler:
                     code="INVALID_INPUT",
                     message="content is required for inject action",
                     details={},
-                ), ensure_ascii=False))]
+                ), ensure_ascii=False), isError=True)]
             scope = arguments.get("scope", "session")
             source = arguments.get("source", "")
             priority = arguments.get("priority", "normal")
@@ -1947,7 +1947,7 @@ class SkillToolHandler:
                 code="INVALID_INPUT",
                 message=f"Invalid action: {action}. Valid: {sorted(valid_actions)}",
                 details={"action": action},
-            ), ensure_ascii=False))]
+            ), ensure_ascii=False), isError=True)]
 
         if action == "create":
             name = arguments.get("name", "")
@@ -1956,7 +1956,7 @@ class SkillToolHandler:
                     code="INVALID_INPUT",
                     message="name is required for create action",
                     details={},
-                ), ensure_ascii=False))]
+                ), ensure_ascii=False), isError=True)]
             directory = arguments.get("directory", name)
             stack = arguments.get("stack", [])
             template = arguments.get("template", "default")
@@ -1981,7 +1981,7 @@ class SkillToolHandler:
                     code="NOT_FOUND",
                     message=f"Project path not found: {project_path}",
                     details={"project_path": project_path},
-                ), ensure_ascii=False))]
+                ), ensure_ascii=False), isError=True)]
             issues = []
             config_file = ppath / ".xuansto-config.yaml"
             if not config_file.exists():
@@ -2005,7 +2005,7 @@ class SkillToolHandler:
                     code="NOT_FOUND",
                     message=f"Project path not found: {project_path}",
                     details={"project_path": project_path},
-                ), ensure_ascii=False))]
+                ), ensure_ascii=False), isError=True)]
             detected = []
             markers = {
                 "python": ["requirements.txt", "pyproject.toml", "setup.py", "Pipfile"],

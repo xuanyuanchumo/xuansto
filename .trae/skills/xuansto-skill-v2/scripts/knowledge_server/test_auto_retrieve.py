@@ -130,7 +130,7 @@ class TestAutoRetrieveWithValidProject(unittest.TestCase):
         self.assertEqual(result["task_type"], "feature")
         self.assertIn("React", [fw["name"] for fw in result["tech_stack"].get("frameworks", [])])
         self.assertGreater(result["results_count"], 0)
-        self.assertIn("📚", result["context"])
+        self.assertIn("知识库参考", result["context"])
 
     def test_auto_retrieve_detects_tech_stack(self):
         result = self._server.auto_retrieve(

@@ -712,14 +712,14 @@ def register_mcp_tools(server, mcp_server):
                         code="SENSITIVE_CONTENT",
                         message="Content contains sensitive information",
                         details={"findings": findings, "mcp_error_code": APP_ERROR_CODES["SENSITIVE_CONTENT"]},
-                    ), ensure_ascii=False))]
+                    ), ensure_ascii=False), isError=True)]
                 validation_errors = InputValidator.validate_all(content=content)
                 if validation_errors:
                     return [TextContent(type="text", text=json.dumps(make_error_response(
                         code="BAD_REQUEST",
                         message="Input validation failed",
                         details={"validation_errors": validation_errors, "mcp_error_code": APP_ERROR_CODES["BAD_REQUEST"]},
-                    ), ensure_ascii=False))]
+                    ), ensure_ascii=False), isError=True)]
                 entry_data = {
                     "title": metadata.get("title", "") or metadata.get("id", ""),
                     "content": content,
@@ -784,7 +784,7 @@ def register_mcp_tools(server, mcp_server):
                             code="SENSITIVE_CONTENT",
                             message="Content contains sensitive information",
                             details={"findings": findings, "mcp_error_code": APP_ERROR_CODES["SENSITIVE_CONTENT"]},
-                        ), ensure_ascii=False))]
+                        ), ensure_ascii=False), isError=True)]
                     updates["content"] = content
                 if "type" in metadata:
                     updates["type"] = metadata["type"]
@@ -799,14 +799,14 @@ def register_mcp_tools(server, mcp_server):
                         code="BAD_REQUEST",
                         message="No update fields provided",
                         details={"mcp_error_code": APP_ERROR_CODES["BAD_REQUEST"]},
-                    ), ensure_ascii=False))]
+                    ), ensure_ascii=False), isError=True)]
                 result = server.sqlite.update_entry(entry_id, updates)
                 if result is None:
                     return [TextContent(type="text", text=json.dumps(make_error_response(
                         code="NOT_FOUND",
                         message="Knowledge entry not found",
                         details={"entry_id": entry_id, "mcp_error_code": APP_ERROR_CODES["NOT_FOUND"]},
-                    ), ensure_ascii=False))]
+                    ), ensure_ascii=False), isError=True)]
                 if isinstance(result, dict) and result.get("error") == "version_conflict":
                     return [TextContent(type="text", text=json.dumps(make_error_response(
                         code="VERSION_CONFLICT",
@@ -818,7 +818,7 @@ def register_mcp_tools(server, mcp_server):
                             "mcp_error_code": APP_ERROR_CODES["VERSION_CONFLICT"],
                         },
                         retryable=True,
-                    ), ensure_ascii=False))]
+                    ), ensure_ascii=False), isError=True)]
                 if server.chroma.available and content is not None:
                     try:
                         server.chroma.add_embedding(entry_id, content, {"scope": result.get("scope", ""), "title": result.get("title", "")})
@@ -911,7 +911,7 @@ def register_mcp_tools(server, mcp_server):
                         code="BAD_REQUEST",
                         message="project_path is required",
                         details={"mcp_error_code": APP_ERROR_CODES["BAD_REQUEST"]},
-                    ), ensure_ascii=False))]
+                    ), ensure_ascii=False), isError=True)]
                 try:
                     result = server.auto_retrieve(
                         task_type=task_type,
@@ -925,7 +925,7 @@ def register_mcp_tools(server, mcp_server):
                         code="INTERNAL_ERROR",
                         message=f"Auto-retrieve failed: {e}",
                         details={"mcp_error_code": MCP_ERROR_CODES["INTERNAL_ERROR"]},
-                    ), ensure_ascii=False))]
+                    ), ensure_ascii=False), isError=True)]
     
             elif name == "knowledge_web_update":
                 entry_id = arguments.get("entry_id")
@@ -936,7 +936,7 @@ def register_mcp_tools(server, mcp_server):
                         code="BAD_REQUEST",
                         message="At least one of entry_id, category, or tags must be provided",
                         details={"mcp_error_code": APP_ERROR_CODES["BAD_REQUEST"]},
-                    ), ensure_ascii=False))]
+                    ), ensure_ascii=False), isError=True)]
                 try:
                     from .web_search import search_official_docs, extract_and_structure
                 except ImportError:
@@ -944,7 +944,7 @@ def register_mcp_tools(server, mcp_server):
                         code="INTERNAL_ERROR",
                         message="Web search module not available",
                         details={"mcp_error_code": MCP_ERROR_CODES["INTERNAL_ERROR"]},
-                    ), ensure_ascii=False))]
+                    ), ensure_ascii=False), isError=True)]
                 target_entry = None
                 query_parts = []
                 if entry_id:
@@ -954,7 +954,7 @@ def register_mcp_tools(server, mcp_server):
                             code="NOT_FOUND",
                             message="Knowledge entry not found",
                             details={"entry_id": entry_id, "mcp_error_code": APP_ERROR_CODES["NOT_FOUND"]},
-                        ), ensure_ascii=False))]
+                        ), ensure_ascii=False), isError=True)]
                     query_parts.append(target_entry.get("title", ""))
                     if target_entry.get("category") and target_entry["category"] != "uncategorized":
                         query_parts.append(target_entry["category"])
@@ -1059,7 +1059,7 @@ def register_mcp_tools(server, mcp_server):
                             code="BAD_REQUEST",
                             message=str(e),
                             details={"mcp_error_code": APP_ERROR_CODES["BAD_REQUEST"]},
-                        ), ensure_ascii=False))]
+                        ), ensure_ascii=False), isError=True)]
     
             else:
                 pass
@@ -1069,7 +1069,7 @@ def register_mcp_tools(server, mcp_server):
                 code="INTERNAL_ERROR",
                 message=str(e),
                 details={"mcp_error_code": MCP_ERROR_CODES["INTERNAL_ERROR"]},
-            ), ensure_ascii=False))]
+            ), ensure_ascii=False), isError=True)]
 
         if name == "resource_load_status":
             action = arguments.get("action", "status")
@@ -1101,7 +1101,7 @@ def register_mcp_tools(server, mcp_server):
                         code="BAD_REQUEST",
                         message=f"Invalid target_phase: {target_phase_str}",
                         details={"mcp_error_code": APP_ERROR_CODES["BAD_REQUEST"]},
-                    ), ensure_ascii=False))]
+                    ), ensure_ascii=False), isError=True)]
                 state = loader.advance_phase(target_phase)
                 loader.record_activity()
                 result = {
@@ -1172,7 +1172,7 @@ def register_mcp_tools(server, mcp_server):
                     code="BAD_REQUEST",
                     message=f"Invalid action: {action}",
                     details={"valid_actions": ["status", "preload", "cache", "clear_cache", "loading_progress"], "mcp_error_code": APP_ERROR_CODES["BAD_REQUEST"]},
-                ), ensure_ascii=False))]
+                ), ensure_ascii=False), isError=True)]
 
         if name in SKILL_TOOL_NAMES:
             skill_result = await _skill_handler.handle(name, arguments)
@@ -1183,7 +1183,7 @@ def register_mcp_tools(server, mcp_server):
             code="UNKNOWN_TOOL",
             message=f"Unknown tool: {name}",
             details={"tool_name": name, "mcp_error_code": MCP_ERROR_CODES["METHOD_NOT_FOUND"]},
-        ), ensure_ascii=False))]
+        ), ensure_ascii=False), isError=True)]
 
 
 async def run_mcp_server(server):
