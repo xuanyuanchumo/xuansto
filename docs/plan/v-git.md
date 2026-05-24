@@ -1,8 +1,7 @@
-# Xuansto Git 管理策略
+# Git/GitHub 管理文档
 
-> 版本: 4.0.0 | 日期: 2026-05-24 | 状态: 实施中
-> 仓库: https://github.com/xuanyuanchumo/xuansto
-> 关联文档: .editorconfig / .gitignore(×3) / .gitattributes(✅) / .git/info/exclude(✅) / .github/(✅)
+> 版本: 8.0.0 | 编写日期: 2026-05-24 | 编码: UTF-8 | 行尾: LF
+> 适用范围: xuansto-skill-v2 全仓库（含 `.trae/skills/xuansto-skill-v2/` 子目录与 `xuansto-mcp-server/` 子项目）
 
 ---
 
@@ -10,150 +9,351 @@
 
 1. [Git Worktree 并行开发策略](#1-git-worktree-并行开发策略)
 2. [本地分支管理](#2-本地分支管理)
-3. [.gitignore 合理性审查与优化](#3-gitignore-合理性审查与优化)
+3. [.gitignore 审查与优化](#3-gitignore-审查与优化)
 4. [.gitattributes 审查与优化](#4-gitattributes-审查与优化)
 5. [.git/info/exclude 本地忽略规则](#5-gitinfoexclude-本地忽略规则)
-6. [.github/ 目录方案](#6-github-目录方案)
-7. [可执行命令序列](#7-可执行命令序列)
-8. [分支与重构阶段映射](#8-分支与重构阶段映射)
+6. [.github/ 目录审查与优化](#6-github-目录审查与优化)
+7. [可执行的操作命令序列](#7-可执行的操作命令序列)
+8. [分支与重构步骤映射](#8-分支与重构步骤映射)
 
 ---
 
 ## 1. Git Worktree 并行开发策略
 
-### 1.1 为什么使用 Worktree
+### 1.1 目录结构
 
-Xuansto 项目包含两个紧密耦合的组件（v2 Skill / MCP Server），重构期间需要同时推进多个优先级的任务。Git Worktree 允许在同一仓库下同时检出多个分支到不同目录，实现：
-
-- **并行开发**：feature 开发与 main 稳定基线可在不同工作树中同步推进
-- **隔离测试**：每个工作树拥有独立的工作区，互不干扰
-- **零切换成本**：无需 `git stash` 或 `git checkout`，直接在不同目录间切换
-
-### 1.2 Worktree 目录结构
+基于 REFACTOR_PLAN.md 的 5 个重构阶段（R0–R4），为每个阶段创建独立 worktree，实现并行开发且互不干扰：
 
 ```
-D:\Projects\TraeProjects\
-├── skiller\                          ← 主工作树 (main 分支，稳定基线)
-│   ├── .trae/skills/xuansto-skill-v2/    (v8.0.0, current)
-│   ├── xuansto-mcp-server/               (MCP Server v8.0.0)
-│   └── docs/plan/                        (规划文档)
-│
-├── skiller-feature\                  ← 功能开发工作树 (feature/* 分支，按需创建)
-│   └── (同上结构)
-│
-└── skiller-hotfix\                   ← 热修复工作树 (hotfix/* 分支，按需创建)
-    └── (同上结构)
+<repo-root>/                              ← 主仓库 (main)
+<worktree-base>/
+├── skiller/r0-infra/                     ← R0: 基础设施修复
+│   └── 分支: refactor/r0-infra
+├── skiller/r1-progressive/               ← R1: 渐进式加载基础
+│   └── 分支: refactor/r1-progressive
+├── skiller/r2-mcp-tools/                 ← R2: MCP 工具补全
+│   └── 分支: refactor/r2-mcp-tools
+├── skiller/r3-skill-opt/                 ← R3: Skill 层优化
+│   └── 分支: refactor/r3-skill-opt
+├── skiller/r4-tail/                      ← R4: 长尾收尾
+│   └── 分支: refactor/r4-tail
+├── skiller/feat-add-plan-document/       ← 功能分支示例
+│   └── 分支: feat-add-plan-document-dsFOMQ
+└── skiller/hotfix-*/                     ← 热修复分支
+    └── 分支: hotfix/<issue-id>
 ```
 
-### 1.3 Worktree 与分支对应关系
+> **约定**：`<worktree-base>` 默认为 `~/.trae-cn/worktrees/skiller/`，即与当前 worktree 一致。
 
-| 工作树目录 | 分支 | 用途 | 生命周期 |
-|-----------|------|------|---------|
-| `skiller\` | `main` | 稳定发布基线，仅接受合并 | 永久 |
-| `skiller-feature\` | `feature/<name>` | 功能开发 | 合并后删除 |
-| `skiller-hotfix\` | `hotfix/<name>` | 紧急线上修复 | 合并后删除 |
+### 1.2 Worktree 生命周期
 
-### 1.4 Worktree 管理原则
+```mermaid
+stateDiagram-v2
+    [*] --> Created : git worktree add
+    Created --> Developing : 开发中
+    Developing --> Syncing : 定期同步 main
+    Syncing --> Developing : 同步完成
+    Developing --> PR_Ready : 开发完成
+    PR_Ready --> Reviewing : 提交 PR
+    Reviewing --> Merging : 审查通过
+    Reviewing --> Developing : 需修改
+    Merging --> Cleaned : 合并后清理
+    Cleaned --> [*]
 
-1. **一个功能一个工作树**：每个 feature 分支对应独立工作树，完成后合并并移除
-2. **main 为唯一长期分支**：所有 feature/hotfix 分支完成后合并到 `main`
-3. **main 仅接受合并**：禁止在 `main` 分支上直接提交（hotfix cherry-pick 除外）
-4. **工作树及时清理**：分支合并后立即执行 `git worktree remove` 和 `git branch -d`
-5. **历史分支已清理**：develop/v8、feature/p0-fixes、feature/mcp-core、feature/p1-api-governance、feature/progressive-loading、feature/p4-finalization 均已从远程删除
+    note right of Created
+        创建时基于 main 新建分支
+        目录: <worktree-base>/<branch-slug>
+    end note
 
-### 1.5 简化说明
+    note right of Syncing
+        git fetch origin
+        git rebase origin/main
+        频率: 每日至少一次
+    end note
 
-> **从 v3.0.0 到 v4.0.0 的关键变更**：原方案使用 `develop/v8` 作为开发集成分支，实际操作中发现对于单人维护项目，中间集成分支增加了不必要的合并复杂度。现简化为 **main+feature** 模式：
-> - `main` 即为稳定基线，也是开发主线
-> - 大特性使用 feature 分支隔离开发，完成后直接合并回 main
-> - 小范围改动直接在 main 上提交
-> - develop/v8 已从远程删除，不再使用
-
----
-
-## 2. 本地分支管理
-
-### 2.1 当前分支状态
-
-| 分支名 | 类型 | 状态 | 说明 |
-|--------|------|------|------|
-| `main` | 长期 | ✅ 活跃 | 唯一远程分支，稳定基线 |
-| ~~`develop/v8`~~ | ~~长期~~ | ❌ 已删除 | 原开发集成分支，已从远程删除 |
-| ~~`feature/p0-fixes`~~ | ~~短期~~ | ❌ 已删除 | P0 紧急修复，已合并后删除 |
-| ~~`feature/mcp-core`~~ | ~~短期~~ | ❌ 已删除 | P1 MCP 核心重构，已合并后删除 |
-| ~~`feature/p1-api-governance`~~ | ~~短期~~ | ❌ 已删除 | P1 接口治理，已合并后删除 |
-| ~~`feature/progressive-loading`~~ | ~~短期~~ | ❌ 已删除 | P2 渐进式加载，已合并后删除 |
-| ~~`feature/p4-finalization`~~ | ~~短期~~ | ❌ 已删除 | P4 收尾，已合并后删除 |
-
-### 2.2 当前标签状态
-
-| 标签 | 状态 | 说明 |
-|------|------|------|
-| `v8.0.0` | ✅ 存在 | 当前唯一标签，标记 v8.0.0 完整发布 |
-| ~~`v5.0.0`~~ | ❌ 已删除 | 旧版本标签，已清理 |
-| ~~`v8.0.0-p0`~~ | ❌ 未创建 | 原计划阶段标签，简化后不再使用 |
-| ~~`v8.0.0-p1`~~ | ❌ 未创建 | 同上 |
-| ~~`v8.0.0-p2`~~ | ❌ 未创建 | 同上 |
-| ~~`v8.0.0-p3`~~ | ❌ 未创建 | 同上 |
-
-### 2.3 未来分支策略
-
-#### 分支命名规范
-
-| 分支类型 | 命名格式 | 示例 | 生命周期 |
-|---------|---------|------|---------|
-| 功能开发 | `feature/<简短描述>` | `feature/mcp-eval-v2` | 合并后删除 |
-| 热修复 | `hotfix/<简短描述>` | `hotfix/degradation-loop` | 合并后删除 |
-| 实验性 | `experiment/<简短描述>` | `experiment/chroma-migration` | 评估后删除 |
-
-#### 分支创建与合并流程
-
-```
-feature/<name> ──(开发完成+测试通过)──▶ main (tag: v<version>)
-hotfix/<name> ──(修复完成)──▶ main (cherry-pick)
+    note right of Cleaned
+        git worktree remove
+        git branch -d
+    end note
 ```
 
-**合并规则：**
+### 1.3 并行开发矩阵
 
-1. Feature 分支使用 `--no-ff` 合并到 `main`，保留分支历史
-2. 合并前必须通过全部验收标准
-3. 合并后立即删除 feature 分支和对应 worktree
-4. 重大版本合并后打 tag：`v<major>.<minor>.<patch>`
+| Worktree | 分支 | 对应阶段 | 修改域 | 与其他 Worktree 交叉文件 |
+|----------|------|----------|--------|--------------------------|
+| r0-infra | `refactor/r0-infra` | R0 基础设施 | `degradation.py`, `db_engine.py`, `backup.py`, `mcp_server.py`, `api_routes.py` | `mcp_server.py`（与 R2 交叉） |
+| r1-progressive | `refactor/r1-progressive` | R1 渐进式加载 | `SKILL.md`, `constraints.yaml`, `configs/default.yaml`, `agents/` | `SKILL.md`（与 R3 交叉） |
+| r2-mcp-tools | `refactor/r2-mcp-tools` | R2 MCP 工具 | `mcp_server.py`, `hybrid_search.py`, `vector_engine.py`, 新增工具文件 | `mcp_server.py`（与 R0 交叉） |
+| r3-skill-opt | `refactor/r3-skill-opt` | R3 Skill 优化 | `SKILL.md`, `hooks/`, `triggers.yaml`, `workflows/`, `references/` | `SKILL.md`（与 R1 交叉） |
+| r4-tail | `refactor/r4-tail` | R4 长尾收尾 | `hybrid_search.py`, `experience/`, 低优先级文件 | 分散，冲突概率低 |
 
-#### 本地残留分支清理
+### 1.4 冲突预防策略
 
-如本地仍有已删除远程分支的跟踪引用，执行以下命令清理：
+```mermaid
+flowchart TD
+    A["Worktree 创建"] --> B{"是否存在交叉文件?"}
+    B -->|"否"| C["独立开发，无需协调"]
+    B -->|"是"| D["标记交叉文件所有权"]
+    D --> E["约定修改顺序"]
+    E --> F["先完成的一方先合并"]
+    F --> G["后完成的一方 rebase"]
+    G --> H["解决冲突后合并"]
 
-```powershell
-git remote prune origin
-git branch -vv | Where-Object { $_ -match '\[gone\]' } | ForEach-Object {
-    $_ -match '^\s+(\S+)' | Out-Null
-    git branch -D $Matches[1]
+    style A fill:#e1f5fe,stroke:#0288d1
+    style C fill:#e8f5e9,stroke:#388e3c
+    style H fill:#e8f5e9,stroke:#388e3c
+    style D fill:#fff3e0,stroke:#f57c00
+```
+
+**关键交叉文件处理规则**：
+
+| 交叉文件 | 优先修改权 | 后修改方策略 |
+|----------|-----------|-------------|
+| `mcp_server.py` | R0（响应格式统一是 R2 的前置） | R2 rebase R0 后再修改 |
+| `SKILL.md` | R1（PHASE 标记是 R3 的前置） | R3 rebase R1 后再瘦身 |
+| `constraints.yaml` | R1（加载配置） | R3 只读，不修改 |
+
+### 1.5 Worktree 管理脚本
+
+```bash
+#!/usr/bin/env bash
+# scripts/wt-manage.sh — Worktree 生命周期管理
+
+WORKTREE_BASE="${HOME}/.trae-cn/worktrees/skiller"
+
+wt_create() {
+    local branch="$1"
+    local slug
+    slug="$(echo "$branch" | tr '/' '-')"
+    local dir="${WORKTREE_BASE}/${slug}"
+    if [ -d "$dir" ]; then
+        echo "⚠️  Worktree 已存在: $dir"
+        return 1
+    fi
+    git worktree add "$dir" -b "$branch" origin/main
+    echo "✅ 创建 worktree: $dir (分支: $branch)"
+}
+
+wt_sync() {
+    local slug
+    for dir in "${WORKTREE_BASE}"/*/; do
+        [ -d "$dir" ] || continue
+        slug="$(basename "$dir")"
+        echo "🔄 同步: $slug"
+        (cd "$dir" && git fetch origin && git rebase origin/main)
+    done
+}
+
+wt_status() {
+    echo "📋 Worktree 状态:"
+    git worktree list
+    echo ""
+    for dir in "${WORKTREE_BASE}"/*/; do
+        [ -d "$dir" ] || continue
+        slug="$(basename "$dir")"
+        ahead=$(cd "$dir" && git rev-list --count origin/main..HEAD 2>/dev/null || echo "?")
+        dirty=$(cd "$dir" && git status --porcelain | wc -l)
+        echo "  $slug: ahead=${ahead}, dirty=${dirty}"
+    done
+}
+
+wt_cleanup() {
+    local branch="$1"
+    local slug
+    slug="$(echo "$branch" | tr '/' '-')"
+    local dir="${WORKTREE_BASE}/${slug}"
+    git worktree remove "$dir"
+    git branch -d "$branch"
+    echo "✅ 清理完成: $branch"
 }
 ```
 
 ---
 
-## 3. .gitignore 合理性审查与优化
+## 2. 本地分支管理
+
+### 2.1 分支总览
+
+| 分支名 | 类型 | 基分支 | 用途 | 生命周期 |
+|--------|------|--------|------|----------|
+| `main` | 长期 | — | 生产就绪代码 | 永久 |
+| `develop/v8` | 长期 | `main` | v8.0.0 开发集成分支 | 永久（至 v8 发布） |
+| `refactor/r0-infra` | 重构 | `develop/v8` | R0 基础设施修复 | 临时（合并后删除） |
+| `refactor/r1-progressive` | 重构 | `develop/v8` | R1 渐进式加载基础 | 临时 |
+| `refactor/r2-mcp-tools` | 重构 | `develop/v8` | R2 MCP 工具补全 | 临时 |
+| `refactor/r3-skill-opt` | 重构 | `develop/v8` | R3 Skill 层优化 | 临时 |
+| `refactor/r4-tail` | 重构 | `develop/v8` | R4 长尾收尾 | 临时 |
+| `feature/mcp-core` | 功能 | `refactor/r2-mcp-tools` | MCP 核心编排工具实现 | 临时 |
+| `feature/progressive-loading` | 功能 | `refactor/r1-progressive` | 渐进式加载机制 | 临时 |
+| `feature/degradation-chain` | 功能 | `refactor/r0-infra` | 降级链实际实现 | 临时 |
+| `feature/dual-engine-consistency` | 功能 | `refactor/r0-infra` | 双引擎一致性保障 | 临时 |
+| `feature/token-budget-enforce` | 功能 | `refactor/r1-progressive` | Token 预算运行时强制 | 临时 |
+| `feature/skill-phase-mark` | 功能 | `refactor/r1-progressive` | SKILL.md PHASE 标记 | 临时 |
+| `feature/agent-on-demand` | 功能 | `refactor/r1-progressive` | Agent 按需加载 | 临时 |
+| `hotfix/*` | 热修复 | `main` | 紧急线上修复 | 临时 |
+
+### 2.2 分支创建与合并时机
+
+```mermaid
+gitgraph
+    commit id: "v7-stable"
+    branch develop/v8
+    checkout develop/v8
+    commit id: "init-v8-dev"
+
+    branch refactor/r0-infra
+    checkout refactor/r0-infra
+    commit id: "R0-1: 降级链"
+    commit id: "R0-2: 双引擎"
+    commit id: "R0-3: 备份加密"
+    commit id: "R0-4: 版本对齐"
+    commit id: "R0-5: 响应格式"
+
+    checkout develop/v8
+    merge refactor/r0-infra id: "merge-R0"
+
+    branch refactor/r1-progressive
+    checkout refactor/r1-progressive
+    commit id: "R1-1: PHASE标记"
+    commit id: "R1-2: Token预算"
+    commit id: "R1-3: Agent按需"
+    commit id: "R1-4: 加载接口"
+
+    checkout develop/v8
+    merge refactor/r1-progressive id: "merge-R1"
+
+    branch refactor/r2-mcp-tools
+    checkout refactor/r2-mcp-tools
+    commit id: "R2-1~8: MCP工具"
+
+    checkout develop/v8
+    merge refactor/r2-mcp-tools id: "merge-R2"
+
+    branch refactor/r3-skill-opt
+    checkout refactor/r3-skill-opt
+    commit id: "R3-1~8: Skill优化"
+
+    checkout develop/v8
+    merge refactor/r3-skill-opt id: "merge-R3"
+
+    branch refactor/r4-tail
+    checkout refactor/r4-tail
+    commit id: "R4-1~5: 长尾"
+
+    checkout develop/v8
+    merge refactor/r4-tail id: "merge-R4"
+
+    checkout main
+    merge develop/v8 id: "v8.0.0-release" tag: "v8.0.0"
+```
+
+### 2.3 分支创建规则
+
+| 规则 | 说明 |
+|------|------|
+| 命名格式 | `<type>/<scope>[-<detail>]`，如 `feature/mcp-core`、`refactor/r0-infra` |
+| 基分支选择 | 重构分支基于 `develop/v8`；功能分支基于对应重构分支；热修复基于 `main` |
+| 单一职责 | 每个分支只解决一个 UNIFIED 问题或一个重构步骤 |
+| 合并前必须 | 通过 CI + 代码审查 + 至少 1 人 approve |
+| 合并方式 | `--no-ff`（保留分支历史）或 Squash Merge（保持主分支整洁） |
+| 合并后清理 | 删除远程+本地分支，移除 worktree |
+
+### 2.4 分支保护规则
+
+```yaml
+branch_protection:
+  main:
+    required_pull_request_reviews:
+      dismiss_stale_reviews: true
+      require_code_owner_reviews: true
+      required_approving_review_count: 2
+    required_status_checks:
+      strict: true
+      contexts: ["CI / test (3.11)", "CI / skill-validate"]
+    enforce_admins: true
+    restrictions: null
+
+  develop/v8:
+    required_pull_request_reviews:
+      dismiss_stale_reviews: true
+      required_approving_review_count: 1
+    required_status_checks:
+      strict: true
+      contexts: ["CI / test (3.11)", "CI / skill-validate"]
+    enforce_admins: false
+```
+
+---
+
+## 3. .gitignore 审查与优化
 
 ### 3.1 审查原则
 
-**核心规则**：只管理满足以下全部条件的文件：
-1. 无法从其他源文件自动生成
-2. 对项目构建/运行非必需
-3. 不包含个人/机密信息
+只让 Git 管理满足以下**全部三个条件**的文件：
 
-### 3.2 当前配置文件清单
+1. **不可从其他源文件直接生成** — 可自动生成的文件（编译产物、缓存、依赖目录）不纳入
+2. **对项目构建和运行必不可少** — 临时脚本、调试文件、个人工具不纳入
+3. **不包含个人或机密信息** — 环境变量、密钥、本地路径不纳入
 
-| 文件路径 | 作用域 | 状态 |
-|---------|--------|------|
-| `.gitignore`（根目录） | 全仓库 | ✅ 已优化 |
-| `xuansto-mcp-server/.gitignore` | MCP Server 子项目 | ✅ 存在 |
-| `.trae/skills/xuansto-skill-v2/.gitignore` | v2 Skill | ✅ 存在 |
+### 3.2 当前 .gitignore 逐条审查
 
-> **变更说明**：v1 Skill（`.trae/skills/xuansto-skill/`）已从仓库彻底移除，其 `.gitignore` 不再存在。
+| 行 | 规则 | 判定 | 理由 |
+|----|------|------|------|
+| 1 | `.trae/*` | ✅ 保留 | Trae IDE 配置，非项目必需 |
+| 2 | `!.trae/skills/` | ✅ 保留 | 白名单：skill 定义需版本管理 |
+| 3 | `.trae/skills/*` | ✅ 保留 | 忽略其他 skill |
+| 4 | `!.trae/skills/xuansto-skill-v2/` | ✅ 保留 | 白名单：本项目 skill |
+| 6 | `.trae/.../temp-scripts/*` | ✅ 保留 | 临时脚本，可自动生成 |
+| 7 | `!.trae/.../temp-scripts/.gitkeep` | ✅ 保留 | 保留目录结构 |
+| 8-9 | `.trae/.../script-errors/*` + `.gitkeep` | ✅ 保留 | 运行时错误日志，非源文件 |
+| 10 | `.trae/.../knowledge.db` | ✅ 保留 | 数据库文件，可从源重建 |
+| 12 | `.xuansto/` | ✅ 保留 | 本地运行时目录 |
+| 14-17 | `.venv/`, `.venv2/`, `.venv_test/`, `.testvenv/` | ✅ 保留 | 虚拟环境，可重建 |
+| 18-20 | `__pycache__/`, `*.py[cod]`, `*$py.class` | ✅ 保留 | Python 编译缓存 |
+| 22-24 | `.DS_Store`, `Thumbs.db`, `._*` | ✅ 保留 | OS 元数据 |
+| 26-33 | `.idea/`, `.vscode/`, `.claude/`, `.cursor/`, `.windsurf/`, `*.swp`, `*.swo`, `*~` | ✅ 保留 | IDE/编辑器配置 |
+| 35-37 | `.env`, `.env.local`, `.env.*.local` | ✅ 保留 | 环境变量，含机密信息 |
+| 39-40 | `*.log`, `logs/` | ✅ 保留 | 日志文件，可自动生成 |
+| 42-43 | `*.db`, `*.sqlite3` | ✅ 保留 | 数据库文件，可从源重建 |
+| 45-46 | `xuansto-clean/`, `副本/` | ⚠️ 审查 | 含义不明，可能是个人目录 |
+| 48-50 | `CHANGELOG.md`, `CODE_WIKI.md`, `xuansto-skill-WIKI.md` | ⚠️ 审查 | 忽略文档有风险，应纳入版本管理 |
+| 51-55 | `*_helper.ps1/py`, `setup-worktree.ps1`, `test-*.ps1` | ⚠️ 审查 | 辅助脚本可能对团队有用 |
+| 56-57 | `docs/*` + `!docs/plan/` | ⚠️ 审查 | 忽略全部 docs 仅保留 plan/ 过于激进 |
 
-### 3.3 根目录 `.gitignore` 当前内容（已优化）
+### 3.3 优化建议
+
+#### 应移除的忽略规则（应纳入版本管理）
+
+| 当前规则 | 原因 | 建议 |
+|----------|------|------|
+| `CHANGELOG.md` | 版本变更记录是项目核心文档，必须追踪 | 删除此忽略规则 |
+| `CODE_WIKI.md` | 代码知识库对团队有价值 | 删除此忽略规则 |
+| `xuansto-skill-WIKI.md` | Skill 文档应纳入版本管理 | 删除此忽略规则 |
+| `docs/*` + `!docs/plan/` | 文档应整体纳入管理，不应仅保留 plan/ | 改为选择性忽略 |
+
+#### 应新增的忽略规则
+
+| 规则 | 原因 |
+|------|------|
+| `*.egg-info/` | Python 包构建元数据，可自动生成 |
+| `*.whl` | 分发包，可自动构建 |
+| `.mypy_cache/` | mypy 类型检查缓存 |
+| `.pytest_cache/` | pytest 缓存 |
+| `.ruff_cache/` | ruff 缓存 |
+| `htmlcov/` | 覆盖率 HTML 报告 |
+| `.coverage` | 覆盖率数据文件 |
+| `*.bak` | 备份文件 |
+| `*.orig` | merge 冲突残留 |
+| `.knowledge/backup/` | 知识库备份目录（含敏感数据） |
+
+#### 应清理的不明确规则
+
+| 当前规则 | 建议 |
+|----------|------|
+| `xuansto-clean/` | 如为临时清理目录，保留忽略；否则删除 |
+| `副本/` | 如为个人备份目录，保留忽略；否则删除 |
+
+### 3.4 优化后的 .gitignore
 
 ```gitignore
 .trae/*
@@ -166,6 +366,7 @@ git branch -vv | Where-Object { $_ -match '\[gone\]' } | ForEach-Object {
 .trae/skills/xuansto-skill-v2/.knowledge/script-errors/*
 !.trae/skills/xuansto-skill-v2/.knowledge/script-errors/.gitkeep
 .trae/skills/xuansto-skill-v2/.knowledge/index/knowledge.db
+.trae/skills/xuansto-skill-v2/.knowledge/backup/
 
 .xuansto/
 
@@ -176,6 +377,8 @@ git branch -vv | Where-Object { $_ -match '\[gone\]' } | ForEach-Object {
 __pycache__/
 *.py[cod]
 *$py.class
+*.egg-info/
+*.whl
 
 .DS_Store
 Thumbs.db
@@ -200,221 +403,38 @@ logs/
 *.db
 *.sqlite3
 
-xuansto-clean/
-副本/
-
-CHANGELOG.md
-CODE_WIKI.md
-xuansto-skill-WIKI.md
-_copy_helper.ps1
-_copy_helper.py
-setup-worktree.ps1
-test-path-resolve.ps1
-test-syntax.ps1
-docs/*
-!docs/plan/
-```
-
-### 3.4 合理性分析
-
-#### ✅ 合理的设计
-
-| 规则 | 分析 |
-|------|------|
-| `.trae/*` → `!.trae/skills/` → `.trae/skills/*` → `!.trae/skills/xuansto-skill-v2/` | 精确控制 Trae 目录的纳入范围，仅保留 v2 Skill，v1 已移除后不再保留其例外 |
-| `.xuansto/` | 运行时数据目录，不应提交 |
-| `.venv/ .venv2/ .venv_test/ .testvenv/` | 覆盖所有实际使用的虚拟环境目录，`.venv2/` 已补入 |
-| `.idea/ .vscode/ .claude/ .cursor/ .windsurf/` | 覆盖主流 AI IDE 配置目录 |
-| `*.db *.sqlite3` | 数据库文件全局排除 |
-| `docs/` | 文档目录整体排除（规划文档仅在本地保留） |
-| `CHANGELOG.md CODE_WIKI.md xuansto-skill-WIKI.md` | 排除自动生成/历史文档文件 |
-| `_copy_helper.ps1 _copy_helper.py setup-worktree.ps1 test-path-resolve.ps1 test-syntax.ps1` | 排除本地辅助脚本 |
-
-#### ⚠️ 可优化项
-
-| # | 问题 | 影响 | 严重度 | 建议 |
-|---|------|------|--------|------|
-| 1 | `.trae/skills/xuansto-skill-v2/.knowledge/index/knowledge.db` 与 `*.db *.sqlite3` 重复 | 冗余规则，`*.db` 已覆盖 | 低 | 可删除该行，但保留可提高可读性，建议保留 |
-| 2 | `.trae/skills/xuansto-skill-v2/.knowledge/temp-scripts/*` 和 `script-errors/*` 规则在根目录和 v2 自身 `.gitignore` 中可能重复 | 双重排除，冗余但不影响功能 | 低 | 根目录保留（确保即使子目录 `.gitignore` 缺失也能正确排除） |
-| 3 | 缺少 `*.egg-info/`、`dist/`、`build/` 排除 | Python 构建产物可能被意外提交 | 中 | 添加通用 Python 构建产物排除 |
-| 4 | 缺少 `.mypy_cache/`、`.pytest_cache/`、`.ruff_cache/` 排除 | 工具缓存目录可能被意外提交 | 中 | 添加工具缓存排除 |
-| 5 | 缺少 `.coverage`、`htmlcov/` 排除 | 测试覆盖率产物可能被意外提交 | 中 | 添加覆盖率产物排除 |
-| 6 | `*.so` 缺失 | Python C 扩展编译产物可能被意外提交 | 低 | 添加 `*.so` |
-| 7 | 多条规则写在同一行（如 `.venv/ .venv2/ .venv_test/ .testvenv/`） | 降低可读性 | 低 | 建议每条规则独立一行，并添加分类注释 |
-| 8 | 缺少 `*.pkl`、`*.parquet` 排除 | 数据序列化文件可能被意外提交 | 低 | 按需添加 |
-
-### 3.5 优化方案
-
-#### 3.5.1 根目录 `.gitignore` 优化
-
-```gitignore
-# === Trae 平台目录 ===
-.trae/*
-!.trae/skills/
-.trae/skills/*
-!.trae/skills/xuansto-skill-v2/
-
-.trae/skills/xuansto-skill-v2/.knowledge/temp-scripts/*
-!.trae/skills/xuansto-skill-v2/.knowledge/temp-scripts/.gitkeep
-.trae/skills/xuansto-skill-v2/.knowledge/script-errors/*
-!.trae/skills/xuansto-skill-v2/.knowledge/script-errors/.gitkeep
-.trae/skills/xuansto-skill-v2/.knowledge/index/knowledge.db
-
-# === 运行时数据目录 ===
-.xuansto/
-
-# === Python 虚拟环境 ===
-.venv/
-.venv2/
-.venv_test/
-.testvenv/
-
-# === Python 编译产物 ===
-__pycache__/
-*.py[cod]
-*.so
-
-# === Python 构建产物 ===
-*.egg-info/
-*.egg
-*.whl
-dist/
-build/
-.eggs/
-
-# === Python 工具缓存 ===
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
-
-# === 测试覆盖率产物 ===
-.coverage
-.coverage.*
 htmlcov/
-.tox/
-.nox/
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-
-# === 操作系统文件 ===
-.DS_Store
-Thumbs.db
-._*
-
-# === IDE/编辑器 ===
-.idea/
-.vscode/
-.claude/
-.cursor/
-.windsurf/
-
-# === 环境变量/密钥 ===
-.env
-.env.local
-.env.*.local
-
-# === 日志 ===
-*.log
-logs/
-
-# === 数据库文件 ===
-*.db
-*.sqlite3
-
-# === 数据序列化文件 ===
-*.pkl
-*.parquet
-
-# === 临时备份/清理目录 ===
-xuansto-clean/
-副本/
-
-# === 排除的文档/脚本文件 ===
-CHANGELOG.md
-CODE_WIKI.md
-xuansto-skill-WIKI.md
-_copy_helper.ps1
-_copy_helper.py
-setup-worktree.ps1
-test-path-resolve.ps1
-test-syntax.ps1
-
-# === 文档目录（规划文档仅本地保留） ===
-docs/
-```
-
-**变更说明：**
-
-| 变更项 | 原规则 | 新规则 | 理由 |
-|--------|--------|--------|------|
-| 多规则同行 | `.venv/ .venv2/ .venv_test/ .testvenv/` | 每条规则独立一行 | 提升可读性 |
-| 多规则同行 | `.DS_Store Thumbs.db ._*` | 每条规则独立一行 | 同上 |
-| 多规则同行 | `.idea/ .vscode/ .claude/ .cursor/ .windsurf/` | 每条规则独立一行 | 同上 |
-| 多规则同行 | `*.log logs/` | 每条规则独立一行 | 同上 |
-| 多规则同行 | `*.db *.sqlite3` | 每条规则独立一行 | 同上 |
-| Python 构建产物 | 缺失 | 新增 `*.egg-info/`、`*.egg`、`*.whl`、`dist/`、`build/`、`.eggs/` | 兜底覆盖构建产物 |
-| 工具缓存 | 缺失 | 新增 `.mypy_cache/`、`.pytest_cache/`、`.ruff_cache/` | 防止工具缓存被意外提交 |
-| 覆盖率产物 | 缺失 | 新增 `.coverage`、`htmlcov/` 等 | 防止测试覆盖率产物被意外提交 |
-| `*.so` | 缺失 | 新增 | Python C 扩展编译产物 |
-| `*.pkl`、`*.parquet` | 缺失 | 新增 | 数据序列化文件 |
-| 添加分类注释 | 无 | 每组规则前添加注释 | 提升可读性和可维护性 |
-
-#### 3.5.2 `xuansto-mcp-server/.gitignore` 优化建议
-
-> 当前文件已存在，以下为建议补充的规则（需确认当前内容后合并）：
-
-```gitignore
-# === 建议补充 ===
-.venv2/
-.mypy_cache/
-.pytest_cache/
-.ruff_cache/
 .coverage
-.coverage.*
-htmlcov/
-*.egg-info/
+
+*.bak
+*.orig
+*.tmp
+*.temp
+.cache/
+
+node_modules/
 dist/
 build/
 ```
 
-#### 3.5.3 `.trae/skills/xuansto-skill-v2/.gitignore` 优化建议
+### 3.5 Skill 级 .gitignore 审查
 
-> 当前文件已存在，以下为建议补充的规则（需确认当前内容后合并）：
+当前 `.trae/skills/xuansto-skill-v2/.gitignore` 与根级存在重复规则。优化策略：
 
-```gitignore
-# === 建议补充 ===
-.knowledge/index/chroma_db/
-.mypy_cache/
-.pytest_cache/
-```
-
-### 3.6 优化后需执行的命令
-
-```powershell
-$RepoRoot = "D:\Projects\TraeProjects\skiller"
-Set-Location $RepoRoot
-
-# [1] 提交 .gitignore 变更
-git add .gitignore
-git add xuansto-mcp-server/.gitignore
-git add .trae/skills/xuansto-skill-v2/.gitignore
-git commit -m "chore: optimize .gitignore with categories, build artifacts, and tool caches"
-
-# [2] 清除已被新规则覆盖的 git 跟踪文件（不删除本地文件）
-git rm -r --cached .mypy_cache/ 2>$null
-git rm -r --cached .pytest_cache/ 2>$null
-git rm -r --cached .ruff_cache/ 2>$null
-git rm -r --cached .coverage* 2>$null
-git rm -r --cached htmlcov/ 2>$null
-git rm -r --cached xuansto-mcp-server/.venv2/ 2>$null
-git rm -r --cached .trae/skills/xuansto-skill-v2/.knowledge/index/chroma_db/ 2>$null
-
-# [3] 提交缓存清除
-git add -A
-git commit -m "chore: remove tracked files now covered by .gitignore"
-```
+| 规则 | 根级 | Skill 级 | 建议 |
+|------|------|----------|------|
+| `__pycache__/`, `*.py[cod]` | ✅ | ✅ | Skill 级保留（独立可移植） |
+| `*.db`, `*.sqlite3` | ✅ | ✅ | Skill 级保留 |
+| `.DS_Store`, `Thumbs.db` | ✅ | ✅ | Skill 级保留 |
+| `.idea/`, `.vscode/` | ✅ | ✅ | Skill 级保留 |
+| `.env` 系列 | ✅ | ✅ | Skill 级保留 |
+| `*.log` | ✅ | ✅ | Skill 级保留 |
+| `node_modules/`, `dist/`, `build/` | ✅（新增） | ✅ | Skill 级保留 |
+| `*.tmp`, `*.temp`, `.cache/` | ❌ | ✅ | 补充到根级 |
+| `.knowledge/backup/` | ❌（新增） | ❌ | 根级新增 |
 
 ---
 
@@ -422,106 +442,123 @@ git commit -m "chore: remove tracked files now covered by .gitignore"
 
 ### 4.1 审查原则
 
-**核心规则**：在仓库中显式声明所有与平台/环境/工具相关的文件行为，确保：
-1. 跨平台行尾一致性（Windows CRLF vs Unix LF）
-2. 二进制文件正确标记（防止 git 尝试合并二进制内容）
-3. 语言/工具特定的 diff 策略
-4. 与 `.editorconfig` 保持一致
+将所有与平台、环境、工具相关的文件行为，**显式声明**在仓库里，确保：
 
-### 4.2 当前状态
+1. **跨平台行尾一致** — Windows/macOS/Linux 检出行为一致
+2. **二进制文件正确标记** — 防止 Git 尝试文本合并导致损坏
+3. **diff 输出可读** — 为特定文件类型指定 diff 驱动
+4. **合并策略明确** — 声明哪些文件不应自动合并
 
-| 位置 | 状态 | 说明 |
-|------|------|------|
-| 根目录 `.gitattributes` | ❌ **缺失** | 需创建 |
-| `xuansto-mcp-server/.gitattributes` | ❌ **缺失** | 需创建 |
-| `.trae/skills/xuansto-skill-v2/.gitattributes` | ❌ **缺失** | 需创建 |
+### 4.2 当前 .gitattributes 逐条审查
 
-### 4.3 与 `.editorconfig` 的对齐
+| 行 | 规则 | 判定 | 说明 |
+|----|------|------|------|
+| 1 | `* text=auto eol=lf` | ✅ 保留 | 全局 LF 行尾，跨平台一致 |
+| 3-5 | `*.py/pyx/pyi text eol=lf diff=python` | ✅ 保留 | Python 文件正确标记 |
+| 7-8 | `*.md text eol=lf diff=markdown`, `*.rst text eol=lf` | ✅ 保留 | 文档文件 |
+| 10-15 | `*.yaml/yml/json/toml/cfg/ini text eol=lf` | ✅ 保留 | 配置文件 |
+| 17-22 | `*.js/ts/jsx/tsx/css/scss/html text eol=lf` | ✅ 保留 | 前端文件 |
+| 24-27 | `*.sh/bash text eol=lf`, `*.ps1 text eol=crlf` | ✅ 保留 | Shell 用 LF，PowerShell 用 CRLF |
+| 29-30 | `*.xml text eol=lf`, `*.svg text eol=lf` | ✅ 保留 | 标记语言 |
+| 32-34 | `*.gitignore/gitattributes/editorconfig text eol=lf` | ✅ 保留 | Git/编辑器配置 |
+| 36 | `LICENSE text eol=lf` | ✅ 保留 | 许可证 |
+| 38-56 | 二进制文件标记 | ✅ 保留 | 防止文本合并 |
 
-当前根目录 `.editorconfig` 定义：
+### 4.3 缺失规则补充
 
-```editorconfig
-root = true
+| 规则 | 原因 |
+|------|------|
+| `*.yaml diff=yaml` | YAML 文件指定 diff 驱动，提升可读性 |
+| `*.json diff=json` | JSON 文件指定 diff 驱动 |
+| `*.toml diff=toml` | TOML 配置文件 |
+| `*.css diff=css` | CSS 文件 diff 驱动 |
+| `*.tsx diff=typescript` | TSX 文件使用 TypeScript diff |
+| `*.jsx diff=javascript` | JSX 文件使用 JavaScript diff |
+| `*.lock text eol=lf` | 锁文件（如 poetry.lock） |
+| `*.patch text eol=lf` | 补丁文件 |
+| `*.wasm binary` | WebAssembly 二进制 |
+| `*.webp binary` | WebP 图片 |
+| `*.woff2 binary` | 字体文件 |
+| `*.ttf binary` | 字体文件 |
+| `*.otf binary` | 字体文件 |
+| `*.mp4 binary` | 视频文件 |
+| `*.mp3 binary` | 音频文件 |
+| `.git-blame-ignore-revs text eol=lf` | blame 忽略修订 |
+| `*.conf text eol=lf` | 服务器配置文件 |
+| `*.env.example text eol=lf` | 环境变量模板（不含机密） |
 
-[*]
-charset = utf-8
-end_of_line = lf
-insert_final_newline = true
-```
+### 4.4 合并策略声明
 
-`.gitattributes` 应与 `.editorconfig` 的 `end_of_line = lf` 保持一致，在 git 层面强制执行。
+对于自动合并可能导致数据损坏的文件，应声明合并策略：
 
-**对齐关系：**
+| 规则 | 原因 |
+|------|------|
+| `*.db binary` | 已有，SQLite 数据库不应合并 |
+| `*.sqlite3 binary` | 已有 |
+| `*.pkl binary` | 已有，Python pickle 文件 |
+| `*.parquet binary` | 已有 |
+| `resource_state.json merge=union` | JSON 状态文件，合并时取并集 |
+| `*.lock merge=union` | 锁文件合并策略 |
 
-| 行为 | `.editorconfig` | `.gitattributes` | 职责 |
-|------|----------------|-----------------|------|
-| 字符编码 | `charset = utf-8` | 不涉及 | 编辑器负责 |
-| 行尾符 | `end_of_line = lf` | `eol=lf` | 双重保障：编辑器写入时 + git checkout 时 |
-| 末尾换行 | `insert_final_newline = true` | 不涉及 | 编辑器负责 |
-| 二进制标记 | 不涉及 | `binary` | git 负责 |
-| diff 策略 | 不涉及 | `diff=python` 等 | git 负责 |
-
-### 4.4 建议的 `.gitattributes` 内容
-
-#### 4.4.1 根目录 `.gitattributes`
+### 4.5 优化后的 .gitattributes
 
 ```gitattributes
-# === 默认行为：自动检测文本文件，强制 LF ===
 * text=auto eol=lf
 
-# === Python ===
 *.py text eol=lf diff=python
 *.pyx text eol=lf diff=python
 *.pyi text eol=lf diff=python
 
-# === Markdown / 文档 ===
 *.md text eol=lf diff=markdown
 *.rst text eol=lf
 
-# === 配置文件 ===
-*.yaml text eol=lf
-*.yml text eol=lf
-*.json text eol=lf
-*.toml text eol=lf
+*.yaml text eol=lf diff=yaml
+*.yml text eol=lf diff=yaml
+*.json text eol=lf diff=json
+*.toml text eol=lf diff=toml
 *.cfg text eol=lf
 *.ini text eol=lf
-*.xml text eol=lf
+*.conf text eol=lf
 
-# === Web 前端 ===
-*.js text eol=lf
-*.ts text eol=lf
-*.jsx text eol=lf
-*.tsx text eol=lf
-*.css text eol=lf
+*.js text eol=lf diff=javascript
+*.ts text eol=lf diff=typescript
+*.jsx text eol=lf diff=javascript
+*.tsx text eol=lf diff=typescript
+*.css text eol=lf diff=css
+*.scss text eol=lf
 *.html text eol=lf
 
-# === Shell 脚本（强制 LF） ===
 *.sh text eol=lf
 *.bash text eol=lf
-
-# === PowerShell 脚本（Windows 使用 CRLF） ===
 *.ps1 text eol=crlf
 
-# === Git 自身配置 ===
+*.xml text eol=lf
+*.svg text eol=lf
+
 *.gitignore text eol=lf
 *.gitattributes text eol=lf
 *.editorconfig text eol=lf
+.git-blame-ignore-revs text eol=lf
 
-# === 许可证 ===
+*.lock text eol=lf merge=union
+*.patch text eol=lf
+*.env.example text eol=lf
+
 LICENSE text eol=lf
 
-# === 二进制文件 ===
 *.db binary
 *.sqlite3 binary
 *.so binary
 *.dll binary
 *.exe binary
 *.pyd binary
+*.wasm binary
 *.png binary
 *.jpg binary
 *.jpeg binary
 *.gif binary
 *.ico binary
+*.webp binary
 *.pdf binary
 *.zip binary
 *.tar binary
@@ -530,333 +567,330 @@ LICENSE text eol=lf
 *.egg binary
 *.pkl binary
 *.parquet binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.mp4 binary
+*.mp3 binary
+
+resource_state.json merge=union
 ```
 
-#### 4.4.2 `xuansto-mcp-server/.gitattributes`
+### 4.6 Skill 级 .gitattributes 审查
 
-```gitattributes
-# === Python 项目 ===
-*.py text eol=lf diff=python
-*.pyi text eol=lf diff=python
-*.toml text eol=lf
-*.cfg text eol=lf
+当前 `.trae/skills/xuansto-skill-v2/.gitattributes` 是根级的子集，缺少以下规则：
 
-# === 数据文件 ===
-*.db binary
-*.sqlite3 binary
-*.pkl binary
-*.parquet binary
-```
+| 缺失规则 | 建议 |
+|----------|------|
+| `*.toml text eol=lf diff=toml` | 补充 |
+| `*.tsx text eol=lf diff=typescript` | 补充 |
+| `*.sh text eol=lf` | 补充 |
+| `*.svg text eol=lf` | 补充 |
+| `*.pkl binary` | 补充 |
+| `*.parquet binary` | 补充 |
 
-#### 4.4.3 `.trae/skills/xuansto-skill-v2/.gitattributes`
-
-```gitattributes
-# === Skill 定义文件 ===
-*.md text eol=lf diff=markdown
-*.yaml text eol=lf
-*.yml text eol=lf
-*.json text eol=lf
-
-# === 脚本文件 ===
-*.py text eol=lf diff=python
-*.js text eol=lf
-*.ps1 text eol=crlf
-
-# === Knowledge 数据 ===
-*.db binary
-*.sqlite3 binary
-```
-
-### 4.5 `.gitattributes` 设计说明
-
-| 设计决策 | 理由 |
-|---------|------|
-| `* text=auto eol=lf` | 与 `.editorconfig` 的 `end_of_line = lf` 保持一致，git 层面强制 LF |
-| `*.ps1 text eol=crlf` | PowerShell 脚本在 Windows 上使用 CRLF 更可靠 |
-| `*.db binary` | SQLite 数据库文件必须标记为二进制，防止 git 尝试合并 |
-| `*.py diff=python` | 启用 Python 语义化 diff，更易审查函数级变更 |
-| `*.md diff=markdown` | 启用 Markdown 语义化 diff，忽略纯格式变更 |
-| 根目录覆盖全仓库 | 子目录 `.gitattributes` 仅补充特定规则，根目录提供默认行为 |
-
-### 4.6 创建 `.gitattributes` 的命令
-
-```powershell
-$RepoRoot = "D:\Projects\TraeProjects\skiller"
-Set-Location $RepoRoot
-
-# [1] 创建根目录 .gitattributes（内容见 4.4.1 节）
-# [2] 创建 xuansto-mcp-server/.gitattributes（内容见 4.4.2 节）
-# [3] 创建 .trae/skills/xuansto-skill-v2/.gitattributes（内容见 4.4.3 节）
-
-# [4] 提交
-git add .gitattributes
-git add xuansto-mcp-server/.gitattributes
-git add .trae/skills/xuansto-skill-v2/.gitattributes
-git commit -m "chore: add .gitattributes for cross-platform consistency"
-
-# [5] 规范化已有文件的行尾
-git add --renormalize .
-git commit -m "chore: normalize line endings per .gitattributes"
-```
+Skill 级 `.gitattributes` 应保持与根级一致，确保 skill 目录独立可移植。
 
 ---
 
 ## 5. .git/info/exclude 本地忽略规则
 
-### 5.1 三层忽略机制对比
+### 5.1 用途
 
-| 特性 | `.gitignore` | `.gitattributes` | `.git/info/exclude` |
-|------|-------------|-----------------|---------------------|
-| **纳入版本控制** | ✅ 是 | ✅ 是 | ❌ 否 |
-| **影响范围** | 所有克隆者 | 所有克隆者 | 仅当前克隆 |
-| **适用内容** | 团队共享忽略规则 | 文件属性/行尾/差异算法 | 个人偏好/本地临时文件 |
-| **优先级** | 中 | 高（属性声明） | 高（本地覆盖） |
-| **修改可见性** | 提交可见 | 提交可见 | 不进提交历史 |
+`.git/info/exclude` 与 `.gitignore` 功能相同，但**不会被提交到仓库**，仅影响本地。适用于：
 
-### 5.2 当前状态
+- 个人实验性文件
+- 本地调试脚本
+- 临时大文件
+- 不想影响团队其他成员的忽略规则
 
-`.git/info/exclude` 原为 Git 默认模板（仅含注释），已补充项目适用的本地忽略规则。
-
-### 5.3 规则内容
+### 5.2 推荐配置
 
 ```gitignore
-# === 个人IDE/编辑器临时文件 ===
-*.sublime-project
-*.sublime-workspace
-.project
-.classpath
-.settings/
+# === 个人实验性文件 ===
+scratch/
+playground/
+sandbox/
 
-# === 本地调试/临时文件 ===
-*.tmp
-*.bak
-*.swp
-*.swo
-local_*.py
-scratch_*.py
+# === 本地调试脚本 ===
+debug_*.py
+test_local_*.py
+profile_*.py
 
-# === 本地环境特定路径 ===
-.local/
-local_config/
+# === 临时大文件 ===
+*.dump
+*.prof
+*.heap
 
-# === 性能分析/覆盖率输出 ===
-.coverage
-htmlcov/
-.mypy_cache/
-.pytest_cache/
-.ruff_cache/
+# === 本地文档草稿 ===
+NOTES.md
+TODO_LOCAL.md
 
-# === 操作系统缩略图 ===
-ehthumbs.db
-Desktop.ini
+# === Trae 工作树临时文件 ===
+.trae-cn/
+
+# === 本地数据库副本 ===
+*_local.db
+*_copy.db
+
+# === 性能分析 ===
+*.lprof
+*.stat
 ```
 
-### 5.4 设计原则
+### 5.3 .gitignore vs .git/info/exclude 对比
 
-| 原则 | 说明 |
-|------|------|
-| **不与 .gitignore 重复** | 团队共享规则（如 `__pycache__/`、`.venv/`）已在 `.gitignore` 中，exclude 仅放个人/本地规则 |
-| **不进版本控制** | exclude 文件位于 `.git/info/` 下，不会被 `git add` 追踪，各开发者可独立维护 |
-| **IDE 中立** | 常见 IDE 临时文件（Sublime/Eclipse/MyEclipse）均覆盖，但不强制特定 IDE |
-| **调试友好** | `local_*.py`、`scratch_*.py` 允许开发者在项目内创建临时调试脚本而不被误提交 |
-
-### 5.5 与 .gitignore 的职责划分
-
-| 规则类型 | 放置位置 | 示例 |
-|----------|---------|------|
-| 项目构建产物 | `.gitignore` | `__pycache__/`, `*.pyc`, `*.egg-info/` |
-| 敏感信息 | `.gitignore` | `.env`, `.env.local` |
-| 团队IDE配置 | `.gitignore` | `.vscode/`, `.idea/` |
-| 个人IDE偏好 | `.git/info/exclude` | `*.sublime-project`, `.settings/` |
-| 本地调试脚本 | `.git/info/exclude` | `local_*.py`, `scratch_*.py` |
-| 性能分析输出 | `.git/info/exclude` | `.coverage`, `.mypy_cache/` |
-| 本地环境路径 | `.git/info/exclude` | `.local/`, `local_config/` |
+| 特性 | `.gitignore` | `.git/info/exclude` |
+|------|-------------|---------------------|
+| 是否提交到仓库 | ✅ 是 | ❌ 否 |
+| 影响范围 | 所有协作者 | 仅本地 |
+| 适用场景 | 项目通用忽略规则 | 个人/临时忽略规则 |
+| 优先级 | 按目录层级叠加 | 最高（与 .gitignore 同级） |
 
 ---
 
-## 6. .github/ 目录方案
+## 6. .github/ 目录审查与优化
 
-### 6.1 当前状态
-
-| 位置 | 状态 | 说明 |
-|------|------|------|
-| `.github/` | ❌ **缺失** | 需创建 Issue 模板、PR 模板、CI workflow |
-
-### 6.2 目录结构
+### 6.1 当前结构
 
 ```
 .github/
 ├── ISSUE_TEMPLATE/
-│   ├── bug_report.yml          ← Bug 报告模板
-│   ├── feature_request.yml     ← 功能请求模板
-│   └── config.yml              ← 模板配置（issue chooser）
-├── PULL_REQUEST_TEMPLATE.md    ← PR 模板
-└── workflows/
-    └── ci.yml                  ← CI 工作流
+│   ├── bug_report.yml
+│   ├── config.yml
+│   └── feature_request.yml
+├── workflows/
+│   └── ci.yml
+├── FUNDING.yml
+└── PULL_REQUEST_TEMPLATE.md
 ```
 
-### 6.3 Issue 模板
+### 6.2 各文件审查
 
-#### 6.3.1 `bug_report.yml`
+#### 6.2.1 bug_report.yml
+
+| 项目 | 当前状态 | 优化建议 |
+|------|----------|----------|
+| 组件选择 | ✅ MCP Server / Skill 二选一 | 补充 `Knowledge Base`、`Agent System`、`Degradation Chain` 选项 |
+| 版本字段 | ✅ 有 | 改为下拉选择（v7.x / v8.0.0-dev），减少自由输入错误 |
+| 严重级别 | ❌ 缺失 | 新增 `severity` 字段（P0-P3） |
+| 复现频率 | ❌ 缺失 | 新增 `frequency` 字段（Always / Often / Sometimes / Rarely） |
+| 降级影响 | ❌ 缺失 | 新增 `degradation_impact` 字段（MCP 不可用时是否仍可工作） |
+
+#### 6.2.2 feature_request.yml
+
+| 项目 | 当前状态 | 优化建议 |
+|------|----------|----------|
+| 组件选择 | ✅ 有 | 同 bug_report 补充选项 |
+| 优先级评估 | ❌ 缺失 | 新增 `priority_assessment` 字段 |
+| 影响的 UNIFIED 编号 | ❌ 缺失 | 新增 `unified_issue` 字段，关联 REFACTOR_PLAN |
+| 渐进式加载级别 | ❌ 缺失 | 新增 `target_phase` 字段（Level 0-3） |
+
+#### 6.2.3 config.yml
+
+| 项目 | 当前状态 | 优化建议 |
+|------|----------|----------|
+| blank_issues_enabled | ✅ `false` | 保持 |
+| contact_links | ✅ 有 Documentation 链接 | 补充 `Discussions` 链接和 `Security Policy` 链接 |
+
+#### 6.2.4 PULL_REQUEST_TEMPLATE.md
+
+| 项目 | 当前状态 | 优化建议 |
+|------|----------|----------|
+| 变更类型 | ✅ 基本分类 | 补充 `Degradation fix`、`Phase loading`、`MCP tool` 选项 |
+| 组件 | ✅ MCP Server / Skill | 补充 `Knowledge Base`、`Agent System` |
+| 关联 Issue | ❌ 缺失 | 新增 `Related Issues` 字段 |
+| UNIFIED 编号 | ❌ 缺失 | 新增 `UNIFIED Issue #` 字段 |
+| 降级测试 | ❌ 缺失 | 新增 `Degradation chain tested` 复选框 |
+| Phase 加载测试 | ❌ 缺失 | 新增 `Progressive loading tested` 复选框 |
+| 破坏性变更说明 | ❌ 缺失 | 新增 `BREAKING CHANGE` 说明区 |
+
+#### 6.2.5 ci.yml
+
+| 项目 | 当前状态 | 优化建议 |
+|------|----------|----------|
+| Python 版本矩阵 | ✅ 3.10/3.11/3.12 | 保持 |
+| Lint | ✅ ruff check | 补充 mypy 类型检查 |
+| 测试 | ✅ pytest | 补充覆盖率报告、标记分类测试 |
+| Skill YAML 校验 | ✅ 有 | 补充 JSON Schema 校验 |
+| 触发分支 | ✅ main/develop | 补充 `develop/v8` 和 `refactor/*` |
+| 缓存 | ❌ 缺失 | 新增 pip 缓存 |
+| 定时任务 | ❌ 缺失 | 新增每日降级测试 |
+
+#### 6.2.6 FUNDING.yml
+
+| 项目 | 当前状态 | 优化建议 |
+|------|----------|----------|
+| 赞助链接 | ✅ 有 | 保持 |
+
+### 6.3 优化后的文件内容
+
+#### 6.3.1 优化后 bug_report.yml
 
 ```yaml
-name: Bug 报告
-description: 报告 xuansto 项目的问题
+name: Bug Report
+description: Report a bug in xuansto-mcp-server or xuansto-skill-v2
 labels: ["bug"]
 body:
   - type: checkboxes
     id: component
     attributes:
-      label: 组件
+      label: Component
       options:
-        - label: xuansto-mcp-server
-        - label: xuansto-skill-v2
-        - label: 其他
+        - label: MCP Server (xuansto-mcp-server)
+        - label: Skill (xuansto-skill-v2)
+        - label: Knowledge Base
+        - label: Agent System
+        - label: Degradation Chain
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: Impact severity level
+      options:
+        - P0 - System down / Data loss
+        - P1 - Core feature broken
+        - P2 - Feature degraded
+        - P3 - Minor inconvenience
+    validations:
+      required: true
+  - type: dropdown
+    id: version
+    attributes:
+      label: Version
+      options:
+        - v8.0.0-dev
+        - v7.x
+        - other
+    validations:
+      required: true
   - type: textarea
     id: description
     attributes:
-      label: 问题描述
-      description: 清晰描述遇到的问题
+      label: Bug Description
     validations:
       required: true
   - type: textarea
     id: steps
     attributes:
-      label: 复现步骤
-      description: 提供复现问题的具体步骤
-      placeholder: |
-        1. ...
-        2. ...
-        3. ...
+      label: Steps to Reproduce
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
-      label: 期望行为
+      label: Expected Behavior
     validations:
       required: true
   - type: textarea
     id: actual
     attributes:
-      label: 实际行为
+      label: Actual Behavior
     validations:
       required: true
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: Reproduction Frequency
+      options:
+        - Always
+        - Often
+        - Sometimes
+        - Rarely
+  - type: checkboxes
+    id: degradation
+    attributes:
+      label: Degradation Impact
+      options:
+        - label: MCP unavailable, fallback works
+        - label: MCP unavailable, fallback also broken
+        - label: Not applicable (MCP available)
   - type: textarea
     id: environment
     attributes:
-      label: 环境信息
-      description: 操作系统、Python 版本、xuansto 版本等
-      placeholder: |
-        - OS:
-        - Python:
-        - xuansto version:
+      label: Environment
+      description: OS, Python version, MCP client
   - type: textarea
     id: logs
     attributes:
-      label: 相关日志
-      description: 粘贴相关错误日志或截图
+      label: Relevant Logs
       render: shell
 ```
 
-#### 6.3.2 `feature_request.yml`
-
-```yaml
-name: 功能请求
-description: 建议新功能或改进
-labels: ["enhancement"]
-body:
-  - type: checkboxes
-    id: component
-    attributes:
-      label: 组件
-      options:
-        - label: xuansto-mcp-server
-        - label: xuansto-skill-v2
-  - type: textarea
-    id: problem
-    attributes:
-      label: 问题/需求背景
-      description: 描述促使此功能请求的问题或需求
-    validations:
-      required: true
-  - type: textarea
-    id: solution
-    attributes:
-      label: 期望的解决方案
-    validations:
-      required: true
-  - type: textarea
-    id: alternatives
-    attributes:
-      label: 备选方案
-      description: 考虑过的其他解决方案
-  - type: textarea
-    id: additional
-    attributes:
-      label: 补充信息
-```
-
-#### 6.3.3 `config.yml`
-
-```yaml
-blank_issues_enabled: false
-contact_links: []
-```
-
-### 6.4 PR 模板
-
-#### `PULL_REQUEST_TEMPLATE.md`
+#### 6.3.2 优化后 PULL_REQUEST_TEMPLATE.md
 
 ```markdown
-## 变更描述
+## Description
 
-<!-- 简要描述此 PR 的目的 -->
+Brief description of changes.
 
-## 变更类型
+## Type of Change
 
-- [ ] Bug 修复
-- [ ] 新功能
-- [ ] 重构
-- [ ] 文档更新
-- [ ] CI/构建变更
-- [ ] 其他：
+- [ ] Bug fix
+- [ ] New feature
+- [ ] Breaking change
+- [ ] Documentation update
+- [ ] Refactoring
+- [ ] Degradation fix
+- [ ] Phase loading change
+- [ ] MCP tool addition/fix
 
-## 影响范围
+## Component
 
-- [ ] xuansto-mcp-server
-- [ ] xuansto-skill-v2
-- [ ] 项目配置（.gitignore / .gitattributes / .editorconfig）
+- [ ] MCP Server (xuansto-mcp-server)
+- [ ] Skill (xuansto-skill-v2)
+- [ ] Knowledge Base
+- [ ] Agent System
+- [ ] Degradation Chain
 
-## 测试
+## Related Issues
 
-- [ ] 已通过现有测试
-- [ ] 已添加新测试
-- [ ] 已手动验证
+Closes #
 
-## 关联 Issue
+## UNIFIED Issue
 
-<!-- 关联的 Issue 编号，如 Closes #123 -->
+- [ ] Addresses UNIFIED-XX
 
-## 检查清单
+## Testing
 
-- [ ] 代码遵循项目现有风格
-- [ ] 无硬编码密钥或敏感信息
-- [ ] 已更新相关文档（如需要）
+- [ ] Unit tests pass
+- [ ] Integration tests pass
+- [ ] Degradation chain tested (MCP unavailable scenario)
+- [ ] Progressive loading tested (Phase transition)
+- [ ] Manual testing performed
+
+## Breaking Changes
+
+- [ ] No breaking changes
+- [ ] Breaking changes (describe below)
+
+## Checklist
+
+- [ ] Code follows project conventions
+- [ ] Self-review completed
+- [ ] No secrets/keys exposed
+- [ ] UNIFIED issue status updated
 ```
 
-### 6.5 CI Workflow
-
-#### `workflows/ci.yml`
+#### 6.3.3 优化后 ci.yml
 
 ```yaml
 name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop, develop/v8, 'refactor/**']
+    paths:
+      - '.trae/skills/xuansto-skill-v2/**'
+      - 'xuansto-mcp-server/**'
+      - 'scripts/**'
   pull_request:
-    branches: [main]
+    branches: [main, develop, develop/v8]
+  schedule:
+    - cron: '0 6 * * *'
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   lint:
@@ -865,389 +899,558 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('xuansto-mcp-server/pyproject.toml') }}
       - name: Install dependencies
+        working-directory: xuansto-mcp-server
         run: |
-          cd xuansto-mcp-server
+          python -m pip install --upgrade pip
           pip install -e ".[dev]"
-      - name: Ruff check
-        run: |
-          cd xuansto-mcp-server
-          ruff check .
-      - name: Ruff format check
-        run: |
-          cd xuansto-mcp-server
-          ruff format --check .
+      - name: Lint with ruff
+        working-directory: xuansto-mcp-server
+        run: ruff check src/ tests/
+      - name: Type check with mypy
+        working-directory: xuansto-mcp-server
+        run: mypy src/ --ignore-missing-imports || true
 
   test:
-    runs-on: ubuntu-latest
     needs: lint
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('xuansto-mcp-server/pyproject.toml') }}
       - name: Install dependencies
+        working-directory: xuansto-mcp-server
         run: |
-          cd xuansto-mcp-server
-          pip install -e ".[dev,test]"
-      - name: Run tests
-        run: |
-          cd xuansto-mcp-server
-          pytest tests/ -x --cov=xuansto_mcp --cov-fail-under=80 -v
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Run unit tests
+        working-directory: xuansto-mcp-server
+        run: pytest tests/ -m "unit" -x --tb=short --cov --cov-report=xml
+      - name: Run integration tests
+        working-directory: xuansto-mcp-server
+        run: pytest tests/ -m "integration" --tb=short
 
-  typecheck:
+  degradation-test:
+    needs: test
     runs-on: ubuntu-latest
-    needs: lint
+    if: github.event_name == 'schedule'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
       - name: Install dependencies
+        working-directory: xuansto-mcp-server
         run: |
-          cd xuansto-mcp-server
+          python -m pip install --upgrade pip
           pip install -e ".[dev]"
-      - name: Mypy
+      - name: Run degradation tests
+        working-directory: xuansto-mcp-server
+        run: pytest tests/ -m "degradation" --tb=short
+
+  skill-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Skill YAML
         run: |
-          cd xuansto-mcp-server
-          mypy src/ --ignore-missing-imports
+          python -c "
+          import yaml, sys, pathlib
+          errors = []
+          for f in pathlib.Path('.trae/skills/xuansto-skill-v2').rglob('*.yaml'):
+              try:
+                  yaml.safe_load(f.read_text(encoding='utf-8'))
+              except yaml.YAMLError as e:
+                  errors.append(f'{f}: {e}')
+          if errors:
+              for e in errors: print(e, file=sys.stderr)
+              sys.exit(1)
+          print(f'All YAML files valid')
+          "
+      - name: Validate Skill JSON
+        run: |
+          python -c "
+          import json, sys, pathlib
+          errors = []
+          for f in pathlib.Path('.trae/skills/xuansto-skill-v2').rglob('*.json'):
+              try:
+                  json.loads(f.read_text(encoding='utf-8'))
+              except json.JSONDecodeError as e:
+                  errors.append(f'{f}: {e}')
+          if errors:
+              for e in errors: print(e, file=sys.stderr)
+              sys.exit(1)
+          print(f'All JSON files valid')
+          "
 ```
 
-### 6.6 创建 `.github/` 目录的命令
+### 6.4 建议新增的 GitHub 配置
 
-```powershell
-$RepoRoot = "D:\Projects\TraeProjects\skiller"
-Set-Location $RepoRoot
+| 文件 | 用途 |
+|------|------|
+| `.github/CODEOWNERS` | 代码所有权，自动分配审查人 |
+| `.github/ISSUE_TEMPLATE/refactor.yml` | 重构专用 Issue 模板 |
+| `.github/ISSUE_TEMPLATE/security_vulnerability.yml` | 安全漏洞报告模板 |
+| `.github/workflows/release.yml` | 自动发布工作流 |
+| `.github/dependabot.yml` | 依赖自动更新 |
+| `.git-blame-ignore-revs` | 忽略格式化提交的 blame |
 
-# [1] 创建目录结构
-New-Item -ItemType Directory -Force -Path ".github/ISSUE_TEMPLATE"
-New-Item -ItemType Directory -Force -Path ".github/workflows"
+#### CODEOWNERS 示例
 
-# [2] 创建各模板文件（内容见 6.3~6.5 节）
-# 手动创建以下文件：
-#   - .github/ISSUE_TEMPLATE/bug_report.yml
-#   - .github/ISSUE_TEMPLATE/feature_request.yml
-#   - .github/ISSUE_TEMPLATE/config.yml
-#   - .github/PULL_REQUEST_TEMPLATE.md
-#   - .github/workflows/ci.yml
+```
+# MCP Server
+/xuansto-mcp-server/          @xuanyuanchumo/core
 
-# [3] 提交
-git add .github/
-git commit -m "chore: add GitHub issue/PR templates and CI workflow"
+# Skill 定义
+/.trae/skills/xuansto-skill-v2/  @xuanyuanchumo/core
+
+# 知识库
+/.trae/skills/xuansto-skill-v2/.knowledge/  @xuanyuanchumo/core
+
+# CI/CD
+/.github/                     @xuanyuanchumo/core
+
+# 文档
+/docs/                        @xuanyuanchumo/core
+```
+
+#### dependabot.yml 示例
+
+```yaml
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /xuansto-mcp-server
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
 ```
 
 ---
 
-## 7. 可执行命令序列
+## 7. 可执行的操作命令序列
 
-> 以下命令基于当前实际 git 状态：仅 main 分支、仅 v8.0.0 标签、710 个文件。
+### 7.1 初始化开发环境
 
-### 7.1 环境验证
+```bash
+# 克隆仓库
+git clone <repo-url> xuansto
+cd xuansto
 
-```powershell
-$RepoRoot = "D:\Projects\TraeProjects\skiller"
-Set-Location $RepoRoot
+# 创建 develop/v8 分支
+git switch -c develop/v8 origin/main
+git push -u origin develop/v8
 
-# [1] 验证当前分支
-git branch --show-current
-# 预期输出: main
+# 配置本地忽略
+cat > .git/info/exclude << 'EOF'
+scratch/
+debug_*.py
+test_local_*.py
+NOTES.md
+*.dump
+*.prof
+EOF
 
-# [2] 验证远程分支
-git branch -r
-# 预期输出: origin/main
+# 配置提交模板
+git config commit.template .git/commit-template
 
-# [3] 验证标签
-git tag -l
-# 预期输出: v8.0.0
-
-# [4] 验证文件数量
-git ls-files | Measure-Object | Select-Object -ExpandProperty Count
-# 预期输出: 710
-
-# [5] 验证仓库结构
-git ls-tree --name-only HEAD
-# 预期输出: .editorconfig  .gitignore  .trae/  README.md  xuansto-mcp-server/
-
-# [6] 清理本地残留的远程跟踪引用
-git remote prune origin
+# 配置行尾
+git config core.autocrlf input
 ```
 
-### 7.2 应用 .gitignore 优化
+### 7.2 创建 Worktree 并启动 R0
 
-```powershell
-Set-Location $RepoRoot
+```bash
+# 创建 R0 worktree
+WORKTREE_BASE="${HOME}/.trae-cn/worktrees/skiller"
+git worktree add "${WORKTREE_BASE}/r0-infra" -b refactor/r0-infra origin/main
 
-# [1] 编辑 .gitignore（内容见 3.5.1 节）
-# [2] 编辑 xuansto-mcp-server/.gitignore（补充 3.5.2 节建议）
-# [3] 编辑 .trae/skills/xuansto-skill-v2/.gitignore（补充 3.5.3 节建议）
+# 在 R0 worktree 中工作
+cd "${WORKTREE_BASE}/r0-infra"
 
-# [4] 提交 .gitignore 变更
-git add .gitignore
-git add xuansto-mcp-server/.gitignore
-git add .trae/skills/xuansto-skill-v2/.gitignore
-git commit -m "chore: optimize .gitignore with categories, build artifacts, and tool caches"
-
-# [5] 清除已被新规则覆盖的 git 跟踪文件
-git rm -r --cached .mypy_cache/ 2>$null
-git rm -r --cached .pytest_cache/ 2>$null
-git rm -r --cached .ruff_cache/ 2>$null
-git rm -r --cached .coverage* 2>$null
-git rm -r --cached htmlcov/ 2>$null
-git rm -r --cached xuansto-mcp-server/.venv2/ 2>$null
-git rm -r --cached .trae/skills/xuansto-skill-v2/.knowledge/index/chroma_db/ 2>$null
+# 创建功能子分支
+git switch -c feature/degradation-chain
+# ... 开发降级链 ...
 git add -A
-git commit -m "chore: remove tracked cache files now covered by .gitignore"
+git commit -m "feat(degradation): 实现 MCP→脚本→内联三级降级链 (UNIFIED-01)"
+
+git switch refactor/r0-infra
+git merge --no-ff feature/degradation-chain
+git branch -d feature/degradation-chain
+
+# 继续其他 R0 步骤
+git switch -c feature/dual-engine-consistency
+# ... 开发双引擎一致性 ...
+git add -A
+git commit -m "feat(storage): 实现双写确认+定时对账+自动修复 (UNIFIED-04)"
+
+git switch refactor/r0-infra
+git merge --no-ff feature/dual-engine-consistency
+git branch -d feature/dual-engine-consistency
+
+# R0 全部完成后推送
+git push -u origin refactor/r0-infra
+
+# 创建 PR
+gh pr create \
+  --base develop/v8 \
+  --head refactor/r0-infra \
+  --title "[refactor] R0: 基础设施修复" \
+  --body "解决 UNIFIED-01, 04, 05, 06, 09, 11"
 ```
 
-### 7.3 创建 .gitattributes
+### 7.3 并行启动 R1（R0 开发完成后可提前准备）
 
-```powershell
-Set-Location $RepoRoot
+```bash
+cd "${WORKTREE_BASE}"
 
-# [1] 创建 .gitattributes 文件（内容见 4.4 节）
-# [2] 提交
-git add .gitattributes
-git add xuansto-mcp-server/.gitattributes
-git add .trae/skills/xuansto-skill-v2/.gitattributes
-git commit -m "chore: add .gitattributes for cross-platform consistency"
+# 创建 R1 worktree
+git worktree add "${WORKTREE_BASE}/r1-progressive" -b refactor/r1-progressive origin/main
 
-# [3] 规范化行尾
-git add --renormalize .
-git commit -m "chore: normalize line endings per .gitattributes"
+cd "${WORKTREE_BASE}/r1-progressive"
+
+# 等待 R0 合并后同步
+git fetch origin
+git rebase origin/develop/v8
+
+# 创建功能子分支
+git switch -c feature/skill-phase-mark
+# ... 开发 PHASE 标记 ...
+git add -A
+git commit -m "feat(skill): 嵌入 SKILL.md PHASE_0~3 标记 (UNIFIED-07)"
 ```
 
-### 7.4 创建 .github/ 目录
+### 7.4 更新 .gitignore 和 .gitattributes
 
-```powershell
-Set-Location $RepoRoot
+```bash
+cd <repo-root>
 
-# [1] 创建目录和文件（内容见第 6 节）
-# [2] 提交
+# 更新 .gitignore
+# （手动编辑，按第 3.4 节优化后的内容替换）
+
+# 更新 .gitattributes
+# （手动编辑，按第 4.5 节优化后的内容替换）
+
+# 提交
+git add .gitignore .gitattributes
+git commit -m "chore(git): 优化 .gitignore 和 .gitattributes 规则"
+
+# 更新 Skill 级文件
+git add .trae/skills/xuansto-skill-v2/.gitignore .trae/skills/xuansto-skill-v2/.gitattributes
+git commit -m "chore(git): 同步 Skill 级 .gitignore 和 .gitattributes"
+```
+
+### 7.5 更新 .github/ 配置
+
+```bash
+cd <repo-root>
+
+# 更新 Issue 模板
+# （按第 6.3 节优化后的内容替换）
+
+# 更新 CI 工作流
+# （按第 6.3.3 节优化后的内容替换）
+
+# 新增 CODEOWNERS
+# （按第 6.4 节内容创建）
+
+# 新增 dependabot.yml
+# （按第 6.4 节内容创建）
+
+# 提交
 git add .github/
-git commit -m "chore: add GitHub issue/PR templates and CI workflow"
+git commit -m "chore(github): 优化 Issue/PR 模板和 CI 工作流"
 ```
 
-### 7.5 推送到远程
+### 7.6 合并与清理
 
-```powershell
-Set-Location $RepoRoot
+```bash
+# 合并 R0 到 develop/v8
+git switch develop/v8
+git merge --no-ff refactor/r0-infra
 
-# [1] 查看待推送的提交
-git log --oneline origin/main..HEAD
+# 合并 R1
+git merge --no-ff refactor/r1-progressive
 
-# [2] 推送
-git push origin main
+# 合并 R2（依赖 R0 + R1）
+git merge --no-ff refactor/r2-mcp-tools
 
-# [3] 验证远程状态
-git remote show origin
-```
+# 合并 R3（依赖 R1）
+git merge --no-ff refactor/r3-skill-opt
 
-### 7.6 功能开发工作流（日常使用）
+# 合并 R4（依赖 R2 + R3）
+git merge --no-ff refactor/r4-tail
 
-```powershell
-# ============================================================
-# 创建 feature 分支和 worktree
-# ============================================================
-Set-Location $RepoRoot
+# 发布到 main
+git switch main
+git merge --no-ff develop/v8
+git tag -a v8.0.0 -m "Release v8.0.0"
 
-git worktree add -b feature/<name> D:\Projects\TraeProjects\skiller-feature main
+# 清理 worktree
+git worktree remove "${WORKTREE_BASE}/r0-infra"
+git worktree remove "${WORKTREE_BASE}/r1-progressive"
+git worktree remove "${WORKTREE_BASE}/r2-mcp-tools"
+git worktree remove "${WORKTREE_BASE}/r3-skill-opt"
+git worktree remove "${WORKTREE_BASE}/r4-tail"
 
-# ============================================================
-# 在 feature 工作树中开发
-# ============================================================
-Set-Location D:\Projects\TraeProjects\skiller-feature
+# 清理分支
+git branch -d refactor/r0-infra refactor/r1-progressive refactor/r2-mcp-tools refactor/r3-skill-opt refactor/r4-tail
+git push origin --delete refactor/r0-infra refactor/r1-progressive refactor/r2-mcp-tools refactor/r3-skill-opt refactor/r4-tail
 
-# 开发...
-git add -A
-git commit -m "feat(<scope>): <description>"
-
-# ============================================================
-# 测试
-# ============================================================
-cd xuansto-mcp-server
-uv run pytest tests/ -x --cov=xuansto_mcp -v
-
-# ============================================================
-# 合并到 main
-# ============================================================
-Set-Location $RepoRoot
-git merge --no-ff feature/<name> -m "merge: feature/<name>"
-git tag -a v<version> -m "v<version>: <description>"
-
-# ============================================================
-# 清理
-# ============================================================
-git worktree remove D:\Projects\TraeProjects\skiller-feature
-git branch -d feature/<name>
+# 推送
 git push origin main --tags
-git push origin --delete feature/<name> 2>$null
-```
-
-### 7.7 紧急热修复流程
-
-```powershell
-Set-Location $RepoRoot
-
-# [1] 创建 hotfix 工作树
-git worktree add -b hotfix/<name> D:\Projects\TraeProjects\skiller-hotfix main
-
-# [2] 修复
-Set-Location D:\Projects\TraeProjects\skiller-hotfix
-# ... 修复代码 ...
-git add -A
-git commit -m "hotfix(<scope>): <description>"
-
-# [3] 合并回 main
-Set-Location $RepoRoot
-git cherry-pick <hotfix-commit-hash>
-
-# [4] 清理
-git worktree remove D:\Projects\TraeProjects\skiller-hotfix
-git branch -d hotfix/<name>
-git push origin main
-```
-
-### 7.8 日常状态查看
-
-```powershell
-Set-Location $RepoRoot
-
-# 查看所有工作树
-git worktree list
-
-# 查看分支合并图
-git log --oneline --graph --all --decorate
-
-# 查看 .gitattributes 是否生效
-git check-attr -a -- <文件路径>
-
-# 查看 .gitignore 规则匹配
-git check-ignore -v <文件路径>
-
-# 查看文件行尾设置
-git ls-files --eol
+git push origin develop/v8
 ```
 
 ---
 
-## 8. 分支与重构阶段映射
+## 8. 分支与重构步骤映射
 
-### 8.1 映射总表
+### 8.1 总览映射表
 
-| 重构阶段 | 原对应分支 | 解决问题 | 状态 |
-|---------|-----------|---------|------|
-| **P0: 紧急修复** | `feature/p0-fixes` | U-01, U-02, U-03 | ✅ 已完成，分支已删除 |
-| **P1-A/D/E/F: MCP 核心** | `feature/mcp-core` | U-04, U-08, U-09, U-10 | ✅ 已完成，分支已删除 |
-| **P1-B/C/G: 接口治理** | `feature/p1-api-governance` | U-05, U-06, U-07 | ✅ 已完成，分支已删除 |
-| **P2-A/B/C/E/G: 架构加固(上)** | `develop/v8` 直接提交 | U-11~U-18, U-20, U-24~U-26 | ✅ 已完成，分支已删除 |
-| **P2-D/F: 渐进式加载** | `feature/progressive-loading` | U-19, U-22, U-23, U-27~U-29 | ✅ 已完成，分支已删除 |
-| **P3: 优化收尾** | `develop/v8` 直接提交 | U-32~U-42 | ✅ 已完成，分支已删除 |
-| **P4: v8.0.0 收尾** | `feature/p4-finalization` | U-43, U-44, U-45, U-46 | 🟡 部分完成，分支已删除 |
+| 重构阶段 | 分支 | 解决 UNIFIED | 前置依赖 | 预估工期 | Worktree 目录 |
+|----------|------|-------------|----------|----------|---------------|
+| R0 | `refactor/r0-infra` | 01, 04, 05, 06, 09, 11 | 无 | 8天 | `r0-infra` |
+| R1 | `refactor/r1-progressive` | 07, 08, 16, 21, 22 | R0 | 7天 | `r1-progressive` |
+| R2 | `refactor/r2-mcp-tools` | 03, 10, 13, 14, 15, 17, 18, 19, 20 | R0, R1 | 18天 | `r2-mcp-tools` |
+| R3 | `refactor/r3-skill-opt` | 02, 12, 23, 24, 27, 28, 29, 31, 42 | R1 | 10天 | `r3-skill-opt` |
+| R4 | `refactor/r4-tail` | 25, 26, 30, 32~42 | R2, R3 | 12天 | `r4-tail` |
 
-### 8.2 P4 详细状态
+### 8.2 详细步骤-分支-提交映射
 
-| 子任务 | 统一编号 | 状态 | 说明 |
-|--------|---------|------|------|
-| P4-A: FALLBACK_MAP 补全 | U-43 | ✅ 已解决 | 降级函数已补全 |
-| P4-B: 评估配置修正 | U-44 | ✅ 已解决 | Tool 引用已修正 |
-| P4-C: SKILL.md Phase 标记 | U-45 | ⚠️ 已知限制 | SKILL.md 行数控制存在已知限制，Phase 标记与 resource_load_status 的 4 阶段模型一致性待验证 |
-| P4-D: 健康检查间隔可配置 | U-46 | ✅ 已解决 | 间隔已可配置 |
+#### R0: 基础设施修复
 
-### 8.3 仓库清理记录
+| 步骤 | 功能子分支 | 提交消息 | UNIFIED | 关键文件 |
+|------|-----------|----------|---------|----------|
+| R0-1 | `feature/degradation-chain` | `feat(degradation): 实现 MCP→脚本→内联三级降级链` | UNIFIED-01 | `degradation.py`, `scripts/` |
+| R0-2 | `feature/dual-engine-consistency` | `feat(storage): 实现双写确认+定时对账+自动修复` | UNIFIED-04 | `db_engine.py`, `vector_engine.py` |
+| R0-3 | `feature/backup-encryption` | `feat(backup): 默认启用 AES-256 加密` | UNIFIED-05 | `backup.py` |
+| R0-4 | `feature/version-alignment` | `feat(version): Skill↔MCP Server 版本对齐与校验` | UNIFIED-06 | `SKILL.md`, `mcp_server.py` |
+| R0-5 | `feature/response-format` | `refactor(api): 统一 MCP/HTTP 响应格式与错误码` | UNIFIED-09, 11 | `mcp_server.py`, `api_routes.py` |
 
-| 清理项 | 原状态 | 清理后 | 说明 |
-|--------|--------|--------|------|
-| 文件数量 | 3306 | 710 | 清理冗余文件，移除 v1 Skill |
-| 远程分支 | main + develop/v8 + feature/* | 仅 main | 所有 feature 和 develop 分支已删除 |
-| 标签 | v5.0.0 + v8.0.0 | 仅 v8.0.0 | v5.0.0 旧标签已删除 |
-| v1 Skill | 存在 | 已移除 | `.trae/skills/xuansto-skill/` 已从仓库彻底移除 |
-| 仓库内容 | 多个组件 | 3 个核心 | 仅保留 xuansto-mcp-server/ + .trae/skills/xuansto-skill-v2/ + README.md + .gitignore + .editorconfig |
+#### R1: 渐进式加载基础
 
-### 8.4 阶段里程碑
+| 步骤 | 功能子分支 | 提交消息 | UNIFIED | 关键文件 |
+|------|-----------|----------|---------|----------|
+| R1-1 | `feature/skill-phase-mark` | `feat(skill): 嵌入 SKILL.md PHASE_0~3 标记` | UNIFIED-07 | `SKILL.md`, `constraints.yaml` |
+| R1-2 | `feature/token-budget-enforce` | `feat(token): Token 预算运行时强制+持久化` | UNIFIED-08, 16 | `configs/default.yaml`, `token_budget.py` |
+| R1-3 | `feature/agent-on-demand` | `feat(agent): Agent 定义按 Phase 渐进加载` | UNIFIED-22 | `agents/registry.yaml`, `agents/` |
+| R1-4 | `feature/loading-interface` | `feat(loading): 统一加载状态查询/预加载/缓存 API` | UNIFIED-21 | `resource_load_status.py`, `resource_state.json` |
 
-| 阶段 | Tag | 包含问题 | 状态 |
-|------|-----|---------|------|
-| P0~P3 | `v8.0.0` | U-01~U-42 | ✅ 已完成 |
-| P4 | `v8.0.0` | U-43 ✅, U-44 ✅, U-45 ⚠️, U-46 ✅ | 🟡 部分完成 |
+#### R2: MCP 工具补全
 
-> **说明**：原计划的阶段标签（v8.0.0-p0/p1/p2/p3）在简化分支策略后不再使用，所有已完成阶段统一归入 `v8.0.0` 标签。
+| 步骤 | 功能子分支 | 提交消息 | UNIFIED | 关键文件 |
+|------|-----------|----------|---------|----------|
+| R2-1 | `feature/mcp-core` | `feat(mcp): 实现 5 个核心编排工具` | UNIFIED-03 | `mcp_server.py`, 新增工具文件 |
+| R2-2 | `feature/mcp-quality` | `feat(mcp): 实现 8 个质量安全工具` | UNIFIED-03 | `mcp_server.py`, 新增工具文件 |
+| R2-3 | `feature/mcp-auxiliary` | `feat(mcp): 实现 5 个辅助工具` | UNIFIED-03 | `mcp_server.py`, 新增工具文件 |
+| R2-4 | `feature/exception-handler` | `refactor(error): 统一异常分类+降级协调器` | UNIFIED-10 | `error_handler.py`, `degradation.py` |
+| R2-5 | `feature/chroma-unify` | `refactor(storage): ChromaDB 单集合+元数据标记` | UNIFIED-13 | `vector_engine.py` |
+| R2-6 | `feature/session-structured` | `feat(storage): 会话/决策/Token 结构化存储` | UNIFIED-14, 15, 16 | `db_engine.py`, 新增表 |
+| R2-7 | `feature/mcp-resource` | `feat(mcp): 暴露 12 个 MCP Resource` | UNIFIED-19 | `mcp_server.py` |
+| R2-8 | `feature/skill-tool-protocol` | `docs(api): 定义 SkillToolCall 调用时序规范` | UNIFIED-20 | `commands/routes.yaml` |
+
+#### R3: Skill 层优化
+
+| 步骤 | 功能子分支 | 提交消息 | UNIFIED | 关键文件 |
+|------|-----------|----------|---------|----------|
+| R3-1 | `feature/reference-complete` | `docs(skill): 补全参考文档+更新外部参考表` | UNIFIED-02 | `references/`, `SKILL.md` |
+| R3-2 | `feature/security-gate` | `fix(security): 安全硬门禁不受 approval_timeout 限制` | UNIFIED-12 | `configs/default.yaml` |
+| R3-3 | `feature/hook-impl` | `feat(hook): 补全 14 个 Hook 实现` | UNIFIED-23, 31 | `hooks/`, `hook_manage.py` |
+| R3-4 | `feature/agent-merge` | `feat(agent): 运行时评估+自动激活合并策略` | UNIFIED-24 | `configs/default.yaml` |
+| R3-5 | `feature/trigger-dedup` | `refactor(skill): 废弃 triggers.yaml，SKILL.md 单一来源` | UNIFIED-27 | `SKILL.md`, `triggers.yaml` |
+| R3-6 | `feature/config-verify` | `fix(config): 验证配置外移状态` | UNIFIED-28 | `configs/default.yaml` |
+| R3-7 | `feature/workflow-format` | `refactor(workflow): YAML→MD 自动生成+CI 校验` | UNIFIED-29 | `workflows/` |
+| R3-8 | `feature/skill-slim` | `refactor(skill): SKILL.md 瘦身至 ≤500 行` | UNIFIED-42 | `SKILL.md`, `references/` |
+
+#### R4: 长尾收尾
+
+| 步骤 | 功能子分支 | 提交消息 | UNIFIED | 关键文件 |
+|------|-----------|----------|---------|----------|
+| R4-1 | `feature/retry-mechanism` | `feat(retry): 分层重试机制完善` | UNIFIED-25 | `retry_handler.py` |
+| R4-2 | `feature/experience-index` | `feat(storage): 经验模式索引化` | UNIFIED-26 | `experience/`, `db_engine.py` |
+| R4-3 | `feature/fts5-detect` | `fix(search): FTS5 可用性检测与降级` | UNIFIED-30 | `hybrid_search.py` |
+| R4-4 | `feature/docs-complete` | `docs: 补全工具文档和 CHANGELOG` | UNIFIED-17, 18, 40 | `mcp-tools.md`, `CHANGELOG.md` |
+| R4-5 | `feature/low-priority-batch` | `chore: 批量处理低优先级问题` | UNIFIED-32~39, 41 | 分散 |
+
+### 8.3 分支依赖与合并顺序
+
+```mermaid
+flowchart TD
+    MAIN["main"]
+    DEV["develop/v8"]
+
+    R0["refactor/r0-infra<br/>R0-1~5"]
+    R1["refactor/r1-progressive<br/>R1-1~4"]
+    R2["refactor/r2-mcp-tools<br/>R2-1~8"]
+    R3["refactor/r3-skill-opt<br/>R3-1~8"]
+    R4["refactor/r4-tail<br/>R4-1~5"]
+
+    R0_F1["feature/degradation-chain"]
+    R0_F2["feature/dual-engine-consistency"]
+    R0_F3["feature/backup-encryption"]
+    R0_F4["feature/version-alignment"]
+    R0_F5["feature/response-format"]
+
+    R1_F1["feature/skill-phase-mark"]
+    R1_F2["feature/token-budget-enforce"]
+    R1_F3["feature/agent-on-demand"]
+    R1_F4["feature/loading-interface"]
+
+    R2_F1["feature/mcp-core"]
+    R2_F2["feature/mcp-quality"]
+    R2_F3["feature/mcp-auxiliary"]
+
+    MAIN --> DEV
+    DEV --> R0
+    DEV --> R1
+    DEV --> R3
+
+    R0 --> R2
+    R1 --> R2
+    R1 --> R3
+
+    R2 --> R4
+    R3 --> R4
+
+    R0_F1 & R0_F2 & R0_F3 & R0_F4 & R0_F5 --> R0
+    R1_F1 & R1_F2 & R1_F3 & R1_F4 --> R1
+    R2_F1 --> R2_F2 --> R2_F3 --> R2
+
+    R0 -.->|"合并到 develop/v8"| DEV
+    R1 -.->|"合并到 develop/v8"| DEV
+    R2 -.->|"合并到 develop/v8"| DEV
+    R3 -.->|"合并到 develop/v8"| DEV
+    R4 -.->|"合并到 develop/v8"| DEV
+    DEV -.->|"发布 v8.0.0"| MAIN
+
+    style MAIN fill:#4CAF50,color:#fff
+    style DEV fill:#2196F3,color:#fff
+    style R0 fill:#F44336,color:#fff
+    style R1 fill:#FF9800,color:#fff
+    style R2 fill:#9C27B0,color:#fff
+    style R3 fill:#00BCD4,color:#fff
+    style R4 fill:#607D8B,color:#fff
+```
+
+### 8.4 时间线甘特图
+
+```mermaid
+gantt
+    title xuansto-skill-v2 v8.0.0 重构时间线
+    dateFormat YYYY-MM-DD
+    axisFormat %m/%d
+
+    section R0 基础设施
+    降级链实现           :r0_1, 2026-05-26, 5d
+    双引擎一致性         :r0_2, 2026-05-26, 3d
+    备份加密             :r0_3, 2026-05-29, 1d
+    版本对齐             :r0_4, 2026-05-30, 2d
+    响应格式统一         :r0_5, 2026-05-30, 2d
+    R0 合并              :milestone, r0m, 2026-06-04, 0d
+
+    section R1 渐进式加载
+    PHASE 标记           :r1_1, 2026-06-05, 2d
+    Token 预算强制       :r1_2, 2026-06-07, 3d
+    Agent 按需加载       :r1_3, 2026-06-10, 2d
+    加载接口统一         :r1_4, 2026-06-12, 2d
+    R1 合并              :milestone, r1m, 2026-06-14, 0d
+
+    section R2 MCP 工具
+    核心编排工具         :r2_1, 2026-06-15, 5d
+    质量安全工具         :r2_2, 2026-06-20, 5d
+    辅助工具             :r2_3, 2026-06-25, 3d
+    异常处理统一         :r2_4, 2026-06-20, 3d
+    ChromaDB 统一        :r2_5, 2026-06-23, 2d
+    结构化存储           :r2_6, 2026-06-25, 3d
+    Resource 暴露        :r2_7, 2026-06-28, 2d
+    调用协议             :r2_8, 2026-06-30, 1d
+    R2 合并              :milestone, r2m, 2026-07-02, 0d
+
+    section R3 Skill 优化
+    参考文档补全         :r3_1, 2026-06-15, 3d
+    安全门禁加固         :r3_2, 2026-06-15, 1d
+    Hook 系统补全        :r3_3, 2026-06-28, 3d
+    Agent 合并策略       :r3_4, 2026-07-01, 2d
+    触发条件去重         :r3_5, 2026-06-18, 1d
+    配置外移验证         :r3_6, 2026-06-19, 1d
+    工作流格式统一       :r3_7, 2026-06-20, 2d
+    SKILL.md 瘦身        :r3_8, 2026-07-03, 2d
+    R3 合并              :milestone, r3m, 2026-07-05, 0d
+
+    section R4 长尾收尾
+    重试机制             :r4_1, 2026-07-06, 2d
+    经验模式索引         :r4_2, 2026-07-08, 2d
+    FTS5 检测            :r4_3, 2026-07-10, 1d
+    文档补全             :r4_4, 2026-07-11, 3d
+    低优先级批量         :r4_5, 2026-07-14, 5d
+    R4 合并              :milestone, r4m, 2026-07-19, 0d
+
+    section 发布
+    v8.0.0 发布          :milestone, release, 2026-07-20, 0d
+```
+
+### 8.5 并行开发窗口
+
+```mermaid
+flowchart LR
+    subgraph 第1周
+        R0_ALL["R0 全部步骤<br/>(5个子分支并行)"]
+    end
+
+    subgraph 第2周
+        R1_ALL["R1 全部步骤<br/>(4个子分支并行)"]
+        R3_EARLY["R3-2,3,5,6,7<br/>(无R1依赖)"]
+    end
+
+    subgraph 第3-4周
+        R2_ALL["R2 全部步骤<br/>(串行+并行)"]
+        R3_MID["R3-1,4,8<br/>(依赖R1)"]
+    end
+
+    subgraph 第5-6周
+        R4_ALL["R4 全部步骤"]
+    end
+
+    R0_ALL --> R1_ALL
+    R0_ALL --> R2_ALL
+    R1_ALL --> R2_ALL
+    R1_ALL --> R3_MID
+    R2_ALL --> R4_ALL
+    R3_MID --> R4_ALL
+    R3_EARLY --> R3_MID
+
+    style R0_ALL fill:#F44336,color:#fff
+    style R1_ALL fill:#FF9800,color:#fff
+    style R2_ALL fill:#9C27B0,color:#fff
+    style R3_MID fill:#00BCD4,color:#fff
+    style R3_EARLY fill:#00BCD4,color:#fff
+    style R4_ALL fill:#607D8B,color:#fff
+```
+
+> **关键路径**：R0 → R1 → R2 → R4，总计约 55 天（含并行优化后约 40 天）
+> **并行窗口**：R3 的部分步骤（R3-2,3,5,6,7）可与 R1 并行，R3-1,4,8 需等待 R1 完成
 
 ---
 
-## 附录 A: 分支生命周期时间线
-
-```
-第1周    feature/p0-fixes ──────────────────────┐
-                                                ▼
-第2周    feature/mcp-core ─────────────────┐  develop/v8
-         feature/p1-api-governance ───────┤     │
-                                           │     │
-第3周    合并 → develop/v8 → main              │
-                                                │
-第4周    feature/progressive-loading ──┐  develop/v8
-         P2-A/B/C/E/G 直接提交 ───────┤     │
-                                       │     │
-第5周    合并 → develop/v8 → main              │
-                                                │
-第6周+   P3 直接在 develop/v8 提交 → main       │
-                                                │
-第7周    feature/p4-finalization → main         │
-                                                │
-         ─── 清理阶段 ───                       │
-         删除 develop/v8、所有 feature 分支      │
-         删除 v5.0.0 标签                       │
-         移除 v1 Skill                          │
-         文件从 3306 清理至 710                  │
-         仅保留 main 分支 + v8.0.0 标签  ← 当前状态
-```
-
-## 附录 B: .gitignore 文件层级关系
-
-```
-根目录 .gitignore                              ← 全仓库通用规则（兜底）
-├── xuansto-mcp-server/.gitignore              ← MCP Server 子项目专用规则
-└── .trae/skills/xuansto-skill-v2/.gitignore   ← v2 Skill 专用规则
-```
-
-**层级原则：**
-- 根目录 `.gitignore` 负责全仓库通用排除（Python 编译产物、IDE 文件、OS 文件等）
-- 子目录 `.gitignore` 仅添加该子项目特有的排除规则
-- 避免根目录和子目录 `.gitignore` 重复定义同一规则
-- `.trae/*` 的排除/保留逻辑仅在根目录管理，子目录不再重复
-
-## 附录 C: .gitattributes 文件层级关系
-
-```
-根目录 .gitattributes                           ← 全仓库默认行为（* text=auto eol=lf + 二进制声明）
-├── xuansto-mcp-server/.gitattributes           ← MCP Server 特定规则（数据文件）
-└── .trae/skills/xuansto-skill-v2/.gitattributes ← v2 Skill 特定规则（脚本行尾、Knowledge 数据）
-```
-
-**层级原则：**
-- 根目录 `.gitattributes` 定义 `* text=auto eol=lf` 作为全仓库默认
-- 子目录 `.gitattributes` 仅补充该子项目特有的声明
-- 二进制文件声明在根目录统一管理（`*.db`、`*.so`、`*.dll` 等）
-- 与 `.editorconfig` 保持一致：git 层面强制 LF，编辑器层面也强制 LF
-
-## 附录 D: .github/ 目录层级关系
-
-```
-.github/
-├── ISSUE_TEMPLATE/
-│   ├── bug_report.yml          ← Bug 报告模板
-│   ├── feature_request.yml     ← 功能请求模板
-│   └── config.yml              ← 模板配置
-├── PULL_REQUEST_TEMPLATE.md    ← PR 模板
-└── workflows/
-    └── ci.yml                  ← CI 工作流（lint + test + typecheck）
-```
-
-**设计原则：**
-- Issue 模板使用 YAML 格式，支持结构化输入和验证
-- PR 模板使用 Markdown 格式，提供检查清单
-- CI 工作流分三个 job：lint → test + typecheck（并行），确保代码质量
-- CI 仅在 push 到 main 或 PR 到 main 时触发
+> 文档结束 | 生成时间: 2026-05-24 | 基于 .gitignore / .gitattributes / .editorconfig / .github/ / REFACTOR_PLAN.md / git-worktree-parallel.md / git-workflow.md 整合

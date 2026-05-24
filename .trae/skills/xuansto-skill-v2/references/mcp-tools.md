@@ -66,7 +66,7 @@
       }
     },
     "dependencies": {
-      "mcp_server": "xuansto-mcp-server>=3.5.0",
+      "mcp_server": "xuansto-mcp-server>=4.0.0",
       "scripts": ["knowledge-server.py", "skill-test.py", "agentic-security-scanner.py"],
       "python_version": ">=3.10"
     },
@@ -124,7 +124,12 @@
 
 **降级链：** ChromaDB → SQLite FTS5 → keyword_fallback
 
-**完整返回值JSON Schema：**
+**action说明：**
+- `retrieve`: 三层知识库混合检索，返回匹配结果列表
+- `inject`: 将知识内容注入知识库，底层通过knowledge_add实现
+- `precipitate`: 从已有经验中沉淀模式，底层通过experience_precipitator.py实现
+
+**retrieve返回值JSON Schema：**
 ```json
 {
   "status": "success",
@@ -154,6 +159,71 @@
 }
 ```
 
+**inject返回值JSON Schema：**
+```json
+{
+  "status": "success",
+  "data": {
+    "action": "inject",
+    "id": "kb-inj-20250122-001",
+    "knowledge_type": "experience",
+    "scope": "workspace",
+    "content_preview": "Vite+React+TS组合初始化效率高...",
+    "metadata_saved": {
+      "category": "project-init",
+      "tags": ["react", "vite"],
+      "injected_at": "2025-01-22T14:30:00Z"
+    },
+    "indexed": true
+  },
+  "metadata": {
+    "tool": "knowledge_search",
+    "latency_ms": 45,
+    "degraded": false
+  }
+}
+```
+
+**precipitate返回值JSON Schema：**
+```json
+{
+  "status": "success",
+  "data": {
+    "action": "precipitate",
+    "patterns": [
+      {
+        "id": "pat-001",
+        "experience_type": "project-init",
+        "pattern": "Vite+React+TS组合在中小型项目中初始化效率最高",
+        "confidence": 0.88,
+        "occurrence_count": 5,
+        "scope": "workspace",
+        "first_seen": "2025-01-10T08:00:00Z",
+        "last_seen": "2025-01-22T14:30:00Z"
+      },
+      {
+        "id": "pat-002",
+        "experience_type": "error-recovery",
+        "pattern": "TypeScript严格模式应在项目初期启用，后期启用成本高",
+        "confidence": 0.82,
+        "occurrence_count": 3,
+        "scope": "general",
+        "first_seen": "2025-01-12T10:00:00Z",
+        "last_seen": "2025-01-20T16:00:00Z"
+      }
+    ],
+    "total_patterns": 2,
+    "min_confidence_used": 0.7,
+    "scope_filtered": "workspace"
+  },
+  "metadata": {
+    "tool": "knowledge_search",
+    "latency_ms": 120,
+    "degraded": false
+  }
+}
+```
+
 **错误码定义：**
 | 错误码 | 说明 | 处理建议 |
 |--------|------|----------|
@@ -162,13 +232,22 @@
 | DB_UNAVAILABLE | ChromaDB不可用 | 自动降级到SQLite FTS5 |
 | DEGRADED | 降级模式执行(关键词检索) | 检查ChromaDB服务状态 |
 | TIMEOUT | 检索超时 | 减少top_k或简化query |
+| INJECT_FAILED | 知识注入失败(inject) | 检查content和knowledge_type参数 |
+| PRECIPITATE_NO_PATTERNS | 无可沉淀的模式(precipitate) | 降低min_confidence或扩大scope |
+| DUPLICATE_CONTENT | 注入内容已存在(inject) | 检查是否重复注入相同内容 |
 
-**降级脚本路径：** `scripts/knowledge-server.py --search`
+**降级脚本路径：** `scripts/knowledge-server.py --search` (retrieve) / `scripts/knowledge_server/kb_client.py` (inject) / `scripts/knowledge_server/experience_precipitator.py` (precipitate)
 
 **调用示例：**
 ```
-调用: knowledge_search(query="React项目初始化最佳实践", top_k=5, search_type="hybrid", scope="experience")
+调用: knowledge_search(action="retrieve", query="React项目初始化最佳实践", top_k=5, search_type="hybrid", scope="experience")
 响应: {status: "success", data: {results: [{id: "kb-001", content: "...", confidence: 0.92}], total_matches: 12, search_type_used: "hybrid"}, ...}
+
+调用: knowledge_search(action="inject", content="Vite+React+TS组合初始化效率高", knowledge_type="experience", scope="workspace", metadata={"category": "project-init", "tags": ["react", "vite"]})
+响应: {status: "success", data: {action: "inject", id: "kb-inj-20250122-001", knowledge_type: "experience", scope: "workspace", content_preview: "Vite+React+TS组合初始化效率高...", indexed: true}, ...}
+
+调用: knowledge_search(action="precipitate", min_confidence=0.7, scope="workspace")
+响应: {status: "success", data: {action: "precipitate", patterns: [{id: "pat-001", experience_type: "project-init", pattern: "Vite+React+TS组合...", confidence: 0.88, occurrence_count: 5}], total_patterns: 2, min_confidence_used: 0.7}, ...}
 ```
 
 ## quality_gate_check
@@ -942,38 +1021,26 @@ Hook管理：列出Hook配置、执行指定Hook。
 
 ## server_health
 
-服务器健康检查。
+服务器健康检查与版本兼容性验证。
 
-**参数：** 无
+**参数：**
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| action | str | "check" | 操作类型: check, version, status |
+| include_details | bool | False | 是否返回详细工具状态信息 |
 
 **完整返回值JSON Schema：**
 ```json
 {
   "status": "success",
   "data": {
-    "server_status": "HEALTHY",
-    "version": "3.5.0",
+    "status": "HEALTHY",
+    "version": "4.0.0",
+    "api_version": "3.0.0",
     "uptime_seconds": 86400,
-    "tools_available": 13,
-    "tools_status": {
-      "skill_analyze": "OK",
-      "knowledge_search": "OK",
-      "quality_gate_check": "OK",
-      "spec_drift_detect": "OK",
-      "security_scan": "OK",
-      "code_simplify": "OK",
-      "session_manage": "OK",
-      "workflow_dispatch": "OK",
-      "agent_status": "OK",
-      "hook_manage": "OK",
-      "resource_load_status": "OK",
-      "context_compress": "OK",
-      "server_health": "OK"
-    },
-    "memory_usage_mb": 128.5,
-    "active_workflows": 1,
-    "active_sessions": 2,
-    "last_check": "2025-01-22T14:30:00Z"
+    "tools_available": 17,
+    "degradation_level": "none",
+    "last_check_timestamp": "2025-01-22T14:30:00Z"
   },
   "metadata": {
     "tool": "server_health",
@@ -983,20 +1050,59 @@ Hook管理：列出Hook配置、执行指定Hook。
 }
 ```
 
+**action说明：**
+- `check`: 执行完整健康检查，返回status/version/api_version/uptime_seconds/tools_available/degradation_level/last_check_timestamp
+- `version`: 仅返回版本兼容性信息，返回version/api_version
+- `status`: 返回服务运行状态概要，返回status/uptime_seconds/degradation_level
+
+**include_details=True时额外返回：**
+```json
+{
+  "tools_status": {
+    "skill_analyze": "OK",
+    "knowledge_search": "OK",
+    "quality_gate_check": "OK",
+    "spec_drift_detect": "OK",
+    "security_scan": "OK",
+    "code_simplify": "OK",
+    "session_manage": "OK",
+    "workflow_dispatch": "OK",
+    "agent_status": "OK",
+    "hook_manage": "OK",
+    "resource_load_status": "OK",
+    "context_compress": "OK",
+    "server_health": "OK",
+    "decision_log": "OK",
+    "token_budget": "OK",
+    "knowledge_inject": "OK",
+    "project_init": "OK"
+  },
+  "memory_usage_mb": 128.5,
+  "active_workflows": 1,
+  "active_sessions": 2
+}
+```
+
 **错误码定义：**
 | 错误码 | 说明 | 处理建议 |
 |--------|------|----------|
 | UNAVAILABLE | MCP Server不可用 | 检查xuansto-mcp-server进程和配置 |
 | TIMEOUT | 健康检查超时 | 检查Server负载和网络连接 |
 | PARTIAL_DEGRADATION | 部分工具不可用 | 查看tools_status确认哪些工具降级 |
-| VERSION_MISMATCH | Server版本不兼容 | 更新xuansto-mcp-server到>=3.5.0 |
+| VERSION_MISMATCH | Server版本不兼容 | 更新xuansto-mcp-server到>=4.0.0 |
 
 **降级脚本路径：** `scripts/health-checker.py`
 
 **调用示例：**
 ```
-调用: server_health()
-响应: {status: "success", data: {server_status: "HEALTHY", version: "3.5.0", tools_available: 13, tools_status: {skill_analyze: "OK", ...}, memory_usage_mb: 128.5, ...}, ...}
+调用: server_health(action="check", include_details=True)
+响应: {status: "success", data: {status: "HEALTHY", version: "4.0.0", api_version: "3.0.0", uptime_seconds: 86400, tools_available: 17, degradation_level: "none", last_check_timestamp: "2025-01-22T14:30:00Z", tools_status: {skill_analyze: "OK", ...}, memory_usage_mb: 128.5, ...}, ...}
+
+调用: server_health(action="version")
+响应: {status: "success", data: {version: "4.0.0", api_version: "3.0.0"}, ...}
+
+调用: server_health(action="status")
+响应: {status: "success", data: {status: "HEALTHY", uptime_seconds: 86400, degradation_level: "none"}, ...}
 ```
 
 ## decision_log

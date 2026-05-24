@@ -30,6 +30,7 @@ from .api import create_app
 from .mcp_server import register_mcp_tools
 from .tech_stack_detector import detect_tech_stack
 from .context_formatter import format_knowledge_context
+from .progressive_loader import ProgressiveLoader, LoadPhase
 
 logger = logging.getLogger("knowledge-server")
 
@@ -66,6 +67,7 @@ class KnowledgeServer:
         )
         self.ws_manager = WebSocketManager()
         self.degradation = DegradationManager(self.chroma, self.config, embedding_manager=self.embedding_manager, sqlite_engine=self.sqlite)
+        self.progressive_loader = ProgressiveLoader()
         self.api_key_auth = ApiKeyAuth(knowledge_root)
         self.rate_limiter = RateLimiter()
         self._app = None

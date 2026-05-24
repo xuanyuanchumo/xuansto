@@ -7,18 +7,19 @@
 *.md text eol=lf diff=markdown
 *.rst text eol=lf
 
-*.yaml text eol=lf
-*.yml text eol=lf
-*.json text eol=lf
-*.toml text eol=lf
+*.yaml text eol=lf diff=yaml
+*.yml text eol=lf diff=yaml
+*.json text eol=lf diff=json
+*.toml text eol=lf diff=toml
 *.cfg text eol=lf
 *.ini text eol=lf
+*.conf text eol=lf
 
-*.js text eol=lf
-*.ts text eol=lf
-*.jsx text eol=lf
-*.tsx text eol=lf
-*.css text eol=lf
+*.js text eol=lf diff=javascript
+*.ts text eol=lf diff=typescript
+*.jsx text eol=lf diff=javascript
+*.tsx text eol=lf diff=typescript
+*.css text eol=lf diff=css
 *.scss text eol=lf
 *.html text eol=lf
 
@@ -32,6 +33,11 @@
 *.gitignore text eol=lf
 *.gitattributes text eol=lf
 *.editorconfig text eol=lf
+.git-blame-ignore-revs text eol=lf
+
+*.lock text eol=lf merge=union
+*.patch text eol=lf
+*.env.example text eol=lf
 
 LICENSE text eol=lf
 
@@ -41,11 +47,13 @@ LICENSE text eol=lf
 *.dll binary
 *.exe binary
 *.pyd binary
+*.wasm binary
 *.png binary
 *.jpg binary
 *.jpeg binary
 *.gif binary
 *.ico binary
+*.webp binary
 *.pdf binary
 *.zip binary
 *.tar binary
@@ -54,3 +62,10 @@ LICENSE text eol=lf
 *.egg binary
 *.pkl binary
 *.parquet binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.mp4 binary
+*.mp3 binary
+
+resource_state.json merge=union

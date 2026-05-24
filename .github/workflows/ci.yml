@@ -2,47 +2,94 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, develop/v8, 'refactor/**']
+    paths:
+      - '.trae/skills/xuansto-skill-v2/**'
+      - 'xuansto-mcp-server/**'
+      - 'scripts/**'
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, develop/v8]
+  schedule:
+    - cron: '0 6 * * *'
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  test:
+  lint:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.10", "3.11", "3.12"]
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
-
+          python-version: "3.11"
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('xuansto-mcp-server/pyproject.toml') }}
       - name: Install dependencies
         working-directory: xuansto-mcp-server
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
-
       - name: Lint with ruff
         working-directory: xuansto-mcp-server
         run: ruff check src/ tests/
-
-      - name: Run tests
+      - name: Type check with mypy
         working-directory: xuansto-mcp-server
-        run: pytest tests/ -x --tb=short
+        run: mypy src/ --ignore-missing-imports || true
+
+  test:
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('xuansto-mcp-server/pyproject.toml') }}
+      - name: Install dependencies
+        working-directory: xuansto-mcp-server
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Run unit tests
+        working-directory: xuansto-mcp-server
+        run: pytest tests/ -m "unit" -x --tb=short --cov --cov-report=xml
+      - name: Run integration tests
+        working-directory: xuansto-mcp-server
+        run: pytest tests/ -m "integration" --tb=short
+
+  degradation-test:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        working-directory: xuansto-mcp-server
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Run degradation tests
+        working-directory: xuansto-mcp-server
+        run: pytest tests/ -m "degradation" --tb=short
 
   skill-validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Validate Skill YAML
         run: |
           python -c "
@@ -57,4 +104,19 @@ jobs:
               for e in errors: print(e, file=sys.stderr)
               sys.exit(1)
           print(f'All YAML files valid')
+          "
+      - name: Validate Skill JSON
+        run: |
+          python -c "
+          import json, sys, pathlib
+          errors = []
+          for f in pathlib.Path('.trae/skills/xuansto-skill-v2').rglob('*.json'):
+              try:
+                  json.loads(f.read_text(encoding='utf-8'))
+              except json.JSONDecodeError as e:
+                  errors.append(f'{f}: {e}')
+          if errors:
+              for e in errors: print(e, file=sys.stderr)
+              sys.exit(1)
+          print(f'All JSON files valid')
           "

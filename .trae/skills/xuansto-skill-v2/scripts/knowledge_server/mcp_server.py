@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 
 from .config import mcp_available, make_response, make_error_response
 from .security import InputValidator, SensitiveContentFilter
+from .progressive_loader import LoadPhase, ProgressiveLoader
+from .skill_tools import get_skill_tool_definitions, SkillToolHandler, SKILL_TOOL_NAMES
 
 logger = logging.getLogger("knowledge-server")
 
@@ -39,10 +41,11 @@ def register_mcp_tools(server, mcp_server):
         return
 
     _status_pushed = False
+    _skill_handler = SkillToolHandler(server=server)
 
     @mcp_server.list_tools()
     async def list_tools():
-        return [
+        knowledge_tools = [
             Tool(
                 name="knowledge_search",
                 description=(
@@ -591,7 +594,71 @@ def register_mcp_tools(server, mcp_server):
                 },
                 annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
             ),
+            Tool(
+                name="resource_load_status",
+                description=(
+                    "[Read-Only/Stateful] Query and control the progressive loading disclosure state.\n\n"
+                    "Use this tool to check which resources are currently loaded, preload resources for a target phase, "
+                    "query cache state, clear cache (degrades to SKELETON), or check loading progress. "
+                    "The progressive loading system controls which skill resources are available at any time, "
+                    "advancing through SKELETON→FUNCTIONAL→ENHANCED→FULL phases and degrading when token budgets are tight.\n\n"
+                    "Parameters:\n"
+                    "- action (string, required, enum: status|preload|cache|clear_cache|loading_progress): The operation to perform.\n"
+                    "  - status: Return current loading state including phase, loaded resources, and disclosure note.\n"
+                    "  - preload: Advance to the specified target phase, loading all resources for that phase.\n"
+                    "  - cache: Query the current cache state of loaded resources.\n"
+                    "  - clear_cache: Clear all cached resources and degrade to SKELETON phase.\n"
+                    "  - loading_progress: Query the loading progress of each resource.\n"
+                    "- target_phase (string, optional, enum: skeleton|functional|enhanced|full): Target phase for preload action.\n"
+                    "- resource_ids (array of strings, optional): Specific resource IDs to check (for cache/loading_progress actions).\n\n"
+                    "Returns an object with:\n"
+                    "- action: The action performed.\n"
+                    "- current_phase: The current loading phase name.\n"
+                    "- phase_index: The numeric phase index (0-3).\n"
+                    "- loaded_resources: List of currently loaded resource IDs.\n"
+                    "- loaded_count: Number of loaded resources.\n"
+                    "- available_resources: List of resources available in current phase.\n"
+                    "- available_commands: List of commands available in current phase.\n"
+                    "- disclosure_note: Human-readable note about current availability (Chinese).\n"
+                    "- upgrade_hint: Hint about how to advance to the next phase (Chinese).\n"
+                    "- progress: Per-resource loading progress (for loading_progress action).\n"
+                    "- timestamp: ISO 8601 timestamp of the response.\n\n"
+                    "Example: Check current loading status:\n"
+                    '{"action": "status"}\n\n'
+                    "Example: Preload to enhanced phase:\n"
+                    '{"action": "preload", "target_phase": "enhanced"}'
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "action": {"type": "string", "description": "Operation: status, preload, cache, clear_cache, loading_progress", "enum": ["status", "preload", "cache", "clear_cache", "loading_progress"]},
+                        "target_phase": {"type": "string", "description": "Target phase for preload: skeleton, functional, enhanced, full", "enum": ["skeleton", "functional", "enhanced", "full"]},
+                        "resource_ids": {"type": "array", "items": {"type": "string"}, "description": "Specific resource IDs to check"},
+                    },
+                    "required": ["action"],
+                    "additionalProperties": False,
+                    "$schema": MCP_JSON_SCHEMA_URI,
+                },
+                outputSchema={
+                    "type": "object",
+                    "properties": {
+                        "action": {"type": "string"},
+                        "current_phase": {"type": "string"},
+                        "phase_index": {"type": "integer"},
+                        "loaded_resources": {"type": "array", "items": {"type": "string"}},
+                        "loaded_count": {"type": "integer"},
+                        "available_resources": {"type": "array", "items": {"type": "string"}},
+                        "available_commands": {"type": "array", "items": {"type": "string"}},
+                        "disclosure_note": {"type": "string"},
+                        "upgrade_hint": {"type": "string"},
+                        "progress": {"type": "object"},
+                        "timestamp": {"type": "string"},
+                    },
+                },
+                annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False),
+            ),
         ]
+        return knowledge_tools + get_skill_tool_definitions()
 
     @mcp_server.call_tool()
     async def call_tool(name: str, arguments: dict):
@@ -992,6 +1059,114 @@ def register_mcp_tools(server, mcp_server):
                         message=str(e),
                         details={"mcp_error_code": APP_ERROR_CODES["BAD_REQUEST"]},
                     ), ensure_ascii=False))]
+
+        elif name == "resource_load_status":
+            action = arguments.get("action", "status")
+            loader = server.progressive_loader
+            now_iso = datetime.now(timezone.utc).isoformat()
+
+            if action == "status":
+                state = loader._state
+                result = {
+                    "action": "status",
+                    "current_phase": state.current_phase.value,
+                    "phase_index": state.current_phase.index,
+                    "loaded_resources": state.loaded_resources,
+                    "loaded_count": len(state.loaded_resources),
+                    "available_resources": loader.get_available_resources(),
+                    "available_commands": loader.get_available_commands(),
+                    "disclosure_note": loader.get_disclosure_note(),
+                    "upgrade_hint": loader.get_upgrade_hint(),
+                    "timestamp": now_iso,
+                }
+                return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+
+            elif action == "preload":
+                target_phase_str = arguments.get("target_phase", "functional")
+                try:
+                    target_phase = LoadPhase(target_phase_str)
+                except ValueError:
+                    return [TextContent(type="text", text=json.dumps(make_error_response(
+                        code="BAD_REQUEST",
+                        message=f"Invalid target_phase: {target_phase_str}",
+                        details={"mcp_error_code": APP_ERROR_CODES["BAD_REQUEST"]},
+                    ), ensure_ascii=False))]
+                state = loader.advance_phase(target_phase)
+                loader.record_activity()
+                result = {
+                    "action": "preload",
+                    "current_phase": state.current_phase.value,
+                    "phase_index": state.current_phase.index,
+                    "loaded_resources": state.loaded_resources,
+                    "loaded_count": len(state.loaded_resources),
+                    "available_resources": loader.get_available_resources(),
+                    "available_commands": loader.get_available_commands(),
+                    "disclosure_note": loader.get_disclosure_note(),
+                    "upgrade_hint": loader.get_upgrade_hint(),
+                    "timestamp": now_iso,
+                }
+                return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+
+            elif action == "cache":
+                state = loader._state
+                resource_ids = arguments.get("resource_ids")
+                progress = state.progress
+                if resource_ids:
+                    progress = {k: v for k, v in progress.items() if k in resource_ids}
+                result = {
+                    "action": "cache",
+                    "current_phase": state.current_phase.value,
+                    "phase_index": state.current_phase.index,
+                    "cached_resources": list(progress.keys()),
+                    "cache_details": progress,
+                    "loaded_count": len(state.loaded_resources),
+                    "timestamp": now_iso,
+                }
+                return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+
+            elif action == "clear_cache":
+                loader._state = ProgressiveLoader()._state
+                state = loader._state
+                result = {
+                    "action": "clear_cache",
+                    "current_phase": state.current_phase.value,
+                    "phase_index": state.current_phase.index,
+                    "loaded_resources": state.loaded_resources,
+                    "loaded_count": len(state.loaded_resources),
+                    "disclosure_note": loader.get_disclosure_note(),
+                    "upgrade_hint": loader.get_upgrade_hint(),
+                    "timestamp": now_iso,
+                }
+                return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+
+            elif action == "loading_progress":
+                state = loader._state
+                resource_ids = arguments.get("resource_ids")
+                progress = state.progress
+                if resource_ids:
+                    progress = {k: v for k, v in progress.items() if k in resource_ids}
+                result = {
+                    "action": "loading_progress",
+                    "current_phase": state.current_phase.value,
+                    "phase_index": state.current_phase.index,
+                    "progress": progress,
+                    "total_resources": len(loader.get_available_resources()),
+                    "loaded_count": len(state.loaded_resources),
+                    "timestamp": now_iso,
+                }
+                return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+
+            else:
+                return [TextContent(type="text", text=json.dumps(make_error_response(
+                    code="BAD_REQUEST",
+                    message=f"Invalid action: {action}",
+                    details={"valid_actions": ["status", "preload", "cache", "clear_cache", "loading_progress"], "mcp_error_code": APP_ERROR_CODES["BAD_REQUEST"]},
+                ), ensure_ascii=False))]
+
+        if name in SKILL_TOOL_NAMES:
+            skill_result = await _skill_handler.handle(name, arguments)
+            if skill_result is not None:
+                return skill_result
 
         return [TextContent(type="text", text=json.dumps(make_error_response(
             code="UNKNOWN_TOOL",

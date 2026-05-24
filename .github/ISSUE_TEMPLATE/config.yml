@@ -3,3 +3,9 @@ contact_links:
   - name: Documentation
     url: https://github.com/xuanyuanchumo/xuansto#readme
     about: Check the README for usage instructions
+  - name: Discussions
+    url: https://github.com/xuanyuanchumo/xuansto/discussions
+    about: Ask questions and share ideas in Discussions
+  - name: Security Policy
+    url: https://github.com/xuanyuanchumo/xuansto/security/policy
+    about: Report security vulnerabilities responsibly

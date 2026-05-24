@@ -1,41 +1,58 @@
 # Xuansto Skill v2 (MCP Edition) 问题清单
 
-> 版本：7.0.0
-> 更新日期：2026-05-22
-> 分析范围：SKILL.md、57个Agent定义、27个命令、15个工作流、13个MCP工具、降级脚本
+> 版本：8.0.0
+> 更新日期：2026-05-24
+> 分析范围：SKILL.md、57个Agent定义、31个命令、17个MCP工具、降级脚本、渐进式加载
 
 ---
 
 ## P0 - 阻塞性问题
 
-### P0-01: v2降级模式不可用
+### P0-01: v2降级模式不可用 ✅ 已修复
 - **需求来源**: SKILL.md声明"MCP工具优先→脚本降级→文件系统兜底"
-- **当前状态**: MCP Server的degradation.py仅返回fallback响应，未实际调用scripts/目录下的Python脚本
-- **影响**: MCP Server不可用时，所有MCP工具调用将失败，系统完全无法运行
-- **修复方案**: 实现degradation.py到scripts/目录下Python脚本的实际调用链
+- **当前状态**: ✅ 已修复 — degradation.py已实现MCPToolFallback类，包含14个MCP工具的脚本调用链
+- **修复内容**:
+  - 新增MCPToolFallback类，实现subprocess.run调用scripts/目录下Python脚本
+  - 三级降级策略：脚本执行→内联降级→错误响应
+  - 14个MCP工具映射到对应降级脚本
+  - 内联降级实现：spec_drift_detect、security_scan、code_simplify、agent_status、hook_manage、resource_load_status、server_health、workflow_dispatch
+  - 超时控制（默认120秒）和线程安全日志
+- **影响**: MCP Server不可用时，系统可通过脚本降级继续运行
 
-### P0-02: v2缺少references/完整参考文档
+### P0-02: v2缺少references/完整参考文档 ✅ 已修复
 - **需求来源**: v1有72+参考文件，v2仅2个
-- **当前状态**: v2 references/仅包含mcp-tools.md和workflow-phases.md
-- **影响**: Agent和命令执行时无法获取详细参考（如quality-gates.md、agent-registry.md、knowledge-workflow-details.md等）
-- **修复方案**: 从v1迁移关键参考文件到v2 references/，或通过MCP Resource提供
+- **当前状态**: ✅ 已修复 — v2 references/现已包含79+参考文件，SKILL.md外部参考表已更新为18个条目（4个配置+14个参考文档）
+- **修复内容**:
+  - 从v1迁移并创建全部关键参考文档（quality-gates.md、agent-registry.md、knowledge-workflow-details.md等）
+  - 扩展mcp-integration-strategy.md（38行→367行）和parallelization-strategy.md（45行→414行）
+  - SKILL.md外部参考表按优先级分组：P0核心工作流(5)、P1集成与质量(11)、P2并行优化(2)
+- **影响**: Agent和命令执行时可获取完整参考文档
 
 ## P1 - 高优先级问题
 
-### P1-01: MCP Server版本与Skill版本不一致
-- **当前状态**: MCP Server v3.5.0 vs Skill v7.0.0
-- **影响**: 用户难以判断版本兼容性
-- **修复方案**: 在SKILL.md和MCP Server README中互相声明兼容版本
+### P1-01: MCP Server版本与Skill版本不一致 ✅ 已修复
+- **当前状态**: ✅ 已修复 — SKILL.md YAML frontmatter新增compatible_mcp_server: ">=4.0.0"，API版本声明更新为3.0.0
+- **修复内容**:
+  - SKILL.md新增compatible_mcp_server字段声明最低兼容MCP Server版本
+  - MCP依赖声明更新为xuansto-mcp-server >= 4.0.0 | API版本: 3.0.0
+- **影响**: 用户可明确判断版本兼容性
 
-### P1-02: server_health工具未在v2 mcp-tools.md中列出
-- **当前状态**: MCP Server实现了server_health工具，但v2 references/mcp-tools.md未包含
-- **影响**: 用户无法了解server_health工具的参数和返回值
-- **修复方案**: 在mcp-tools.md中补充server_health工具文档
+### P1-02: server_health工具未在v2 mcp-tools.md中列出 ✅ 已修复
+- **当前状态**: ✅ 已修复 — references/mcp-tools.md已补充server_health完整文档
+- **修复内容**:
+  - 补充server_health工具参数（action: check|version|status, include_details: bool）
+  - 补充返回值JSON Schema（status, version, api_version, uptime_seconds, tools_available, degradation_level等）
+  - 补充错误码和降级脚本路径
+- **影响**: 用户可了解server_health工具的完整参数和返回值
 
-### P1-03: knowledge_search缺少inject/precipitate action文档
-- **当前状态**: v1 SKILL.md声明knowledge_search支持retrieve/inject/precipitate三个action，v2 mcp-tools.md仅文档了retrieve
-- **影响**: 知识注入和经验沉淀功能无法使用
-- **修复方案**: 补充inject和precipitate action的参数和返回值文档
+### P1-03: knowledge_search缺少inject/precipitate action文档 ✅ 已修复
+- **当前状态**: ✅ 已修复 — references/mcp-tools.md已补充inject和precipitate action完整文档
+- **修复内容**:
+  - 补充inject action参数（content, scope, metadata）和返回值Schema
+  - 补充precipitate action参数（experience_type, min_confidence, scope, pattern_ids）和返回值Schema
+  - 补充inject/precipitate专用错误码（INJECT_FAILED, PRECIPITATE_NO_PATTERNS, DUPLICATE_CONTENT）
+  - 补充降级脚本路径和调用示例
+- **影响**: 知识注入和经验沉淀功能可正常使用
 
 ## P2 - 中等优先级问题
 
@@ -57,9 +74,9 @@
 - **修复方案**: 确立v2为唯一维护版本，v1标记为archived
 
 ### P3-02: v2 SKILL.md行数可能超过500行
-- **当前状态**: 增强后的SKILL.md可能接近或超过skill-creator建议的500行上限
-- **影响**: Token消耗增加
-- **修复方案**: 将详细步骤外移到references/，SKILL.md保留概要和索引
+- **当前状态**: 增强后的SKILL.md已添加PHASE标记实现渐进式加载，实际Token消耗由Phase控制
+- **影响**: 通过渐进式加载机制已缓解，Phase 0仅加载≤2K Token
+- **修复方案**: 已通过PHASE标记实现渐进式加载，SKILL.md按Phase分段加载
 
 ---
 
@@ -67,8 +84,8 @@
 
 | 优先级 | 总数 | 已修复 | 未修复 |
 |--------|------|--------|--------|
-| P0 | 2 | 0 | 2 |
-| P1 | 3 | 0 | 3 |
+| P0 | 2 | 2 | 0 |
+| P1 | 3 | 3 | 0 |
 | P2 | 2 | 0 | 2 |
 | P3 | 2 | 0 | 2 |
-| **总计** | **9** | **0** | **9** |
+| **总计** | **9** | **5** | **4** |

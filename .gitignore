@@ -8,6 +8,7 @@
 .trae/skills/xuansto-skill-v2/.knowledge/script-errors/*
 !.trae/skills/xuansto-skill-v2/.knowledge/script-errors/.gitkeep
 .trae/skills/xuansto-skill-v2/.knowledge/index/knowledge.db
+.trae/skills/xuansto-skill-v2/.knowledge/backup/
 
 .xuansto/
 
@@ -18,6 +19,8 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.egg-info/
+*.whl
 
 .DS_Store
 Thumbs.db
@@ -42,16 +45,18 @@ logs/
 *.db
 *.sqlite3
 
-xuansto-clean/
-副本/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
 
-CHANGELOG.md
-CODE_WIKI.md
-xuansto-skill-WIKI.md
-_copy_helper.ps1
-_copy_helper.py
-setup-worktree.ps1
-test-path-resolve.ps1
-test-syntax.ps1
-docs/*
-!docs/plan/
+*.bak
+*.orig
+*.tmp
+*.temp
+.cache/
+
+node_modules/
+dist/
+build/

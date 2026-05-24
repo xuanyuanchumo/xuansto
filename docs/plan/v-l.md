@@ -1,21 +1,18 @@
-# Xuansto Skill 版本演进路线
+# xuansto-skill-v2 版本演进路线图
 
-> 版本: 4.0.0 | 日期: 2026-05-24 | 状态: v8.0.0 已发布
-> 仓库: https://github.com/xuanyuanchumo/xuansto
-> 分支: main（唯一分支）| 标签: v8.0.0（唯一标签）
+> 版本: 1.0 | 编写日期: 2026-05-24 | 编码: UTF-8 | 行尾: LF
+> 当前版本: v8.0.0 | 目标版本: v9.0.0
 
 ---
 
 ## 目录
 
 1. [版本号定义规则](#1-版本号定义规则)
-2. [双组件版本规则](#2-双组件版本规则)
-3. [版本里程碑总览](#3-版本里程碑总览)
-4. [v8.0.0 — 当前发布版](#4-v800--当前发布版)
-5. [v8.1.0 — 可选改进](#5-v810--可选改进)
-6. [v9.0.0 — 下一大版本](#6-v900--下一大版本)
-7. [版本兼容性矩阵](#7-版本兼容性矩阵)
-8. [升级与回退策略](#8-升级与回退策略)
+2. [重构阶段与版本映射](#2-重构阶段与版本映射)
+3. [版本路线图总览](#3-版本路线图总览)
+4. [各版本详细规划](#4-各版本详细规划)
+5. [版本时间线](#5-版本时间线)
+6. [风险与缓解](#6-风险与缓解)
 
 ---
 
@@ -23,503 +20,591 @@
 
 ### 1.1 语义化版本（SemVer）
 
-本项目严格遵循 [语义化版本 2.0.0](https://semver.org/lang/zh-CN/) 规范，版本号格式为 **MAJOR.MINOR.PATCH**：
+本项目采用 [语义化版本 2.0.0](https://semver.org/lang/zh-CN/) 规范，版本号格式为 **MAJOR.MINOR.PATCH**：
 
-| 字段 | 含义 | 递增条件 | 示例 |
-|------|------|---------|------|
-| **MAJOR** | 主版本号 | 存在不兼容的 API 变更 | 8 → 9 |
-| **MINOR** | 次版本号 | 新增向后兼容的功能 | 8.0 → 8.1 |
-| **PATCH** | 修订号 | 向后兼容的问题修复 | 8.0.0 → 8.0.1 |
+```
+v9.0.0
+│ │ │
+│ │ └── PATCH：向后兼容的问题修复
+│ └──── MINOR：向后兼容的功能新增
+└────── MAJOR：不兼容的 API 变更
+```
 
-### 1.2 版本号变更判定标准
+### 1.2 各层级升级条件
 
-| 变更类型 | Skill 版本影响 | MCP Server 版本影响 | 示例 |
-|---------|--------------|-------------------|------|
-| 新增 Tool / Resource | — | MINOR | 新增 Tool → v8.0.0 → v8.1.0 |
-| 新增 Skill 命令 | MINOR | — | 新增 `/audit` 命令 → v8.0.0 → v8.1.0 |
-| Tool 参数变更（向后兼容） | — | MINOR | `agent_status` 新增 action → v8.1.0 |
-| Tool 参数变更（不兼容） | — | MAJOR | 移除 `knowledge_search.inject` → v9.0.0 |
-| 降级机制变更 | MINOR | MINOR | 统一降级框架 → 双方 MINOR |
-| 数据模型变更（需迁移） | — | MINOR | 新增 `error_type` 字段 → v8.1.0 |
-| API 协议变更 | MAJOR | MAJOR | API v3 → v4 → v9.0.0 |
-| Bug 修复 | PATCH | PATCH | 修复竞态条件 → v8.0.1 |
+| 层级 | 升级条件 | 示例 |
+|------|----------|------|
+| **PATCH** | 修复 Bug、补充文档、性能优化，不改变任何 API 接口和行为 | v8.1.0 → v8.1.1：修复降级脚本路径解析错误 |
+| **MINOR** | 新增 MCP 工具、新增命令、新增 Agent、新增配置项，所有变更向后兼容 | v8.1.0 → v8.2.0：新增 PHASE 标记和渐进式加载机制 |
+| **MAJOR** | 破坏性变更：API 接口不兼容、配置格式升级、Phase 编号体系变更、删除已废弃功能 | v8.x → v9.0.0：统一响应格式（破坏旧客户端解析） |
 
-### 1.3 预发布版本标识
+### 1.3 特殊版本标记
 
-| 标识 | 含义 | 示例 |
+| 标记 | 含义 | 示例 |
 |------|------|------|
-| `-alpha.N` | 内部测试，API 可能频繁变更 | `v8.1.0-alpha.1` |
-| `-beta.N` | 功能冻结，仅修复缺陷 | `v8.1.0-beta.1` |
-| `-rc.N` | 发布候选，预期即为正式版 | `v8.1.0-rc.1` |
+| `-alpha.N` | 内部开发测试版，API 随时可能变更 | v8.3.0-alpha.1 |
+| `-beta.N` | 功能冻结，仅修复缺陷，公开测试 | v8.3.0-beta.1 |
+| `-rc.N` | 发布候选，除非发现阻断性问题否则即成为正式版 | v9.0.0-rc.1 |
 
----
+### 1.4 版本号与问题清单关联
 
-## 2. 双组件版本规则
-
-### 2.1 组件定义
-
-xuansto 项目由两个协同发布的组件构成：
-
-| 组件 | 当前版本 | 位置 | 职责 |
-|------|---------|------|------|
-| **xuansto-skill-v2** | v8.0.0 | `.trae/skills/xuansto-skill-v2/` | Skill 层：SKILL.md、约束、路由、参考文档、评估配置 |
-| **xuansto-mcp-server** | v8.0.0 | `xuansto-mcp-server/` | MCP Server 层：Tool、Resource、Hook、数据层、降级引擎 |
-
-> **历史说明**：xuansto-skill (v1) 已从仓库彻底移除（非 ARCHIVED），仅作历史参照。仓库从 3306 文件精简至 710 文件，仅保留 `xuansto-mcp-server/` + `.trae/skills/xuansto-skill-v2/` + `README.md` + `.gitignore` + `.editorconfig`。
-
-### 2.2 版本同步规则
-
-自 v8.0.0 起，双组件采用 **版本号对齐** 策略：
-
-| 规则 | 说明 |
-|------|------|
-| MAJOR 同步 | 双组件 MAJOR 版本必须同步递增（v8 → v9 同时发布） |
-| MINOR 独立 | MINOR 版本可独立递增，但跨组件依赖的变更需同步发布 |
-| PATCH 独立 | PATCH 版本完全独立递增，不要求同步 |
-| 最低兼容声明 | SKILL.md 中声明 `min_version`，MCP Server 通过 `negotiate_version` 校验 |
-
-### 2.3 版本协商机制
+每个版本必须明确关联其解决的 UNIFIED-xx 问题编号，在 CHANGELOG.md 中记录对应关系：
 
 ```
-Skill 启动 → 读取 SKILL.md min_version
-           → 调用 server_health(negotiate_version, client_version="8.0.0")
-           → MCP Server 返回:
-              { server_version: "8.0.0",
-                api_version: "3.0.0",
-                compatible: true,
-                deprecated_features: [...],
-                new_features: [...] }
-           → 不兼容时返回错误 + 升级建议
-```
-
-### 2.4 版本不对齐时的行为
-
-| 场景 | Skill 版本 | MCP Server 版本 | 行为 |
-|------|-----------|----------------|------|
-| Skill > Server | v8.1.0 | v8.0.0 | 降级运行，v8.1.0 新功能不可用 |
-| Skill < Server | v8.0.0 | v8.1.0 | 正常运行，Server 新功能未暴露 |
-| MAJOR 不匹配 | v9.0.0 | v8.0.0 | 拒绝连接，返回明确升级指引 |
-| Server 不可用 | v8.0.0 | — | 全量降级到脚本/内联模式 |
-
----
-
-## 3. 版本里程碑总览
-
-### 3.1 版本谱系图
-
-```
-  V_REMOVED                  V_CURRENT                    V_OPTIONAL             V_NEXT_MAJOR
-  ──────────                 ─────────                    ──────────             ────────────
-  xuansto-skill v1           xuansto-skill-v2 v8.0.0      v8.1.0 (可选改进)      xuansto-skill-v2 v9.0.0
-  (已从仓库彻底移除)         xuansto-mcp-server v8.0.0    xuansto-mcp-server     xuansto-mcp-server v9.0.0
-  ┌──────────────────┐      ┌──────────────────┐         v8.1.0                ┌──────────────────┐
-  │ v1.0.0 → v4.0.0  │      │  v8.0.0 重构整合  │                               │  v9.0.0 下一大版  │
-  │ 原始单文件Skill   │      │                  │              ┌──────────┐     │                  │
-  │ 72+参考文件       │      │ P0 紧急修复 ✅    │              │ v8.1.0   │     │ API v4.0.0       │
-  │ 脚本驱动         │      │ P1 接口治理 ✅    │─────────────▶│ U-45     │     │ Phase自动推进    │
-  │ v4.0.0 已移除    │      │ P2 架构加固 ✅    │              │ 可选改进  │     │ 架构升级         │
-  │ 仓库已清理       │      │ P3 优化收尾 ✅    │              └──────────┘     │ 降级质量升级      │
-  └──────────────────┘      │ P4 收尾补全 ✅    │                               └──────────────────┘
-                            │                  │
-                            │ 45/46 问题已解决  │
-                            │ 20 Tool + 11 Res │
-                            │ 20/20 降级覆盖   │
-                            │ 统一xuansto.db    │
-                            │ 710 文件(精简)    │
-                            └──────────────────┘
-```
-
-### 3.2 里程碑时间线
-
-| 版本 | 阶段 | 周期 | 解决问题数 | 累计解决 | 状态 |
-|------|------|------|-----------|---------|------|
-| v8.0.0 | P0 紧急修复 | 第 1 周 | 3 (U-01~U-03) | 3/46 | ✅ 已完成 |
-| v8.0.0 | P1 接口治理 | 第 2-3 周 | 7 (U-04~U-10) | 10/46 | ✅ 已完成 |
-| v8.0.0 | P2 架构加固 | 第 4-5 周 | 21 (U-11~U-31) | 31/46 | ✅ 已完成 |
-| v8.0.0 | P3 优化收尾 | 第 6 周+ | 11 (U-32~U-42) | 42/46 | ✅ 已完成 |
-| v8.0.0 | P4 收尾补全 | 第 7 周 | 3 (U-43, U-44, U-46) | 45/46 | ✅ 已完成 |
-| v8.1.0 | 可选改进 | — | 0 (U-45 为已知限制) | 45/46 | 🔲 可选 |
-| v9.0.0 | 下一大版本 | 待定 | 新特性 + 破坏性变更 | — | 📋 待规划 |
-
-### 3.3 问题分布与版本映射
-
-```
-紧急 (3)  U-01 U-02 U-03                                    → v8.0.0 P0 ✅
-高   (7)  U-04 U-05 U-06 U-07 U-08 U-09 U-10               → v8.0.0 P1 ✅
-中   (24) U-11~U-31, U-43, U-44                             → v8.0.0 P2+P4 ✅
-低   (11) U-32~U-42, U-46                                   → v8.0.0 P3+P4 ✅
-已知限制 (1) U-45                                            → 不计划修复
-
-v8.0.0 已解决: 45/46  ████████████████████████████████████████████████████████████████████████████░  97.8%
-已知限制:       1/46  █░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   2.2%
+## v8.1.0 (2026-06-XX)
+### 修复
+- UNIFIED-01: 降级链断裂修复
+- UNIFIED-04: 双引擎一致性保障
+- UNIFIED-05: 备份加密默认启用
+- UNIFIED-06: 版本对齐
+- UNIFIED-09: 响应格式统一
+- UNIFIED-11: 工具数声明不一致修正
 ```
 
 ---
 
-## 4. v8.0.0 — 当前发布版
-
-### 4.1 版本目标
-
-从原始脚本驱动架构全面重构为 MCP-first 架构，解决五份分析文档中发现的全部独立问题。实现生产级降级机制（20/20 Tool 全覆盖）、统一数据存储、完整 Tool 体系（20 Tools + 11 Resources）、渐进式加载框架和安全加固。仓库从 3306 文件精简至 710 文件，v1 Skill 已彻底移除。
-
-### 4.2 主要变更
-
-#### 4.2.1 P0 紧急修复（U-01, U-02, U-03）
-
-| 问题 | 变更内容 | 影响文件 |
-|------|---------|---------|
-| U-01 降级机制不完整且不统一 | 实现 `subprocess_utils.py` 异步降级链：MCP 调用 → 脚本降级 → 内联降级 → 最小响应；17 个 Tool 全部有降级路径；降级响应含 `source:"fallback"` 标识 | `degradation.py`, `subprocess_utils.py`, `server.py` |
-| U-02 v2 参考文档严重不足 | references/ 从 6 个文件扩展到 75+ 参考文件，覆盖编码规范、安全指南、桌面开发、Hook 系统等 | `references/*.md`, `mcp-tools.md` |
-| U-03 状态持久化无原子保障 | xuansto.db 统一存储（8 表 + 11 索引）；atexit 注册 `_persist_state()`；hash 完整性校验；写入锁 + backoff jitter | `database.py`, `degradation.py` |
-
-#### 4.2.2 P1 接口治理（U-04 ~ U-10）
-
-| 问题 | 变更内容 | 影响文件 |
-|------|---------|---------|
-| U-04 Tool 注册依赖 FastMCP 内部 API | 本地 `_TOOL_REGISTRY` 注册表；Hook 拦截从映射表获取 Tool 函数；`_tool_manager._tools` 零引用 | `server.py`, `hook_engine.py` |
-| U-05 版本协商机制不完整 | MCP Server 升级到 v8.0.0；`negotiate_version` 响应含 `deprecated_features` / `new_features`；semver 比较逻辑 | `server_health.py`, `config.py` |
-| U-06 knowledge_search/inject 职责边界模糊 | `knowledge_search` Schema 仅保留 `action="retrieve"`；写入操作统一通过 `knowledge_inject` | `knowledge_search.py`, `knowledge_inject.py` |
-| U-07 工具文档与 MCP 暴露缺失 | 新增 `metrics_report` + `config_manage` Tool；`mcp-tools.md` 覆盖全部 20 个 Tool | `metrics_report.py`, `config_manage.py` |
-| U-08 ChromaDB 降级频繁 | ChromaDB 从必需降级为可选增强；默认 SQLite FTS5 + BM25；`HybridSearchEngine` 三级降级 | `search_engine.py`, `pyproject.toml` |
-| U-09 降级脚本同步阻塞 | `run_script_fallback_async` 使用 `asyncio.create_subprocess_exec`；`wait_for` 超时控制；保留同步版本 | `subprocess_utils.py` |
-| U-10 Tool 职责过载 | `agent_status` 保留查询类；`agent_manage` 负责变更类（create/assign/release/destroy/schedule） | `agent_status.py`, `agent_manage.py` |
-
-#### 4.2.3 P2 架构加固（U-11 ~ U-31）
-
-| 问题 | 变更内容 | 影响文件 |
-|------|---------|---------|
-| U-11 Phase 定义重复 | SKILL.md 精简至 <200 行 | `SKILL.md` |
-| U-12 路径解析静默降级 | MCPNotificationCallback 通知 + WARNING 日志 | `config.py`, `notification.py` |
-| U-13 Hook 拦截失败不阻塞 | 安全 Hook 失败默认阻塞 + 失败计数 `_HOOK_FAILURE_THRESHOLD=5` | `hook_engine.py` |
-| U-14 会话状态分散 | xuansto.db `session_states` 表 | `database.py` |
-| U-15 指标文件无清理 | xuansto.db `tool_metrics` 表 + TTL 清理 | `metrics.py` |
-| U-16 内存缓存无持久化 | xuansto.db 持久化 + atexit handler | `cache.py` |
-| U-17 YAML 配置无 Schema 校验 | `SkillConfigModel` / `FallbackConfigModel` / `ConstraintsModel` Pydantic 校验 | `config_models.py`, `config_manage.py` |
-| U-18 SQLite 数据库分散 | 统一 xuansto.db（8 表） | `database.py` |
-| U-19 Resource 与 Tool 重叠 | 明确分工：Resource 只读快照 / Tool 交互操作 | `skill_resources.py` |
-| U-20 Hook 引擎缺少类型安全 | `HookType` 枚举（8 种类型） | `hook_engine.py`, `schemas.py` |
-| U-21 通知系统未与 MCP 集成 | `MCPNotificationCallback` 推送关键事件 | `notification.py` |
-| U-22 配置热重载缺少 MCP 入口 | `config_manage` Tool | `config_manage.py` |
-| U-23 Resource 缺少分页过滤 | `sessions/{id}` + `agents/{layer}/{name}` 参数化 Resource | `skill_resources.py` |
-| U-24 Token 估算精度不足 | tiktoken 可选（`_HAS_TIKTOKEN`）+ `target_deviation` 字段 | `context_compress.py` |
-| U-25 Hook 与 MCP 集成不完整 | HookType 枚举 + 安全阻断 + 失败计数 | `hook_engine.py` |
-| U-26 Agent 合并策略未执行 | `agent_status(action="merge")` + `_merge_agents()` + YAML 规则加载 | `agent_status.py` |
-| U-27 命令路由静态无协商 | `server_health(action="capabilities")` 返回可用 Tool + 降级状态 + API 版本 | `server_health.py` |
-| U-28 DisclosureTransition 未使用 | DisclosureTransition 状态机已实现 | `resource_load_status.py` |
-| U-29 FALLBACK_MAP 静态构建 | `config_manage reload` + `fallback_config.yaml` 热监控（watchfiles/polling） | `degradation.py` |
-| U-30 错误码语义混淆 | 统一 `error_code`，deprecated `code` 字段 | `errors.py` |
-| U-31 退避缺少抖动 | `backoff jitter`（`random.uniform(0, 0.5)`） | `degradation.py` |
-
-#### 4.2.4 P3 优化收尾（U-32 ~ U-42）
-
-| 问题 | 变更内容 | 影响文件 |
-|------|---------|---------|
-| U-32 缺少评估配置 | evals/ 目录（`mcp_evaluation.xml` + `trigger_eval.json`） | `evals/` |
-| U-33 缺少 CHANGELOG | `CHANGELOG.md` 已创建 | `CHANGELOG.md` |
-| U-34 v1/v2 文件重复 | v1 从仓库彻底移除（非 ARCHIVED） | 仓库清理 |
-| U-35 SKILL.md 行数超限 | SKILL.md 精简至 <200 行 | `SKILL.md` |
-| U-36 工作流 YAML/MD 同步 | YAML 为权威源（`_yaml/` 目录 15 个 YAML 文件） | `workflows/_yaml/` |
-| U-37 ErrorPattern 无分类 | `error_type` 字段 | `database.py` |
-| U-38 Workflow/Decision 无关联 | `workflow_id` 关联字段 | `database.py` |
-| U-39 knowledge_entries 无软删除 | `deleted_at` 字段 + `knowledge_inject(delete)` | `database.py`, `knowledge_inject.py` |
-| U-40 缓存无 LRU 淘汰 | `cache.py` LRU 缓存 | `cache.py` |
-| U-41 快照文件无加密 | `crypto.py` AES-256-GCM | `crypto.py` |
-| U-42 速率限制/白名单/默认值 | `rate_limiter.py` 令牌桶 + 名称白名单 + action 必填 | `rate_limiter.py`, `validator.py` |
-
-#### 4.2.5 P4 收尾补全（U-43, U-44, U-46）
-
-| 问题 | 变更内容 | 影响文件 |
-|------|---------|---------|
-| U-43 FALLBACK_MAP 缺少 3 个新 Tool 降级定义 | 新增 `metrics_report_fallback`（从 xuansto.db 读取最近指标）、`config_manage_fallback`（返回当前配置快照只读）、`agent_manage_fallback`（从静态 registry 读取 Agent 信息）；3 个 fallback 函数加入 FALLBACK_MAP 和 _INLINE_FALLBACK_MAP；更新 `fallback_config.yaml` | `degradation.py`, `metrics_report.py`, `config_manage.py`, `agent_manage.py`, `fallback_config.yaml` |
-| U-44 mcp_evaluation.xml 引用 4 个不存在的 Tool | `knowledge_auto_retrieve` → `knowledge_search(action="retrieve")` + `knowledge_inject(action="list_available")`；`knowledge_progressive_search` → `knowledge_search(action="retrieve", search_type="hybrid")`；`knowledge_deep_load` → `knowledge_search(action="retrieve", query=entry_id)`；`knowledge_stats` → `knowledge_inject(action="list_available")`；更新 verification 断言；确保全部 10 个 qa_pair 的 tool_calls 指向实际存在的 Tool | `evals/mcp_evaluation.xml` |
-| U-46 DegradationManager 健康检查间隔硬编码 30s | `.xuansto-config.yaml` 新增 `health_check_interval_sec` 字段；`SkillConfigModel` 添加 `health_check_interval_sec: int = Field(default=30, ge=5, le=300)`；`DegradationManager.__init__` 从配置读取间隔值；`config_manage(action="status")` 显示当前间隔 | `degradation.py`, `config_models.py`, `.xuansto-config.yaml` |
-
-### 4.3 关联问题编号
-
-| 阶段 | 问题编号 | 数量 | 状态 |
-|------|---------|------|------|
-| P0 紧急修复 | U-01, U-02, U-03 | 3 | ✅ 全部已解决 |
-| P1 接口治理 | U-04 ~ U-10 | 7 | ✅ 全部已解决 |
-| P2 架构加固 | U-11 ~ U-31 | 21 | ✅ 全部已解决 |
-| P3 优化收尾 | U-32 ~ U-42 | 11 | ✅ 全部已解决 |
-| P4 收尾补全 | U-43, U-44, U-46 | 3 | ✅ 全部已解决 |
-| 已知限制 | U-45 | 1 | ⚠️ 已知限制，不计划修复 |
-| **合计** | **U-01 ~ U-46** | **46** | **✅ 45/46 已解决（97.8%）** |
-
-### 4.4 验收标准
-
-| 编号 | 验收标准 | 状态 |
-|------|---------|------|
-| AC-01 | 杀死 MCP Server 进程后，20 个 Tool 仍可通过降级返回结果 | ✅ |
-| AC-02 | 降级响应结构与正常响应一致（含 `source:"fallback"` 标识） | ✅ |
-| AC-03 | 降级脚本调用超时（60s）后回退到内联降级 | ✅ |
-| AC-04 | 每个 Phase 的 Agent 执行时可获取对应参考文档 | ✅ |
-| AC-05 | `mcp-tools.md` 覆盖全部 20 个 Tool | ✅ |
-| AC-06 | 模拟进程崩溃后重启，状态可正确恢复 | ✅ |
-| AC-07 | 并发读写测试无数据损坏 | ✅ |
-| AC-08 | `_tool_manager._tools` 在代码中零引用 | ✅ |
-| AC-09 | `knowledge_search(action="inject")` 返回参数校验错误 | ✅ |
-| AC-10 | 卸载 chromadb 后知识检索仍可用（BM25 模式） | ✅ |
-| AC-11 | `agent_status` action 枚举仅含查询类 | ✅ |
-| AC-12 | 所有状态实体可通过 SQL 查询 | ✅ |
-| AC-13 | `config_manage(action="validate")` 可检测配置问题 | ✅ |
-| AC-14 | security-block Hook 失败时工具调用被阻止 | ✅ |
-| AC-15 | Phase 转换时客户端收到 DisclosureTransition 通知 | ✅ |
-| AC-16 | 修改 `fallback_config.yaml` 后降级路径自动更新 | ✅ |
-| AC-17 | 错误响应仅含 `error_code` 字段（`code` 已 deprecated） | ✅ |
-| AC-18 | SKILL.md < 200 行 | ✅ |
-| AC-19 | YAML 为工作流权威源（15 个 YAML 文件） | ✅ |
-| AC-20 | 高频调用被限流（令牌桶 60 req/min） | ✅ |
-| AC-21 | 所有 Tool 的 action 参数为必填 | ✅ |
-| AC-22 | `server_health(check)` 返回 `tools_count=20` | ✅ |
-| AC-23 | MCP 不可用时 20/20 Tool 返回降级响应 | ✅ |
-| AC-24 | 降级链集成测试通过（含 3 个新 Tool） | ✅ |
-| AC-25 | `mcp_evaluation.xml` 中每个 qa_pair 引用的 Tool 名称在 `schemas.py` 中有对应 Input 定义 | ✅ |
-| AC-26 | `mcp_evaluation.xml` 中参数结构与 Schema 一致 | ✅ |
-| AC-27 | `trigger_eval.json` 无需修改 | ✅ |
-| AC-28 | 修改 `.xuansto-config.yaml` 后 `config_manage(reload)` 生效 | ✅ |
-| AC-29 | 健康检查间隔范围 5s ~ 300s | ✅ |
-| AC-30 | 默认间隔仍为 30s | ✅ |
-
-### 4.5 核心成果指标
-
-| 指标 | v8.0.0 值 |
-|------|----------|
-| MCP Tool 数量 | 20 |
-| MCP Resource 数量 | 11 |
-| API 版本 | v3.0.0 |
-| Python 最低版本 | >=3.10 |
-| Agent 数量 | 57 / 13 层 |
-| 命令数量 | 31 |
-| 质量门禁 | 54 项 |
-| 工作流阶段 | 9 Phase (SDD+TDD) |
-| 降级路径覆盖 | 20/20 Tool (100%) |
-| 数据库表 | 8 表 + 11 索引 |
-| 参考文档 | 75+ 文件 |
-| 问题解决率 | 45/46 (97.8%) |
-| 仓库文件数 | 710（从 3306 精简） |
-| 已知限制 | U-45（SKILL.md Phase 标记） |
-
----
-
-## 5. v8.1.0 — 可选改进
-
-### 5.1 版本目标
-
-v8.1.0 为可选改进版本，仅包含 U-45（SKILL.md Phase 标记）作为可选增强。U-45 已降级为已知限制，不计划作为必须修复项。此版本仅在团队有明确需求时才推进。
-
-### 5.2 可选变更
-
-#### 5.2.1 SKILL.md Phase 标记（U-45 — 已知限制，可选改进）
-
-| 项目 | 说明 |
-|------|------|
-| **问题** | SKILL.md 未使用 Phase 标记，渐进式加载状态机仅在 MCP Server 侧实现 |
-| **根因** | 渐进式加载框架在 P2-D 阶段仅实现了 Server 侧，Skill 侧未同步 |
-| **影响** | Skill 无法在加载时告知平台自身属于哪个 Phase；平台无法根据 Skill 的 Phase 声明决定加载策略 |
-| **当前状态** | 已降级为已知限制，不影响核心功能 |
-| **可选变更** | 1. 在 SKILL.md 的 triggers 段添加 phase 标注：`phase: 0`（骨架阶段加载）<br>2. 在 commands/ 段标注各命令所需最低 Phase<br>3. 在 references/ 段标注各参考文档的 Phase 归属<br>4. 添加 Phase 推进提示文本模板 |
-| **影响文件** | `SKILL.md` |
-| **修复复杂度** | 低 |
-| **优先级** | 可选（P5），非必须 |
-
-### 5.3 关联问题编号
-
-| 问题编号 | 标题 | 严重度 | 影响域 | 状态 |
-|---------|------|--------|--------|------|
-| U-45 | SKILL.md 未使用 Phase 标记实现渐进式加载提示 | 低 | Skill, 特效 | ⚠️ 已知限制 |
-
-### 5.4 验收标准（如推进）
-
-| 编号 | 验收标准 |
-|------|---------|
-| AC-31 | SKILL.md 行数仍 <200 行 |
-| AC-32 | Phase 标记与 `resource_load_status` 的 4 阶段模型一致 |
-
-### 5.5 发布条件
-
-- 团队明确需要 Skill 侧 Phase 声明能力
-- v9.0.0 规划中渐进式加载自动推进需要 Skill 侧配合
-- 否则此版本可跳过，直接进入 v9.0.0
-
----
-
-## 6. v9.0.0 — 下一大版本
-
-### 6.1 版本目标
-
-基于 v8.0.0 的稳定基线（45/46 问题已解决，20/20 降级全覆盖），引入不兼容的 API 变更和重大架构升级。主要实现 API v4.0.0 协议升级、渐进式加载 Phase 2-3 自动推进、MCP Server 内部架构升级、降级质量从"最小可用"升级为"功能等价"。
-
-### 6.2 主要变更
-
-#### 6.2.1 API v4.0.0 协议升级
-
-| 项目 | 说明 |
-|------|------|
-| **目标** | 统一 API 响应格式，移除历史兼容层，升级协议版本 |
-| **变更** | 移除 `code` 字段，仅保留 `error_code`（v8.0.0 已 deprecated，v9.0.0 强制执行）；统一所有 Tool 响应为 `{status, data, error_code, metadata}` 结构；移除 v1 兼容的降级响应格式；API 版本号从 v3.0.0 升级到 v4.0.0 |
-| **破坏性** | 不兼容 v8.x 客户端，需配合 Skill 层升级 |
-
-#### 6.2.2 渐进式加载自动推进
-
-| 项目 | 说明 |
-|------|------|
-| **目标** | 实现 Phase 2-3 自动推进，无需显式调用 `resource_load_status(preload, phase=N)` |
-| **变更** | Phase 1→2 推进由"需要参考文档/知识检索"自动触发（v8.0.0 已实现 DisclosureTransition 提示，v9.0.0 改为自动推进）；Phase 2→3 推进由"深度分析/安全扫描"自动触发；Token 预算监控与自动降级闭环；完整 Phase 转换通知体系；SKILL.md Phase 标记（如 v8.1.0 未实施，则在此版本强制实施） |
-| **性能目标** | Phase 0→1 推进延迟 ≤500ms；Phase 1→2 推进延迟 ≤2000ms；Phase 2→3 推进延迟 ≤5000ms |
-
-#### 6.2.3 MCP Server 架构升级
-
-| 项目 | 说明 |
-|------|------|
-| **目标** | MCP Server 内部架构升级，移除历史兼容层，提升可维护性 |
-| **变更** | Tool 注册完全基于公开 API（v8.0.0 已解耦，v9.0.0 移除内部 API 兼容层）；搜索引擎默认 BM25 + 可选向量搜索（v8.0.0 已实现，v9.0.0 移除 ChromaDB 必需依赖声明）；统一 SQLite 存储引擎（v8.0.0 已迁移，v9.0.0 移除 JSON 状态文件兼容读取）；移除同步降级兼容代码 |
-| **破坏性** | 移除 `_tool_manager._tools` 内部 API 兼容层；移除 JSON 状态文件读取；移除 `subprocess.run` 同步降级 |
-
-#### 6.2.4 降级质量升级
-
-| 项目 | 说明 |
-|------|------|
-| **目标** | 基于v8.0.0已实现的20/20降级覆盖，进一步优化降级质量 |
-| **变更** | 降级响应从"最小可用"升级为"功能等价"（尽可能保留核心语义）；降级脚本支持增量更新（无需全量替换）；降级状态持久化到 xuansto.db 支持跨重启恢复 |
-| **破坏性** | 无，降级质量升级向后兼容 |
-
-### 6.3 关联问题编号
-
-v9.0.0 不直接关联 U-01~U-46 中的未解决问题（U-45 为已知限制），但以下问题的治理成果在此版本中成为强制要求：
-
-| 问题编号 | 关联说明 |
-|---------|---------|
-| U-01 | 降级机制在 v9.0.0 中移除 v1 兼容降级路径 |
-| U-04 | Tool 注册在 v9.0.0 中完全移除内部 API 兼容层 |
-| U-05 | API v4.0.0 强制版本协商，不支持 v3 客户端 |
-| U-06 | `knowledge_search` 在 v9.0.0 中移除 inject/precipitate 兼容处理 |
-| U-08 | ChromaDB 在 v9.0.0 中从必需依赖声明中移除 |
-| U-30 | `code` 字段在 v9.0.0 中彻底移除 |
-| U-34 | v1 目录已在 v8.0.0 彻底移除，v9.0.0 无需额外操作 |
-| U-43 | v8.0.0 补全的 20/20 降级覆盖在 v9.0.0 中升级为"功能等价"降级 |
-| U-45 | 如 v8.1.0 未实施，v9.0.0 中 SKILL.md Phase 标记随自动推进强制实施 |
-
-### 6.4 验收标准
-
-| 编号 | 验收标准 |
-|------|---------|
-| AC-33 | API v4.0.0 客户端可正常调用全部 Tool |
-| AC-34 | API v3.x 客户端调用返回明确的不兼容错误 |
-| AC-35 | Phase 0→1→2 自动推进，无需显式 preload |
-| AC-36 | Token 预算超限时自动降级并通知客户端 |
-| AC-37 | `_tool_manager._tools` 引用不存在 |
-| AC-38 | `chromadb` 不在 `pyproject.toml` 必需依赖中 |
-| AC-39 | JSON 状态文件兼容读取代码不存在 |
-| AC-40 | `code` 字段在错误响应中不存在 |
-| AC-41 | `subprocess.run` 同步降级代码不存在 |
-| AC-42 | 全部 45 个已解决问题的回归测试通过 |
-| AC-43 | 降级响应语义等价度 ≥90%（对比 MCP 正常响应） |
-
----
-
-## 7. 版本兼容性矩阵
-
-### 7.1 Skill 与 MCP Server 版本对应关系
-
-| Skill 版本 | MCP Server 版本 | API 版本 | 降级覆盖 | 兼容说明 |
-|-----------|----------------|---------|---------|---------|
-| v8.0.0 | v8.0.0 | v3.0.0 | 20/20 Tool | 当前发布版，45/46 问题已解决 |
-| v8.1.0 | v8.1.0 | v3.0.0 | 20/20 Tool | 可选改进，U-45 可选实施 |
-| v9.0.0 | v9.0.0 | v4.0.0 | 20/20 Tool | 不兼容 v8.x；需同时升级 Skill 和 MCP Server |
-
-### 7.2 渐进式加载版本演进
-
-| 版本 | Phase 0→1 | Phase 1→2 | Phase 2→3 | Token 降级 | Skill 侧 Phase 标记 |
-|------|-----------|-----------|-----------|-----------|-------------------|
-| v8.0.0 | 自动 | DisclosureTransition 提示 | DisclosureTransition 提示 | 手动触发 | ✗（U-45 已知限制） |
-| v8.1.0 | 自动 | DisclosureTransition 提示 | DisclosureTransition 提示 | 手动触发 | ✓（可选） |
-| v9.0.0 | 自动 | **自动推进** | **自动推进** | **自动降级** | ✓（强制） |
-
-### 7.3 降级机制版本演进
-
-| 版本 | MCP 调用 | 脚本降级 | 内联降级 | 最小响应 | 异步化 | 覆盖率 |
-|------|---------|---------|---------|---------|--------|--------|
-| v8.0.0 | ✓ | ✓ | ✓ | ✓ | ✓ | 20/20 (100%) |
-| v8.1.0 | ✓ | ✓ | ✓ | ✓ | ✓ | 20/20 (100%) |
-| v9.0.0 | ✓ | ✓（功能等价） | ✓（功能等价） | ✓ | ✓（移除同步兼容） | 20/20 (100%) |
-
-### 7.4 数据存储版本演进
-
-| 版本 | 主存储 | 状态文件 | 缓存 | 加密 |
-|------|--------|---------|------|------|
-| v8.0.0 | xuansto.db (8 表) | JSON 兼容读取 | SQLite 持久化 + LRU | AES-256-GCM 可选 |
-| v8.1.0 | xuansto.db (8 表) | JSON 兼容读取 | SQLite 持久化 + LRU | AES-256-GCM 可选 |
-| v9.0.0 | xuansto.db (8 表) | **仅 SQLite** | SQLite 持久化 + LRU | AES-256-GCM 可选 |
-
-### 7.5 跨版本兼容性
-
-| 客户端 \ 服务端 | MCP v8.0.0 | MCP v8.1.0 | MCP v9.0.0 |
-|---------------|-----------|-----------|-----------|
-| Skill v8.0.0 | ✓ 完全兼容 | ✓ 降级运行 | ✗ 不兼容 |
-| Skill v8.1.0 | ✓ 降级运行 | ✓ 完全兼容 | ✗ 不兼容 |
-| Skill v9.0.0 | ✗ 不兼容 | ✗ 不兼容 | ✓ 完全兼容 |
-
----
-
-## 8. 升级与回退策略
-
-### 8.1 升级路径
-
-```
-v8.0.0/v8.0.0 ──────▶ v8.1.0/v8.1.0 ──────▶ v9.0.0/v9.0.0
-  当前发布版             可选改进              下一大版本
-  45/46 已解决           U-45 可选实施         API v4 + 自动Phase
-  20/20 降级覆盖         20/20 降级覆盖        功能等价降级
-  API v3.0.0            API v3.0.0            API v4.0.0
+## 2. 重构阶段与版本映射
+
+### 2.1 映射关系
+
+| 重构阶段 | 版本号 | 阶段名称 | 预估工期 | 解决问题数 |
+|----------|--------|----------|----------|-----------|
+| Phase R0 | **v8.1.0** | 基础设施修复 | 8 天 | 6 项 |
+| Phase R1 | **v8.2.0** | 渐进式加载基础 | 7 天 | 5 项 |
+| Phase R2 前半 | **v8.3.0** | MCP 核心工具补全 | 10 天 | 5 项 |
+| Phase R2 后半 | **v8.4.0** | MCP 辅助能力与数据结构化 | 8 天 | 6 项 |
+| Phase R3 | **v8.5.0** | Skill 层优化 | 10 天 | 9 项 |
+| Phase R4 | **v8.6.0** | 长尾收尾 | 12 天 | 11 项 |
+| — | **v9.0.0** | 正式发布 | 3 天 | — |
+
+### 2.2 映射依据
+
+```mermaid
+flowchart TD
+    R0["Phase R0<br/>基础设施修复<br/>8天"] --> V810["v8.1.0"]
+    R1["Phase R1<br/>渐进式加载基础<br/>7天"] --> V820["v8.2.0"]
+    R2A["Phase R2 前半<br/>核心编排+质量安全工具<br/>10天"] --> V830["v8.3.0"]
+    R2B["Phase R2 后半<br/>辅助工具+数据结构化<br/>8天"] --> V840["v8.4.0"]
+    R3["Phase R3<br/>Skill层优化<br/>10天"] --> V850["v8.5.0"]
+    R4["Phase R4<br/>长尾收尾<br/>12天"] --> V860["v8.6.0"]
+    RELEASE["集成测试+文档+发布"] --> V900["v9.0.0"]
+
+    V810 -->|"R0完成"| V820
+    V820 -->|"R1完成"| V830
+    V830 -->|"R2-1/R2-2/R2-4完成"| V840
+    V840 -->|"R2全部完成"| V850
+    V850 -->|"R3完成"| V860
+    V860 -->|"R4完成+全量回归"| V900
+
+    style V810 fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    style V820 fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style V830 fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    style V840 fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    style V850 fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px
+    style V860 fill:#efebe9,stroke:#4e342e,stroke-width:2px
+    style V900 fill:#fce4ec,stroke:#c62828,stroke-width:3px
 ```
 
-> 注：v8.1.0 为可选版本，可跳过直接升级到 v9.0.0。
+### 2.3 版本间依赖关系
 
-### 8.2 各版本升级注意事项
+| 版本 | 前置依赖 | 依赖原因 |
+|------|----------|----------|
+| v8.1.0 | 无 | 基础设施修复，独立进行 |
+| v8.2.0 | v8.1.0 | 渐进式加载依赖降级链和响应格式统一 |
+| v8.3.0 | v8.1.0, v8.2.0 | MCP 工具依赖降级链、PHASE 标记、Token 预算 |
+| v8.4.0 | v8.3.0 | 辅助工具依赖核心工具框架 |
+| v8.5.0 | v8.2.0 | Skill 层优化依赖渐进式加载基础 |
+| v8.6.0 | v8.4.0, v8.5.0 | 长尾收尾依赖 MCP 和 Skill 层均稳定 |
+| v9.0.0 | v8.6.0 | 全量回归通过后发布 |
 
-| 版本升级 | 数据迁移 | 配置变更 | 破坏性变更 |
-|---------|---------|---------|-----------|
-| v8.0.0 → v8.1.0 | 无 | 无（U-45 仅涉及 SKILL.md） | 无 |
-| v8.1.0 → v9.0.0 | 无（v8.0.0 已完成迁移） | API 版本协商强制 v4 | `knowledge_search.inject` 移除；`code` 字段移除；JSON 状态文件读取移除 |
-| v8.0.0 → v9.0.0（跳过 v8.1.0） | 无 | API 版本协商强制 v4 + SKILL.md Phase 标记 | 同上 + SKILL.md Phase 标记强制实施 |
+---
 
-### 8.3 回退策略
+## 3. 版本路线图总览
 
-| 场景 | 回退方案 | 数据影响 |
-|------|---------|---------|
-| v8.1.0 → v8.0.0 | 直接替换文件 | 无影响（v8.1.0 仅修改 SKILL.md） |
-| v9.0.0 → v8.1.0 | 替换文件 + API 降级 | 不支持自动回退，需手动调整客户端 |
-| v9.0.0 → v8.0.0 | 替换文件 + API 降级 | 不支持自动回退，需手动调整客户端 + 移除 SKILL.md Phase 标记 |
+### 3.1 问题覆盖矩阵
 
-### 8.4 Deprecated 功能时间线
+| 版本 | P0 紧急 | P1 高 | P2 中 | P3 低 | 合计 |
+|------|---------|-------|-------|-------|------|
+| v8.1.0 | UNIFIED-01, 04 | UNIFIED-05, 06, 09, 11 | — | — | 6 |
+| v8.2.0 | — | UNIFIED-07, 08, 16 | UNIFIED-21, 22 | — | 5 |
+| v8.3.0 | UNIFIED-03(部分) | UNIFIED-10 | — | — | 5 |
+| v8.4.0 | UNIFIED-03(剩余) | UNIFIED-13, 14, 15 | UNIFIED-17, 18, 19, 20 | — | 6 |
+| v8.5.0 | UNIFIED-02 | UNIFIED-12 | UNIFIED-23, 24, 27, 28, 29, 31, 42 | — | 9 |
+| v8.6.0 | — | — | UNIFIED-25, 26, 30 | UNIFIED-32~41 | 11 |
+| **合计** | **4** | **12** | **15** | **11** | **42** |
 
-| 功能 | Deprecated 版本 | 移除版本 | 替代方案 |
-|------|----------------|---------|---------|
-| `knowledge_search(action="inject")` | v8.0.0 | v9.0.0 | `knowledge_inject` |
-| `knowledge_search(action="precipitate")` | v8.0.0 | v9.0.0 | `knowledge_inject(action="precipitate")` |
-| 错误响应 `code` 字段 | v8.0.0 | v9.0.0 | `error_code` 字段 |
-| JSON 状态文件读取 | v8.0.0 | v9.0.0 | SQLite 统一存储 |
-| `subprocess.run` 同步降级 | v8.0.0 | v9.0.0 | `asyncio.create_subprocess_exec` |
-| `_tool_manager._tools` 内部 API | v8.0.0 | v9.0.0 | `_TOOL_REGISTRY` 映射表 |
-| ChromaDB 必需依赖 | v8.0.0 | v9.0.0 | 可选增强依赖 |
-| v1 Skill 目录 | v8.0.0 | v8.0.0（已移除） | v2 Skill |
+### 3.2 版本演进甘特图
 
-### 8.5 升级检查清单
+```mermaid
+gantt
+    title xuansto-skill-v2 版本演进路线图（v8.0.0 → v9.0.0）
+    dateFormat YYYY-MM-DD
+    axisFormat %m/%d
 
-#### v8.0.0 → v8.1.0（可选）
+    section v8.1.0 基础设施修复
+    降级链实现 (UNIFIED-01)           :r0_1, 2026-06-01, 5d
+    双引擎一致性 (UNIFIED-04)         :r0_2, 2026-06-01, 3d
+    备份加密 (UNIFIED-05)             :r0_3, 2026-06-02, 1d
+    版本对齐 (UNIFIED-06)             :r0_4, 2026-06-03, 2d
+    响应格式统一 (UNIFIED-09,11)      :r0_5, 2026-06-04, 2d
 
-- [ ] 更新 xuansto-skill-v2 到 v8.1.0
-- [ ] （可选）在 SKILL.md 中添加 Phase 标记
-- [ ] 验证 SKILL.md 行数仍 <200 行
+    section v8.2.0 渐进式加载基础
+    PHASE标记嵌入 (UNIFIED-07)        :r1_1, after r0_5, 2d
+    Token预算强制 (UNIFIED-08,16)     :r1_2, after r0_5, 3d
+    Agent按需加载 (UNIFIED-22)        :r1_3, after r1_1, 2d
+    加载接口统一 (UNIFIED-21)         :r1_4, after r1_2, 2d
 
-#### v8.0.0/v8.1.0 → v9.0.0
+    section v8.3.0 MCP核心工具补全
+    P0核心编排工具 (UNIFIED-03a)      :r2_1, after r1_4, 5d
+    P1质量安全工具 (UNIFIED-03b)      :r2_2, after r2_1, 4d
+    异常处理统一 (UNIFIED-10)         :r2_4, after r0_5, 3d
 
-- [ ] 更新 xuansto-mcp-server 到 v9.0.0
-- [ ] 更新 xuansto-skill-v2 到 v9.0.0
-- [ ] 更新客户端 API 版本协商为 v4
-- [ ] 移除所有 `knowledge_search(action="inject")` 调用
-- [ ] 移除所有错误响应中 `code` 字段的读取
-- [ ] 验证 API v3.x 客户端收到不兼容错误
-- [ ] 运行全量回归测试（45 个已解决问题）
-- [ ] 验证降级响应语义等价度 ≥90%
+    section v8.4.0 MCP辅助能力与数据结构化
+    P2辅助工具 (UNIFIED-03c)          :r2_3, after r2_2, 3d
+    ChromaDB集合统一 (UNIFIED-13)     :r2_5, after r0_2, 2d
+    会话/决策/Token结构化 (UNIFIED-14,15,16) :r2_6, after r0_2, 2d
+    Resource暴露 (UNIFIED-19)         :r2_7, after r2_1, 2d
+    SkillToolCall协议 (UNIFIED-20)    :r2_8, after r2_1, 2d
+
+    section v8.5.0 Skill层优化
+    参考文档补全 (UNIFIED-02)         :r3_1, after r1_1, 3d
+    安全门禁加固 (UNIFIED-12)         :r3_2, 2026-07-14, 1d
+    Hook系统补全 (UNIFIED-23,31)      :r3_3, after r2_3, 2d
+    Agent合并策略 (UNIFIED-24)        :r3_4, after r2_1, 2d
+    触发条件去重 (UNIFIED-27)         :r3_5, 2026-07-14, 1d
+    配置外移验证 (UNIFIED-28)         :r3_6, 2026-07-15, 1d
+    工作流格式统一 (UNIFIED-29)       :r3_7, 2026-07-16, 1d
+    SKILL.md瘦身 (UNIFIED-42)         :r3_8, after r1_1, 2d
+
+    section v8.6.0 长尾收尾
+    重试机制完善 (UNIFIED-25)         :r4_1, after r2_4, 2d
+    经验模式索引化 (UNIFIED-26)       :r4_2, after r0_2, 1d
+    FTS5可用性检测 (UNIFIED-30)       :r4_3, after r0_1, 1d
+    文档补全 (UNIFIED-17,18,40)       :r4_4, after r2_3, 2d
+    低优先级批量处理 (UNIFIED-32~41)  :r4_5, after r4_4, 8d
+
+    section v9.0.0 正式发布
+    全量回归测试                      :rel1, after r4_5, 2d
+    文档终审+发布                     :rel2, after rel1, 1d
+```
+
+### 3.3 关键里程碑
+
+| 里程碑 | 版本 | 预计日期 | 标志性成果 |
+|--------|------|----------|-----------|
+| M1: 降级可用 | v8.1.0 | 2026-06-09 | MCP 不可用时系统不再瘫痪 |
+| M2: 渐进加载 | v8.2.0 | 2026-06-18 | Phase 0 Token ≤2K，骨架加载 ≤500ms |
+| M3: 编排可用 | v8.3.0 | 2026-06-30 | /init /plan /implement 等核心命令可执行 |
+| M4: 数据可靠 | v8.4.0 | 2026-07-09 | 双引擎一致率 ≥99.9%，会话/决策可查询 |
+| M5: Skill 精简 | v8.5.0 | 2026-07-21 | SKILL.md ≤500 行，安全门禁不可绕过 |
+| M6: 全面就绪 | v8.6.0 | 2026-08-04 | 42 项问题全部解决 |
+| M7: 正式发布 | v9.0.0 | 2026-08-07 | 全量回归通过，CHANGELOG 完整 |
+
+---
+
+## 4. 各版本详细规划
+
+### 4.1 v8.1.0 — 基础设施修复
+
+> 重构阶段: Phase R0 | 预估工期: 8 天 | 前置依赖: 无
+
+#### 目标
+
+修复系统最底层的基础设施缺陷，确保降级链可用、数据一致、响应统一，为后续所有阶段奠定可靠基础。
+
+#### 主要变更
+
+| 子任务 | 变更内容 | 涉及文件 |
+|--------|----------|----------|
+| R0-1: 降级链实现 | `degradation.py` 实际调用 `scripts/` 脚本，返回与 MCP 相同 JSON 结构 | `degradation.py`, `scripts/*.py` |
+| R0-2: 双引擎一致性 | 双写确认机制 + 定时对账 + 不一致自动修复 | `db_engine.py`, `vector_engine.py` |
+| R0-3: 备份加密 | 默认启用 AES-256 加密，密钥自动生成 | `backup.py` |
+| R0-4: 版本对齐 | SKILL.md 声明 `mcp_server_min_version`，MCP Server 声明 `skill_min_version` | `SKILL.md`, `mcp_server.py` |
+| R0-5: 响应格式统一 | 统一 `make_response`/`make_error_response` 契约，SKILL.md 工具数更新为 19 | `mcp_server.py`, `api_routes.py`, `SKILL.md` |
+
+#### 关联问题编号
+
+| 编号 | 优先级 | 说明 |
+|------|--------|------|
+| UNIFIED-01 | P0 | 降级链断裂：MCP→脚本→内联三级降级未实际实现 |
+| UNIFIED-04 | P0 | 双引擎一致性风险：SQLite 与 ChromaDB 无事务保证 |
+| UNIFIED-05 | P1 | 备份无加密默认 |
+| UNIFIED-06 | P1 | Skill 与 MCP Server 版本不一致 |
+| UNIFIED-09 | P1 | MCP/HTTP 响应格式不统一 |
+| UNIFIED-11 | P1 | MCP 工具数量声明不一致 |
+
+#### 验收标准
+
+1. MCP Server 停止后，所有 19 个工具可降级到脚本执行，降级检测→脚本调用→结果包装全流程 ≤5s
+2. SQLite 写入成功后标记 pending，ChromaDB 写入成功后标记 ready，自动修复成功率 ≥95%
+3. 新建备份默认加密，备份元数据标记 `encrypted=true`
+4. `server_health` 返回版本兼容性检查结果
+5. MCP Tool 和 HTTP 端点使用相同 JSON Schema，错误响应包含 `code/message/details/retryable`
+6. SKILL.md 工具数更新为 19
+
+---
+
+### 4.2 v8.2.0 — 渐进式加载基础
+
+> 重构阶段: Phase R1 | 预估工期: 7 天 | 前置依赖: v8.1.0
+
+#### 目标
+
+建立渐进式加载的核心机制，包括 PHASE 标记、Token 预算强制、Agent 按需加载和加载接口统一，使 Skill 触发时 Token 消耗从 ~8K 降至 ≤2K。
+
+#### 主要变更
+
+| 子任务 | 变更内容 | 涉及文件 |
+|--------|----------|----------|
+| R1-1: PHASE 标记嵌入 | SKILL.md 包含 `<!-- PHASE_0_START -->` ~ `<!-- PHASE_3_END -->` 标记 | `SKILL.md` |
+| R1-2: Token 预算强制 | 超 80% 自动触发 `context_compress`，超 95% 强制降级 Phase，预算状态持久化到 SQLite | `configs/default.yaml`, `constraints.yaml`, `token_budget.py` |
+| R1-3: Agent 按需加载 | Phase 0 不加载 Agent，Phase 1 加载 13 个核心 Agent，Phase 2 加载完整 57 个 | `agents/registry.yaml`, `agents/*/*.md` |
+| R1-4: 加载接口统一 | status/preload/cache/clear_cache/loading_progress 5 个 action 全部可用 | `resource_load_status.py`, `constraints.yaml` |
+
+#### 关联问题编号
+
+| 编号 | 优先级 | 说明 |
+|------|--------|------|
+| UNIFIED-07 | P1 | PHASE 标记未嵌入 SKILL.md |
+| UNIFIED-08 | P1 | Token 预算无运行时强制机制 |
+| UNIFIED-16 | P1 | Token 预算状态无持久化 |
+| UNIFIED-21 | P2 | 渐进式加载接口分散 |
+| UNIFIED-22 | P2 | Agent 定义文件全量加载 |
+
+#### 验收标准
+
+1. 4 对 PHASE 标记正确嵌入，Phase 0 内容 ≤2K Token
+2. 超 80% 自动触发 `context_compress`，超 95% 强制降级 Phase
+3. 预算状态持久化，会话恢复后不丢失
+4. Phase 0 不加载任何 Agent 定义，Phase 1 加载 13 个核心 Agent（≤150 Token/Agent）
+5. status/preload/cache/clear_cache/loading_progress 5 个 action 全部可用
+6. Phase 切换时发送 `notifications/tools/list_changed`
+7. Skill 触发时 Token ≤2K（当前 ~8K）
+
+---
+
+### 4.3 v8.3.0 — MCP 核心工具补全
+
+> 重构阶段: Phase R2 前半 | 预估工期: 10 天 | 前置依赖: v8.1.0, v8.2.0
+
+#### 目标
+
+实现最关键的 MCP 编排工具和质量安全工具，使 `/init`、`/plan`、`/implement` 等核心命令可通过 MCP 协议执行，同时统一异常处理机制。
+
+#### 主要变更
+
+| 子任务 | 变更内容 | 涉及文件 |
+|--------|----------|----------|
+| R2-1: P0 核心编排工具 | 实现 `skill_analyze`、`quality_gate_check`、`session_manage`、`workflow_dispatch`、`project_init` 5 个工具 | `mcp_server.py`, `scripts/*.py` |
+| R2-2: P1 质量安全工具 | 实现 `spec_drift_detect`、`security_scan`、`code_simplify`、`agent_status`、`resource_load_status`、`context_compress`、`token_budget`、`knowledge_inject` 8 个工具 | `mcp_server.py`, `scripts/*.py` |
+| R2-4: 异常处理统一 | 统一异常分类 + 降级协调器 | `degradation.py`, `mcp_server.py` |
+
+#### 关联问题编号
+
+| 编号 | 优先级 | 说明 |
+|------|--------|------|
+| UNIFIED-03 | P0 | MCP 工具实现严重不足（R2-1/R2-2 部分） |
+| UNIFIED-10 | P1 | 异常处理分散，缺乏统一协调 |
+| UNIFIED-01 | P0 | 降级链（R2-1/R2-2 依赖降级链验证） |
+| UNIFIED-09 | P1 | 响应格式（R2-1/R2-2 使用统一格式） |
+| UNIFIED-08 | P1 | Token 预算（R2-2 中 `token_budget` 工具） |
+
+#### 验收标准
+
+1. 13 个工具（5 编排 + 8 质量安全）通过 MCP 协议可调用
+2. 参数校验符合 JSON Schema（`additionalProperties: false`）
+3. 降级到脚本时返回相同结构，`degraded=true`
+4. 错误码→HTTP 状态码映射表完整
+5. 降级协调器统一检测→执行→恢复流程
+6. `isError` 标记正确区分协议错误与工具执行错误
+7. `/init` 命令可通过 MCP 工具链完整执行
+
+---
+
+### 4.4 v8.4.0 — MCP 辅助能力与数据结构化
+
+> 重构阶段: Phase R2 后半 | 预估工期: 8 天 | 前置依赖: v8.3.0
+
+#### 目标
+
+补全剩余 MCP 辅助工具，解决数据存储层问题，实现 MCP Resource 暴露和 SkillToolCall 协议，使 MCP 层功能完整。
+
+#### 主要变更
+
+| 子任务 | 变更内容 | 涉及文件 |
+|--------|----------|----------|
+| R2-3: P2 辅助工具 | 实现 `hook_manage`、`server_health`、`decision_log`、`agent_manage`、`metrics_report` 5 个工具 | `mcp_server.py`, `scripts/*.py` |
+| R2-5: ChromaDB 集合统一 | 单集合 + 元数据 `embedding_tier` 标记 | `vector_engine.py` |
+| R2-6: 会话/决策/Token 结构化存储 | SQLite `session_states`、`decision_logs`、`token_budget_states` 表 | `db_engine.py` |
+| R2-7: Resource 暴露 | `knowledge://`、`workflow://`、`agent://` 等 12 个 Resource | `mcp_server.py` |
+| R2-8: SkillToolCall 协议 | Skill→MCP Tool 调用时序规范 + 参数传递规则 | `commands/routes.yaml`, `constraints.yaml` |
+
+#### 关联问题编号
+
+| 编号 | 优先级 | 说明 |
+|------|--------|------|
+| UNIFIED-03 | P0 | MCP 工具实现严重不足（R2-3 部分，补全最后 5 个工具） |
+| UNIFIED-13 | P1 | ChromaDB 集合分裂 |
+| UNIFIED-14 | P1 | 会话状态无结构化存储 |
+| UNIFIED-15 | P1 | 决策日志无持久化 |
+| UNIFIED-17 | P2 | server_health 文档缺失 |
+| UNIFIED-18 | P2 | knowledge_search 缺少 inject/precipitate 文档 |
+| UNIFIED-19 | P2 | Resource 未暴露 |
+| UNIFIED-20 | P2 | Skill↔MCP Server 缺乏显式调用协议 |
+
+#### 验收标准
+
+1. 全部 19 个 MCP 工具实现完毕，通过 MCP 协议可调用
+2. 迁移后仅存在 `knowledge` 集合，元数据包含 `embedding_tier: "api"/"local"`
+3. 迁移脚本从 Markdown 解析到 SQLite，原文件保留为 `.migrated`
+4. `list_resources` 返回 12 个 Resource URI，`read_resource` 返回正确内容类型
+5. 定义链式调用参数传递规则、超时（30s/Tool, 120s/链）、重试策略（retryable 最多 2 次）
+6. MCP 工具总数 = 19，与 `mcp-tools.md` 文档一致
+
+---
+
+### 4.5 v8.5.0 — Skill 层优化
+
+> 重构阶段: Phase R3 | 预估工期: 10 天 | 前置依赖: v8.2.0
+
+#### 目标
+
+优化 Skill 声明层，补全参考文档、加固安全门禁、补全 Hook 系统、实现 Agent 合并策略，并将 SKILL.md 瘦身至 ≤500 行。
+
+#### 主要变更
+
+| 子任务 | 变更内容 | 涉及文件 |
+|--------|----------|----------|
+| R3-1: 参考文档补全 | `references/` 关键文档补全 + SKILL.md 参考表更新 | `references/*.md`, `SKILL.md` |
+| R3-2: 安全门禁加固 | `security_hard_gates` 不受 `approval_timeout` 限制 | `configs/default.yaml` |
+| R3-3: Hook 系统补全 | 全部 14 个 Hook 完整实现 + hooks.json 与 hook_manage 职责明确 | `hooks/hooks.json`, `hook_engine.py` |
+| R3-4: Agent 合并策略 | 运行时评估 + 自动激活合并策略 | `configs/default.yaml`, `agent_merge.py` |
+| R3-5: 触发条件去重 | 废弃 `triggers.yaml`，SKILL.md 使用单一来源 | `triggers.yaml`, `SKILL.md` |
+| R3-6: 配置外移验证 | 验证 `.skill-config.yaml` 是否存在，不存在则回迁 | `configs/default.yaml` |
+| R3-7: 工作流格式统一 | YAML 为机器执行版本，MD 为人类可读版本，建立自动生成流程 | `workflows/*.md`, `workflows/_yaml/*.yaml` |
+| R3-8: SKILL.md 瘦身 | 详细步骤外移到 `references/`，SKILL.md 保留概要和索引 | `SKILL.md`, `references/*.md` |
+
+#### 关联问题编号
+
+| 编号 | 优先级 | 说明 |
+|------|--------|------|
+| UNIFIED-02 | P0 | 参考文档不完整 |
+| UNIFIED-12 | P1 | 安全硬门禁在 autonomous 模式下可能被绕过 |
+| UNIFIED-23 | P2 | Hook 系统仅 security-block 有实际实现 |
+| UNIFIED-24 | P2 | Agent 合并策略无运行时调度逻辑 |
+| UNIFIED-27 | P2 | 触发条件三处冗余 |
+| UNIFIED-28 | P2 | loop/planning_files 配置外移状态不明 |
+| UNIFIED-29 | P2 | 工作流 YAML 与 MD 可能不一致 |
+| UNIFIED-31 | P2 | Hook 系统与 MCP 工具 hook_manage 职责重叠 |
+| UNIFIED-42 | P3 | SKILL.md 行数可能超 500 行 |
+
+#### 验收标准
+
+1. `quality-gates.md`、`agent-registry.md` 等关键文档迁移完成，SKILL.md 外部参考表列出所有可用文档
+2. 生产部署/密钥轮换/破坏性 DDL 始终等待人工确认，超时不自动放行
+3. strict 配置下 14 个 Hook 全部生效，Hook 执行失败不阻塞主流程
+4. `project_scale < medium` 时自动合并安全测试 Agent，合并后 Token 消耗降低 ≥30%
+5. `triggers.yaml` 标记为 deprecated，SKILL.md 使用单一来源
+6. YAML→MD 自动生成脚本，CI 中校验 YAML 与 MD 一致性
+7. SKILL.md ≤500 行，Phase 0 内容 ≤2K Token，外移内容通过 `{{include:}}` 或 MCP Resource 可访问
+
+---
+
+### 4.6 v8.6.0 — 长尾收尾
+
+> 重构阶段: Phase R4 | 预估工期: 12 天 | 前置依赖: v8.4.0, v8.5.0
+
+#### 目标
+
+处理所有剩余中低优先级问题，完善重试机制、索引化经验模式、补全文档，批量处理低优先级问题，确保 42 项统一问题全部解决。
+
+#### 主要变更
+
+| 子任务 | 变更内容 | 涉及文件 |
+|--------|----------|----------|
+| R4-1: 重试机制完善 | 分层重试：同步重试 + 异步重试 | `mcp_server.py`, `api_routes.py` |
+| R4-2: 经验模式索引化 | SQLite `experience_patterns` 表 | `db_engine.py`, `.knowledge/experience/patterns/*.json` |
+| R4-3: FTS5 可用性检测 | 降级脚本中检测 FTS5 可用性，不可用时直接降级到关键词匹配 | `hybrid_search.py`, `scripts/*.py` |
+| R4-4: 文档补全 | `mcp-tools.md` 包含全部 19 个工具文档 + CHANGELOG.md | `references/mcp-tools.md`, `CHANGELOG.md` |
+| R4-5: 低优先级批量处理 | Prompt 模板、工具列表动态更新、Resource 订阅、语义化版本、配置合并、Schema 回滚、评估框架、v1 归档 | 多文件 |
+
+#### 关联问题编号
+
+| 编号 | 优先级 | 说明 |
+|------|--------|------|
+| UNIFIED-25 | P2 | 重试机制不完整 |
+| UNIFIED-26 | P2 | 经验模式文件无索引 |
+| UNIFIED-30 | P2 | knowledge_search 降级链中 SQLite FTS5 依赖未声明 |
+| UNIFIED-32 | P3 | Prompt 模板未实现 |
+| UNIFIED-33 | P3 | 工具列表静态（listChanged: False） |
+| UNIFIED-34 | P3 | 无 Resource 订阅机制 |
+| UNIFIED-35 | P3 | 版本管理缺乏语义化策略 |
+| UNIFIED-36 | P3 | 配置分散 |
+| UNIFIED-37 | P3 | resource_state.json 格式兼容 |
+| UNIFIED-38 | P3 | Schema 迁移无回滚 |
+| UNIFIED-39 | P3 | 评估框架不完整 |
+| UNIFIED-40 | P3 | CHANGELOG.md 缺失 |
+| UNIFIED-41 | P3 | v1 与 v2 重复文件 |
+
+#### 验收标准
+
+1. 版本冲突最多 3 次立即重试，可重试服务错误最多 2 次指数退避，嵌入失败后台异步重试
+2. 经验模式按错误类型/置信度/状态可查询
+3. FTS5 不可用时自动跳过 `bm25_only` 级别，日志记录降级原因
+4. `mcp-tools.md` 包含全部 19 个工具文档，CHANGELOG.md 记录 v8.0.0 → v8.6.0 变更
+5. 各低优先级问题独立验收
+6. 42 项 UNIFIED 问题全部标记为已解决
+
+---
+
+### 4.7 v9.0.0 — 正式发布
+
+> 预估工期: 3 天 | 前置依赖: v8.6.0
+
+#### 目标
+
+完成全量回归测试、文档终审和正式发布，标志着从 v8.0.0 到 v9.0.0 重构的完成。
+
+#### 主要变更
+
+| 变更内容 | 说明 |
+|----------|------|
+| 全量回归测试 | 单元测试 + 集成测试 + E2E 测试 + 降级测试全部通过 |
+| 性能指标验证 | Skill 触发 Token ≤2K，全流程 Token ≤30K，骨架加载 ≤500ms |
+| 文档终审 | SKILL.md、MIGRATION.md、CHANGELOG.md、mcp-tools.md 全部更新 |
+| 版本号升级 | 所有模块版本号统一升级到 v9.0.0 |
+| MIGRATION.md 更新 | 记录 v8 → v9 的迁移步骤和破坏性变更 |
+
+#### 破坏性变更（MAJOR 升级原因）
+
+| 变更 | 影响 | 迁移方式 |
+|------|------|----------|
+| 统一响应格式 | 旧客户端解析 MCP TextContent(JSON) 的代码需适配 | 使用新 JSON Schema |
+| Phase 编号体系 | Phase 0-3 加载阶段与 v1 的 Phase 0-8 工作流阶段含义不同 | 参考 MIGRATION.md |
+| 19 个 MCP 工具 | 从 10 个扩展到 19 个，旧版 MCP Server 不兼容 | 升级 xuansto-mcp-server ≥4.0.0 |
+| ChromaDB 单集合 | 双集合迁移到单集合 | 运行迁移脚本 |
+| 会话存储格式 | Markdown → SQLite | 运行迁移脚本，原文件保留为 `.migrated` |
+| 备份默认加密 | 旧备份需手动解密 | 设置 `KNOWLEDGE_BACKUP_KEY` |
+
+#### 关联问题编号
+
+本版本不直接解决新的 UNIFIED 问题，而是确保 v8.1.0~v8.6.0 解决的所有问题通过回归验证。
+
+#### 验收标准
+
+1. 单元测试通过率 100%，代码覆盖率 ≥80%
+2. 集成测试通过率 100%，降级测试通过率 ≥90%
+3. E2E 测试通过率 ≥95%
+4. 数据一致性（SQLite/ChromaDB 不一致率 <0.1%）
+5. Skill 触发 Token ≤2K，单命令执行 Token ≤5K，全流程 Token ≤30K
+6. CHANGELOG.md 完整记录 v8.0.0 → v9.0.0 所有变更
+7. MIGRATION.md 包含 v8 → v9 迁移指南
+
+---
+
+## 5. 版本时间线
+
+### 5.1 版本发布时间线
+
+```mermaid
+timeline
+    title xuansto-skill-v2 版本演进时间线
+    section 2026年6月
+        v8.1.0 : 基础设施修复
+                : 降级链可用
+                : 双引擎一致
+                : 响应格式统一
+        v8.2.0 : 渐进式加载基础
+                : PHASE标记嵌入
+                : Token预算强制
+                : Agent按需加载
+    section 2026年7月
+        v8.3.0 : MCP核心工具补全
+                : 13个工具实现
+                : 异常处理统一
+                : /init命令可用
+        v8.4.0 : MCP辅助能力与数据结构化
+                : 19个工具全部实现
+                : ChromaDB单集合
+                : Resource暴露
+        v8.5.0 : Skill层优化
+                : 参考文档补全
+                : 安全门禁加固
+                : SKILL.md瘦身
+    section 2026年8月
+        v8.6.0 : 长尾收尾
+                : 42项问题全部解决
+                : 文档补全
+        v9.0.0 : 正式发布
+                : 全量回归通过
+                : CHANGELOG完整
+```
+
+### 5.2 各版本问题解决进度
+
+```mermaid
+xychart-beta
+    title "UNIFIED 问题累计解决数"
+    x-axis ["v8.0.0", "v8.1.0", "v8.2.0", "v8.3.0", "v8.4.0", "v8.5.0", "v8.6.0", "v9.0.0"]
+    y-axis "已解决问题数" 0 --> 42
+    line [0, 6, 11, 16, 22, 31, 42, 42]
+```
+
+### 5.3 各优先级问题解决分布
+
+| 版本 | P0 累计 | P1 累计 | P2 累计 | P3 累计 | 总计 |
+|------|---------|---------|---------|---------|------|
+| v8.0.0 | 0/4 | 0/12 | 0/15 | 0/11 | 0/42 |
+| v8.1.0 | 2/4 | 4/12 | 0/15 | 0/11 | 6/42 |
+| v8.2.0 | 2/4 | 7/12 | 2/15 | 0/11 | 11/42 |
+| v8.3.0 | 3/4 | 8/12 | 2/15 | 0/11 | 16/42 |
+| v8.4.0 | 4/4 | 11/12 | 6/15 | 0/11 | 22/42 |
+| v8.5.0 | 4/4 | 12/12 | 13/15 | 1/11 | 31/42 |
+| v8.6.0 | 4/4 | 12/12 | 15/15 | 11/11 | 42/42 |
+| v9.0.0 | 4/4 | 12/12 | 15/15 | 11/11 | 42/42 |
+
+---
+
+## 6. 风险与缓解
+
+### 6.1 风险矩阵
+
+| 风险 | 影响版本 | 概率 | 影响 | 缓解措施 |
+|------|----------|------|------|----------|
+| MCP Server 升级不兼容 | v8.3.0, v8.4.0 | 中 | 高 | v8.1.0 已实现版本对齐和兼容性检查 |
+| ChromaDB 迁移数据丢失 | v8.4.0 | 低 | 高 | 迁移前自动备份，原集合保留 7 天 |
+| Token 预算强制导致功能降级 | v8.2.0 | 中 | 中 | 预算阈值可配置，默认值经过压测验证 |
+| 19 个工具降级脚本维护成本 | v8.3.0~v8.4.0 | 高 | 中 | 脚本自动生成框架，从 MCP 工具定义自动生成降级脚本 |
+| SKILL.md 瘦身后信息丢失 | v8.5.0 | 低 | 中 | 外移内容通过 MCP Resource 和 `{{include:}}` 双通道可访问 |
+| R2 阶段工期超预期 | v8.3.0, v8.4.0 | 高 | 高 | R2 拆分为两个版本，P0 编排工具优先，P2 辅助工具可延后 |
+
+### 6.2 回退策略
+
+| 版本 | 回退条件 | 回退方式 |
+|------|----------|----------|
+| v8.1.0 | 降级链验证失败 | 回退到 v8.0.0，降级链功能标记为 experimental |
+| v8.2.0 | Phase 0 Token >3K | 回退到 v8.1.0，渐进式加载标记为 opt-in |
+| v8.3.0 | 核心命令执行失败率 >5% | 回退到 v8.2.0，核心工具标记为 beta |
+| v8.4.0 | 数据迁移不一致率 >1% | 回退到 v8.3.0，保留旧集合不迁移 |
+| v8.5.0 | 安全门禁测试未通过 | 仅回退 R3-2，其余变更保留 |
+| v8.6.0 | 低优先级变更引入回归 | 按子任务粒度回退 |
+| v9.0.0 | E2E 测试通过率 <95% | 延期发布，修复后重新 rc |
+
+### 6.3 质量门禁
+
+每个版本发布前必须通过以下门禁：
+
+| 门禁 | 阈值 | 阻断级别 |
+|------|------|----------|
+| 单元测试通过率 | 100% | BLOCK |
+| 代码覆盖率 | ≥80% | BLOCK |
+| MCP Tool Schema 校验 | 100% | BLOCK |
+| Lint 错误数 | 0 | BLOCK |
+| 集成测试通过率 | 100% | BLOCK |
+| 降级测试通过率 | ≥90% | WARN |
+| E2E 测试通过率 | ≥95% | WARN |
+| 数据一致性 | <0.1% | WARN |
+
+---
+
+> 文档结束 | 生成时间: 2026-05-24 | 版本路线: v8.0.0 → v8.1.0 → v8.2.0 → v8.3.0 → v8.4.0 → v8.5.0 → v8.6.0 → v9.0.0 | 统一问题 42 项全覆盖
