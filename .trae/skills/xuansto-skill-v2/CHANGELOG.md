@@ -5,61 +5,30 @@ All notable changes to xuansto-skill-v2 will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [8.0.0] - 2025-05-23
+## [8.0.0] - 2026-05-24
 
 ### Added
-
-- MCP-first architecture with 17 atomic tools via xuansto-mcp-server
-- Progressive resource loading with 4-phase disclosure (skeleton/functional/enhanced/full)
-- Token budget management with per-phase allocation
-- Decision logging with ADR support
-- Context compression (semantic/selective/lossless strategies)
-- Project initialization with stack detection
-- Knowledge injection and precipitation workflow
-- Metrics reporting with time-range queries
-- Config hot-reload via watchfiles or polling
-- Hook engine with pre/post plugin system
-- Degradation fallback watcher
-- Rate limiting with token bucket algorithm
-- LRU cache for resource caching
-- Optional AES-256-GCM snapshot encryption
-- Name parameter whitelist validation against path traversal
-- `error_type` column in error_patterns table
-- `workflow_id` column in decision_records table
-- `deleted_at` column in knowledge_entries table (soft delete)
-- Evals directory with trigger accuracy and MCP evaluation suites
-- Workflow YAML files as authoritative source definitions
+- MCP Server + Skill 混合架构（26个MCP工具：11个知识管理+15个Skill工具）
+- 57个Agent定义（13层编排架构）
+- 54项质量门禁（BLOCK/WARN两级）
+- 31个命令（/init到/budget）
+- 渐进式加载4阶段（SKELETON→FUNCTIONAL→ENHANCED→FULL）
+- 3级降级策略（MCP工具→脚本降级→内联降级→错误响应）
+- 79+参考文档
+- Token预算管理
+- 决策日志（SQLite持久化）
+- 工作流调度（9阶段全生命周期）
+- Hook系统（minimal/standard/strict三级配置）
+- 模型路由（fast/standard/deep）
 
 ### Changed
-
-- Migrated from script-based toolchain to MCP server architecture
-- Command count expanded from 27 to 31 (added /sdd-tdd-medium, /sdd-tdd-fast, /decision, /budget)
-- Agent registry now loaded from YAML (agents/registry.yaml)
-- Command routing table now loaded from YAML (commands/routes.yaml)
-- SKILL.md slimmed down with detailed content moved to references/
-- Action parameter made required on all tool input models
-- Resource caching uses LRU eviction policy
+- 从v1纯Skill+脚本架构迁移到MCP+Skill混合架构
+- 知识检索从简单关键词匹配升级为三层检索（hybrid/semantic_only/keyword_only）
+- 降级策略从无到3级降级链
 
 ### Fixed
-
-- UTF-8 BOM detection in file encoding checks
-- Session persistence integrity with hash verification
-- ChromaDB path migration from legacy location
-
-### Deprecated
-
-- xuansto-skill (v5) — archived, no longer maintained
-- Direct script invocation — use MCP tools instead
-
-### Removed
-
-- Shell script (.sh) support — Python-only for scripts
-- Legacy knowledge_auto_retrieve and knowledge_progressive_search tools
-
-### Security
-
-- Rate limiting to prevent tool abuse (60 req/min per tool by default)
-- Name parameter whitelist regex validation
-- Path traversal prevention in validator
-- Optional snapshot encryption with AES-256-GCM
-- Security hook blocks dangerous commands (rm -rf, force push, DROP TABLE)
+- P0-01: v2降级模式不可用（已实现MCPToolFallback类）
+- P0-02: v2缺少references/完整参考文档（已补充79+参考文件）
+- P1-01: MCP Server版本与Skill版本不一致（新增compatible_mcp_server字段）
+- P1-02: server_health工具未在v2 mcp-tools.md中列出（已补充）
+- P1-03: knowledge_search缺少inject/precipitate action文档（已补充）
