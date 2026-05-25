@@ -9,6 +9,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+try:
+    import yaml as _yaml
+    _yaml_available = True
+except ImportError:
+    _yaml_available = False
+
 from .config import make_response, make_error_response
 from .embedding import EmbeddingManager
 
@@ -244,6 +250,38 @@ class MCPToolFallback:
         self._degraded = False
         self._degradation_log: list = []
         self._lock = threading.Lock()
+        self._tool_map = self._load_fallbacks_from_yaml() or self.TOOL_SCRIPT_MAP
+
+    def _load_fallbacks_from_yaml(self) -> Optional[Dict[str, Any]]:
+        yaml_path = self._skill_root / "constraints.yaml"
+        if not yaml_path.exists():
+            return None
+        if not _yaml_available:
+            return None
+        try:
+            with open(str(yaml_path), "r", encoding="utf-8") as f:
+                data = _yaml.safe_load(f)
+            if not isinstance(data, dict):
+                return None
+            fallbacks = data.get("degradation", {}).get("tool_fallbacks", {})
+            if not isinstance(fallbacks, dict) or not fallbacks:
+                return None
+            return fallbacks
+        except Exception:
+            logger.debug("operation=load_fallbacks_yaml, status=failed")
+            return None
+
+    @staticmethod
+    def _wrap_degraded(tool_name: str, result: dict) -> dict:
+        return {"status": "degraded", "tool": tool_name, "result": result}
+
+    @staticmethod
+    def _wrap_inline_degraded(tool_name: str, result: dict) -> dict:
+        return {"status": "inline_degraded", "tool": tool_name, "result": result}
+
+    @staticmethod
+    def _wrap_error(tool_name: str, error: dict) -> dict:
+        return {"status": "error", "tool": tool_name, "error": error}
 
     @property
     def is_degraded(self) -> bool:
@@ -277,14 +315,13 @@ class MCPToolFallback:
         logger.info("operation=mcp_degradation_deactivate")
 
     def call_tool(self, tool_name: str, arguments: Optional[Dict[str, Any]] = None) -> dict:
-        if tool_name not in self.TOOL_SCRIPT_MAP:
-            return make_error_response(
-                "UNKNOWN_TOOL",
-                f"Unknown tool: {tool_name}",
-                {"tool_name": tool_name},
-            )
+        if tool_name not in self._tool_map:
+            return self._wrap_error(tool_name, {
+                "code": "UNKNOWN_TOOL",
+                "message": f"Unknown tool: {tool_name}",
+            })
 
-        config = self.TOOL_SCRIPT_MAP[tool_name]
+        config = self._tool_map[tool_name]
         arguments = arguments or {}
 
         if "script" in config:
@@ -294,7 +331,7 @@ class MCPToolFallback:
                 arguments,
             )
             if result.get("status") != "error":
-                return result
+                return self._wrap_degraded(tool_name, result)
             if "inline" in config:
                 inline_method = getattr(self, config["inline"], None)
                 if inline_method:
@@ -302,8 +339,12 @@ class MCPToolFallback:
                         "operation=mcp_fallback_inline, tool=%s, reason=script_failed",
                         tool_name,
                     )
-                    return inline_method(arguments)
-            return result
+                    inline_result = inline_method(arguments)
+                    return self._wrap_inline_degraded(tool_name, inline_result)
+            return self._wrap_error(tool_name, result.get("meta", {}).get("error", {
+                "code": "SCRIPT_FAILED",
+                "message": "Script execution failed",
+            }))
 
         if "scripts" in config:
             sub_command = arguments.get("action", "init")
@@ -312,7 +353,7 @@ class MCPToolFallback:
                 script_path, extra_args = script_entry
                 result = self._execute_script(script_path, extra_args, arguments)
                 if result.get("status") != "error":
-                    return result
+                    return self._wrap_degraded(tool_name, result)
             if "inline" in config:
                 inline_method = getattr(self, config["inline"], None)
                 if inline_method:
@@ -321,23 +362,23 @@ class MCPToolFallback:
                         tool_name,
                         sub_command,
                     )
-                    return inline_method(arguments)
-            return make_error_response(
-                "NO_FALLBACK",
-                f"No fallback for tool={tool_name} action={sub_command}",
-                {"tool_name": tool_name, "action": sub_command},
-            )
+                    inline_result = inline_method(arguments)
+                    return self._wrap_inline_degraded(tool_name, inline_result)
+            return self._wrap_error(tool_name, {
+                "code": "NO_FALLBACK",
+                "message": f"No fallback for tool={tool_name} action={sub_command}",
+            })
 
         if "inline" in config:
             inline_method = getattr(self, config["inline"], None)
             if inline_method:
-                return inline_method(arguments)
+                inline_result = inline_method(arguments)
+                return self._wrap_inline_degraded(tool_name, inline_result)
 
-        return make_error_response(
-            "NO_FALLBACK",
-            f"No fallback available for tool: {tool_name}",
-            {"tool_name": tool_name},
-        )
+        return self._wrap_error(tool_name, {
+            "code": "NO_FALLBACK",
+            "message": f"No fallback available for tool: {tool_name}",
+        })
 
     def _execute_script(
         self,
