@@ -1,34 +1,36 @@
-# Xuansto Skill 版本特性对比文档
+# Xuansto Skill V 版本功能对比文档
 
-> 版本: 1.0.0 | 更新日期: 2026-05-24 | 编码: UTF-8 | 行尾: LF
+> 版本: 8.0.0 | 更新日期: 2026-05-25 | 编码: UTF-8 | 行尾: LF
+> Skill目录: `.trae/skills/xuansto-skill-v2/`
 
 ---
 
 ## 目录
 
-1. [版本演进总览](#1-版本演进总览)
+1. [版本定义与演进总览](#1-版本定义与演进总览)
 2. [标注说明](#2-标注说明)
-3. [架构形态对比](#3-架构形态对比)
-4. [核心功能对比](#4-核心功能对比)
-5. [性能指标对比](#5-性能指标对比)
-6. [渐进式加载方式对比](#6-渐进式加载方式对比)
-7. [API 契约对比](#7-api-契约对比)
-8. [数据模型对比](#8-数据模型对比)
-9. [降级策略对比](#9-降级策略对比)
-10. [安全与质量对比](#10-安全与质量对比)
-11. [已知限制与问题对比](#11-已知限制与问题对比)
-12. [版本演进路线图](#12-版本演进路线图)
+3. [对比维度总表](#3-对比维度总表)
+4. [架构形态详细对比](#4-架构形态详细对比)
+5. [核心功能详细对比](#5-核心功能详细对比)
+6. [性能详细对比](#6-性能详细对比)
+7. [渐进式加载方式详细对比](#7-渐进式加载方式详细对比)
+8. [API契约详细对比](#8-api契约详细对比)
+9. [数据模型详细对比](#9-数据模型详细对比)
+10. [降级策略详细对比](#10-降级策略详细对比)
+11. [测试覆盖详细对比](#11-测试覆盖详细对比)
+12. [已知限制详细对比](#12-已知限制详细对比)
+13. [迁移影响分析](#13-迁移影响分析)
 
 ---
 
-## 1. 版本演进总览
+## 1. 版本定义与演进总览
 
 | 版本 | 代号 | 定位 | 核心变更 | 状态 |
 |------|------|------|----------|------|
-| **v5.0.0** | V_PREVIOUS_MAJOR | 纯Skill内嵌架构 | 基线版本，全量加载，无MCP依赖 | 已移除 |
-| **v8.0.0** | V_CURRENT | MCP Server + Skill 双层架构 | MCP工具驱动、渐进式加载声明、Token预算定义 | 当前版本 |
-| **v8.1.0** | 下一小版本 | 基础设施修复 + 渐进式加载落地 | 降级链实际实现、PHASE标记嵌入、Token预算强制执行 | 计划中(R0-R1) |
-| **v9.0.0** | 下一大版本 | 全功能MCP编排引擎 | MCP工具扩展补全、结构化存储、Skill层瘦身、Hook完整实现 | 远期规划(R2-R4) |
+| **7.0.0** | V_PREVIOUS_MAJOR | v1架构，纯Skill+脚本 | 基线版本，全量加载，无MCP依赖，纯内嵌脚本执行 | 已归档 |
+| **8.0.0** | V_CURRENT | MCP Server + Skill 混合架构 | MCP工具驱动、渐进式加载声明、Token预算定义、3级降级链 | 当前版本 |
+| **8.1.0** | V_NEXT_MINOR | 基础设施重构 | 降级链实际实现、PHASE标记嵌入、Token预算强制执行、双向同步、模块化拆分 | 计划中(R0-R1) |
+| **9.0.0** | V_NEXT_MAJOR | 下一代架构 | Resource优先+Skill声明、流式响应、多项目支持、持久化Agent、自适应降级 | 远期规划(R2-R4) |
 
 ---
 
@@ -36,384 +38,418 @@
 
 | 标注 | 含义 | 说明 |
 |------|------|------|
-| 🟢 | 增强 | 相较前一版本功能增强或性能提升 |
-| 🔴 | 削弱 | 相较前一版本功能削弱或约束收紧 |
-| ⚪ | 废弃 | 前一版本中存在但当前版本已移除 |
-| 🔵 | 新增 | 前一版本中不存在，当前版本新引入 |
+| ↑ | 增强 | 相较前一版本功能增强或性能提升 |
+| ↓ | 削弱 | 相较前一版本功能削弱或约束收紧 |
+| ✗ | 废弃 | 前一版本中存在但当前版本已移除 |
+| ★ | 新增 | 前一版本中不存在，当前版本新引入 |
 
 ---
 
-## 3. 架构形态对比
+## 3. 对比维度总表
 
-### 3.1 整体架构
+| 维度 | 7.0.0 | 8.0.0 | 8.1.0 | 9.0.0 |
+|------|-------|-------|-------|-------|
+| 架构形态 | 纯Skill+脚本 | MCP+Skill混合 ★ | MCP+Skill模块化 ↑ | Resource优先+Skill ↑ |
+| 核心功能 | 基本Agent编排 | 57Agent/13层/54门禁 ★ | +工具模块化 ↑ | +流式响应+多项目 ↑ |
+| 性能 | 无Token控制 | Token预算4阶段 ★ | +双向同步 ↑ | +流式优化 ↑ |
+| 特效加载方式 | 无 | PHASE标记+LoadPhase ★ | +双向同步 ↑ | +Resource渐进 ↑ |
+| API契约 | 脚本调用 | MCP stdio+HTTP ★ | +Schema统一 ↑ | +版本协商+流式 ↑ |
+| 数据模型 | JSON文件 | SQLite+ChromaDB ★ | +事务保证 ↑ | +持久化Agent ↑ |
+| 降级策略 | 无 | 3级降级链 ★ | +YAML统一 ↑ | +自适应降级 ↑ |
+| 测试覆盖 | 无 | 基本功能测试 ★ | +单元测试 ↑ | +E2E+性能测试 ↑ |
+| 已知限制 | 无MCP/无降级 | 工具耦合/无同步 | 数据一致性 | 待定 |
 
-| 对比维度 | v5.0.0 (V_PREVIOUS_MAJOR) | v8.0.0 (V_CURRENT) | v8.1.0 (下一小版本) | v9.0.0 (下一大版本) |
-|----------|--------------------------|-------------------|--------------------|--------------------|
-| 架构模式 | 纯Skill内嵌 | MCP Server + Skill 混合 🟢 | Skill声明式 + MCP计算（职责分离） 🟢 | Skill纯声明式 + MCP纯计算（清晰分层） 🟢 |
-| 分层数 | 2层（Skill + 脚本） | 4层（Skill + 执行 + 资源 + 依赖） 🔵 | 4层（职责边界明确化） 🟢 | 4层（零计算Skill层） 🟢 |
-| Skill层职责 | 声明 + 内嵌逻辑 | 声明 + 部分内嵌逻辑 | 纯声明式（零计算） 🟢 | 纯声明式（零计算） |
-| MCP Server | 无 ⚪ | xuansto-mcp-server ≥4.0.0 🔵 | 版本对齐 + 健康检查 🟢 | 统一工具注册中心 🟢 |
-| 进程模型 | 单进程 | 双进程（Skill + MCP Server） 🔵 | 双进程 + 降级守护 🟢 | 双进程 + 动态工具发现 🔵 |
-| 配置热重载 | 需重启 | 声明支持 🔵 | watchfiles事件驱动 🟢 | watchfiles + 远程配置同步 🟢 |
+---
 
-### 3.2 工具调用架构
+## 4. 架构形态详细对比
 
-| 对比维度 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
+### 4.1 整体架构
+
+| 对比维度 | 7.0.0 (V_PREVIOUS_MAJOR) | 8.0.0 (V_CURRENT) | 8.1.0 (V_NEXT_MINOR) | 9.0.0 (V_NEXT_MAJOR) |
+|----------|--------------------------|-------------------|----------------------|----------------------|
+| 架构模式 | 纯Skill内嵌 | MCP Server + Skill 混合 ★ | Skill声明式 + MCP计算（职责分离） ↑ | Skill纯声明式 + MCP纯计算（清晰分层） ↑ |
+| 分层数 | 2层（Skill + 脚本） | 4层（Skill + 执行 + 资源 + 依赖） ★ | 4层（职责边界明确化） ↑ | 4层（零计算Skill层） ↑ |
+| Skill层职责 | 声明 + 内嵌逻辑 | 声明 + 部分内嵌逻辑 | 纯声明式（零计算） ↑ | 纯声明式（零计算） |
+| MCP Server | 无 | xuansto-mcp-server ≥4.0.0 ★ | 版本对齐 + 健康检查 ↑ | 统一工具注册中心 ↑ |
+| 进程模型 | 单进程 | 双进程（Skill + MCP Server） ★ | 双进程 + 降级守护 ↑ | 双进程 + 动态工具发现 ★ |
+| 配置热重载 | 需重启 | 声明支持 ★ | watchfiles事件驱动 ↑ | watchfiles + 远程配置同步 ↑ |
+
+### 4.2 工具调用架构
+
+| 对比维度 | 7.0.0 | 8.0.0 | 8.1.0 | 9.0.0 |
 |----------|--------|--------|--------|--------|
-| 工具调用方式 | 内嵌脚本/内联逻辑 | 26个MCP原子工具(11+15) + 降级脚本 🔵 | 26个MCP工具 + 实际降级链 🟢 | 26+个MCP工具 + 完整降级链 🟢 |
-| MCP工具实现 | 无 ⚪ | 11个mcp_server + 15个skill_tools全量实现 🟢 | 11个mcp_server + 15个skill_tools 🟢 | 全部26+工具完整实现 🟢 |
-| 降级链 | 无统一降级 🔴 | YAML声明降级路径，degradation.py未实际调用 🔴 | MCP→scripts/→内联 三级降级实际可用 🟢 | 三级降级 + 统一降级协调器 🟢 |
-| 降级结果格式 | 无统一格式 | 声明与MCP相同JSON结构 🔵 | 实际包装为MCP相同JSON结构 🟢 | 统一响应契约 + Schema校验 🟢 |
-| SkillToolCall协议 | 无 ⚪ | 无（仅声明mcp_tools列表） 🔴 | 基础调用时序定义 🔵 | 完整协议（时序+参数+超时+重试） 🟢 |
+| 工具调用方式 | 内嵌脚本/内联逻辑 | 26个MCP原子工具(11+15) + 降级脚本 ★ | 26个MCP工具 + 实际降级链 ↑ | 26+个MCP工具 + 完整降级链 ↑ |
+| MCP工具实现 | 无 | 11个mcp_server + 15个skill_tools全量实现 ★ | 11个mcp_server + 15个skill_tools ↑ | 全部26+工具完整实现 ↑ |
+| 降级链 | 无统一降级 ↓ | YAML声明降级路径，degradation.py未实际调用 ↓ | MCP→scripts/→内联 三级降级实际可用 ↑ | 三级降级 + 统一降级协调器 ↑ |
+| 降级结果格式 | 无统一格式 | 声明与MCP相同JSON结构 ★ | 实际包装为MCP相同JSON结构 ↑ | 统一响应契约 + Schema校验 ↑ |
+| SkillToolCall协议 | 无 | 无（仅声明mcp_tools列表） ↓ | 基础调用时序定义 ★ | 完整协议（时序+参数+超时+重试） ↑ |
+
+### 4.3 模块化程度
+
+| 对比维度 | 7.0.0 | 8.0.0 | 8.1.0 | 9.0.0 |
+|----------|--------|--------|--------|--------|
+| skill_tools.py | 不存在 | 单文件2300+行，15个处理器集中 ↓ | 按工具分组拆分为独立模块 ↑ | 独立模块 + 插件化注册 ↑ |
+| mcp_server.py | 不存在 | 单文件1200+行，注册与处理耦合 ↓ | 注册/路由/处理分离 ↑ | 动态注册 + 热加载 ↑ |
+| degradation.py | 不存在 | 硬编码TOOL_SCRIPT_MAP ↓ | 从constraints.yaml动态读取 ↑ | 统一降级协调器 ↑ |
 
 ---
 
-## 4. 核心功能对比
+## 5. 核心功能详细对比
 
-### 4.1 编排能力
+### 5.1 编排能力
 
-| 对比维度 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
+| 对比维度 | 7.0.0 | 8.0.0 | 8.1.0 | 9.0.0 |
 |----------|--------|--------|--------|--------|
 | Agent数量 | 57 Agents / 13层 | 57 Agents / 13层 | 57 Agents / 13层 | 57+ Agents / 13层 |
-| Agent加载方式 | 全量加载 🔴 | 声明渐进式（未实际实现） 🔴 | 按Phase渐进加载实际生效 🟢 | 渐进加载 + 按需合并 🟢 |
-| Agent合并策略 | 无 ⚪ | 声明agent_merge_policy（无运行时逻辑） 🔴 | 声明（无运行时逻辑） | 运行时评估 + 自动激活 🟢 |
+| Agent加载方式 | 全量加载 ↓ | 声明渐进式（未实际实现） ↓ | 按Phase渐进加载实际生效 ↑ | 渐进加载 + 按需合并 ↑ |
+| Agent合并策略 | 无 | 声明agent_merge_policy（无运行时逻辑） ↓ | 声明（无运行时逻辑） | 运行时评估 + 自动激活 ★ |
 | 工作流阶段 | 9阶段(Phase 0-8) | 9阶段(Phase 0-8) | 9阶段(Phase 0-8) | 9阶段(Phase 0-8) |
-| 命令数量 | 27个 | 31个 🔵 | 31个 | 31+个 |
-| 命令路由 | 基础路由 | 意图→命令→MCP工具链→降级→Phase 🔵 | 路由表精简/完整按Phase加载 🟢 | 完整路由 + 动态工具列表通知 🟢 |
-| 质量门禁 | 无统一门禁 | 54项门禁(BLOCK/WARN) 🔵 | 54项门禁 + 按Phase过滤 🟢 | 54项门禁 + 自动修复建议 🟢 |
-| 并发Agent | 无限制 | 最大3并发/10系统级 🔵 | 最大3并发/10系统级 | 动态并发（按项目规模调整） 🟢 |
+| 命令数量 | 27个 | 31个 ★ | 31个 | 31+个 ↑ |
+| 命令路由 | 基础路由 | 意图→命令→MCP工具链→降级→Phase ★ | 路由表精简/完整按Phase加载 ↑ | 完整路由 + 动态工具列表通知 ↑ |
+| 质量门禁 | 无统一门禁 ↓ | 54项门禁(BLOCK/WARN) ★ | 54项门禁 + 按Phase过滤 ↑ | 54项门禁 + 自动修复建议 ↑ |
+| 并发Agent | 无限制 | 最大3并发/10系统级 ★ | 最大3并发/10系统级 | 动态并发（按项目规模调整） ↑ |
 
-### 4.2 知识检索
+### 5.2 知识检索
 
-| 对比维度 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
+| 对比维度 | 7.0.0 | 8.0.0 | 8.1.0 | 9.0.0 |
 |----------|--------|--------|--------|--------|
-| 检索引擎 | ChromaDB/SQLite/关键词 | 可插拔搜索引擎架构 🟢 | 可插拔 + 降级链实际可用 🟢 | 可插拔 + 混合检索 + 语义缓存 🟢 |
-| 检索降级链 | ChromaDB→SQLite→关键词 | 声明3级降级（FTS5依赖未声明） 🔴 | 3级降级 + FTS5可用性检测 🟢 | 3级降级 + 自动健康检查 + 恢复 🟢 |
-| 嵌入降级 | 无 | OpenAI→sentence-transformers→不可用 🔵 | 3级嵌入降级实际可用 🟢 | 3级嵌入 + 自动恢复检测 🟢 |
-| 渐进式搜索 | 无 ⚪ | ProgressiveSearcher声明 🔵 | 按Phase启用 🔵 | 多轮渐进 + 任务类型感知 + Token预算 🟢 |
-| 知识注入 | 无 ⚪ | knowledge_inject声明 🔵 | Phase 2起可用 🟢 | Phase 2起 + 作用域控制 🟢 |
-| 经验沉淀 | 无 ⚪ | experience_precipitator声明 🔵 | 声明 | 沉淀 + 结构化索引 + 查询 🟢 |
+| 检索引擎 | ChromaDB/SQLite/关键词 | 可插拔搜索引擎架构 ↑ | 可插拔 + 降级链实际可用 ↑ | 可插拔 + 混合检索 + 语义缓存 ↑ |
+| 检索降级链 | ChromaDB→SQLite→关键词 | 声明3级降级（FTS5依赖未声明） ↓ | 3级降级 + FTS5可用性检测 ↑ | 3级降级 + 自动健康检查 + 恢复 ↑ |
+| 嵌入降级 | 无 | OpenAI→sentence-transformers→不可用 ★ | 3级嵌入降级实际可用 ↑ | 3级嵌入 + 自动恢复检测 ↑ |
+| 渐进式搜索 | 无 | ProgressiveSearcher声明 ★ | 按Phase启用 ↑ | 多轮渐进 + 任务类型感知 + Token预算 ↑ |
+| 知识注入 | 无 | knowledge_inject声明 ★ | Phase 2起可用 ↑ | Phase 2起 + 作用域控制 ↑ |
+| 经验沉淀 | 无 | experience_precipitator声明 ★ | 声明 | 沉淀 + 结构化索引 + 查询 ↑ |
 
-### 4.3 桌面开发支持
+### 5.3 桌面开发支持
 
-| 对比维度 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
+| 对比维度 | 7.0.0 | 8.0.0 | 8.1.0 | 9.0.0 |
 |----------|--------|--------|--------|--------|
-| 桌面框架 | Electron | Electron / Tauri / Flutter 🟢 | Electron / Tauri / Flutter | Electron / Tauri / Flutter |
-| IPC安全 | 基础 | IPC契约验证 🔵 | IPC契约验证 | IPC安全 + 代码签名强制 🟢 |
-| 桌面构建 | /build-desktop | /build-desktop + /release-desktop 🟢 | /build-desktop + /release-desktop | 完整桌面CI/CD流水线 🟢 |
-| 桌面Agent | 基础 | 5个跨平台层Agent 🔵 | 5个跨平台层Agent | 5个 + 自动更新 + 原生模块 🟢 |
+| 桌面框架 | Electron | Electron / Tauri / Flutter ↑ | Electron / Tauri / Flutter | Electron / Tauri / Flutter |
+| IPC安全 | 基础 | IPC契约验证 ★ | IPC契约验证 | IPC安全 + 代码签名强制 ↑ |
+| 桌面构建 | /build-desktop | /build-desktop + /release-desktop ↑ | /build-desktop + /release-desktop | 完整桌面CI/CD流水线 ↑ |
+| 桌面Agent | 基础 | 5个跨平台层Agent ★ | 5个跨平台层Agent | 5个 + 自动更新 + 原生模块 ↑ |
 
 ---
 
-## 5. 性能指标对比
+## 6. 性能详细对比
 
-### 5.1 Token 消耗
+### 6.1 Token消耗
 
-| 指标 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
+| 指标 | 7.0.0 | 8.0.0 | 8.1.0 | 9.0.0 |
 |------|--------|--------|--------|--------|
-| Skill触发时Token | ~8,000 | ~8,000（声明≤2K但未实际生效） 🔴 | ≤2,000（Phase 0骨架实际生效） 🟢 | ≤1,500（骨架进一步精简） 🟢 |
-| 单命令执行Token | ~15,000 | ~15,000（声明≤5K但未实际生效） 🔴 | ≤5,000（Phase 1按需加载） 🟢 | ≤4,000（命令步骤外移） 🟢 |
-| 全流程Token(9 Phase) | ~84,000 | ~84,000（声明≤30K但未实际生效） 🔴 | ≤30,000（4级渐进+预算强制） 🟢 | ≤25,000（Agent合并+上下文压缩） 🟢 |
-| Agent调度Token(单次) | ~500/Agent | ~500/Agent（全量加载） 🔴 | ≤150/Agent（索引摘要→按需加载） 🟢 | ≤100/Agent（压缩索引） 🟢 |
+| Skill触发时Token | ~8,000 | ~8,000（声明≤2K但未实际生效） ↓ | ≤2,000（Phase 0骨架实际生效） ↑ | ≤1,500（骨架进一步精简） ↑ |
+| 单命令执行Token | ~15,000 | ~15,000（声明≤5K但未实际生效） ↓ | ≤5,000（Phase 1按需加载） ↑ | ≤4,000（命令步骤外移） ↑ |
+| 全流程Token(9 Phase) | ~84,000 | ~84,000（声明≤30K但未实际生效） ↓ | ≤30,000（4级渐进+预算强制） ↑ | ≤25,000（Agent合并+上下文压缩） ↑ |
+| Agent调度Token(单次) | ~500/Agent | ~500/Agent（全量加载） ↓ | ≤150/Agent（索引摘要→按需加载） ↑ | ≤100/Agent（压缩索引） ↑ |
 
-### 5.2 响应时间
+### 6.2 响应时间
 
-| 指标 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
+| 指标 | 7.0.0 | 8.0.0 | 8.1.0 | 9.0.0 |
 |------|--------|--------|--------|--------|
-| 骨架加载时间 | N/A（全量） | N/A（全量加载） 🔴 | ≤500ms 🟢 | ≤300ms 🟢 |
-| Phase资源预加载 | N/A（全量） | N/A（全量加载） 🔴 | ≤2s/Phase 🟢 | ≤1.5s/Phase 🟢 |
-| Agent定义按需加载 | N/A（全量） | N/A（全量加载） 🔴 | ≤300ms/Agent 🟢 | ≤200ms/Agent 🟢 |
-| 知识检索响应 | 1-5s(ChromaDB) | 1-5s(ChromaDB) | ≤3s(hybrid) 🟢 | ≤2s(混合+缓存) 🟢 |
-| Phase降级响应 | N/A | N/A 🔴 | ≤1s 🟢 | ≤500ms 🟢 |
+| 骨架加载时间 | N/A（全量） | N/A（全量加载） ↓ | ≤500ms ★ | ≤300ms ↑ |
+| Phase资源预加载 | N/A（全量） | N/A（全量加载） ↓ | ≤2s/Phase ★ | ≤1.5s/Phase ↑ |
+| Agent定义按需加载 | N/A（全量） | N/A（全量加载） ↓ | ≤300ms/Agent ★ | ≤200ms/Agent ↑ |
+| 知识检索响应 | 1-5s(ChromaDB) | 1-5s(ChromaDB) | ≤3s(hybrid) ↑ | ≤2s(混合+缓存) ↑ |
+| Phase降级响应 | N/A | N/A ↓ | ≤1s ★ | ≤500ms ↑ |
+| 双向同步延迟 | N/A | N/A ↓ | ≤100ms ★ | ≤50ms ↑ |
 
 ---
 
-## 6. 渐进式加载方式对比
+## 7. 渐进式加载方式详细对比
 
-### 6.1 加载策略
+### 7.1 加载策略
 
-| 对比维度 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
+| 对比维度 | 7.0.0 | 8.0.0 | 8.1.0 | 9.0.0 |
 |----------|--------|--------|--------|--------|
-| 加载策略 | 全量加载 | 9阶段工作流Phase（0-8） | 4阶段渐进式加载(0-3) 🟢 | 4阶段渐进式加载 + 动态工具发现 🟢 |
-| Token预算 | 无 | 声明4级预算(2K/5K/10K/20K) 🔵 | 4级预算 + 运行时强制 🟢 | 4级预算 + 运行时强制 + 持久化 🟢 |
-| Phase编号 | phase 0-8（工作流阶段） | phase 0-3（加载阶段）🔵 + phase 0-8（工作流阶段） | 加载Phase与工作流Phase分离 🟢 | 加载Phase与工作流Phase分离 |
-| SKILL.md Phase标记 | 无 ⚪ | constraints.yaml定义但SKILL.md未嵌入 🔴 | PHASE_0~3标记嵌入SKILL.md 🟢 | SKILL.md≤500行 + 外移详细步骤 🟢 |
-| 披露机制 | 无 ⚪ | disclosure_note + upgrade_hint + available_commands 🔵 | 披露机制实际生效 🟢 | 披露 + 动态工具列表通知 🟢 |
-| 自动升级 | 无 ⚪ | auto_upgrade参数声明 🔵 | Token超限自动推进Phase 🟢 | Token超限 + 语义压缩 + 自动恢复 🟢 |
+| 加载策略 | 全量加载 | 9阶段工作流Phase（0-8） | 4阶段渐进式加载(0-3) ↑ | 4阶段渐进式加载 + 动态工具发现 ↑ |
+| Token预算 | 无 ↓ | 声明4级预算(2K/5K/10K/20K) ★ | 4级预算 + 运行时强制 ↑ | 4级预算 + 运行时强制 + 持久化 ↑ |
+| Phase编号 | phase 0-8（工作流阶段） | phase 0-3（加载阶段）★ + phase 0-8（工作流阶段） | 加载Phase与工作流Phase分离 ↑ | 加载Phase与工作流Phase分离 |
+| SKILL.md Phase标记 | 无 ↓ | constraints.yaml定义但SKILL.md未嵌入 ↓ | PHASE_0~3标记嵌入SKILL.md ↑ | SKILL.md≤500行 + 外移详细步骤 ↑ |
+| 披露机制 | 无 ↓ | disclosure_note + upgrade_hint + available_commands ★ | 披露机制实际生效 ↑ | 披露 + 动态工具列表通知 ↑ |
+| 自动升级 | 无 ↓ | auto_upgrade参数声明 ★ | Token超限自动推进Phase ↑ | Token超限 + 语义压缩 + 自动恢复 ↑ |
 
-### 6.2 各Phase加载内容
+### 7.2 各Phase加载内容
 
-| 加载阶段 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
+| 加载阶段 | 7.0.0 | 8.0.0 | 8.1.0 | 9.0.0 |
 |----------|--------|--------|--------|--------|
-| Phase 0: 骨架 | 全量加载（无区分） | 声明：核心约束+命令概要+Agent索引 | 实际生效：核心约束+命令列表+MCP依赖+Agent索引 🟢 | 精简骨架：≤1.5K Token 🟢 |
-| Phase 1: 功能 | 全量加载 | 声明：命令步骤+工作流定义+MCP工具参数 | 实际生效：命令路由+核心13Agent+工作流概览 🟢 | 命令路由+核心Agent+门禁检查 🟢 |
-| Phase 2: 增强 | 全量加载 | 声明：参考文档+模板+知识库索引 | 实际生效：完整路由+57Agent+知识检索+参考文档 🟢 | 完整路由+Agent+知识+参考文档 🟢 |
-| Phase 3: 完整 | 全量加载 | 声明：全部资源+脚本集+披露资源 | 实际生效：Hook系统+模型路由+关键规则 🟢 | Hook+模型路由+脚本集+评估 🟢 |
+| Phase 0: 骨架 | 全量加载（无区分） | 声明：核心约束+命令概要+Agent索引 | 实际生效：核心约束+命令列表+MCP依赖+Agent索引 ↑ | 精简骨架：≤1.5K Token ↑ |
+| Phase 1: 功能 | 全量加载 | 声明：命令步骤+工作流定义+MCP工具参数 | 实际生效：命令路由+核心13Agent+工作流概览 ↑ | 命令路由+核心Agent+门禁检查 ↑ |
+| Phase 2: 增强 | 全量加载 | 声明：参考文档+模板+知识库索引 | 实际生效：完整路由+57Agent+知识检索+参考文档 ↑ | 完整路由+Agent+知识+参考文档 ↑ |
+| Phase 3: 完整 | 全量加载 | 声明：全部资源+脚本集+披露资源 | 实际生效：Hook系统+模型路由+关键规则 ↑ | Hook+模型路由+脚本集+评估 ↑ |
 
-### 6.3 MCP工具按Phase可用性
+### 7.3 MCP工具按Phase可用性
 
-| 工具 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
+| 工具 | 7.0.0 | 8.0.0 | 8.1.0 | 9.0.0 |
 |------|--------|--------|--------|--------|
 | knowledge_search / knowledge_stats / server_health | 全量可用 | 全量可用 | Phase 0起可用 | Phase 0起可用 |
-| knowledge_add / knowledge_update / knowledge_delete / knowledge_rollback / knowledge_auto_retrieve / knowledge_progressive_search / knowledge_deep_load / knowledge_web_update | 无 ⚪ | 全量可用 🔵 | Phase 1起可用 🟢 | Phase 1起可用 |
-| skill_analyze / workflow_dispatch / session_manage / project_init | 全量可用 | 全量可用 🟢 | Phase 1起可用 🟢 | Phase 1起可用 |
-| quality_gate_check / agent_status / resource_load_status / knowledge_inject / token_budget | 无 ⚪ | 全量可用 🟢 | Phase 2起可用 🟢 | Phase 2起可用 |
-| security_scan / code_simplify / spec_drift_detect / context_compress / hook_manage / decision_log / agent_manage / metrics_report | 无 ⚪ | 部分可用（6个skill_tools实现，agent_manage/metrics_report仅在xuansto-mcp-server） 🔴 | 声明可用（部分缺失） 🔴 | Phase 3起可用 🟢 |
+| knowledge_add / knowledge_update / knowledge_delete / knowledge_rollback / knowledge_auto_retrieve / knowledge_progressive_search / knowledge_deep_load / knowledge_web_update | 无 | 全量可用 ★ | Phase 1起可用 ↑ | Phase 1起可用 |
+| skill_analyze / workflow_dispatch / session_manage / project_init | 全量可用 | 全量可用 | Phase 1起可用 ↑ | Phase 1起可用 |
+| quality_gate_check / agent_status / resource_load_status / knowledge_inject / token_budget | 无 | 全量可用 ★ | Phase 2起可用 ↑ | Phase 2起可用 |
+| security_scan / code_simplify / spec_drift_detect / context_compress / hook_manage / decision_log / agent_manage / metrics_report | 无 | 部分可用 ↓ | 声明可用（部分缺失） ↓ | Phase 3起可用 ↑ |
 
 ---
 
-## 7. API 契约对比
+## 8. API契约详细对比
 
-### 7.1 MCP 协议
+### 8.1 MCP协议
 
-| 对比维度 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
+| 对比维度 | 7.0.0 | 8.0.0 | 8.1.0 | 9.0.0 |
 |----------|--------|--------|--------|--------|
-| API版本 | 无 | MCP API v3.0.0 🔵 | MCP API v3.0.0 | MCP API v4.0.0 🟢 |
-| MCP工具数 | 0 | 26个(11+15全量实现) 🟢 | 26个（工具链优化） 🟢 | 26+个（全量实现+扩展） 🟢 |
-| 工具列表动态更新 | 无 | listChanged: False 🔴 | listChanged: False | listChanged: True 🔵 |
-| Resource协议 | 无 ⚪ | 0 Resources ⚪ | 0 Resources | 计划Resource URI 🔵 |
-| Resource订阅 | 无 ⚪ | 无（0 Resources） | 无 | 支持订阅 🔵 |
-| Prompt模板 | 无 ⚪ | 未利用MCP Prompt协议 🔴 | 未利用 | 代码审查等场景复用 🔵 |
-| 工具Annotations | 无 | 无 | readOnlyHint/destructiveHint等 🔵 | 完整Annotations 🟢 |
+| API版本 | 无 | MCP API v3.0.0 ★ | MCP API v3.0.0 | MCP API v4.0.0 ↑ |
+| MCP工具数 | 0 ↓ | 26个(11+15全量实现) ★ | 26个（工具链优化） ↑ | 26+个（全量实现+扩展） ↑ |
+| 工具列表动态更新 | 无 ↓ | listChanged: False ↓ | listChanged: False | listChanged: True ★ |
+| Resource协议 | 无 ↓ | 0 Resources ↓ | 0 Resources | 计划Resource URI ★ |
+| Resource订阅 | 无 ↓ | 无（0 Resources） | 无 | 支持订阅 ★ |
+| Prompt模板 | 无 ↓ | 未利用MCP Prompt协议 ↓ | 未利用 | 代码审查等场景复用 ★ |
+| 工具Annotations | 无 | 无 | readOnlyHint/destructiveHint等 ★ | 完整Annotations ↑ |
 
-### 7.2 响应格式
+### 8.2 响应格式
 
-| 对比维度 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
+| 对比维度 | 7.0.0 | 8.0.0 | 8.1.0 | 9.0.0 |
 |----------|--------|--------|--------|--------|
-| MCP响应格式 | 无 | TextContent(JSON) | TextContent(JSON) | TextContent(JSON) |
-| HTTP响应格式 | 无 | 直接JSON | 直接JSON | 统一JSON（与MCP相同Schema） 🟢 |
-| 错误响应格式 | 无 | 不统一 🔴 | code/message/details/retryable 🟢 | 统一错误码 + HTTP状态码映射 🟢 |
-| isError标记 | 无 | 未区分协议错误与工具执行错误 🔴 | 区分协议错误与工具执行错误 🟢 | 完整错误分类 🟢 |
-| 版本兼容性检查 | 无 | 无 🔴 | server_health版本校验 🟢 | 双向版本声明 + 自动兼容检测 🟢 |
+| MCP响应格式 | 无 | TextContent(JSON) ★ | TextContent(JSON) | TextContent(JSON) |
+| HTTP响应格式 | 无 | 直接JSON ★ | 直接JSON | 统一JSON（与MCP相同Schema） ↑ |
+| 错误响应格式 | 无 | 不统一 ↓ | code/message/details/retryable ↑ | 统一错误码 + HTTP状态码映射 ↑ |
+| isError标记 | 无 | 未区分协议错误与工具执行错误 ↓ | 区分协议错误与工具执行错误 ↑ | 完整错误分类 ↑ |
+| 版本兼容性检查 | 无 ↓ | 无 ↓ | server_health版本校验 ↑ | 双向版本声明 + 自动兼容检测 ↑ |
 
-### 7.3 命令路由
+### 8.3 命令路由
 
-| 对比维度 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
+| 对比维度 | 7.0.0 | 8.0.0 | 8.1.0 | 9.0.0 |
 |----------|--------|--------|--------|--------|
-| 路由定义 | 基础命令映射 | intent→command→mcp_tools→fallback→phase 🔵 | 精简/完整路由按Phase加载 🟢 | 完整路由 + 降级策略 + 调用协议 🟢 |
-| 路由优先级 | 无 | 精确>语义>更具体命令>/sprint兜底 🔵 | 同v8.0.0 | 同v8.0.0 + 动态路由权重 🟢 |
-| 调用时序规范 | 无 | 无 🔴 | 基础时序定义 🔵 | 完整时序（30s/Tool, 120s/链） 🟢 |
-| 重试策略 | 无 | 仅HTTP update_entry有版本冲突重试 🔴 | 分层重试 🔵 | 分层重试 + 指数退避 + 异步重试 🟢 |
+| 路由定义 | 基础命令映射 | intent→command→mcp_tools→fallback→phase ★ | 精简/完整路由按Phase加载 ↑ | 完整路由 + 降级策略 + 调用协议 ↑ |
+| 路由优先级 | 无 | 精确>语义>更具体命令>/sprint兜底 ★ | 同8.0.0 | 同8.0.0 + 动态路由权重 ↑ |
+| 调用时序规范 | 无 ↓ | 无 ↓ | 基础时序定义 ★ | 完整时序（30s/Tool, 120s/链） ↑ |
+| 重试策略 | 无 | 仅HTTP update_entry有版本冲突重试 ↓ | 分层重试 ★ | 分层重试 + 指数退避 + 异步重试 ↑ |
 
 ---
 
-## 8. 数据模型对比
+## 9. 数据模型详细对比
 
-### 8.1 存储引擎
+### 9.1 存储引擎
 
-| 对比维度 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
+| 对比维度 | 7.0.0 | 8.0.0 | 8.1.0 | 9.0.0 |
 |----------|--------|--------|--------|--------|
-| 主存储 | SQLite | SQLite + FTS5 🟢 | SQLite + FTS5 + 对账机制 🟢 | SQLite + FTS5 + 对账 + 自动修复 🟢 |
-| 向量存储 | ChromaDB | ChromaDB PersistentClient | ChromaDB + 双写确认 🟢 | ChromaDB单集合 + embedding_tier标记 🟢 |
-| 双引擎一致性 | 无保障 | 无事务保证，embedding写入失败仅标记pending 🔴 | 双写确认 + 定时对账 🟢 | 自动修复成功率≥95% 🟢 |
-| ChromaDB集合 | 单集合 | knowledge + knowledge_primary双集合 🔴 | 双集合 + 一致性检查 🟢 | 单集合 + 元数据标记 🟢 |
-| Schema迁移 | 无 | v9-v12仅前向迁移 | 前向迁移 | 前向迁移 + 回滚机制 🔵 |
+| 主存储 | SQLite | SQLite + FTS5 ↑ | SQLite + FTS5 + 对账机制 ↑ | SQLite + FTS5 + 对账 + 自动修复 ↑ |
+| 向量存储 | ChromaDB | ChromaDB PersistentClient | ChromaDB + 双写确认 ↑ | ChromaDB单集合 + embedding_tier标记 ↑ |
+| 双引擎一致性 | 无保障 ↓ | 无事务保证，embedding写入失败仅标记pending ↓ | 双写确认 + 定时对账 ↑ | 自动修复成功率≥95% ↑ |
+| ChromaDB集合 | 单集合 | knowledge + knowledge_primary双集合 ↓ | 双集合 + 一致性检查 ↑ | 单集合 + 元数据标记 ↑ |
+| Schema迁移 | 无 | v9-v12仅前向迁移 | 前向迁移 | 前向迁移 + 回滚机制 ★ |
 
-### 8.2 状态持久化
+### 9.2 状态持久化
 
-| 对比维度 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
+| 对比维度 | 7.0.0 | 8.0.0 | 8.1.0 | 9.0.0 |
 |----------|--------|--------|--------|--------|
-| 会话状态 | Markdown存储 | Markdown存储（无法程序化查询） 🔴 | Markdown存储 | SQLite session_states表 🟢 |
-| 决策日志 | 无持久化 | 数据存储机制未定义 🔴 | 内联JSON记录 | SQLite decision_logs表 🟢 |
-| Token预算状态 | 无 | 仅存于内存 🔴 | 仅存于内存 | SQLite token_budget_states表 🟢 |
-| resource_state.json | v2格式 | v3格式（新增phase字段） 🟢 | v3格式 + 自动升级 🟢 | v3格式 + LoadingProgress结构 🟢 |
-| 经验模式 | 无索引 | JSON文件无统一索引 🔴 | JSON文件无统一索引 | SQLite experience_patterns表 🟢 |
-| 备份加密 | 无 | 默认明文（需手动设置KNOWLEDGE_BACKUP_KEY） 🔴 | 默认AES-256加密 🟢 | 默认AES-256 + 密钥轮换 🟢 |
+| 会话状态 | Markdown存储 | Markdown存储（无法程序化查询） ↓ | Markdown存储 | SQLite session_states表 ★ |
+| 决策日志 | 无持久化 ↓ | 数据存储机制未定义 ↓ | 内联JSON记录 | SQLite decision_logs表 ★ |
+| Token预算状态 | 无 ↓ | 仅存于内存 ↓ | 仅存于内存 | SQLite token_budget_states表 ★ |
+| resource_state.json | v2格式 | v3格式（新增phase字段） ↑ | v3格式 + 自动升级 ↑ | v3格式 + LoadingProgress结构 ↑ |
+| 经验模式 | 无索引 ↓ | JSON文件无统一索引 ↓ | JSON文件无统一索引 | SQLite experience_patterns表 ★ |
+| 备份加密 | 无加密 ↓ | 默认明文（需手动设置KNOWLEDGE_BACKUP_KEY） ↓ | 默认AES-256加密 ↑ | 默认AES-256 + 密钥轮换 ↑ |
 
-### 8.3 配置管理
+### 9.3 配置管理
 
-| 对比维度 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
+| 对比维度 | 7.0.0 | 8.0.0 | 8.1.0 | 9.0.0 |
 |----------|--------|--------|--------|--------|
-| 配置文件数 | 少量 | 分散在6+文件 🔴 | 分散在6+文件 | 统一配置入口 🔵 |
-| 配置热重载 | 需重启 | 声明.xuansto-config.yaml 🔵 | watchfiles事件驱动 🟢 | watchfiles + 远程同步 🟢 |
-| constraints.yaml版本 | 7.0.0 | 8.0.0 🟢 | 8.1.0 🟢 | 9.0.0 🟢 |
-| 触发条件来源 | SKILL.md内嵌 | SKILL.md + triggers.yaml冗余 🔴 | 废弃triggers.yaml，SKILL.md单一来源 🟢 | SKILL.md单一来源 |
+| 配置文件数 | 少量 | 分散在6+文件 ↓ | 分散在6+文件 | 统一配置入口 ★ |
+| 配置热重载 | 需重启 | 声明.xuansto-config.yaml ★ | watchfiles事件驱动 ↑ | watchfiles + 远程同步 ↑ |
+| constraints.yaml版本 | 7.0.0 | 8.0.0 ↑ | 8.1.0 ↑ | 9.0.0 ↑ |
+| 触发条件来源 | SKILL.md内嵌 | SKILL.md + triggers.yaml冗余 ↓ | 废弃triggers.yaml，SKILL.md单一来源 ↑ | SKILL.md单一来源 |
 
 ---
 
-## 9. 降级策略对比
+## 10. 降级策略详细对比
 
-### 9.1 降级链
+### 10.1 降级链
 
-| 对比维度 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
+| 对比维度 | 7.0.0 | 8.0.0 | 8.1.0 | 9.0.0 |
 |----------|--------|--------|--------|--------|
-| 降级层级 | 无统一降级 | 3级声明（MCP→脚本→内联） 🔵 | 3级实际可用 🟢 | 3级 + 统一降级协调器 🟢 |
-| 降级检测 | 无 | 尝试调用skill_analyze，失败则进入降级模式 🔵 | 健康检查 + 自动检测 🟢 | 健康检查 + 定期巡检 + 自动恢复 🟢 |
-| 脚本降级 | 无 | constraints.yaml声明映射，degradation.py未实际调用 🔴 | degradation.py实际调用scripts/ 🟢 | 统一降级协调器调度 🟢 |
-| 降级结果格式 | 无 | 声明与MCP相同JSON结构 | 实际包装为MCP相同JSON结构 🟢 | 统一响应契约 + Schema校验 🟢 |
-| 知识检索降级 | ChromaDB→SQLite→关键词 | 声明3级降级 | 3级降级 + FTS5可用性检测 🟢 | 3级降级 + 自动恢复 🟢 |
-| 嵌入降级 | 无 | OpenAI→ST→不可用（声明） | 3级嵌入降级实际可用 🟢 | 3级嵌入 + 自动恢复 🟢 |
-| MCP→脚本映射 | 无 | 26个工具声明降级脚本路径 🔵 | 全部工具可降级到脚本执行 🟢 | 全部工具 + 脚本健康检查 🟢 |
+| 降级层级 | 无统一降级 ↓ | 3级声明（MCP→脚本→内联） ★ | 3级实际可用 ↑ | 3级 + 统一降级协调器 ↑ |
+| 降级检测 | 无 ↓ | 尝试调用skill_analyze，失败则进入降级模式 ★ | 健康检查 + 自动检测 ↑ | 健康检查 + 定期巡检 + 自动恢复 ↑ |
+| 脚本降级 | 无 ↓ | constraints.yaml声明映射，degradation.py未实际调用 ↓ | degradation.py实际调用scripts/ ↑ | 统一降级协调器调度 ↑ |
+| 降级结果格式 | 无 ↓ | 声明与MCP相同JSON结构 | 实际包装为MCP相同JSON结构 ↑ | 统一响应契约 + Schema校验 ↑ |
+| 知识检索降级 | ChromaDB→SQLite→关键词 | 声明3级降级 | 3级降级 + FTS5可用性检测 ↑ | 3级降级 + 自动恢复 ↑ |
+| 嵌入降级 | 无 ↓ | OpenAI→ST→不可用（声明） | 3级嵌入降级实际可用 ↑ | 3级嵌入 + 自动恢复 ↑ |
+| MCP→脚本映射 | 无 ↓ | 26个工具声明降级脚本路径 ★ | 全部工具可降级到脚本执行 ↑ | 全部工具 + 脚本健康检查 ↑ |
 
-### 9.2 降级脚本映射
+### 10.2 降级脚本映射
 
-| MCP工具 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
+| MCP工具 | 7.0.0 | 8.0.0 | 8.1.0 | 9.0.0 |
 |---------|--------|--------|--------|--------|
-| skill_analyze | 无 | scripts/skill-test.py --analyze | 实际可调用 🟢 | 实际可调用 + 结果校验 🟢 |
-| quality_gate_check | 无 | scripts/skill-test.py --gate | 实际可调用 🟢 | 实际可调用 + 结果校验 🟢 |
-| knowledge_search | 无 | scripts/knowledge-server.py --search | 实际可调用 🟢 | 实际可调用 + 结果校验 🟢 |
-| security_scan | 无 | scripts/agentic-security-scanner.py | 实际可调用 🟢 | 实际可调用 + 结果校验 🟢 |
-| code_simplify | 无 | scripts/code-simplifier.py | 实际可调用 🟢 | 实际可调用 + 结果校验 🟢 |
-| session_manage | 无 | scripts/init-session.py / session-catchup.py | 实际可调用 🟢 | 实际可调用 + 结果校验 🟢 |
-| workflow_dispatch | 无 | scripts/project-initializer.py | 实际可调用 🟢 | 实际可调用 + 结果校验 🟢 |
-| context_compress | 无 | scripts/context-compressor.py | 实际可调用 🟢 | 实际可调用 + 结果校验 🟢 |
-| server_health | 无 | scripts/health-checker.py | 实际可调用 🟢 | 实际可调用 + 版本校验 🟢 |
+| skill_analyze | 无 | scripts/skill-test.py --analyze | 实际可调用 ↑ | 实际可调用 + 结果校验 ↑ |
+| quality_gate_check | 无 | scripts/skill-test.py --gate | 实际可调用 ↑ | 实际可调用 + 结果校验 ↑ |
+| knowledge_search | 无 | scripts/knowledge-server.py --search | 实际可调用 ↑ | 实际可调用 + 结果校验 ↑ |
+| security_scan | 无 | scripts/agentic-security-scanner.py | 实际可调用 ↑ | 实际可调用 + 结果校验 ↑ |
+| code_simplify | 无 | scripts/code-simplifier.py | 实际可调用 ↑ | 实际可调用 + 结果校验 ↑ |
+| session_manage | 无 | scripts/init-session.py / session-catchup.py | 实际可调用 ↑ | 实际可调用 + 结果校验 ↑ |
+| workflow_dispatch | 无 | scripts/project-initializer.py | 实际可调用 ↑ | 实际可调用 + 结果校验 ↑ |
+| context_compress | 无 | scripts/context-compressor.py | 实际可调用 ↑ | 实际可调用 + 结果校验 ↑ |
+| server_health | 无 | scripts/health-checker.py | 实际可调用 ↑ | 实际可调用 + 版本校验 ↑ |
 
 ---
 
-## 10. 安全与质量对比
+## 11. 测试覆盖详细对比
 
-### 10.1 安全机制
+### 11.1 测试层级
 
-| 对比维度 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
+| 对比维度 | 7.0.0 | 8.0.0 | 8.1.0 | 9.0.0 |
 |----------|--------|--------|--------|--------|
-| 安全扫描 | 基础 | OWASP + 依赖扫描 🔵 | OWASP + 依赖扫描 | OWASP + Agentic Top 10 + MCP Top 10 🟢 |
-| 安全硬门禁 | 无 | 声明（但autonomous模式可绕过） 🔴 | 生产部署/密钥轮换不受timeout限制 🟢 | 安全硬门禁不可绕过 🟢 |
-| 渗透测试 | 基础 | AI渗透测试 🔵 | AI渗透测试 | AI渗透测试 + 自动修复 🟢 |
-| 输入验证 | 基础 | InputValidator + SensitiveContentFilter + RateLimiter 🟢 | 同v8.0.0 | 同v8.0.0 + Schema严格校验 🟢 |
-| 备份安全 | 无加密 | 默认明文 🔴 | 默认AES-256加密 🟢 | 默认AES-256 + 密钥轮换 🟢 |
-| IPC安全 | 基础 | IPC契约验证 🔵 | IPC契约验证 | IPC安全 + 代码签名强制 🟢 |
+| 单元测试 | 无 ↓ | knowledge_server/内5个测试文件（仅知识检索） ★ | +工具处理器独立测试 ↑ | 全量工具单元测试 ↑ |
+| 集成测试 | 无 ↓ | 无 ↓ | Skill-MCP联动测试 ★ | Skill-MCP + 降级链集成测试 ↑ |
+| 端到端测试 | 无 ↓ | 无 ↓ | 无 ↓ | Web/桌面/降级全链路E2E ★ |
+| 性能测试 | 无 ↓ | 无 ↓ | Token预算控制测试 ★ | +响应时间+并发+流式性能 ↑ |
+| 回归验证 | 无 ↓ | 无 ↓ | 基本回归方案 ★ | 完整回归验证方案 ↑ |
 
-### 10.2 质量保障
+### 11.2 测试覆盖范围
 
-| 对比维度 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
+| 测试对象 | 7.0.0 | 8.0.0 | 8.1.0 | 9.0.0 |
 |----------|--------|--------|--------|--------|
-| 质量门禁总数 | 无统一门禁 | 54项 🔵 | 54项 | 54项 + 自动修复建议 🟢 |
-| 门禁级别 | 无 | BLOCK / WARN 🔵 | BLOCK / WARN | BLOCK / WARN / AUTO-FIX 🔵 |
-| 规格偏差检测 | 无 | spec_drift_detect声明 🔵 | 声明 | 实际可用 + 自动修复建议 🟢 |
-| 代码简化 | 无 | code_simplify声明 🔵 | 声明 | 实际可用 + 去重检测 🟢 |
-| 评估框架 | 无 | 2个文件但无实际流程 🔴 | 2个文件 | 完整评估框架 🔵 |
-| Hook系统 | 静态配置 | 3级14个Hook（仅security-block有实现） 🔴 | security-block + token-budget-check 🟢 | 全部14个Hook完整实现 🟢 |
-| 置信度阈值 | 无 | ≥80%审查置信度 🔵 | ≥80% | ≥80% + 经验提取≥0.8 🟢 |
+| MCP工具单元测试 | 无 | 仅知识检索5个 | 每个处理器有test_*.py ↑ | 全量26+工具覆盖 ↑ |
+| 降级链测试 | 无 | 无 ↓ | MCP→脚本→内联三级降级 ★ | 三级降级 + 自适应降级 ↑ |
+| 渐进式加载测试 | 无 | 无 ↓ | Phase推进/降级测试 ★ | +Resource加载+流式 ↑ |
+| 双向同步测试 | 无 | 无 ↓ | LoadingSyncBridge测试 ★ | +同步延迟+并发 ↑ |
+| 数据一致性测试 | 无 | 无 ↓ | SQLite/ChromaDB对账 ★ | +自动修复+崩溃恢复 ↑ |
+| 安全测试 | 无 | 基本安全扫描 ★ | +门禁不可绕过 ↑ | +渗透测试+合规审查 ↑ |
 
-### 10.3 Hook系统
+### 11.3 质量门禁
 
-| Hook名称 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
-|----------|--------|--------|--------|--------|
-| security-block (PreToolUse) | 无 | ✅ 实现 | ✅ 实现 | ✅ 实现 |
-| token-budget-check (PreToolUse) | 无 | 声明未实现 🔴 | ✅ 实现 🟢 | ✅ 实现 |
-| dangerous-cmd-confirm (PreToolUse) | 无 | 声明未实现 🔴 | 声明未实现 | ✅ 实现 🟢 |
-| auto-format (PostToolUse) | 无 | 声明未实现 🔴 | 声明未实现 | ✅ 实现 🟢 |
-| encoding-check (PostToolUse) | 无 | 声明未实现 🔴 | 声明未实现 | ✅ 实现 🟢 |
-| console-log-detect (PostToolUse) | 无 | 声明未实现 🔴 | 声明未实现 | ✅ 实现 🟢 |
-| type-check (PostToolUse) | 无 | 声明未实现 🔴 | 声明未实现 | ✅ 实现 🟢 |
-| session-save (Stop) | 无 | 声明未实现 🔴 | ✅ 实现 🟢 | ✅ 实现 |
-| git-status-check (Stop) | 无 | 声明未实现 🔴 | 声明未实现 | ✅ 实现 🟢 |
-| experience-precipitate (Stop) | 无 | 声明未实现 🔴 | 声明未实现 | ✅ 实现 🟢 |
-| save-state (PreCompact) | 无 | 声明未实现 🔴 | ✅ 实现 🟢 | ✅ 实现 |
-| decision-log-persist (PreCompact) | 无 | 声明未实现 🔴 | 声明未实现 | ✅ 实现 🟢 |
+| 门禁 | 7.0.0 | 8.0.0 | 8.1.0 | 9.0.0 |
+|------|--------|--------|--------|--------|
+| 单元测试通过率 | 无 | 无 ↓ | 100% BLOCK ★ | 100% BLOCK |
+| 代码覆盖率 | 无 | 无 ↓ | ≥80% BLOCK ★ | ≥80% BLOCK |
+| MCP Tool Schema校验 | 无 | 无 ↓ | 100% BLOCK ★ | 100% BLOCK |
+| Lint错误数 | 无 | 无 ↓ | 0 BLOCK ★ | 0 BLOCK |
+| 降级测试通过率 | 无 | 无 ↓ | ≥90% WARN ★ | ≥90% WARN |
+| E2E测试通过率 | 无 | 无 ↓ | 无 ↓ | ≥95% WARN ★ |
+| 双向同步延迟 | 无 | 无 ↓ | ≤100ms WARN ★ | ≤50ms WARN ↑ |
 
 ---
 
-## 11. 已知限制与问题对比
+## 12. 已知限制详细对比
 
-### 11.1 紧急问题 (P0)
+### 12.1 紧急问题 (P0)
 
-| 问题编号 | 问题描述 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
+| 问题编号 | 问题描述 | 7.0.0 | 8.0.0 | 8.1.0 | 9.0.0 |
 |----------|----------|--------|--------|--------|--------|
-| UNIFIED-01 | 降级链断裂：MCP→脚本→内联三级降级未实际实现 | N/A | ❌ 存在 | ✅ 修复 🟢 | ✅ 已修复 |
-| UNIFIED-02 | 参考文档不完整（v2 references/ 80+文件但SKILL.md仅列6个） | N/A | ❌ 存在 | ❌ 存在 | ✅ 修复 🟢 |
-| UNIFIED-03 | MCP工具数量声明不一致（实际26个全量实现，文档声明有误） | N/A | ❌ 存在 | ✅ 修复 🟢 | ✅ 已修复 |
-| UNIFIED-04 | 双引擎一致性风险（SQLite与ChromaDB无事务保证） | N/A | ❌ 存在 | ✅ 修复 🟢 | ✅ 已修复 |
+| ARCH-04 | Skill层与MCP层加载状态双向同步缺失 | N/A | ❌ 存在 | ✅ 修复 ↑ | ✅ 已修复 |
+| UNIFIED-01 | 降级链断裂：MCP→脚本→内联三级降级未实际实现 | N/A | ❌ 存在 | ✅ 修复 ↑ | ✅ 已修复 |
+| UNIFIED-04 | 双引擎一致性风险（SQLite与ChromaDB无事务保证） | N/A | ❌ 存在 | ✅ 修复 ↑ | ✅ 已修复 |
 
-### 11.2 高优先级问题 (P1)
+### 12.2 高优先级问题 (P1)
 
-| 问题编号 | 问题描述 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
+| 问题编号 | 问题描述 | 7.0.0 | 8.0.0 | 8.1.0 | 9.0.0 |
 |----------|----------|--------|--------|--------|--------|
-| UNIFIED-05 | 备份无加密默认 | N/A | ❌ 存在 | ✅ 修复 🟢 | ✅ 已修复 |
-| UNIFIED-06 | Skill与MCP Server版本不一致 | N/A | ❌ 存在 | ✅ 修复 🟢 | ✅ 已修复 |
-| UNIFIED-07 | PHASE标记未嵌入SKILL.md | N/A | ❌ 存在 | ✅ 修复 🟢 | ✅ 已修复 |
-| UNIFIED-08 | Token预算无运行时强制机制 | N/A | ❌ 存在 | ✅ 修复 🟢 | ✅ 已修复 |
-| UNIFIED-09 | MCP/HTTP响应格式不统一 | N/A | ❌ 存在 | ✅ 修复 🟢 | ✅ 已修复 |
-| UNIFIED-10 | 异常处理分散，缺乏统一协调 | N/A | ❌ 存在 | ❌ 存在 | ✅ 修复 🟢 |
-| UNIFIED-11 | MCP工具数量声明不一致 | N/A | ❌ 存在 | ✅ 修复 🟢 | ✅ 已修复 |
-| UNIFIED-12 | 安全硬门禁在autonomous模式下可被绕过 | N/A | ❌ 存在 | ❌ 存在 | ✅ 修复 🟢 |
-| UNIFIED-13 | ChromaDB集合分裂 | N/A | ❌ 存在 | ❌ 存在 | ✅ 修复 🟢 |
-| UNIFIED-14 | 会话状态无结构化存储 | N/A | ❌ 存在 | ❌ 存在 | ✅ 修复 🟢 |
-| UNIFIED-15 | 决策日志无持久化 | N/A | ❌ 存在 | ❌ 存在 | ✅ 修复 🟢 |
-| UNIFIED-16 | Token预算状态无持久化 | N/A | ❌ 存在 | ✅ 修复 🟢 | ✅ 已修复 |
+| ARCH-01 | skill_tools.py单文件2300+行，需模块化拆分 | N/A | ❌ 存在 | ✅ 修复 ↑ | ✅ 已修复 |
+| ARCH-02 | mcp_server.py工具注册与处理逻辑耦合 | N/A | ❌ 存在 | ✅ 修复 ↑ | ✅ 已修复 |
+| ARCH-03 | 降级映射硬编码与YAML配置重复定义 | N/A | ❌ 存在 | ✅ 修复 ↑ | ✅ 已修复 |
+| MCP-01 | 26个工具全部在单一文件注册，无法独立测试 | N/A | ❌ 存在 | ✅ 修复 ↑ | ✅ 已修复 |
+| UNIFIED-05 | 备份无加密默认 | N/A | ❌ 存在 | ✅ 修复 ↑ | ✅ 已修复 |
+| UNIFIED-06 | Skill与MCP Server版本不一致 | N/A | ❌ 存在 | ✅ 修复 ↑ | ✅ 已修复 |
+| UNIFIED-07 | PHASE标记未嵌入SKILL.md | N/A | ❌ 存在 | ✅ 修复 ↑ | ✅ 已修复 |
+| UNIFIED-08 | Token预算无运行时强制机制 | N/A | ❌ 存在 | ✅ 修复 ↑ | ✅ 已修复 |
+| UNIFIED-09 | MCP/HTTP响应格式不统一 | N/A | ❌ 存在 | ✅ 修复 ↑ | ✅ 已修复 |
+| UNIFIED-11 | MCP工具数量声明不一致 | N/A | ❌ 存在 | ✅ 修复 ↑ | ✅ 已修复 |
+| UNIFIED-16 | Token预算状态无持久化 | N/A | ❌ 存在 | ✅ 修复 ↑ | ✅ 已修复 |
 
-### 11.3 中/低优先级问题 (P2/P3)
+### 12.3 中/低优先级问题 (P2/P3)
 
-| 问题编号 | 问题描述 | v5.0.0 | v8.0.0 | v8.1.0 | v9.0.0 |
+| 问题编号 | 问题描述 | 7.0.0 | 8.0.0 | 8.1.0 | 9.0.0 |
 |----------|----------|--------|--------|--------|--------|
-| UNIFIED-17 | server_health文档缺失 | N/A | ❌ 存在 | ❌ 存在 | ✅ 修复 🟢 |
-| UNIFIED-19 | Resource未暴露（实际0个Resource，无@mcp.resource()装饰器） | N/A | ❌ 存在 | ❌ 存在 | ✅ 修复 🟢 |
-| UNIFIED-20 | Skill↔MCP Server缺乏显式调用协议 | N/A | ❌ 存在 | ❌ 存在 | ✅ 修复 🟢 |
-| UNIFIED-22 | Agent定义文件全量加载 | N/A | ❌ 存在 | ✅ 修复 🟢 | ✅ 已修复 |
-| UNIFIED-23 | Hook系统仅security-block有实际实现 | N/A | ❌ 存在 | ⚠️ 部分修复 | ✅ 修复 🟢 |
-| UNIFIED-27 | 触发条件三处冗余 | N/A | ❌ 存在 | ✅ 修复 🟢 | ✅ 已修复 |
-| UNIFIED-33 | 工具列表静态(listChanged: False) | N/A | ❌ 存在 | ❌ 存在 | ✅ 修复 🟢 |
-| UNIFIED-42 | SKILL.md行数可能超500行 | N/A | ❌ 存在 | ❌ 存在 | ✅ 修复 🟢 |
+| UNIFIED-02 | 参考文档不完整 | N/A | ❌ 存在 | ❌ 存在 | ✅ 修复 ↑ |
+| UNIFIED-10 | 异常处理分散，缺乏统一协调 | N/A | ❌ 存在 | ❌ 存在 | ✅ 修复 ↑ |
+| UNIFIED-12 | 安全硬门禁在autonomous模式下可被绕过 | N/A | ❌ 存在 | ❌ 存在 | ✅ 修复 ↑ |
+| UNIFIED-13 | ChromaDB集合分裂 | N/A | ❌ 存在 | ❌ 存在 | ✅ 修复 ↑ |
+| UNIFIED-14 | 会话状态无结构化存储 | N/A | ❌ 存在 | ❌ 存在 | ✅ 修复 ↑ |
+| UNIFIED-15 | 决策日志无持久化 | N/A | ❌ 存在 | ❌ 存在 | ✅ 修复 ↑ |
+| UNIFIED-19 | Resource未暴露 | N/A | ❌ 存在 | ❌ 存在 | ✅ 修复 ↑ |
+| UNIFIED-20 | Skill↔MCP Server缺乏显式调用协议 | N/A | ❌ 存在 | ❌ 存在 | ✅ 修复 ↑ |
+| UNIFIED-22 | Agent定义文件全量加载 | N/A | ❌ 存在 | ✅ 修复 ↑ | ✅ 已修复 |
+| UNIFIED-23 | Hook系统仅security-block有实际实现 | N/A | ❌ 存在 | ⚠️ 部分修复 | ✅ 修复 ↑ |
+| UNIFIED-27 | 触发条件三处冗余 | N/A | ❌ 存在 | ✅ 修复 ↑ | ✅ 已修复 |
+| UNIFIED-33 | 工具列表静态(listChanged: False) | N/A | ❌ 存在 | ❌ 存在 | ✅ 修复 ↑ |
+| UNIFIED-42 | SKILL.md行数可能超500行 | N/A | ❌ 存在 | ❌ 存在 | ✅ 修复 ↑ |
+
+### 12.4 已知限制汇总
+
+| 版本 | 核心限制 | 影响 |
+|------|----------|------|
+| **7.0.0** | 无MCP协议支持 / 无统一降级 / 无Token控制 / 全量加载 | 无法按需加载，Token浪费严重，无降级容错 |
+| **8.0.0** | 工具耦合(单文件2300+行) / 无双向同步 / 降级链声明未实现 / 数据一致性风险 | 渐进式加载声明但未生效，降级不可靠，维护困难 |
+| **8.1.0** | 数据一致性(部分P2问题未修复) / 参考文档不完整 / Hook部分实现 | 高优先级问题已修复，中低优先级遗留 |
+| **9.0.0** | 待定（远期规划，具体限制待实现后评估） | — |
 
 ---
 
-## 12. 版本演进路线图
+## 13. 迁移影响分析
 
-### 12.1 变更标注汇总
+### 13.1 7.0.0 → 8.0.0 迁移
 
-| 版本 | 🟢增强 | 🔴削弱 | ⚪废弃 | 🔵新增 | 修复问题数 |
+| 迁移维度 | 影响评估 | 详情 |
+|----------|----------|------|
+| **迁移成本** | 🔴 高 | 架构从纯Skill内嵌迁移到MCP+Skill双层，需安装MCP Server、重写工具调用方式 |
+| **破坏性变更** | 🔴 高 | Phase编号从0-8(工作流)变更为0-3(加载阶段)；resource_state.json格式v2→v3；新增MCP依赖 |
+| **配置迁移** | 🟡 中 | 新增.xuansto-config.yaml；constraints.yaml版本7.0.0→8.0.0；新增token_budgets/resource_priority/disclosure配置 |
+| **命令迁移** | 🟢 低 | 27个命令完全兼容，新增4个命令(/sdd-tdd-medium, /sdd-tdd-fast, /decision, /budget) |
+| **数据迁移** | 🟡 中 | 删除旧resource_state.json，新版本自动创建v3格式；ChromaDB路径迁移 |
+| **风险点** | 🔴 高 | MCP Server安装失败则全部功能不可用（降级链未实际实现）；Token预算声明但未强制执行 |
+
+**迁移步骤**：
+
+1. 安装 xuansto-mcp-server ≥4.0.0
+2. 配置MCP服务器连接（stdio或HTTP）
+3. 替换Skill目录：xuansto-skill/ → xuansto-skill-v2/
+4. 删除旧 .xuansto/resource_state.json
+5. 验证：resource_load_status(action="status") + server_health(action="check")
+
+### 13.2 8.0.0 → 8.1.0 迁移
+
+| 迁移维度 | 影响评估 | 详情 |
+|----------|----------|------|
+| **迁移成本** | 🟡 中 | 基础设施重构，模块化拆分，但API接口向后兼容 |
+| **破坏性变更** | 🟢 低 | 无破坏性API变更；constraints.yaml版本8.0.0→8.1.0；PHASE标记嵌入SKILL.md |
+| **配置迁移** | 🟢 低 | constraints.yaml新增phase_mapping配置；废弃triggers.yaml |
+| **代码迁移** | 🟡 中 | skill_tools.py拆分为独立模块；mcp_server.py注册/路由/处理分离；degradation.py从YAML动态读取 |
+| **数据迁移** | 🟢 低 | resource_state.json v3格式不变；备份默认启用AES-256加密 |
+| **风险点** | 🟡 中 | 模块化拆分可能引入回归；双向同步机制新增，需充分测试；降级链实际实现需验证 |
+
+**关键修复项**（R0+R1阶段）：
+
+- R0: 降级链实际实现(UNIFIED-01)、双引擎一致性(UNIFIED-04)、备份加密(UNIFIED-05)、版本对齐(UNIFIED-06)、响应格式统一(UNIFIED-09,11)
+- R1: PHASE标记嵌入(UNIFIED-07)、Token预算运行时强制(UNIFIED-08,16)、Agent按需加载(UNIFIED-22)、触发条件去重(UNIFIED-27)
+
+### 13.3 8.1.0 → 9.0.0 迁移
+
+| 迁移维度 | 影响评估 | 详情 |
+|----------|----------|------|
+| **迁移成本** | 🔴 高 | 下一代架构，涉及Resource协议、流式响应、持久化Agent、自适应降级等重大变更 |
+| **破坏性变更** | 🟡 中 | MCP API v3.0.0→v4.0.0；ChromaDB双集合→单集合+元数据标记；新增Resource URI协议 |
+| **配置迁移** | 🟡 中 | 统一配置入口；constraints.yaml版本8.1.0→9.0.0；新增Resource/流式相关配置 |
+| **数据迁移** | 🔴 高 | 会话/决策/Token预算从文件迁移到SQLite；ChromaDB集合合并；经验模式索引化 |
+| **功能新增** | 🟢 低（纯新增） | Resource协议暴露、Prompt模板、流式响应、多项目支持、自适应降级 |
+| **风险点** | 🔴 高 | 数据迁移复杂度高；ChromaDB集合合并可能丢失数据；流式响应需MCP SDK升级；自适应降级算法需充分验证 |
+
+**关键修复项**（R2+R3+R4阶段）：
+
+- R2: MCP工具补全(UNIFIED-03)、质量安全工具实现、异常处理统一(UNIFIED-10)、ChromaDB集合统一(UNIFIED-13)、会话/决策/Token结构化存储(UNIFIED-14,15,16)、Resource暴露(UNIFIED-19)、SkillToolCall协议(UNIFIED-20)
+- R3: 参考文档补全(UNIFIED-02)、安全门禁加固(UNIFIED-12)、Hook系统实现补全(UNIFIED-23)、SKILL.md瘦身(UNIFIED-42)
+- R4: 重试机制完善、经验模式索引化、FTS5可用性检测、文档补全、低优先级问题批量处理
+
+### 13.4 迁移成本与风险汇总
+
+| 迁移路径 | 迁移成本 | 破坏性变更 | 数据迁移 | 预估工期 | 核心风险 |
+|----------|----------|------------|----------|----------|----------|
+| 7.0.0 → 8.0.0 | 🔴 高 | 🔴 高 | 🟡 中 | 5天 | MCP Server依赖；降级链不可用 |
+| 8.0.0 → 8.1.0 | 🟡 中 | 🟢 低 | 🟢 低 | 15天 | 模块化拆分回归；双向同步可靠性 |
+| 8.1.0 → 9.0.0 | 🔴 高 | 🟡 中 | 🔴 高 | 40天 | 数据迁移复杂度；ChromaDB集合合并；流式协议兼容 |
+
+### 13.5 变更标注汇总
+
+| 版本 | ↑增强 | ↓削弱 | ✗废弃 | ★新增 | 修复问题数 |
 |------|--------|--------|--------|--------|-----------|
-| v5.0.0 → v8.0.0 | 12 | 5 | 3 | 18 | — |
-| v8.0.0 → v8.1.0 | 22 | 0 | 1 | 3 | 11(UNIFIED-01,04,05,06,07,08,09,11,16,22,27) |
-| v8.1.0 → v9.0.0 | 31 | 0 | 0 | 8 | 31(UNIFIED-02,03,10,12,13,14,15,17,18,19,20,21,23,24,25,26,30,31,32,33,34,35,36,37,38,39,40,41,42等) |
-
-### 12.2 各版本核心里程碑
-
-| 版本 | 里程碑 | 对应重构阶段 | 预估工期 |
-|------|--------|-------------|----------|
-| **v8.0.0** | MCP双层架构 + 渐进式加载声明 + Token预算定义 | — | 已发布 |
-| **v8.1.0** | 降级链实际可用 + PHASE标记嵌入 + Token预算强制 + 版本对齐 | R0 + R1 | 15天 |
-| **v9.0.0** | MCP工具扩展补全 + 结构化存储 + Hook完整实现 + Skill瘦身 | R2 + R3 + R4 | 40天 |
-
-### 12.3 关键依赖关系
-
-```
-v8.0.0 (当前)
-  │
-  ├── R0: 基础设施修复 ──────────────────────────────────────┐
-  │   ├── 降级链实际实现 (UNIFIED-01)                          │
-  │   ├── 双引擎一致性保障 (UNIFIED-04)                        │
-  │   ├── 备份加密默认启用 (UNIFIED-05)                        │
-  │   ├── 版本对齐 (UNIFIED-06)                                │
-  │   └── 响应格式统一 (UNIFIED-09, 11)                        │
-  │                                                           │
-  ├── R1: 渐进式加载基础 ← R0 ───────────────────────────────┤
-  │   ├── PHASE标记嵌入 (UNIFIED-07)                           │
-  │   ├── Token预算运行时强制 (UNIFIED-08, 16)                 │
-  │   ├── Agent按需加载 (UNIFIED-22)                           │
-  │   └── 渐进式加载接口统一 (UNIFIED-21)                      │
-  │                                                           │
-  │  ═════════════════ v8.1.0 发布 ═════════════════          │
-  │                                                           │
-  ├── R2: MCP工具补全 ← R0 + R1 ────────────────────────────┤
-  │   ├── MCP工具数量文档对齐 (UNIFIED-03)                    │
-  │   ├── P1质量安全工具实现                                    │
-  │   ├── P2辅助工具实现                                       │
-  │   ├── 异常处理统一 (UNIFIED-10)                            │
-  │   ├── ChromaDB集合统一 (UNIFIED-13)                        │
-  │   ├── 会话/决策/Token结构化存储 (UNIFIED-14,15,16)         │
-  │   ├── Resource暴露 (UNIFIED-19)                            │
-  │   └── SkillToolCall协议定义 (UNIFIED-20)                   │
-  │                                                           │
-  ├── R3: Skill层优化 ← R1 ─────────────────────────────────┤
-  │   ├── 参考文档补全 (UNIFIED-02)                            │
-  │   ├── 安全门禁加固 (UNIFIED-12)                            │
-  │   ├── Hook系统实现补全 (UNIFIED-23, 31)                    │
-  │   ├── Agent合并策略实现 (UNIFIED-24)                       │
-  │   ├── 触发条件去重 (UNIFIED-27)                            │
-  │   └── SKILL.md瘦身 (UNIFIED-42)                            │
-  │                                                           │
-  └── R4: 长尾收尾 ← R2 + R3 ───────────────────────────────┤
-      ├── 重试机制完善 (UNIFIED-25)                            │
-      ├── 经验模式索引化 (UNIFIED-26)                          │
-      ├── FTS5可用性检测 (UNIFIED-30)                          │
-      ├── 文档补全 (UNIFIED-17,18,40)                          │
-      └── 低优先级问题批量处理 (UNIFIED-32~39,41)              │
-                                                              │
-     ═════════════════ v9.0.0 发布 ═════════════════
-```
+| 7.0.0 → 8.0.0 | 12 | 5 | 3 | 18 | — |
+| 8.0.0 → 8.1.0 | 22 | 0 | 1 | 3 | 11(ARCH-01~04, MCP-01, UNIFIED-01,04,05,06,07,08,09,11,16,22,27) |
+| 8.1.0 → 9.0.0 | 31 | 0 | 0 | 8 | 31(UNIFIED-02,03,10,12,13,14,15,17,18,19,20,21,23,24,25,26,30,31,32,33,34,35,36,37,38,39,40,41,42等) |
 
 ---
 
-> 文档结束 | 生成时间: 2026-05-24 | 基于 MIGRATION.md / SKILL.md / constraints.yaml / progressive-loading.md / REFACTOR_PLAN.md / ARCHITECTURE.md 整合
+> 文档结束 | 生成时间: 2026-05-25 | 基于 SKILL.md / constraints.yaml / CHANGELOG.md / MIGRATION.md / REFACTOR_PLAN.md / ARCHITECTURE.md 整合

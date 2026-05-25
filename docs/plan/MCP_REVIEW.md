@@ -1,335 +1,818 @@
-# MCP 综合分析文档 — xuansto-skill-v2
+# MCP审查文档
 
-> 版本: 8.0.0 | 日期: 2026-05-24 | 状态: 审查中
+> 版本: 8.0.0 | 更新日期: 2026-05-25 | 编码: UTF-8 | 行尾: LF
+> Skill目录: `.trae/skills/xuansto-skill-v2/`
 
----
-
-## 目录
-
-1. [现有 MCP 调用盘点](#1-现有-mcp-调用盘点)
-2. [可 MCP 化能力识别](#2-可-mcp-化能力识别)
-3. [目标 MCP Server 设计](#3-目标-mcp-server-设计)
-4. [mcpServers 配置 JSON 示例](#4-mcpservers-配置-json-示例)
-5. [渐进式加载与 MCP 的关联](#5-渐进式加载与-mcp-的关联)
-6. [Skill → MCP 交互协议](#6-skill--mcp-交互协议)
+本文档对 xuansto-skill-v2 的 MCP（Model Context Protocol）调用能力进行全面审查，涵盖现有工具盘点、可MCP化能力识别、目标MCP Server设计、渐进式加载关联以及Skill→MCP交互协议。
 
 ---
 
-## 1. 现有 MCP 调用盘点
+## 1. 现有MCP调用盘点
 
-### 1.1 已实现工具清单
+### 1.1 知识管理工具（11个）
 
-当前 MCP Server（`scripts/knowledge_server/mcp_server.py`）仅实现 **10 个知识库相关工具**：
+定义位置：[mcp_server.py](../../.trae/skills/xuansto-skill-v2/scripts/knowledge_server/mcp_server.py) 的 `list_tools()` 函数。
 
-| # | 工具名 | 类型 | 只读 | 破坏性 | 幂等 | 开放世界 |
-|---|--------|------|------|--------|------|----------|
-| 1 | `knowledge_search` | 查询 | ✅ | ❌ | ✅ | ❌ |
-| 2 | `knowledge_add` | 操作 | ❌ | ❌ | ❌ | ❌ |
-| 3 | `knowledge_update` | 操作 | ❌ | ❌ | ❌ | ❌ |
-| 4 | `knowledge_delete` | 操作 | ❌ | ✅ | ❌ | ❌ |
-| 5 | `knowledge_stats` | 查询 | ✅ | ❌ | ✅ | ❌ |
-| 6 | `knowledge_rollback` | 操作 | ❌ | ✅ | ✅ | ❌ |
-| 7 | `knowledge_auto_retrieve` | 查询 | ✅ | ❌ | ✅ | ❌ |
-| 8 | `knowledge_progressive_search` | 查询 | ✅ | ❌ | ✅ | ❌ |
-| 9 | `knowledge_deep_load` | 查询 | ✅ | ❌ | ✅ | ❌ |
-| 10 | `knowledge_web_update` | 操作 | ❌ | ❌ | ❌ | ✅ |
+| # | 工具名称 | 功能概述 | 权限标注 |
+|---|---------|----------|----------|
+| 1 | `knowledge_search` | 三层知识库检索（hybrid/semantic_only/keyword_only），支持FTS5全文检索和ChromaDB向量检索 | readOnlyHint=True, idempotentHint=True |
+| 2 | `knowledge_add` | 添加知识条目，支持自动去重检测（auto_dedup），相似条目可合并或拒绝 | readOnlyHint=False, destructiveHint=False |
+| 3 | `knowledge_update` | 更新知识条目内容和元数据，乐观锁版本控制，并发修改返回VERSION_CONFLICT | readOnlyHint=False, destructiveHint=False |
+| 4 | `knowledge_delete` | 删除知识条目，不可逆操作，同时删除版本历史 | readOnlyHint=False, destructiveHint=True |
+| 5 | `knowledge_stats` | 知识库统计：条目数/嵌入状态/引擎健康/变更检测 | readOnlyHint=True, idempotentHint=True |
+| 6 | `knowledge_rollback` | 版本回滚到指定版本，当前版本保存到历史 | readOnlyHint=False, destructiveHint=True, idempotentHint=True |
+| 7 | `knowledge_auto_retrieve` | 自动检索：任务类型+技术栈感知，自动检测项目技术栈并生成检索上下文 | readOnlyHint=True, idempotentHint=True |
+| 8 | `knowledge_progressive_search` | 渐进式多轮检索：Token预算控制、按scope优先级搜索、结果截断与裁剪 | readOnlyHint=True, idempotentHint=True |
+| 9 | `knowledge_deep_load` | 深度加载完整条目，绕过Token预算限制返回未截断内容 | readOnlyHint=True, idempotentHint=True |
+| 10 | `knowledge_web_update` | Web文档搜索更新：搜索官方文档并更新/创建知识条目 | readOnlyHint=False, openWorldHint=True |
+| 11 | `resource_load_status` | 渐进式加载状态查询与控制：status/preload/cache/clear_cache/loading_progress | readOnlyHint=False |
 
-### 1.2 声明但未实现工具清单
+#### 知识管理工具参数与返回值详情
 
-SKILL.md 声明 **17 个 MCP 工具**，其中 **7 个完全未实现**，另有 **9 个在 mcp-tools.md 有文档但无代码**：
+**knowledge_search**
 
-| # | 工具名 | 所在域 | 降级脚本 | 实现优先级 |
-|---|--------|--------|----------|------------|
-| 1 | `skill_analyze` | 项目分析 | `scripts/skill-test.py --analyze` | P0 |
-| 2 | `quality_gate_check` | 质量门禁 | `scripts/skill-test.py --gate` | P0 |
-| 3 | `spec_drift_detect` | 规格偏差 | `scripts/spec-drift-detector.py` | P1 |
-| 4 | `security_scan` | 安全扫描 | `scripts/agentic-security-scanner.py` | P1 |
-| 5 | `code_simplify` | 代码简化 | `scripts/code-simplifier.py` | P1 |
-| 6 | `session_manage` | 会话管理 | `scripts/init-session.py` 等 | P0 |
-| 7 | `workflow_dispatch` | 工作流调度 | `scripts/project-initializer.py` | P0 |
-| 8 | `agent_status` | Agent 状态 | 静态注册表查询 | P1 |
-| 9 | `hook_manage` | Hook 管理 | `scripts/check-encoding.py` 等 | P2 |
-| 10 | `resource_load_status` | 资源加载 | 内联状态检查 | P1 |
-| 11 | `context_compress` | 上下文压缩 | `scripts/context-compressor.py` | P1 |
-| 12 | `server_health` | 健康检查 | `scripts/health-checker.py` | P2 |
-| 13 | `decision_log` | 决策日志 | `scripts/decision-log.py` | P2 |
-| 14 | `token_budget` | Token 预算 | `scripts/token-budget-guard.py` | P1 |
-| 15 | `knowledge_inject` | 知识注入 | `scripts/knowledge_server/main.py --inject` | P1 |
-| 16 | `project_init` | 项目初始化 | `scripts/project-initializer.py` | P0 |
-
-此外 `references/mcp-tools.md` 还额外文档化了 2 个工具（未出现在 SKILL.md 摘要表中）：
-
-| # | 工具名 | 说明 |
-|---|--------|------|
-| 17 | `agent_manage` | Agent 实例生命周期管理（从 agent_status 拆分） |
-| 18 | `metrics_report` | 工具调用指标查询与汇总 |
-
-### 1.3 实现差距总览
-
-```mermaid
-graph LR
-    subgraph 已实现["已实现 (10)"]
-        KS[knowledge_search]
-        KA[knowledge_add]
-        KU[knowledge_update]
-        KD[knowledge_delete]
-        KST[knowledge_stats]
-        KR[knowledge_rollback]
-        KAR[knowledge_auto_retrieve]
-        KPS[knowledge_progressive_search]
-        KDL[knowledge_deep_load]
-        KWU[knowledge_web_update]
-    end
-
-    subgraph 未实现["未实现 (8+2)"]
-        SA[skill_analyze]
-        QGC[quality_gate_check]
-        SDD[spec_drift_detect]
-        SS[security_scan]
-        CS[code_simplify]
-        SM[session_manage]
-        WD[workflow_dispatch]
-        AS[agent_status]
-        HM[hook_manage]
-        RLS[resource_load_status]
-        CC[context_compress]
-        SH[server_health]
-        DL[decision_log]
-        TB[token_budget]
-        KI[knowledge_inject]
-        PI[project_init]
-        AM[agent_manage]
-        MR[metrics_report]
-    end
-
-    已实现 -->|知识域完整| 未实现
-    style 已实现 fill:#4CAF50,color:#fff
-    style 未实现 fill:#F44336,color:#fff
+```json
+{
+  "input": {
+    "query": "string (required) - 检索文本",
+    "top_k": "integer (default=5, range 1-50) - 最大返回数",
+    "search_type": "enum [hybrid|semantic_only|keyword_only] (default=hybrid) - 检索策略",
+    "filters": {
+      "type": "array[string] - 按类型过滤",
+      "category": "array[string] - 按分类过滤",
+      "tags": "array[string] - 按标签过滤",
+      "min_confidence": "number (0-1, default=0.0) - 最低置信度"
+    }
+  },
+  "output": {
+    "results": [{"id": "", "type": "", "category": "", "title": "", "content": "", "confidence": 0, "scope": "", "tags": []}],
+    "total": 0,
+    "search_strategy": "",
+    "degradation_level": 0,
+    "degradation_name": ""
+  }
+}
 ```
 
-### 1.4 现有资源（Resource）盘点
+**knowledge_add**
 
-当前 MCP Server **未暴露任何 Resource**。`list_resources` 和 `list_resource_templates` 处理器未注册。
+```json
+{
+  "input": {
+    "content": "string (required) - 知识内容文本",
+    "metadata": {
+      "id": "string (optional) - 自定义ID",
+      "type": "string (default=unknown) - 条目类型",
+      "category": "string (default=uncategorized) - 分类",
+      "tags": "array[string] - 标签",
+      "confidence": "number (0-1, default=0.6) - 置信度",
+      "source": "string - 来源路径"
+    },
+    "auto_dedup": "boolean (default=true) - 自动去重"
+  },
+  "output": {
+    "id": "",
+    "status": "created|merged",
+    "dedup_status": "new|duplicate_merged|duplicate_rejected",
+    "similarity_score": 0
+  }
+}
+```
 
-### 1.5 现有配置
+**knowledge_update**
 
-| 配置项 | 文件 | 当前值 | 说明 |
-|--------|------|--------|------|
-| MCP 协议版本 | `mcp_server.py` | JSON-RPC 2.0 | 通过 `mcp` SDK 实现 |
-| 传输层 | `mcp_server.py` | Stdio | `stdio_server()` |
-| 工具列表变更通知 | `mcp_server.py` | `listChanged: False` | 静态工具列表 |
-| 通信协议 | `configs/default.yaml` | `A2A/v1.1 + mcp_compatible: true` | MCP 兼容模式 |
-| 降级策略 | `constraints.yaml` | MCP → 脚本 → 内联 | 三级降级链 |
-| Token 预算 | `configs/default.yaml` | 100000 | 默认上限 |
+```json
+{
+  "input": {
+    "id": "string (required) - 条目ID",
+    "content": "string (optional) - 新内容",
+    "metadata": {
+      "type": "string",
+      "category": "string",
+      "tags": "array[string]",
+      "confidence": "number (0-1)"
+    }
+  },
+  "output": {
+    "id": "",
+    "status": "updated"
+  }
+}
+```
 
-### 1.6 问题清单
+**knowledge_delete**
 
-| 编号 | 问题 | 严重度 | 说明 |
-|------|------|--------|------|
-| MCP-01 | 工具实现严重不足 | 🔴 严重 | 声明 17 个工具仅实现 10 个（全部为知识域），8 个核心编排工具完全缺失 |
-| MCP-02 | Resource 未暴露 | 🟡 中等 | 知识库条目、项目配置、Agent 注册表等数据未通过 MCP Resource 协议暴露 |
-| MCP-03 | Prompt 模板未实现 | 🟡 中等 | MCP Prompt 协议可复用于代码审查、需求澄清等场景，当前未利用 |
-| MCP-04 | 工具列表静态 | 🟢 低 | `listChanged: False`，无法动态增减工具 |
-| MCP-05 | 降级路径不一致 | 🟡 中等 | 部分工具降级到脚本（如 `skill-test.py`），部分降级到内联逻辑，缺乏统一降级框架 |
-| MCP-06 | 错误码未对齐 MCP 规范 | 🟡 中等 | 自定义错误码（-32100~-32106）与 MCP 规范范围一致，但未使用 `isError` 标记区分协议错误与工具执行错误 |
-| MCP-07 | 无 Resource 订阅机制 | 🟢 低 | 知识库变更、工作流状态变化无法主动通知客户端 |
+```json
+{
+  "input": {
+    "id": "string (required) - 条目ID"
+  },
+  "output": {
+    "id": "",
+    "status": "deleted"
+  }
+}
+```
 
----
+**knowledge_stats**
 
-## 2. 可 MCP 化能力识别
+```json
+{
+  "input": {
+    "detailed": "boolean (default=false) - 包含详细分类统计",
+    "since": "string (ISO 8601) - 变更检测时间戳"
+  },
+  "output": {
+    "total_entries": 0,
+    "by_scope": {},
+    "embedding": {"pending": 0, "ready": 0},
+    "chroma_available": false,
+    "chroma_vector_count": 0,
+    "degradation_level": 0,
+    "degradation_name": "",
+    "embedding_level": 0,
+    "embedding_level_name": "",
+    "last_change_timestamp": "",
+    "status_changed_since_last_check": false,
+    "by_type": {},
+    "by_category": {}
+  }
+}
+```
 
-### 2.1 适合封装为 Tool 的功能单元
+**knowledge_rollback**
 
-#### 2.1.1 P0 — 核心编排工具（必须实现）
+```json
+{
+  "input": {
+    "id": "string (required) - 条目ID",
+    "target_version": "integer (required, min=1) - 目标版本号"
+  },
+  "output": {
+    "id": "",
+    "status": "rolled_back",
+    "target_version": 0,
+    "current_version": 0
+  }
+}
+```
 
-| 工具名 | 输入 | 输出 | 说明 |
-|--------|------|------|------|
-| `skill_analyze` | `skill_path: str, include_scripts: bool, include_agents: bool, depth: str` | `{metadata, structure, agents, dependencies, issues}` | 项目结构分析，提取 YAML 元数据、目录结构、Agent 注册表 |
-| `quality_gate_check` | `gate_ids: list, phase: int, project_path: str, severity_filter: str, force_refresh: bool` | `{gates_checked, gates_passed, gates_failed, results, can_proceed}` | 54 项质量门禁检查，支持按阶段/ID 过滤 |
-| `session_manage` | `action: str, completed_tasks: list, pending_tasks: list, decisions: list, experience: list, ...` | `{action, session_id, state}` | 会话状态管理，支持 save/load/list/detect/verify/track/restore |
-| `workflow_dispatch` | `action: str, workflow: str, project_path: str, workflow_id: str, phase_action: str, ...` | `{action, workflow_id, current_phase, phases}` | 工作流调度，支持 start/status/abort/phase/recover/snapshots |
-| `project_init` | `action: str, name: str, description: str, stack: list, template: str, directory: str, project_path: str` | `{action, name, directory, config_path, stack}` | 项目初始化，支持 create/validate/detect_stack |
+**knowledge_auto_retrieve**
 
-#### 2.1.2 P1 — 质量与安全工具（高优先级）
+```json
+{
+  "input": {
+    "task_type": "enum [bug_fix|feature|refactor|review|deploy|security] (default=feature) - 任务类型",
+    "project_path": "string (required) - 项目根目录绝对路径",
+    "query": "string (optional) - 覆盖自动生成的检索查询",
+    "token_budget": "integer (256-8192, default=2048) - Token预算"
+  },
+  "output": {
+    "context": "",
+    "tech_stack": {},
+    "task_type": "",
+    "query_used": "",
+    "results_count": 0,
+    "degradation_level": 0,
+    "degradation_name": ""
+  }
+}
+```
 
-| 工具名 | 输入 | 输出 | 说明 |
-|--------|------|------|------|
-| `spec_drift_detect` | `spec_dir: str, src_dir: str` | `{total_specs, drifts_detected, drifts, coverage_pct}` | 规格文档与代码实现偏差检测 |
-| `security_scan` | `target: str, severity_threshold: str, include_agentic: bool, include_dependency: bool` | `{total_findings, by_severity, findings, agentic_findings, dependency_findings}` | OWASP Agentic Top 10 + 依赖漏洞扫描 |
-| `code_simplify` | `target: str, scope: str, include_dedup: bool` | `{total_suggestions, by_type, suggestions, total_lines_reducible}` | 代码简化分析（死代码/重复/复杂度） |
-| `agent_status` | `action: str, phase: int, agent_name: str, ...` | `{action, agents, total_agents, available_count}` | Agent 状态查询，支持 list/by_phase/detail |
-| `resource_load_status` | `action: str, phase: int, resource_ids: list, resource_uris: list, priority: str, batch_mode: bool` | `{action, phase, resources, token_budget_used, token_budget_remaining}` | 渐进式加载状态管理 |
-| `context_compress` | `content: str, strategy: str, target_tokens: int, preserve_sections: list` | `{original_tokens, compressed_tokens, compression_ratio, compressed_content, quality_score}` | 上下文压缩，支持 semantic/selective/lossless |
-| `token_budget` | `action: str, total_budget: int, phase_allocations: dict, project_size: str, complexity: str, ...` | `{total_budget, used, remaining, phase_allocations, usage_by_phase}` | Token 预算管理 |
-| `knowledge_inject` | `action: str, content: str, scope: str, source: str, priority: str` | `{action, scope, injected_tokens, source, priority, context_window_usage_pct}` | 知识注入到当前会话上下文 |
+**knowledge_progressive_search**
 
-#### 2.1.3 P2 — 辅助工具（标准优先级）
+```json
+{
+  "input": {
+    "query": "string (required) - 检索文本",
+    "task_type": "enum [bug_fix|feature|refactor|review|deploy|security] (default=feature)",
+    "tech_stack": {
+      "languages": "array[string]",
+      "frameworks": "array[string]",
+      "runtimes": "array[string]"
+    },
+    "token_budget": "integer (256-8192, default=2048) - Token预算"
+  },
+  "output": {
+    "results": [{"id": "", "title": "", "content": "", "scope": "", "confidence": 0, "tags": [], "_truncated": false}],
+    "total": 0,
+    "task_type": "",
+    "search_config": {},
+    "token_budget": 0,
+    "pruned_entry_ids": [],
+    "degradation_level": 0,
+    "degradation_name": ""
+  }
+}
+```
 
-| 工具名 | 输入 | 输出 | 说明 |
-|--------|------|------|------|
-| `hook_manage` | `action: str, profile: str, hook_name: str, context: dict` | `{action, profile, hooks, total_hooks}` | Hook 管理，支持 list/execute |
-| `server_health` | — | `{server_status, version, uptime_seconds, tools_available, tools_status, memory_usage_mb}` | 服务器健康检查 |
-| `decision_log` | `action: str, title: str, description: str, alternatives: list, decision: str, rationale: str, ...` | `{action, id, entry, total_decisions}` | 决策日志管理 |
-| `agent_manage` | `action: str, agent_type: str, capabilities: list, agent_id: str, task: str` | `{action, agent_id, agent_type, capabilities, status}` | Agent 实例生命周期管理 |
-| `metrics_report` | `action: str, tool_name: str, time_range: str, metric_type: str` | `{action, tools, total_tools, time_range}` | 工具调用指标查询与汇总 |
+**knowledge_deep_load**
 
-### 2.2 适合封装为 Resource 的数据
+```json
+{
+  "input": {
+    "entry_id": "string (required) - 条目ID"
+  },
+  "output": {
+    "id": "",
+    "title": "",
+    "content": "",
+    "scope": "",
+    "confidence": 0,
+    "tags": [],
+    "type": "",
+    "category": ""
+  }
+}
+```
 
-当前 MCP Server 未暴露任何 Resource。以下数据适合通过 MCP Resource 协议暴露：
+**knowledge_web_update**
 
-| URI 模式 | 描述 | 内容类型 | 订阅价值 | 优先级 |
-|----------|------|----------|----------|--------|
-| `knowledge://{category}/{entry_id}` | 知识库条目 | `text/markdown` | 高（条目更新通知） | P0 |
-| `knowledge://stats` | 知识库统计摘要 | `application/json` | 中（变更检测） | P0 |
-| `project://config` | 当前项目配置 | `application/json` | 低 | P1 |
-| `project://stack` | 检测到的技术栈 | `application/json` | 低 | P1 |
-| `agent://registry` | Agent 注册表（57 个） | `application/json` | 低（静态） | P1 |
-| `agent://{agent_name}/status` | 单个 Agent 状态 | `application/json` | 高（状态变化） | P1 |
-| `workflow://{workflow_id}/status` | 工作流状态 | `application/json` | 高（阶段推进） | P0 |
-| `session://{session_id}` | 会话状态 | `application/json` | 中 | P1 |
-| `config://degradation` | 降级策略配置 | `application/json` | 低 | P2 |
-| `config://quality-gates` | 质量门禁定义 | `application/json` | 低 | P2 |
-| `config://routes` | 命令路由表 | `application/json` | 低 | P2 |
-| `metrics://tools` | 工具调用指标 | `application/json` | 中（实时监控） | P2 |
+```json
+{
+  "input": {
+    "entry_id": "string (optional) - 已有条目ID",
+    "category": "string (optional) - 技术分类",
+    "tags": "array[string] (optional) - 标签"
+  },
+  "output": {
+    "id": "",
+    "status": "updated|created_pending_review|no_change|no_results|extraction_failed",
+    "sources_found": 0,
+    "best_source_rating": 0,
+    "updated_fields": []
+  }
+}
+```
 
-### 2.3 MCP 化决策矩阵
+**resource_load_status**
 
-```mermaid
-graph TD
-    A[候选功能] --> B{有状态?}
-    B -->|是| C{需要实时通知?}
-    B -->|否| D{执行操作?}
-    C -->|是| E[Resource + 订阅]
-    C -->|否| F[Resource 静态]
-    D -->|是| G[Tool 操作型]
-    D -->|否| H[Tool 查询型]
-    E --> I[workflow://status<br/>agent://status<br/>knowledge://entry]
-    F --> J[agent://registry<br/>config://routes<br/>config://quality-gates]
-    G --> K[knowledge_add<br/>session_manage<br/>workflow_dispatch]
-    H --> L[knowledge_search<br/>skill_analyze<br/>server_health]
+```json
+{
+  "input": {
+    "action": "enum [status|preload|cache|clear_cache|loading_progress] (required)",
+    "target_phase": "enum [skeleton|functional|enhanced|full] - preload目标阶段",
+    "resource_ids": "array[string] - 指定资源ID"
+  },
+  "output": {
+    "action": "",
+    "current_phase": "",
+    "phase_index": 0,
+    "loaded_resources": [],
+    "loaded_count": 0,
+    "available_resources": [],
+    "available_commands": [],
+    "disclosure_note": "",
+    "upgrade_hint": "",
+    "progress": {},
+    "timestamp": ""
+  }
+}
 ```
 
 ---
 
-## 3. 目标 MCP Server 设计
+### 1.2 Skill工具（15个）
 
-### 3.1 Server 概览
+定义位置：[skill_tools.py](../../.trae/skills/xuansto-skill-v2/scripts/knowledge_server/skill_tools.py) 的 `get_skill_tool_definitions()` 函数。
+
+| # | 工具名称 | 功能概述 | 权限标注 |
+|---|---------|----------|----------|
+| 1 | `skill_analyze` | 项目结构分析：YAML元数据、目录结构、Agent注册表、脚本依赖、问题检测 | readOnlyHint=True, idempotentHint=True |
+| 2 | `quality_gate_check` | 54项质量门禁检查：按gate_ids/phase过滤，BLOCK/WARN分级 | readOnlyHint=True, idempotentHint=True |
+| 3 | `spec_drift_detect` | 规格偏差检测：扫描spec目录与源码目录的匹配度，报告覆盖率和偏差 | readOnlyHint=True, idempotentHint=True |
+| 4 | `security_scan` | OWASP Agentic Top 10 + 依赖漏洞扫描，支持严重度过滤 | readOnlyHint=True, idempotentHint=True, openWorldHint=True |
+| 5 | `code_simplify` | 代码简化分析：死代码/重复/复杂度/命名问题，安全等级评估 | readOnlyHint=True, idempotentHint=True |
+| 6 | `session_manage` | 会话状态管理：save/load/list/detect/verify/track/restore | readOnlyHint=False |
+| 7 | `workflow_dispatch` | 工作流调度：start/status/abort/phase/recover/snapshots | readOnlyHint=False |
+| 8 | `agent_status` | Agent状态查询：list/by_phase/detail/create/match/assign/release/instance_status/destroy/schedule | readOnlyHint=False |
+| 9 | `hook_manage` | Hook管理：list/execute，支持minimal/standard/strict配置 | readOnlyHint=False |
+| 10 | `context_compress` | 上下文压缩：semantic/selective/lossless三种策略 | readOnlyHint=True, idempotentHint=True |
+| 11 | `server_health` | 服务器健康检查：check/version/status，版本兼容性验证 | readOnlyHint=True, idempotentHint=True |
+| 12 | `decision_log` | 决策日志管理：log/query/export，支持ADR格式 | readOnlyHint=False |
+| 13 | `token_budget` | Token预算管理：status/set_budget/recommend/report | readOnlyHint=False |
+| 14 | `knowledge_inject` | 知识注入：inject/preview/clear，session/workflow/global三级作用域 | readOnlyHint=False |
+| 15 | `project_init` | 项目初始化：create/validate/detect_stack | readOnlyHint=False |
+
+#### Skill工具参数与返回值详情
+
+**skill_analyze**
+
+```json
+{
+  "input": {
+    "skill_path": "string (required) - Skill根目录绝对路径",
+    "include_scripts": "boolean (default=true) - 是否分析scripts目录",
+    "include_agents": "boolean (default=true) - 是否分析agents目录",
+    "depth": "enum [basic|full] (default=basic) - 分析深度"
+  },
+  "output": {
+    "metadata": {"name": "", "version": "", "agents_summary": "", "tags": []},
+    "structure": {"root": "", "directories": [], "file_count": 0, "total_lines": 0},
+    "agents": {"total": 0, "layers": 0, "by_layer": {}},
+    "dependencies": {"mcp_server": "", "scripts": [], "python_version": ""},
+    "issues": [{"severity": "", "code": "", "message": "", "path": ""}]
+  }
+}
+```
+
+**quality_gate_check**
+
+```json
+{
+  "input": {
+    "gate_ids": "array[string] - 指定门禁ID",
+    "phase": "string - 阶段编号(0-8)",
+    "project_path": "string (default=.) - 项目根目录",
+    "severity_filter": "enum [all|BLOCK|WARN] (default=all)",
+    "force_refresh": "boolean (default=false) - 强制刷新"
+  },
+  "output": {
+    "gates_checked": 0,
+    "gates_passed": 0,
+    "gates_failed": 0,
+    "results": [{"gate_id": "", "status": "", "severity": "", "message": "", "details": {}}],
+    "phase": "",
+    "can_proceed": false
+  }
+}
+```
+
+**spec_drift_detect**
+
+```json
+{
+  "input": {
+    "spec_dir": "string (default=.trae/specs) - 规格文档目录",
+    "src_dir": "string (default=.) - 源码目录"
+  },
+  "output": {
+    "total_specs": 0,
+    "drifts_detected": 0,
+    "drifts": [{"spec_file": "", "spec_requirement": "", "implementation": "", "drift_type": "", "severity": "", "description": "", "suggestion": ""}],
+    "coverage_pct": 0
+  }
+}
+```
+
+**security_scan**
+
+```json
+{
+  "input": {
+    "target": "string (default=.) - 扫描目标目录",
+    "severity_threshold": "enum [critical|high|medium|low] (default=medium)",
+    "include_agentic": "boolean (default=true) - 包含OWASP Agentic Top 10",
+    "include_dependency": "boolean (default=true) - 包含依赖漏洞扫描"
+  },
+  "output": {
+    "total_findings": 0,
+    "by_severity": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+    "findings": [{"id": "", "title": "", "severity": "", "category": "", "file": "", "line": 0, "description": "", "remediation": "", "references": []}],
+    "agentic_findings": 0,
+    "dependency_findings": 0,
+    "scan_duration_ms": 0
+  }
+}
+```
+
+**code_simplify**
+
+```json
+{
+  "input": {
+    "target": "string (required) - 目标文件或目录",
+    "scope": "enum [file|dir|recent] (default=recent) - 扫描范围",
+    "include_dedup": "boolean (default=true) - 包含重复代码检测"
+  },
+  "output": {
+    "total_suggestions": 0,
+    "by_type": {"dead_code": 0, "duplication": 0, "complexity": 0, "naming": 0},
+    "suggestions": [{"id": "", "type": "", "file": "", "line_start": 0, "line_end": 0, "description": "", "safety": "", "action": "", "estimated_reduction": 0}],
+    "total_lines_reducible": 0,
+    "safe_count": 0,
+    "caution_count": 0
+  }
+}
+```
+
+**session_manage**
+
+```json
+{
+  "input": {
+    "action": "enum [save|load|list|detect|verify|track|restore] (required)",
+    "completed_tasks": "array[string] - 已完成任务(save)",
+    "pending_tasks": "array[string] - 待办任务(save/track)",
+    "decisions": "array[object] - 决策列表(save/track)",
+    "experience": "array[object] - 经验沉淀(save)",
+    "error_log": "array[string] - 错误日志(detect)",
+    "pattern_path": "string - 模式文件路径(verify)",
+    "success": "boolean (default=true) - 验证结果(verify)",
+    "current_phase": "integer - 当前阶段(track)",
+    "current_task": "string - 当前任务(track)"
+  },
+  "output": {
+    "action": "",
+    "session_id": "",
+    "saved_at": "",
+    "state": {}
+  }
+}
+```
+
+**workflow_dispatch**
+
+```json
+{
+  "input": {
+    "action": "enum [start|status|abort|phase|recover|snapshots] (required)",
+    "workflow": "string - 工作流名称(start): sdd-tdd-full/medium/fast",
+    "project_path": "string (default=.) - 项目根目录(start)",
+    "workflow_id": "string - 工作流实例ID",
+    "phase_action": "enum [advance|current] - 阶段操作(phase)",
+    "snapshot_phase": "integer - 恢复目标阶段(recover)"
+  },
+  "output": {
+    "action": "",
+    "workflow_id": "",
+    "workflow_name": "",
+    "current_phase": 0,
+    "phases": [{"phase": 0, "name": "", "status": ""}],
+    "started_at": "",
+    "aborted_at": ""
+  }
+}
+```
+
+**agent_status**
+
+```json
+{
+  "input": {
+    "action": "enum [list|by_phase|detail|create|match|assign|release|instance_status|destroy|schedule] (required)",
+    "phase": "integer - 阶段编号(by_phase, 0-8)",
+    "agent_name": "string - Agent名称(detail)",
+    "agent_type": "string - Agent类型(create)",
+    "capabilities": "array[string] - 能力列表(create/match)",
+    "agent_id": "string - 实例ID(assign/release/instance_status/destroy)",
+    "task": "string - 任务描述(assign)"
+  },
+  "output": {
+    "action": "",
+    "agents": [{"name": "", "layer": "", "status": "", "capabilities": [], "assigned_tasks": 0, "completed_tasks": 0, "definition_file": ""}],
+    "total_agents": 0,
+    "available_count": 0
+  }
+}
+```
+
+**hook_manage**
+
+```json
+{
+  "input": {
+    "action": "enum [list|execute] (required)",
+    "profile": "enum [minimal|standard|strict] (default=standard)",
+    "hook_name": "string - Hook名称(execute)",
+    "context": "object - 执行上下文(execute)"
+  },
+  "output": {
+    "action": "",
+    "profile": "",
+    "hooks": [{"name": "", "trigger": "", "pre_callbacks": [], "post_callbacks": [], "enabled": false}],
+    "total_hooks": 0,
+    "enabled_count": 0
+  }
+}
+```
+
+**context_compress**
+
+```json
+{
+  "input": {
+    "content": "string (required) - 待压缩文本",
+    "strategy": "enum [semantic|selective|lossless] (default=semantic)",
+    "target_tokens": "integer (100-50000, default=2000) - 目标Token数",
+    "preserve_sections": "array[string] - 保留章节标题"
+  },
+  "output": {
+    "original_tokens": 0,
+    "compressed_tokens": 0,
+    "compression_ratio": 0,
+    "strategy_used": "",
+    "compressed_content": "",
+    "preserved_sections": [],
+    "quality_score": 0
+  }
+}
+```
+
+**server_health**
+
+```json
+{
+  "input": {
+    "action": "enum [check|version|status] (default=check)",
+    "include_details": "boolean (default=false) - 包含详细工具状态"
+  },
+  "output": {
+    "status": "HEALTHY|DEGRADED|UNAVAILABLE",
+    "version": "",
+    "api_version": "",
+    "uptime_seconds": 0,
+    "tools_available": 0,
+    "degradation_level": "",
+    "last_check_timestamp": "",
+    "tools_status": {},
+    "memory_usage_mb": 0,
+    "active_workflows": 0,
+    "active_sessions": 0
+  }
+}
+```
+
+**decision_log**
+
+```json
+{
+  "input": {
+    "action": "enum [log|query|export] (required)",
+    "title": "string - 决策标题(log)",
+    "description": "string - 决策描述(log)",
+    "context": "string - 决策上下文(log)",
+    "alternatives": "array[string] - 备选方案(log)",
+    "decision": "string - 最终决策(log)",
+    "rationale": "string - 决策理由(log)",
+    "impact": "string - 影响范围(log)",
+    "decided_by": "string - 决策者(log)",
+    "keyword": "string - 搜索关键词(query)",
+    "tag": "string - 标签过滤(query)",
+    "date_from": "string (ISO8601) - 起始日期(query/export)",
+    "date_to": "string (ISO8601) - 结束日期(query/export)",
+    "limit": "integer (1-100, default=20) - 结果限制(query)",
+    "format": "enum [json|markdown] (default=json) - 导出格式(export)"
+  },
+  "output": {
+    "action": "",
+    "id": "",
+    "entry": {},
+    "results": [],
+    "total_decisions": 0,
+    "format": "",
+    "content": ""
+  }
+}
+```
+
+**token_budget**
+
+```json
+{
+  "input": {
+    "action": "enum [status|set_budget|recommend|report] (required)",
+    "total_budget": "integer (>=1000) - 总预算(set_budget)",
+    "phase_allocations": "object - 阶段分配(set_budget)",
+    "project_size": "enum [small|medium|large] - 项目规模(recommend)",
+    "complexity": "enum [low|medium|high] - 复杂度(recommend)",
+    "team_size": "integer (1-50) - 团队规模(recommend)",
+    "period": "enum [daily|weekly|session] (default=session) - 报告周期(report)"
+  },
+  "output": {
+    "action": "",
+    "total_budget": 0,
+    "used": 0,
+    "remaining": 0,
+    "phase_allocations": {},
+    "usage_by_phase": {}
+  }
+}
+```
+
+**knowledge_inject**
+
+```json
+{
+  "input": {
+    "action": "enum [inject|preview|clear] (required)",
+    "content": "string - 注入内容(inject)",
+    "scope": "enum [session|workflow|global] (default=session) - 作用域",
+    "source": "string - 知识来源标识",
+    "priority": "enum [low|normal|high] (default=normal) - 优先级"
+  },
+  "output": {
+    "action": "",
+    "scope": "",
+    "injected_tokens": 0,
+    "source": "",
+    "priority": "",
+    "context_window_usage_pct": 0
+  }
+}
+```
+
+**project_init**
+
+```json
+{
+  "input": {
+    "action": "enum [create|validate|detect_stack] (required)",
+    "name": "string - 项目名称(create)",
+    "description": "string - 项目描述(create)",
+    "stack": "array[string] - 技术栈(create)",
+    "template": "string - 项目模板(create)",
+    "directory": "string - 项目目录(create)",
+    "project_path": "string - 项目路径(validate/detect_stack)"
+  },
+  "output": {
+    "action": "",
+    "name": "",
+    "directory": "",
+    "config_path": "",
+    "stack": [],
+    "template": "",
+    "valid": false,
+    "issues": [],
+    "detected_stacks": []
+  }
+}
+```
+
+---
+
+## 2. 可MCP化能力识别
+
+### 2.1 适合封装为Tool的功能单元
+
+以下功能已通过 `mcp_server.py` 和 `skill_tools.py` 完整封装为MCP Tool，共计26个。所有工具均具备完整的 `inputSchema`、`outputSchema` 和 `ToolAnnotations`。
+
+| 分类 | 工具 | 输入 | 输出 | 封装状态 |
+|------|------|------|------|----------|
+| 知识检索 | knowledge_search | query, top_k, search_type, filters | results, total, search_strategy, degradation | ✅ 已封装 |
+| 知识检索 | knowledge_auto_retrieve | task_type, project_path, query, token_budget | context, tech_stack, results_count | ✅ 已封装 |
+| 知识检索 | knowledge_progressive_search | query, task_type, tech_stack, token_budget | results, total, pruned_entry_ids | ✅ 已封装 |
+| 知识检索 | knowledge_deep_load | entry_id | id, title, content, scope, confidence | ✅ 已封装 |
+| 知识写入 | knowledge_add | content, metadata, auto_dedup | id, status, dedup_status | ✅ 已封装 |
+| 知识写入 | knowledge_update | id, content, metadata | id, status | ✅ 已封装 |
+| 知识写入 | knowledge_delete | id | id, status | ✅ 已封装 |
+| 知识写入 | knowledge_rollback | id, target_version | id, status, target_version, current_version | ✅ 已封装 |
+| 知识写入 | knowledge_web_update | entry_id, category, tags | id, status, sources_found | ✅ 已封装 |
+| 知识元数据 | knowledge_stats | detailed, since | total_entries, by_scope, embedding, degradation | ✅ 已封装 |
+| 知识注入 | knowledge_inject | action, content, scope, source, priority | injected_tokens, context_window_usage_pct | ✅ 已封装 |
+| 加载控制 | resource_load_status | action, target_phase, resource_ids | current_phase, loaded_resources, disclosure_note | ✅ 已封装 |
+| 项目分析 | skill_analyze | skill_path, include_scripts, include_agents, depth | metadata, structure, agents, dependencies, issues | ✅ 已封装 |
+| 质量保障 | quality_gate_check | gate_ids, phase, project_path, severity_filter | gates_checked, gates_passed, can_proceed | ✅ 已封装 |
+| 质量保障 | spec_drift_detect | spec_dir, src_dir | total_specs, drifts, coverage_pct | ✅ 已封装 |
+| 安全扫描 | security_scan | target, severity_threshold, include_agentic, include_dependency | total_findings, by_severity, findings | ✅ 已封装 |
+| 代码优化 | code_simplify | target, scope, include_dedup | total_suggestions, by_type, suggestions | ✅ 已封装 |
+| 会话管理 | session_manage | action, completed_tasks, pending_tasks, decisions | session_id, saved_at, state | ✅ 已封装 |
+| 工作流 | workflow_dispatch | action, workflow, project_path, workflow_id | workflow_id, current_phase, phases | ✅ 已封装 |
+| Agent管理 | agent_status | action, phase, agent_name, capabilities | agents, total_agents, available_count | ✅ 已封装 |
+| Hook管理 | hook_manage | action, profile, hook_name, context | hooks, total_hooks, enabled_count | ✅ 已封装 |
+| 上下文 | context_compress | content, strategy, target_tokens, preserve_sections | compressed_content, compression_ratio, quality_score | ✅ 已封装 |
+| 健康检查 | server_health | action, include_details | status, version, tools_available | ✅ 已封装 |
+| 决策日志 | decision_log | action, title, alternatives, decision, rationale | id, entry, results, total_decisions | ✅ 已封装 |
+| Token预算 | token_budget | action, total_budget, phase_allocations, project_size | total_budget, used, remaining, phase_allocations | ✅ 已封装 |
+| 项目初始化 | project_init | action, name, stack, template, directory | name, directory, config_path, stack | ✅ 已封装 |
+
+### 2.2 适合封装为Resource的数据
+
+当前MCP Server **未暴露任何Resource**，仅通过Tool提供数据访问。以下为建议新增的Resource：
+
+| URI模式 | 描述 | 内容类型 | 加载阶段 | 数据来源 |
+|---------|------|----------|----------|----------|
+| `xuansto://agents/{name}` | 单个Agent的完整定义（Markdown内容） | `text/markdown` | Phase 2+ | `agents/{layer}/{name}.md` |
+| `xuansto://knowledge/stats` | 知识库实时统计快照 | `application/json` | Phase 1+ | `knowledge_stats` 工具返回值 |
+| `xuansto://loading/status` | 渐进式加载当前状态 | `application/json` | Phase 0+ | `ProgressiveLoader._state` |
+
+#### Resource详细设计
+
+**xuansto://agents/{name}**
+
+- 描述：按Agent名称获取完整Agent定义文件内容
+- URI参数：`{name}` 为Agent文件名（不含扩展名），如 `backend-developer`、`qa-engineer`
+- 内容类型：`text/markdown`
+- 可用阶段：Phase 2 (Enhanced) 及以上
+- 实现方式：读取 `agents/{layer}/{name}.md` 文件内容
+- 示例：`xuansto://agents/backend-developer` → 返回 `agents/engineering/backend-developer.md` 的完整内容
+
+**xuansto://knowledge/stats**
+
+- 描述：知识库实时统计信息，包含条目数、嵌入状态、引擎健康度
+- 内容类型：`application/json`
+- 可用阶段：Phase 1 (Functional) 及以上
+- 实现方式：调用 `knowledge_stats(detailed=false)` 并返回结果
+- 示例返回值：
+
+```json
+{
+  "total_entries": 42,
+  "by_scope": {"general": 15, "workspace": 20, "experience": 7},
+  "embedding": {"pending": 3, "ready": 39},
+  "chroma_available": true,
+  "degradation_level": 0,
+  "degradation_name": "full",
+  "last_change_timestamp": "2026-05-25T08:30:00+00:00"
+}
+```
+
+**xuansto://loading/status**
+
+- 描述：渐进式加载状态，包含当前阶段、已加载资源、可用命令
+- 内容类型：`application/json`
+- 可用阶段：Phase 0 (Skeleton) 及以上
+- 实现方式：读取 `ProgressiveLoader._state` 并格式化
+- 示例返回值：
+
+```json
+{
+  "current_phase": "functional",
+  "phase_index": 1,
+  "loaded_resources": ["skill-config", "command-list", "mcp-dependency", "core-constraints", "execution-entry"],
+  "loaded_count": 5,
+  "available_commands": ["/init", "/brainstorm", "/plan", "/implement"],
+  "disclosure_note": "当前处于功能阶段，命令执行和工作流概览可用。",
+  "upgrade_hint": "请求参考文档或查询Agent详情可推进到增强阶段。"
+}
+```
+
+---
+
+## 3. 目标MCP Server设计
+
+### 3.1 Server基本信息
 
 | 属性 | 值 |
 |------|-----|
-| Server 名称 | `xuansto-mcp-server` |
-| 描述 | 多 Agent 自主开发编排引擎 MCP Server，提供 18+ 原子工具和 12+ 资源 |
-| 协议版本 | MCP 2025-11-25 |
-| 传输层 | Stdio（本地）/ Streamable HTTP（远程） |
-| 最低兼容 | `xuansto-mcp-server >= 4.0.0` |
-| API 版本 | 3.0.0 |
+| Server名称 | `xuansto-mcp-server` |
+| 描述 | 多Agent自主开发编排引擎的MCP工具集 |
+| 版本 | 8.0.0 (Skill) / 4.0.0 (MCP Server) / 3.0.0 (API) |
+| 协议 | Model Context Protocol (MCP) |
+| 传输方式 | stdio |
+| 依赖 | Python >=3.10, mcp SDK |
 
-### 3.2 Tool 完整列表
+### 3.2 Tool列表（26个）
 
-#### 3.2.1 知识域工具（已实现，10 个）
+| # | 名称 | 描述 | readOnlyHint | destructiveHint | idempotentHint | openWorldHint |
+|---|------|------|:---:|:---:|:---:|:---:|
+| 1 | knowledge_search | 三层知识库检索 | ✅ | ❌ | ✅ | ❌ |
+| 2 | knowledge_add | 添加知识条目（自动去重） | ❌ | ❌ | ❌ | ❌ |
+| 3 | knowledge_update | 更新知识条目（乐观锁版本控制） | ❌ | ❌ | ❌ | ❌ |
+| 4 | knowledge_delete | 删除知识条目（不可逆） | ❌ | ✅ | ❌ | ❌ |
+| 5 | knowledge_stats | 知识库统计 | ✅ | ❌ | ✅ | ❌ |
+| 6 | knowledge_rollback | 版本回滚 | ❌ | ✅ | ✅ | ❌ |
+| 7 | knowledge_auto_retrieve | 自动检索（任务类型+技术栈感知） | ✅ | ❌ | ✅ | ❌ |
+| 8 | knowledge_progressive_search | 渐进式多轮检索（Token预算控制） | ✅ | ❌ | ✅ | ❌ |
+| 9 | knowledge_deep_load | 深度加载完整条目 | ✅ | ❌ | ✅ | ❌ |
+| 10 | knowledge_web_update | Web文档搜索更新 | ❌ | ❌ | ❌ | ✅ |
+| 11 | resource_load_status | 渐进式加载状态查询与控制 | ❌ | ❌ | ❌ | ❌ |
+| 12 | skill_analyze | 项目结构分析 | ✅ | ❌ | ✅ | ❌ |
+| 13 | quality_gate_check | 54项质量门禁检查 | ✅ | ❌ | ✅ | ❌ |
+| 14 | spec_drift_detect | 规格偏差检测 | ✅ | ❌ | ✅ | ❌ |
+| 15 | security_scan | OWASP+依赖扫描 | ✅ | ❌ | ✅ | ✅ |
+| 16 | code_simplify | 代码简化分析 | ✅ | ❌ | ✅ | ❌ |
+| 17 | session_manage | 会话状态管理 | ❌ | ❌ | ❌ | ❌ |
+| 18 | workflow_dispatch | 工作流调度 | ❌ | ❌ | ❌ | ❌ |
+| 19 | agent_status | Agent状态查询 | ❌ | ❌ | ❌ | ❌ |
+| 20 | hook_manage | Hook管理 | ❌ | ❌ | ❌ | ❌ |
+| 21 | context_compress | 上下文压缩 | ✅ | ❌ | ✅ | ❌ |
+| 22 | server_health | 服务器健康检查 | ✅ | ❌ | ✅ | ❌ |
+| 23 | decision_log | 决策日志管理 | ❌ | ❌ | ❌ | ❌ |
+| 24 | token_budget | Token预算管理 | ❌ | ❌ | ❌ | ❌ |
+| 25 | knowledge_inject | 知识注入 | ❌ | ❌ | ❌ | ❌ |
+| 26 | project_init | 项目初始化 | ❌ | ❌ | ❌ | ❌ |
 
-| 工具名 | 描述 | 参数 Schema | 返回值 | Annotations |
-|--------|------|-------------|--------|-------------|
-| `knowledge_search` | 三层知识库混合检索 | `{query: str, top_k: int, search_type: enum, filters: object}` | `{results, total, search_strategy, degradation_level}` | RO, 幂等 |
-| `knowledge_add` | 添加知识条目（含去重） | `{content: str, metadata: object, auto_dedup: bool}` | `{id, status, dedup_status, similarity_score}` | 写入 |
-| `knowledge_update` | 更新知识条目 | `{id: str, content: str, metadata: object}` | `{id, status}` | 写入 |
-| `knowledge_delete` | 删除知识条目 | `{id: str}` | `{id, status}` | 破坏性 |
-| `knowledge_stats` | 知识库统计 | `{detailed: bool, since: str}` | `{total_entries, by_scope, embedding, degradation_level}` | RO, 幂等 |
-| `knowledge_rollback` | 回滚知识条目版本 | `{id: str, target_version: int}` | `{id, status, target_version, current_version}` | 破坏性, 幂等 |
-| `knowledge_auto_retrieve` | 自动检索知识上下文 | `{task_type: enum, project_path: str, query: str, token_budget: int}` | `{context, tech_stack, results_count, degradation_level}` | RO, 幂等 |
-| `knowledge_progressive_search` | 渐进式多轮检索 | `{query: str, task_type: enum, tech_stack: object, token_budget: int}` | `{results, total, pruned_entry_ids, degradation_level}` | RO, 幂等 |
-| `knowledge_deep_load` | 加载完整知识条目 | `{entry_id: str}` | `{id, title, content, scope, confidence, tags, type, category}` | RO, 幂等 |
-| `knowledge_web_update` | 从网络更新知识 | `{entry_id: str, category: str, tags: list}` | `{id, status, sources_found, best_source_rating}` | 开放世界 |
+### 3.3 Resource列表（3个新增）
 
-#### 3.2.2 编排域工具（待实现，5 个 P0）
-
-| 工具名 | 描述 | 参数 JSON Schema | 返回值 | Annotations |
-|--------|------|------------------|--------|-------------|
-| `skill_analyze` | 项目结构分析 | ```json {"type":"object","properties":{"skill_path":{"type":"string","description":"技能根目录路径"},"include_scripts":{"type":"boolean","default":true},"include_agents":{"type":"boolean","default":true},"depth":{"type":"string","enum":["basic","full"],"default":"basic"}},"required":["skill_path"],"additionalProperties":false} ``` | `{metadata, structure, agents, dependencies, issues}` | RO, 幂等 |
-| `quality_gate_check` | 54 项质量门禁 | ```json {"type":"object","properties":{"gate_ids":{"type":"array","items":{"type":"string"}},"phase":{"type":"integer","minimum":0,"maximum":8},"project_path":{"type":"string","default":"."},"severity_filter":{"type":"string","enum":["all","BLOCK","WARN"],"default":"all"},"force_refresh":{"type":"boolean","default":false}},"additionalProperties":false} ``` | `{gates_checked, gates_passed, gates_failed, results, can_proceed}` | RO, 幂等 |
-| `session_manage` | 会话状态管理 | ```json {"type":"object","properties":{"action":{"type":"string","enum":["save","load","list","detect","verify","track","restore"]},"completed_tasks":{"type":"array","items":{"type":"string"}},"pending_tasks":{"type":"array","items":{"type":"string"}},"decisions":{"type":"array","items":{"type":"object"}},"experience":{"type":"array","items":{"type":"object"}},"current_phase":{"type":"integer"},"current_task":{"type":"string"}},"required":["action"],"additionalProperties":false} ``` | `{action, session_id, state}` | 写入（除 load/list/detect 外） |
-| `workflow_dispatch` | 工作流调度 | ```json {"type":"object","properties":{"action":{"type":"string","enum":["start","status","abort","phase","recover","snapshots"]},"workflow":{"type":"string"},"project_path":{"type":"string","default":"."},"workflow_id":{"type":"string"},"phase_action":{"type":"string","enum":["advance","current"]},"snapshot_phase":{"type":"integer"}},"required":["action"],"additionalProperties":false} ``` | `{action, workflow_id, current_phase, phases}` | 写入（start/abort/phase/recover） |
-| `project_init` | 项目初始化 | ```json {"type":"object","properties":{"action":{"type":"string","enum":["create","validate","detect_stack"]},"name":{"type":"string"},"description":{"type":"string"},"stack":{"type":"array","items":{"type":"string"}},"template":{"type":"string"},"directory":{"type":"string"},"project_path":{"type":"string"}},"required":["action"],"additionalProperties":false} ``` | `{action, name, directory, config_path, stack}` | 写入（create） |
-
-#### 3.2.3 质量安全域工具（待实现，4 个 P1）
-
-| 工具名 | 描述 | 参数 JSON Schema | 返回值 | Annotations |
-|--------|------|------------------|--------|-------------|
-| `spec_drift_detect` | 规格偏差检测 | ```json {"type":"object","properties":{"spec_dir":{"type":"string","default":".trae/specs"},"src_dir":{"type":"string","default":"."}},"additionalProperties":false} ``` | `{total_specs, drifts_detected, drifts, coverage_pct}` | RO, 幂等 |
-| `security_scan` | 安全扫描 | ```json {"type":"object","properties":{"target":{"type":"string","default":"."},"severity_threshold":{"type":"string","enum":["critical","high","medium","low"],"default":"medium"},"include_agentic":{"type":"boolean","default":true},"include_dependency":{"type":"boolean","default":true}},"additionalProperties":false} ``` | `{total_findings, by_severity, findings}` | RO, 幂等 |
-| `code_simplify` | 代码简化分析 | ```json {"type":"object","properties":{"target":{"type":"string"},"scope":{"type":"string","enum":["file","dir","recent"],"default":"recent"},"include_dedup":{"type":"boolean","default":true}},"required":["target"],"additionalProperties":false} ``` | `{total_suggestions, by_type, suggestions, total_lines_reducible}` | RO, 幂等 |
-| `agent_status` | Agent 状态查询 | ```json {"type":"object","properties":{"action":{"type":"string","enum":["list","by_phase","detail"]},"phase":{"type":"integer","minimum":0,"maximum":8},"agent_name":{"type":"string"}},"required":["action"],"additionalProperties":false} ``` | `{action, agents, total_agents, available_count}` | RO, 幂等 |
-
-#### 3.2.4 资源管理域工具（待实现，4 个 P1）
-
-| 工具名 | 描述 | 参数 JSON Schema | 返回值 | Annotations |
-|--------|------|------------------|--------|-------------|
-| `resource_load_status` | 渐进式加载状态 | ```json {"type":"object","properties":{"action":{"type":"string","enum":["status","preload","cache","clear_cache","loading_progress"]},"phase":{"type":"integer","minimum":0,"maximum":8},"resource_ids":{"type":"array","items":{"type":"string"}},"resource_uris":{"type":"array","items":{"type":"string"}},"priority":{"type":"string","enum":["critical","normal","background"],"default":"normal"},"batch_mode":{"type":"boolean","default":false}},"required":["action"],"additionalProperties":false} ``` | `{action, phase, resources, token_budget_used, token_budget_remaining}` | 写入（preload/cache/clear） |
-| `context_compress` | 上下文压缩 | ```json {"type":"object","properties":{"content":{"type":"string"},"strategy":{"type":"string","enum":["semantic","selective","lossless"],"default":"semantic"},"target_tokens":{"type":"integer","default":2000,"minimum":100,"maximum":50000},"preserve_sections":{"type":"array","items":{"type":"string"}}},"required":["content"],"additionalProperties":false} ``` | `{original_tokens, compressed_tokens, compression_ratio, compressed_content, quality_score}` | RO |
-| `token_budget` | Token 预算管理 | ```json {"type":"object","properties":{"action":{"type":"string","enum":["status","set_budget","recommend","report"]},"total_budget":{"type":"integer","minimum":1000},"phase_allocations":{"type":"object"},"project_size":{"type":"string","enum":["small","medium","large"]},"complexity":{"type":"string","enum":["low","medium","high"]},"period":{"type":"string","enum":["daily","weekly","session"],"default":"session"}},"required":["action"],"additionalProperties":false} ``` | `{total_budget, used, remaining, phase_allocations}` | 写入（set_budget） |
-| `knowledge_inject` | 知识注入 | ```json {"type":"object","properties":{"action":{"type":"string","enum":["inject","preview","clear"]},"content":{"type":"string"},"scope":{"type":"string","enum":["session","workflow","global"],"default":"session"},"source":{"type":"string"},"priority":{"type":"string","enum":["low","normal","high"],"default":"normal"}},"required":["action"],"additionalProperties":false} ``` | `{action, scope, injected_tokens, context_window_usage_pct}` | 写入（inject/clear） |
-
-#### 3.2.5 辅助域工具（待实现，5 个 P2）
-
-| 工具名 | 描述 | 参数 JSON Schema | 返回值 | Annotations |
-|--------|------|------------------|--------|-------------|
-| `hook_manage` | Hook 管理 | ```json {"type":"object","properties":{"action":{"type":"string","enum":["list","execute"]},"profile":{"type":"string","enum":["minimal","standard","strict"],"default":"standard"},"hook_name":{"type":"string"},"context":{"type":"object"}},"required":["action"],"additionalProperties":false} ``` | `{action, profile, hooks, total_hooks}` | 写入（execute） |
-| `server_health` | 服务器健康检查 | ```json {"type":"object","properties":{},"additionalProperties":false} ``` | `{server_status, version, tools_available, tools_status, memory_usage_mb}` | RO, 幂等 |
-| `decision_log` | 决策日志 | ```json {"type":"object","properties":{"action":{"type":"string","enum":["log","query","export"]},"title":{"type":"string"},"decision":{"type":"string"},"rationale":{"type":"string"},"keyword":{"type":"string"},"format":{"type":"string","enum":["json","markdown"],"default":"json"}},"required":["action"],"additionalProperties":false} ``` | `{action, id, entry, total_decisions}` | 写入（log） |
-| `agent_manage` | Agent 实例管理 | ```json {"type":"object","properties":{"action":{"type":"string","enum":["create","assign","release","instance_status","destroy","schedule"]},"agent_type":{"type":"string"},"capabilities":{"type":"array","items":{"type":"string"}},"agent_id":{"type":"string"},"task":{"type":"string"}},"required":["action"],"additionalProperties":false} ``` | `{action, agent_id, agent_type, status}` | 写入 |
-| `metrics_report` | 指标报告 | ```json {"type":"object","properties":{"action":{"type":"string","enum":["query","summary"]},"tool_name":{"type":"string"},"time_range":{"type":"string","enum":["1h","6h","24h","7d","all"],"default":"all"},"metric_type":{"type":"string","enum":["calls","errors","latency","all"],"default":"all"}},"required":["action"],"additionalProperties":false} ``` | `{action, tools, total_tools, time_range}` | RO, 幂等 |
-
-### 3.3 Resource 列表
-
-| URI | 描述 | 内容类型 | 可订阅 | 实现优先级 |
-|-----|------|----------|--------|------------|
-| `knowledge://stats` | 知识库统计摘要 | `application/json` | ✅ | P0 |
-| `knowledge://{category}/{entry_id}` | 知识库条目 | `text/markdown` | ✅ | P0 |
-| `workflow://{workflow_id}/status` | 工作流状态 | `application/json` | ✅ | P0 |
-| `project://config` | 项目配置 | `application/json` | ❌ | P1 |
-| `project://stack` | 技术栈检测结果 | `application/json` | ❌ | P1 |
-| `agent://registry` | Agent 注册表 | `application/json` | ❌ | P1 |
-| `agent://{agent_name}/status` | Agent 状态 | `application/json` | ✅ | P1 |
-| `session://{session_id}` | 会话状态 | `application/json` | ✅ | P1 |
-| `config://degradation` | 降级策略 | `application/json` | ❌ | P2 |
-| `config://quality-gates` | 质量门禁定义 | `application/json` | ❌ | P2 |
-| `config://routes` | 命令路由表 | `application/json` | ❌ | P2 |
-| `metrics://tools` | 工具调用指标 | `application/json` | ✅ | P2 |
+| # | URI | 描述 | 内容类型 | 可用阶段 |
+|---|-----|------|----------|----------|
+| 1 | `xuansto://agents/{name}` | Agent完整定义 | `text/markdown` | Phase 2+ |
+| 2 | `xuansto://knowledge/stats` | 知识库统计快照 | `application/json` | Phase 1+ |
+| 3 | `xuansto://loading/status` | 加载状态 | `application/json` | Phase 0+ |
 
 ### 3.4 权限与安全边界
 
-```mermaid
-graph TB
-    subgraph 安全边界
-        direction TB
-        L1[L1: 只读工具层<br/>knowledge_search, knowledge_stats<br/>skill_analyze, server_health<br/>quality_gate_check, agent_status]
-        L2[L2: 写入工具层<br/>knowledge_add, knowledge_update<br/>session_manage, decision_log<br/>knowledge_inject, token_budget]
-        L3[L3: 破坏性工具层<br/>knowledge_delete, knowledge_rollback<br/>workflow_dispatch abort<br/>agent_manage destroy]
-        L4[L4: 开放世界工具层<br/>knowledge_web_update<br/>security_scan]
-    end
+所有26个工具均通过 `ToolAnnotations` 标注了安全边界信息：
 
-    L1 -->|需确认| L2
-    L2 -->|需确认| L3
-    L3 -->|需确认+审计| L4
+| 标注 | 含义 | 工具数量 | 工具列表 |
+|------|------|---------|----------|
+| `readOnlyHint=True` | 只读操作，不修改任何状态 | 10 | knowledge_search, knowledge_stats, knowledge_auto_retrieve, knowledge_progressive_search, knowledge_deep_load, skill_analyze, quality_gate_check, spec_drift_detect, security_scan, code_simplify, context_compress, server_health |
+| `destructiveHint=True` | 破坏性操作，不可逆 | 2 | knowledge_delete, knowledge_rollback |
+| `idempotentHint=True` | 幂等操作，重复调用结果一致 | 12 | knowledge_search, knowledge_stats, knowledge_auto_retrieve, knowledge_progressive_search, knowledge_deep_load, knowledge_rollback, skill_analyze, quality_gate_check, spec_drift_detect, security_scan, code_simplify, context_compress, server_health |
+| `openWorldHint=True` | 访问外部网络资源 | 2 | knowledge_web_update, security_scan |
 
-    style L1 fill:#4CAF50,color:#fff
-    style L2 fill:#FF9800,color:#fff
-    style L3 fill:#F44336,color:#fff
-    style L4 fill:#9C27B0,color:#fff
-```
+#### 安全措施
 
-| 安全层级 | 工具 | 约束 |
-|----------|------|------|
-| 只读（L1） | `knowledge_search`, `knowledge_stats`, `skill_analyze`, `server_health`, `quality_gate_check`, `agent_status`, `spec_drift_detect`, `code_simplify`, `metrics_report`, `context_compress`, `resource_load_status(status)` | 无需确认，自由调用 |
-| 写入（L2） | `knowledge_add`, `knowledge_update`, `session_manage(save/track)`, `decision_log(log)`, `knowledge_inject(inject)`, `token_budget(set_budget)`, `workflow_dispatch(start/phase)`, `project_init(create)`, `resource_load_status(preload)` | `readOnlyHint: false`，客户端可要求确认 |
-| 破坏性（L3） | `knowledge_delete`, `knowledge_rollback`, `workflow_dispatch(abort)`, `agent_manage(destroy)`, `session_manage(restore)` | `destructiveHint: true`，必须用户确认 |
-| 开放世界（L4） | `knowledge_web_update`, `security_scan` | `openWorldHint: true`，需网络权限 + 审计日志 |
+1. **敏感内容过滤**：`knowledge_add` 和 `knowledge_update` 调用 `SensitiveContentFilter.check()` 检测API密钥、密码等敏感信息
+2. **输入验证**：`knowledge_add` 调用 `InputValidator.validate_all()` 进行输入合法性校验
+3. **乐观锁控制**：`knowledge_update` 通过版本号检测并发修改，返回 `VERSION_CONFLICT` 错误
+4. **破坏性操作标记**：`knowledge_delete` 和 `knowledge_rollback` 标记为 `destructiveHint=True`，Host端可要求用户确认
+5. **外部访问标记**：`knowledge_web_update` 和 `security_scan` 标记为 `openWorldHint=True`，Host端可限制网络访问
 
----
+### 3.5 mcpServers配置JSON示例
 
-## 4. mcpServers 配置 JSON 示例
-
-### 4.1 Stdio 方式（本地，推荐）
+**uvx方式（推荐）**
 
 ```json
 {
@@ -337,22 +820,20 @@ graph TB
     "xuansto-mcp-server": {
       "command": "uvx",
       "args": [
-        "xuansto-mcp-server",
-        "--db-path", "${KNOWLEDGE_DB_PATH:-.knowledge/knowledge.db}",
-        "--log-level", "info"
+        "xuansto-mcp-server@>=4.0.0",
+        "--skill-root",
+        ".trae/skills/xuansto-skill-v2"
       ],
       "env": {
-        "KNOWLEDGE_DB_PATH": ".knowledge/knowledge.db",
-        "CHROMA_PERSIST_DIR": ".knowledge/chroma",
-        "XUANSTO_SKILL_PATH": ".trae/skills/xuansto-skill-v2",
-        "LOG_LEVEL": "info"
+        "XUANSTO_KB_PATH": ".trae/skills/xuansto-skill-v2/.knowledge",
+        "XUANSTO_LOG_LEVEL": "INFO"
       }
     }
   }
 }
 ```
 
-### 4.2 npx 方式（Node.js 封装）
+**npx方式**
 
 ```json
 {
@@ -361,52 +842,36 @@ graph TB
       "command": "npx",
       "args": [
         "-y",
-        "@xuansto/mcp-server",
-        "--transport", "stdio",
-        "--db-path", ".knowledge/knowledge.db"
+        "xuansto-mcp-server@>=4.0.0",
+        "--skill-root",
+        ".trae/skills/xuansto-skill-v2"
       ],
       "env": {
-        "CHROMA_PERSIST_DIR": ".knowledge/chroma",
-        "XUANSTO_SKILL_PATH": ".trae/skills/xuansto-skill-v2"
+        "XUANSTO_KB_PATH": ".trae/skills/xuansto-skill-v2/.knowledge",
+        "XUANSTO_LOG_LEVEL": "INFO"
       }
     }
   }
 }
 ```
 
-### 4.3 Streamable HTTP 方式（远程）
+**Python直接运行方式**
 
 ```json
 {
   "mcpServers": {
-    "xuansto-mcp-server-remote": {
-      "url": "https://xuansto-mcp.example.com/mcp",
-      "headers": {
-        "Authorization": "Bearer ${XUANSTO_MCP_TOKEN}",
-        "MCP-Protocol-Version": "2025-11-25"
-      }
-    }
-  }
-}
-```
-
-### 4.4 Python 直接运行方式（开发调试）
-
-```json
-{
-  "mcpServers": {
-    "xuansto-mcp-server-dev": {
+    "xuansto-mcp-server": {
       "command": "python",
       "args": [
         "-m",
-        "knowledge_server.main",
-        "--mcp",
-        "--db-path", ".knowledge/knowledge.db"
+        "knowledge_server",
+        "--skill-root",
+        ".trae/skills/xuansto-skill-v2"
       ],
+      "cwd": ".trae/skills/xuansto-skill-v2/scripts",
       "env": {
-        "PYTHONPATH": ".trae/skills/xuansto-skill-v2/scripts",
-        "KNOWLEDGE_DB_PATH": ".knowledge/knowledge.db",
-        "LOG_LEVEL": "debug"
+        "XUANSTO_KB_PATH": ".trae/skills/xuansto-skill-v2/.knowledge",
+        "XUANSTO_LOG_LEVEL": "INFO"
       }
     }
   }
@@ -415,289 +880,292 @@ graph TB
 
 ---
 
-## 5. 渐进式加载与 MCP 的关联
+## 4. 渐进式加载与MCP的关联
 
-### 5.1 渐进式加载阶段与 MCP 工具映射
+### 4.1 加载阶段体系
 
-`constraints.yaml` 定义了 4 个渐进式加载阶段，每个阶段对应不同的 MCP 工具可用性：
+渐进式加载系统定义了四个阶段，由 `resource_load_status` 工具负责管理：
 
-```mermaid
-graph LR
-    subgraph Phase0["Phase 0: 骨架 ≤2K"]
-        P0T[knowledge_search<br/>knowledge_stats<br/>server_health]
-    end
+| 阶段 | 名称 | Token预算 | 加载内容 | 对应工具可用性 |
+|------|------|----------|----------|---------------|
+| Phase 0 | 骨架 (Skeleton) | ~2K | 核心约束 + 命令概要 + Agent索引 | resource_load_status, server_health |
+| Phase 1 | 功能 (Functional) | ~5K | 命令详细步骤 + 工作流Phase + MCP工具参数 | + knowledge_search, knowledge_stats, workflow_dispatch, agent_status(list), session_manage, project_init |
+| Phase 2 | 增强 (Enhanced) | ~10K | 参考文档 + 模板 + 知识库索引 | + knowledge_auto_retrieve, knowledge_progressive_search, knowledge_deep_load, quality_gate_check, spec_drift_detect, decision_log, token_budget, knowledge_inject |
+| Phase 3 | 完整 (Full) | ~20K | 全部资源 + 脚本集 + 披露资源 | + knowledge_add, knowledge_update, knowledge_delete, knowledge_rollback, knowledge_web_update, security_scan, code_simplify, hook_manage, context_compress, skill_analyze |
 
-    subgraph Phase1["Phase 1: 功能 ≤5K"]
-        P1T[+ skill_analyze<br/>+ workflow_dispatch<br/>+ session_manage<br/>+ project_init]
-    end
+### 4.2 resource_load_status工具职责
 
-    subgraph Phase2["Phase 2: 增强 ≤10K"]
-        P2T[+ quality_gate_check<br/>+ agent_status<br/>+ resource_load_status<br/>+ knowledge_inject<br/>+ token_budget<br/>+ knowledge_auto_retrieve<br/>+ knowledge_progressive_search]
-    end
+`resource_load_status` 是渐进式加载的核心控制工具，负责：
 
-    subgraph Phase3["Phase 3: 完整 ≤20K"]
-        P3T[+ security_scan<br/>+ code_simplify<br/>+ spec_drift_detect<br/>+ context_compress<br/>+ hook_manage<br/>+ decision_log<br/>+ agent_manage<br/>+ metrics_report]
-    end
+| Action | 职责 | 对加载阶段的影响 |
+|--------|------|-----------------|
+| `status` | 查询当前加载状态、可用资源、可用命令 | 不变 |
+| `preload` | 预加载指定阶段资源 | 推进到目标阶段 |
+| `cache` | 查询缓存状态 | 不变 |
+| `clear_cache` | 清理缓存 | 降级到SKELETON |
+| `loading_progress` | 查询各资源加载进度 | 不变 |
 
-    Phase0 -->|用户执行命令| Phase1
-    Phase1 -->|需要参考文档| Phase2
-    Phase2 -->|深度分析| Phase3
+### 4.3 工具可用性受加载阶段控制
 
-    style Phase0 fill:#E3F2FD
-    style Phase1 fill:#BBDEFB
-    style Phase2 fill:#90CAF9
-    style Phase3 fill:#64B5F6
+每个MCP工具的可用性受当前加载阶段控制。当工具在当前阶段不可用时，调用将返回降级结果或错误提示：
+
+| 加载阶段 | 可用工具 | 不可用工具的降级行为 |
+|----------|---------|---------------------|
+| SKELETON | resource_load_status, server_health | 其他工具返回"当前阶段不可用"提示，建议执行preload |
+| FUNCTIONAL | + 知识检索类(只读)、工作流、会话、Agent查询 | 写入类工具不可用 |
+| ENHANCED | + 质量门禁、偏差检测、决策日志、Token预算、知识注入 | 破坏性操作不可用 |
+| FULL | 全部26个工具 | 无 |
+
+### 4.4 工具调用时自动推进加载阶段
+
+当用户调用某个工具时，系统会自动检测该工具所需的最小加载阶段，并在必要时自动推进：
+
+```
+用户调用 knowledge_progressive_search
+  → 检测到需要 Phase 2 (Enhanced)
+  → 自动调用 resource_load_status(preload, target_phase=enhanced)
+  → 加载 Phase 2 资源
+  → 执行 knowledge_progressive_search
 ```
 
-### 5.2 各阶段工具可用性矩阵
+自动推进规则：
 
-| 工具 | Phase 0 | Phase 1 | Phase 2 | Phase 3 |
-|------|---------|---------|---------|---------|
-| `knowledge_search` | ✅ | ✅ | ✅ | ✅ |
-| `knowledge_stats` | ✅ | ✅ | ✅ | ✅ |
-| `server_health` | ✅ | ✅ | ✅ | ✅ |
-| `skill_analyze` | ❌ | ✅ | ✅ | ✅ |
-| `workflow_dispatch` | ❌ | ✅ | ✅ | ✅ |
-| `session_manage` | ❌ | ✅ | ✅ | ✅ |
-| `project_init` | ❌ | ✅ | ✅ | ✅ |
-| `quality_gate_check` | ❌ | ❌ | ✅ | ✅ |
-| `agent_status` | ❌ | ❌ | ✅ | ✅ |
-| `resource_load_status` | ❌ | ❌ | ✅ | ✅ |
-| `knowledge_inject` | ❌ | ❌ | ✅ | ✅ |
-| `token_budget` | ❌ | ❌ | ✅ | ✅ |
-| `knowledge_auto_retrieve` | ❌ | ❌ | ✅ | ✅ |
-| `knowledge_progressive_search` | ❌ | ❌ | ✅ | ✅ |
-| `security_scan` | ❌ | ❌ | ❌ | ✅ |
-| `code_simplify` | ❌ | ❌ | ❌ | ✅ |
-| `spec_drift_detect` | ❌ | ❌ | ❌ | ✅ |
-| `context_compress` | ❌ | ❌ | ❌ | ✅ |
-| `hook_manage` | ❌ | ❌ | ❌ | ✅ |
-| `decision_log` | ❌ | ❌ | ❌ | ✅ |
-| `agent_manage` | ❌ | ❌ | ❌ | ✅ |
-| `metrics_report` | ❌ | ❌ | ❌ | ✅ |
+| 触发工具 | 自动推进到 | 条件 |
+|----------|-----------|------|
+| 任意命令路由匹配 | FUNCTIONAL | 当前为SKELETON |
+| knowledge_auto_retrieve | ENHANCED | 当前为FUNCTIONAL |
+| knowledge_progressive_search | ENHANCED | 当前为FUNCTIONAL |
+| quality_gate_check | ENHANCED | 当前为FUNCTIONAL |
+| security_scan | FULL | 当前为ENHANCED |
+| knowledge_delete | FULL | 当前为ENHANCED |
+| code_simplify | FULL | 当前为ENHANCED |
 
-### 5.3 工具负责加载，暴露状态/通知
+### 4.5 Token预算与阶段降级
 
-MCP 工具在渐进式加载中承担双重角色：
+当Token使用率超过阈值时，渐进式加载系统自动降级：
 
-1. **加载触发器**：`resource_load_status(action="preload", phase=N)` 触发指定阶段的资源加载
-2. **状态暴露器**：`resource_load_status(action="status")` 返回当前加载状态，`resource_load_status(action="loading_progress")` 返回加载进度
-
-```mermaid
-sequenceDiagram
-    participant Client as MCP Client
-    participant Server as MCP Server
-    participant FS as 文件系统
-
-    Client->>Server: resource_load_status(action="preload", phase=2)
-    Server->>FS: 加载 quality-gates.md
-    Server->>FS: 加载 agent-registry.yaml
-    Server->>FS: 加载 routes.yaml
-    Server-->>Client: {resources: [...], token_budget_used: 8000}
-
-    Note over Client,Server: 工具列表动态更新
-
-    Server-->>Client: notifications/tools/list_changed
-
-    Client->>Server: tools/list
-    Server-->>Client: [knowledge_search, skill_analyze, quality_gate_check, ...]
-
-    Client->>Server: quality_gate_check(gate_ids=["TEST-PASS"])
-    Server-->>Client: {gates_checked: 1, gates_passed: 1, ...}
-```
-
-### 5.4 降级与渐进式加载的协同
-
-| 场景 | MCP 可用 | MCP 不可用 |
-|------|----------|------------|
-| Phase 0 | `knowledge_search` → MCP 调用 | `knowledge_search` → SQLite FTS5 本地查询 |
-| Phase 1 | `skill_analyze` → MCP 调用 | `skill_analyze` → `scripts/skill-test.py --analyze` |
-| Phase 2 | `quality_gate_check` → MCP 调用 | `quality_gate_check` → `scripts/skill-test.py --gate` |
-| Phase 3 | `security_scan` → MCP 调用 | `security_scan` → `scripts/agentic-security-scanner.py` |
-
-降级策略遵循 `constraints.yaml` 中 `degradation.tool_fallbacks` 定义的映射表，确保 MCP 不可用时功能不中断。
+| Token使用率 | 降级动作 | 披露通知 |
+|------------|----------|----------|
+| > 80% | FULL → ENHANCED，释放P3资源 | 必须通知用户 |
+| > 95% | ENHANCED → FUNCTIONAL，释放P2资源 | 必须通知用户 |
+| > 95% 且无活动 > 5分钟 | FUNCTIONAL → SKELETON，释放P1资源 | 必须通知用户 |
 
 ---
 
-## 6. Skill → MCP 交互协议
+## 5. Skill→MCP交互协议
 
-### 6.1 调用方式
+### 5.1 调用方式：Skill命令→MCP工具调用链
 
-Skill 通过 MCP Client 调用 MCP Server 的工具，遵循以下流程：
+Skill命令通过SKILL.md中的路由规则映射到MCP工具调用链。每个命令可能触发一个或多个MCP工具的顺序调用：
 
-```mermaid
-sequenceDiagram
-    participant Skill as Xuansto Skill
-    participant Client as MCP Client
-    participant Server as MCP Server
-    participant Backend as 后端服务
+| Skill命令 | MCP工具调用链 | 说明 |
+|-----------|-------------|------|
+| `/init` | project_init(create) → skill_analyze → knowledge_search → workflow_dispatch(start) | 项目初始化全流程 |
+| `/brainstorm` | knowledge_search → workflow_dispatch(start) | 头脑风暴启动 |
+| `/plan` | skill_analyze → knowledge_search → agent_status(list) → workflow_dispatch(start) → decision_log(log) → token_budget(recommend) | 规划阶段 |
+| `/spec` | workflow_dispatch(phase) → quality_gate_check → spec_drift_detect | 规格编写 |
+| `/design` | quality_gate_check → knowledge_search → workflow_dispatch(phase) | 架构设计 |
+| `/implement` | workflow_dispatch(phase) → quality_gate_check → hook_manage(list) | 代码实现 |
+| `/test` | quality_gate_check → workflow_dispatch(phase) | 测试验证 |
+| `/review` | quality_gate_check → security_scan → code_simplify | 代码审查 |
+| `/audit` | security_scan → quality_gate_check → spec_drift_detect | 安全审计 |
+| `/fix` | session_manage(load) → quality_gate_check → hook_manage(list) | 问题修复 |
+| `/simplify` | code_simplify → quality_gate_check → context_compress | 代码简化 |
+| `/refactor` | code_simplify → quality_gate_check → context_compress | 代码重构 |
+| `/deploy` | quality_gate_check → server_health(check) → workflow_dispatch(phase) | 部署交付 |
+| `/learn` | knowledge_search → knowledge_inject → session_manage(save) | 知识学习 |
+| `/loop` | workflow_dispatch(start) → session_manage(save) → resource_load_status(status) → token_budget(status) → decision_log(log) | 循环开发 |
+| `/sprint` | workflow_dispatch(start) → session_manage(save) → resource_load_status(preload) → token_budget(recommend) → project_init(detect_stack) | 冲刺开发 |
 
-    Note over Skill,Server: 1. 初始化阶段
-    Skill->>Client: 创建 Client 连接
-    Client->>Server: initialize (protocolVersion: 2025-11-25)
-    Server-->>Client: {capabilities: {tools: {listChanged: true}, resources: {subscribe: true}}}
-    Client->>Server: notifications/initialized
+### 5.2 参数传递：命令参数→MCP工具参数映射
 
-    Note over Skill,Server: 2. 工具发现
-    Skill->>Client: 需要可用工具列表
-    Client->>Server: tools/list
-    Server-->>Client: [knowledge_search, skill_analyze, ...]
-    Client-->>Skill: 可用工具列表
+Skill命令的参数通过以下规则映射到MCP工具参数：
 
-    Note over Skill,Server: 3. 工具调用
-    Skill->>Client: 调用 skill_analyze(skill_path="/project")
-    Client->>Server: tools/call {name: "skill_analyze", arguments: {skill_path: "/project"}}
-    Server->>Backend: 执行分析逻辑
-    Backend-->>Server: 分析结果
-    Server-->>Client: {content: [{type: "text", text: "{...}"}], isError: false}
-    Client-->>Skill: 解析结果
+| 映射规则 | 源（Skill命令参数） | 目标（MCP工具参数） | 示例 |
+|----------|-------------------|-------------------|------|
+| 直接映射 | 命令参数名与工具参数名一致 | 直接传递 | `project_path` → `project_path` |
+| 语义映射 | 命令参数名与工具参数名不同 | 按语义转换 | `--stack` → `stack` (project_init) |
+| 默认值填充 | 命令未提供参数 | 使用工具默认值 | `top_k` 未指定 → 默认5 |
+| 上下文注入 | 从会话状态获取 | 自动注入 | `workflow_id` 从当前会话获取 |
+| 环境推断 | 从项目环境推断 | 自动检测 | `project_path` → 当前工作目录 |
 
-    Note over Skill,Server: 4. 降级处理
-    Skill->>Client: 调用 security_scan(target="src")
-    Client--xServer: 连接失败
-    Skill->>Skill: 降级到 scripts/agentic-security-scanner.py
-    Skill->>Skill: 包装结果为相同 JSON 结构
+#### 参数映射示例
+
+**`/init --name my-project --stack python,react`**
+
+```
+project_init:
+  action: "create"
+  name: "my-project"          ← 直接映射
+  stack: ["python", "react"]  ← 逗号分隔→数组
+  directory: "my-project"     ← 默认值=name
+
+skill_analyze:
+  skill_path: ".trae/skills/xuansto-skill-v2"  ← 环境推断
+  depth: "basic"              ← 默认值
+
+knowledge_search:
+  query: "python react project setup best practices"  ← 语义映射
+  top_k: 5                    ← 默认值
+  search_type: "hybrid"       ← 默认值
+
+workflow_dispatch:
+  action: "start"             ← 命令固定
+  workflow: "sdd-tdd-full"    ← 默认值
+  project_path: "."           ← 环境推断
 ```
 
-### 6.2 参数传递规范
+### 5.3 结果处理：MCP工具返回值→Skill输出格式化
 
-| 传递方向 | 格式 | 示例 |
-|----------|------|------|
-| Skill → MCP Client | Python dict / JSON | `{"skill_path": "/project", "depth": "full"}` |
-| MCP Client → MCP Server | JSON-RPC 2.0 | `{"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "skill_analyze", "arguments": {...}}}` |
-| MCP Server → MCP Client | MCP Result | `{"content": [{"type": "text", "text": "{...}"}], "isError": false}` |
-| MCP Client → Skill | Python dict | `{"status": "success", "data": {...}, "metadata": {...}}` |
-
-### 6.3 结果处理流程
-
-```mermaid
-flowchart TD
-    A[收到 MCP 响应] --> B{isError?}
-    B -->|true| C{错误类型}
-    B -->|false| D[解析 content[0].text]
-    
-    C -->|协议错误| E[记录日志 + 抛出异常]
-    C -->|工具执行错误| F{可重试?}
-    
-    F -->|是| G{重试次数 < 3?}
-    G -->|是| H[指数退避重试]
-    G -->|否| I[降级到脚本调用]
-    
-    F -->|否| J[返回错误信息给 Skill]
-    
-    D --> K{status 字段?}
-    K -->|success| L[提取 data 字段返回]
-    K -->|error| M[提取 error 字段处理]
-    K -->|无 status| N[直接返回原始数据]
-    
-    I --> O[包装为统一 JSON 结构]
-    O --> L
-    
-    style A fill:#E3F2FD
-    style L fill:#4CAF50,color:#fff
-    style E fill:#F44336,color:#fff
-    style I fill:#FF9800,color:#fff
-```
-
-### 6.4 统一响应格式
-
-无论通过 MCP 调用还是脚本降级，Skill 层面收到的响应格式保持一致：
+MCP工具的返回值统一包装为以下JSON结构：
 
 ```json
 {
-  "status": "success | error | degraded",
-  "data": {
-    "...": "工具特定返回值"
-  },
+  "status": "ok|conflict|error",
+  "data": { ... },
   "metadata": {
-    "tool": "工具名称",
-    "latency_ms": 234,
+    "tool": "tool_name",
+    "latency_ms": 0,
     "degraded": false,
-    "fallback_used": null
-  },
-  "error": {
-    "code": "ERROR_CODE",
-    "message": "错误描述",
-    "details": {},
-    "retryable": false
+    "fallback_method": null
   }
 }
 ```
 
-### 6.5 命令→MCP 工具链映射
+#### 结果处理流程
 
-基于 `commands/routes.yaml`，每个命令对应一组 MCP 工具链：
+```
+MCP工具返回值
+  ↓
+1. 解包 make_response/make_error_response
+  ↓
+2. 提取 data 字段
+  ↓
+3. 格式化为Skill输出
+  ├── 成功：格式化关键信息 + 可操作建议
+  ├── 降级：添加降级提示 + 替代方案
+  └── 错误：错误码 + 错误描述 + 恢复建议
+```
 
-| 命令 | MCP 工具链 | 降级策略 |
-|------|------------|----------|
-| `/init` | `skill_analyze` → `knowledge_search` → `workflow_dispatch` → `project_init` → `decision_log` | 知识检索降级链 + 内联模板 |
-| `/plan` | `skill_analyze` → `knowledge_search` → `agent_status` → `workflow_dispatch` → `decision_log` → `token_budget` | 基础扫描 + 降级链 + 内联记录 |
-| `/implement` | `workflow_dispatch` → `quality_gate_check` → `hook_manage` | 门禁阻止 + 修复建议 |
-| `/review` | `quality_gate_check` → `security_scan` → `code_simplify` | 安全扫描内嵌降级 + 代码简化内嵌降级 |
-| `/audit` | `security_scan` → `quality_gate_check` → `spec_drift_detect` | 内嵌 agentic + dependency 扫描 |
-| `/simplify` | `code_simplify` → `quality_gate_check` → `context_compress` | 内嵌 simplify + dedup + 脚本降级 |
-| `/loop` | `workflow_dispatch` → `session_manage` → `resource_load_status` → `token_budget` → `decision_log` | 三步降级: MCP 完整 → MCP 简化 → 脚本 |
-| `/sprint` | `workflow_dispatch` → `session_manage` → `resource_load_status` → `token_budget` → `project_init` | 快速工作流 → 精简 Phase |
-| `/status` | `workflow_dispatch` → `session_manage` → `server_health` | 持久化文件读取 |
+#### 结果格式化示例
 
-### 6.6 错误处理与重试策略
+**knowledge_search 返回值 → Skill输出**
 
-| 错误类型 | MCP 错误码 | 处理策略 |
-|----------|------------|----------|
-| 参数验证失败 | -32602 (InvalidParams) | 修正参数后重试，不降级 |
-| 工具不存在 | -32601 (MethodNotFound) | 降级到脚本调用 |
-| 服务器内部错误 | -32603 (InternalError) | 指数退避重试 3 次，仍失败则降级 |
-| 连接超时 | 传输层错误 | 重试 1 次，失败降级 |
-| 工具执行错误 | `isError: true` | 根据 `retryable` 字段决定重试或降级 |
-| 降级脚本失败 | — | 返回降级错误，Skill 层面使用最小功能集继续 |
+```
+MCP返回:
+{
+  "status": "ok",
+  "data": {
+    "results": [
+      {"id": "entry-1", "title": "React Hooks", "content": "...", "confidence": 0.92}
+    ],
+    "total": 1,
+    "search_strategy": "hybrid",
+    "degradation_level": 0
+  }
+}
+
+Skill输出:
+🔍 知识检索完成 (策略: hybrid, 引擎: 完整)
+  找到 1 条匹配结果:
+  1. [0.92] React Hooks - ...
+  💡 使用 knowledge_deep_load(entry_id="entry-1") 查看完整内容
+```
+
+**quality_gate_check 返回值 → Skill输出**
+
+```
+MCP返回:
+{
+  "status": "ok",
+  "data": {
+    "gates_checked": 5,
+    "gates_passed": 4,
+    "gates_failed": 1,
+    "can_proceed": false,
+    "results": [
+      {"gate_id": "TEST-PASS", "status": "FAIL", "severity": "BLOCK", "message": "测试未通过"}
+    ]
+  }
+}
+
+Skill输出:
+🚧 质量门禁检查: 4/5 通过 (❌ 不可继续)
+  ❌ BLOCK: TEST-PASS - 测试未通过
+  ⚠️ 请修复BLOCK门禁后再继续
+```
+
+#### 错误码映射
+
+| MCP错误码 | 数值 | Skill输出 | 恢复建议 |
+|-----------|------|----------|----------|
+| PARSE_ERROR | -32700 | 请求解析失败 | 检查参数格式 |
+| INVALID_REQUEST | -32600 | 无效请求 | 检查必填参数 |
+| METHOD_NOT_FOUND | -32601 | 未知工具 | 检查工具名称 |
+| INVALID_PARAMS | -32602 | 参数无效 | 检查参数类型和范围 |
+| INTERNAL_ERROR | -32603 | 内部错误 | 重试或降级为脚本调用 |
+| VALIDATION_ERROR | -32100 | 输入验证失败 | 修正输入内容 |
+| NOT_FOUND | -32102 | 资源不存在 | 检查ID是否正确 |
+| VERSION_CONFLICT | -32103 | 版本冲突 | 重新获取最新版本后重试 |
+| SENSITIVE_CONTENT | -32106 | 包含敏感信息 | 移除API密钥/密码等 |
 
 ---
 
-## 附录 A: 实现路线图
+## 附录A：工具-脚本降级映射表
 
-```mermaid
-gantt
-    title MCP 工具实现路线图
-    dateFormat YYYY-MM-DD
-    section P0 核心编排
-    skill_analyze          :a1, 2026-06-01, 3d
-    quality_gate_check     :a2, 2026-06-01, 5d
-    session_manage         :a3, 2026-06-04, 5d
-    workflow_dispatch      :a4, 2026-06-04, 5d
-    project_init           :a5, 2026-06-09, 3d
+当MCP Server不可用时，工具自动降级为脚本或内嵌逻辑：
 
-    section P1 质量安全
-    spec_drift_detect      :b1, 2026-06-10, 3d
-    security_scan          :b2, 2026-06-10, 5d
-    code_simplify          :b3, 2026-06-13, 3d
-    agent_status           :b4, 2026-06-13, 2d
-    resource_load_status   :b5, 2026-06-15, 3d
-    context_compress       :b6, 2026-06-15, 3d
-    token_budget           :b7, 2026-06-18, 2d
-    knowledge_inject       :b8, 2026-06-18, 2d
+| MCP工具 | 降级脚本 | 降级方式 |
+|---------|----------|----------|
+| knowledge_search | scripts/knowledge-server.py --search | Python脚本 |
+| knowledge_add | scripts/knowledge-server.py --add | Python脚本 |
+| knowledge_update | scripts/knowledge-server.py --update | Python脚本 |
+| knowledge_delete | scripts/knowledge-server.py --delete | Python脚本 |
+| skill_analyze | scripts/skill-test.py --analyze | Python脚本 |
+| quality_gate_check | scripts/skill-test.py --gate | Python脚本 |
+| spec_drift_detect | 内联漂移检测逻辑 | 内嵌逻辑 |
+| security_scan | scripts/agentic-security-scanner.py | Python脚本 |
+| code_simplify | scripts/code-simplifier.py | Python脚本 |
+| session_manage | scripts/init-session.py | Python脚本 |
+| workflow_dispatch | 内联Phase推进逻辑 | 内嵌逻辑 |
+| agent_status | 静态注册表查询(agents/) | 文件系统 |
+| hook_manage | 内联Hook配置读取 | 内嵌逻辑 |
+| resource_load_status | 内联状态检查(resource_state.json) | 文件系统 |
+| context_compress | scripts/context-compressor.py | Python脚本 |
+| server_health | scripts/health-checker.py | Python脚本 |
+| decision_log | 内联JSON记录 | 内嵌逻辑 |
+| token_budget | 内联估算逻辑 | 内嵌逻辑 |
+| knowledge_inject | 内联注入逻辑 | 内嵌逻辑 |
+| project_init | scripts/project-initializer.py | Python脚本 |
 
-    section P2 辅助工具
-    hook_manage            :c1, 2026-06-20, 2d
-    server_health          :c2, 2026-06-20, 1d
-    decision_log           :c3, 2026-06-22, 2d
-    agent_manage           :c4, 2026-06-22, 2d
-    metrics_report         :c5, 2026-06-24, 2d
+## 附录B：版本兼容矩阵
 
-    section Resource 暴露
-    knowledge:// 资源       :d1, 2026-06-10, 3d
-    workflow:// 资源        :d2, 2026-06-15, 2d
-    agent:// 资源           :d3, 2026-06-20, 2d
-    config:// 资源          :d4, 2026-06-22, 2d
-```
+| Skill版本 | 最低MCP Server版本 | API版本 | 工具数量 | 新增工具 |
+|-----------|-------------------|---------|---------|----------|
+| 8.0.0 | 4.0.0 | 3.0.0 | 26 | knowledge_inject, project_init, knowledge_progressive_search, knowledge_deep_load, knowledge_web_update, resource_load_status, skill_analyze, quality_gate_check, spec_drift_detect, security_scan, code_simplify, session_manage, workflow_dispatch, agent_status, hook_manage, context_compress, server_health, decision_log, token_budget |
+| 7.0.0 | 3.5.0 | 2.0.0 | 15 | server_health, decision_log, token_budget |
+| 6.0.0 | 3.0.0 | 1.0.0 | 13 | 基础工具集 |
 
-## 附录 B: 问题追踪
+## 附录C：错误码完整列表
 
-| 编号 | 问题 | 严重度 | 状态 | 修复建议 |
-|------|------|--------|------|----------|
-| MCP-01 | 工具实现严重不足（17 声明 / 10 实现） | 🔴 严重 | 待修复 | 按 P0→P1→P2 优先级逐步实现 |
-| MCP-02 | Resource 未暴露 | 🟡 中等 | 待修复 | 优先暴露 `knowledge://` 和 `workflow://` 资源 |
-| MCP-03 | Prompt 模板未实现 | 🟡 中等 | 待评估 | 评估代码审查/需求澄清 Prompt 的 MCP 化价值 |
-| MCP-04 | 工具列表静态（`listChanged: False`） | 🟢 低 | 待修复 | 渐进式加载阶段切换时发送 `notifications/tools/list_changed` |
-| MCP-05 | 降级路径不一致 | 🟡 中等 | 待修复 | 统一降级框架：MCP → 脚本 → 内联，脚本路径从 `constraints.yaml` 读取 |
-| MCP-06 | 错误码未对齐 MCP 规范 | 🟡 中等 | 待修复 | 工具执行错误使用 `isError: true` 返回，协议错误使用 JSON-RPC error |
-| MCP-07 | 无 Resource 订阅机制 | 🟢 低 | 待评估 | 知识库变更/工作流状态变化场景评估后决定是否实现 |
+### MCP标准错误码
+
+| 错误码 | 数值 | 描述 |
+|--------|------|------|
+| PARSE_ERROR | -32700 | JSON解析失败 |
+| INVALID_REQUEST | -32600 | 请求对象无效 |
+| METHOD_NOT_FOUND | -32601 | 方法/工具不存在 |
+| INVALID_PARAMS | -32602 | 参数无效 |
+| INTERNAL_ERROR | -32603 | 服务器内部错误 |
+
+### 应用错误码
+
+| 错误码 | 数值 | 描述 |
+|--------|------|------|
+| VALIDATION_ERROR | -32100 | 输入验证失败 |
+| BAD_REQUEST | -32101 | 请求格式错误 |
+| NOT_FOUND | -32102 | 资源不存在 |
+| VERSION_CONFLICT | -32103 | 乐观锁版本冲突 |
+| DUPLICATE_DETECTED | -32104 | 重复条目检测 |
+| UNKNOWN_TOOL | -32105 | 未知工具名称 |
+| SENSITIVE_CONTENT | -32106 | 内容包含敏感信息 |

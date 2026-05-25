@@ -1,1024 +1,1654 @@
-# xuansto-skill-v2 API 规格说明书
+# Xuansto Skill API 规格说明书
 
-> **版本**: v8.0.0  
-> **生成日期**: 2026-05-24  
-> **适用范围**: 多Agent自主开发编排引擎全量API接口
+> **版本**: 8.0.0
+> **Skill目录**: `.trae/skills/xuansto-skill-v2/`
+> **MCP Server**: `xuansto-mcp-server/`
+> **日期**: 2026-05-25
 
 ---
 
 ## 目录
 
-1. [现有 API 调用清单](#1-现有-api-调用清单)
-   - 1.1 [外部 API — MCP Tool 协议](#11-外部-api--mcp-tool-协议)
-   - 1.2 [外部 API — FastAPI HTTP 端点](#12-外部-api--fastapi-http-端点)
-   - 1.3 [外部 API — WebSocket 实时推送](#13-外部-api--websocket-实时推送)
-   - 1.4 [外部 API — Web 搜索](#14-外部-api--web-搜索)
-   - 1.5 [内部 API — 模块间调用](#15-内部-api--模块间调用)
+1. [现有API调用清单](#1-现有api调用清单)
 2. [接口依赖拓扑图](#2-接口依赖拓扑图)
-3. [重构后 API 设计](#3-重构后-api-设计)
+3. [重构后API设计](#3-重构后api设计)
 4. [接口契约](#4-接口契约)
 5. [异常处理、重试与降级方案](#5-异常处理重试与降级方案)
 
 ---
 
-## 1. 现有 API 调用清单
+## 1. 现有API调用清单
 
-### 1.1 外部 API — MCP Tool 协议
+### 1.1 内部API（模块间调用）
 
-**传输层**: stdio（MCP JSON-RPC over stdin/stdout）  
-**协议版本**: MCP 2025-03-26  
-**认证方式**: 无（本地进程通信）
+#### 1.1.1 KnowledgeServer → SQLite（db_engine.py）
 
-| 编号 | Tool 名称 | 请求方式 | 必填参数 | 可选参数 | 返回值 | 只读 | 幂等 | 破坏性 | 开放世界 |
-|------|-----------|----------|----------|----------|--------|------|------|--------|----------|
-| MCP-01 | `knowledge_search` | call_tool | `query` | `top_k`(5), `search_type`("hybrid"), `filters`({}) | `{results, total, search_strategy, degradation_level, degradation_name}` | ✅ | ✅ | ❌ | ❌ |
-| MCP-02 | `knowledge_add` | call_tool | `content` | `metadata`({}), `auto_dedup`(true) | `{id, status, dedup_status, similarity_score?}` | ❌ | ❌ | ❌ | ❌ |
-| MCP-03 | `knowledge_update` | call_tool | `id` | `content`, `metadata`({}) | `{id, status}` | ❌ | ❌ | ❌ | ❌ |
-| MCP-04 | `knowledge_delete` | call_tool | `id` | — | `{id, status}` | ❌ | ❌ | ✅ | ❌ |
-| MCP-05 | `knowledge_stats` | call_tool | — | `detailed`(false), `since`(null) | `{total_entries, by_scope, embedding, chroma_available, ...}` | ✅ | ✅ | ❌ | ❌ |
-| MCP-06 | `knowledge_rollback` | call_tool | `id`, `target_version` | — | `{id, status, target_version, current_version}` | ❌ | ✅ | ✅ | ❌ |
-| MCP-07 | `knowledge_auto_retrieve` | call_tool | `project_path` | `task_type`("feature"), `query`(null), `token_budget`(2048) | `{context, tech_stack, task_type, query_used, results_count, ...}` | ✅ | ✅ | ❌ | ❌ |
-| MCP-08 | `knowledge_progressive_search` | call_tool | `query` | `task_type`("feature"), `tech_stack`({}), `token_budget`(2048) | `{results, total, task_type, search_config, token_budget, pruned_entry_ids, ...}` | ✅ | ✅ | ❌ | ❌ |
-| MCP-09 | `knowledge_deep_load` | call_tool | `entry_id` | — | `{id, title, content, scope, confidence, tags, type, category}` | ✅ | ✅ | ❌ | ❌ |
-| MCP-10 | `knowledge_web_update` | call_tool | —（至少一项） | `entry_id`, `category`, `tags` | `{id, status, sources_found, best_source_rating, updated_fields?}` | ❌ | ❌ | ❌ | ✅ |
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `add_entry` | `add_entry(entry_data: dict) -> dict` | 新增知识条目，返回含`id`的条目字典 |
+| `get_entry` | `get_entry(entry_id: str) -> dict \| None` | 按ID获取条目，不存在返回`None` |
+| `update_entry` | `update_entry(entry_id: str, updates: dict) -> dict \| None` | 更新条目字段，版本冲突返回`{error: "version_conflict"}` |
+| `delete_entry` | `delete_entry(entry_id: str) -> bool` | 删除条目，返回是否成功 |
+| `count_entries` | `count_entries() -> dict` | 统计条目数量，含`total`及按`scope`分组 |
+| `get_all_entries` | `get_all_entries() -> list[dict]` | 获取全部条目列表 |
+| `count_by_embedding_status` | `count_by_embedding_status() -> dict` | 按`embedding_status`统计（`pending`/`ready`） |
+| `update_embedding_status` | `update_embedding_status(entry_id: str, status: str) -> None` | 更新条目的嵌入状态 |
+| `restore_version` | `restore_version(entry_id: str, target_version: int) -> dict \| None` | 恢复到指定版本 |
+| `get_version_history` | `get_version_history(entry_id: str) -> list[dict]` | 获取条目版本历史 |
 
-**MCP 错误码体系**:
+#### 1.1.2 KnowledgeServer → ChromaDB（vector_engine.py）
 
-| 错误码 | 数值 | 说明 |
-|--------|------|------|
-| `PARSE_ERROR` | -32700 | JSON 解析失败 |
-| `INVALID_REQUEST` | -32600 | 请求格式不合法 |
-| `METHOD_NOT_FOUND` | -32601 | 未知 Tool 名称 |
-| `INVALID_PARAMS` | -32602 | 参数校验失败 |
-| `INTERNAL_ERROR` | -32603 | 服务端内部错误 |
-| `VALIDATION_ERROR` | -32100 | 输入验证失败 |
-| `BAD_REQUEST` | -32101 | 请求参数缺失或无效 |
-| `NOT_FOUND` | -32102 | 目标条目不存在 |
-| `VERSION_CONFLICT` | -32103 | 乐观锁版本冲突 |
-| `DUPLICATE_DETECTED` | -32104 | 重复条目检测 |
-| `UNKNOWN_TOOL` | -32105 | 未知工具名 |
-| `SENSITIVE_CONTENT` | -32106 | 内容含敏感信息 |
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `add_embedding` | `add_embedding(entry_id: str, content: str, metadata: dict) -> None` | 添加向量嵌入 |
+| `search` | `search(query: str, top_k: int, filters: dict) -> list[dict]` | 语义搜索，返回相似条目列表 |
+| `get_vector_count` | `get_vector_count() -> int` | 获取向量总数 |
+| `get_all_ids` | `get_all_ids() -> set[str]` | 获取全部向量ID集合 |
+| `delete_embedding` | `delete_embedding(entry_id: str) -> None` | 删除指定条目的向量 |
 
----
+#### 1.1.3 KnowledgeServer → DedupChecker（dedup.py）
 
-### 1.2 外部 API — FastAPI HTTP 端点
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `check_duplicate` | `check_duplicate(entry_data: dict) -> dict` | 检查重复，返回`{action: "merge"|"skip"|"keep_both", similarity_score, existing_id}` |
+| `merge_entries` | `merge_entries(existing: dict, new: dict) -> dict` | 合并重复条目，返回合并后数据 |
 
-**传输层**: HTTP/1.1（uvicorn）  
-**默认端口**: 8765  
-**认证方式**: 远程模式（`host=0.0.0.0`）需 `X-API-Key` Header；本地模式无认证  
-**权限等级**: `admin` / `read-write` / `read-only`  
-**限流**: 60 请求/分钟/IP
+#### 1.1.4 KnowledgeServer → DegradationManager（degradation.py）
 
-#### 1.2.1 健康检查与运维
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `get_search_strategy` | `get_search_strategy() -> str` | 获取当前搜索策略：`hybrid`/`semantic_only`/`keyword_only` |
+| `level` | 属性 | 当前降级等级（0-2） |
+| `level_name` | 属性 | 当前降级等级名称 |
 
-| 编号 | 方法 | 路径 | 认证 | 请求体 | 返回值 |
-|------|------|------|------|--------|--------|
-| HTTP-01 | GET | `/v1/knowledge/health` | 无 | — | `{status, version, engines, stats, embedding, degradation, websocket_connections}` |
-| HTTP-02 | GET | `/v1/health/consistency` | 无 | — | `{consistent, sqlite, chroma, discrepancies}` |
-| HTTP-03 | POST | `/v1/knowledge/backup` | admin | `{type, destination?}` | 备份结果 |
+#### 1.1.5 KnowledgeServer → ProgressiveLoader（progressive_loader.py）
 
-#### 1.2.2 CRUD 操作
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `advance_phase` | `advance_phase(target_phase: int) -> dict` | 推进到指定加载阶段 |
+| `get_available_resources` | `get_available_resources(phase: int) -> list[dict]` | 获取指定阶段可用资源 |
+| `get_disclosure_note` | `get_disclosure_note(phase: int) -> str` | 获取阶段披露说明 |
 
-| 编号 | 方法 | 路径 | 认证 | 请求体 | 返回值 |
-|------|------|------|------|--------|--------|
-| HTTP-04 | POST | `/v1/knowledge/search` | read-only+ | `SearchRequest` | `{results, total, search_strategy, degradation_*}` |
-| HTTP-05 | POST | `/v1/knowledge/stats` | read-only+ | `StatsRequest` | `{total_entries, by_scope, embedding, ...}` |
-| HTTP-06 | GET | `/v1/knowledge/get/{entry_id}` | read-only+ | — | 条目完整数据 |
-| HTTP-07 | GET | `/v1/knowledge/{entry_id}` | read-only+ | — | 条目完整数据（兼容旧版） |
-| HTTP-08 | POST | `/v1/knowledge/add` | read-write+ | `AddRequest` | `{id, status, dedup_status}` |
-| HTTP-09 | PUT | `/v1/knowledge/update/{entry_id}` | read-write+ | `UpdateRequest` | `{id, status}` |
-| HTTP-10 | PUT | `/v1/knowledge/{entry_id}` | read-write+ | `UpdateRequest` | `{id, status}`（兼容旧版） |
-| HTTP-11 | DELETE | `/v1/knowledge/delete/{entry_id}` | read-write+ | — | `{id, status}` |
-| HTTP-12 | DELETE | `/v1/knowledge/{entry_id}` | read-write+ | — | `{id, status}`（兼容旧版） |
-| HTTP-13 | POST | `/v1/knowledge/rollback` | admin | `RollbackVersionRequest` | `{id, status, target_version}` |
-| HTTP-14 | GET | `/v1/knowledge/{entry_id}/versions` | read-only+ | — | `{entry_id, versions, total}` |
+#### 1.1.6 KnowledgeServer → EmbeddingManager（embedding.py）
 
-#### 1.2.3 高级检索
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `generate_embedding` | `generate_embedding(content: str) -> list[float]` | 生成文本嵌入向量 |
+| `degraded` | 属性 | 嵌入服务是否降级 |
+| `level` | 属性 | 嵌入降级等级 |
+| `level_name` | 属性 | 嵌入降级等级名称 |
+| `dimension` | 属性 | 当前嵌入维度 |
 
-| 编号 | 方法 | 路径 | 认证 | 请求体 | 返回值 |
-|------|------|------|------|--------|--------|
-| HTTP-15 | POST | `/v1/knowledge/progressive_search` | read-only+ | `ProgressiveSearchRequest` | `{results, total, task_type, search_config, ...}` |
-| HTTP-16 | POST | `/v1/knowledge/deep_load` | read-only+ | `DeepLoadRequest` | 条目完整数据 |
-| HTTP-17 | POST | `/v1/knowledge/auto_retrieve` | read-only+ | `AutoRetrieveRequest` | `{context, tech_stack, task_type, ...}` |
-| HTTP-18 | POST | `/v1/knowledge/web_update` | read-write+ | `WebUpdateRequest` | `{id, status, sources_found, ...}` |
+#### 1.1.7 KnowledgeServer → Exporter（exporter.py）
 
-#### 1.2.4 Pydantic 请求模型一览
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `export_entry` | `export_entry(entry_id: str) -> None` | 导出条目到文件 |
 
-| 模型 | 必填字段 | 可选字段 | 校验规则 |
-|------|----------|----------|----------|
-| `SearchRequest` | `query` | `scope`, `top_k`(5,1-20), `strategy`("hybrid"), `filters`, `agent_role` | strategy∈{hybrid,semantic_only,keyword_only}; scope∈{general,workspace,experience} |
-| `AddRequest` | `title`, `content` | `scope`("workspace"), `tags`([]), `source_path`, `source_rating`(3,1-5), `type`, `category`, `summary`, `content_path` | scope∈{general,workspace,experience} |
-| `UpdateRequest` | —（至少一字段） | `title`, `content`, `tags`, `confidence`(0-1), `source_rating`(1-5), `type`, `category`, `summary`, `content_path`, `success_count`, `failure_count`, `version` | — |
-| `BackupRequest` | — | `type`("full"), `destination` | type∈{full,incremental,snapshot} |
-| `RollbackVersionRequest` | `entry_id`, `target_version`(≥1) | — | — |
-| `ProgressiveSearchRequest` | `query` | `task_type`("feature"), `tech_stack`({}), `token_budget`(2048,256-8192) | task_type∈{bug_fix,feature,refactor,review,deploy,security} |
-| `DeepLoadRequest` | `entry_id` | — | — |
-| `AutoRetrieveRequest` | `project_path` | `task_type`("feature"), `query`, `token_budget`(2048,256-8192) | task_type同上 |
-| `WebUpdateRequest` | —（至少一项） | `entry_id`, `category`, `tags` | — |
-| `StatsRequest` | — | `detailed`(false), `since` | — |
+#### 1.1.8 MCPToolFallback → scripts/（degradation.py）
 
----
+通过 `subprocess.run` 调用以下14个降级脚本：
 
-### 1.3 外部 API — WebSocket 实时推送
+| 脚本文件 | 对应MCP工具 | 说明 |
+|----------|------------|------|
+| `skill-test.py` | `skill_analyze`, `agent_status`, `quality_gate_check` | 技能分析/Agent状态/门禁检查 |
+| `knowledge-server.py` | `knowledge_search`, `knowledge_inject` | 知识检索/注入 |
+| `spec-drift-detector.py` | `spec_drift_detect` | 规格漂移检测 |
+| `agentic-security-scanner.py` | `security_scan` | 安全扫描 |
+| `code-simplifier.py` | `code_simplify` | 代码简化 |
+| `init-session.py` | `session_manage`（save/init） | 会话初始化 |
+| `session-catchup.py` | `session_manage`（load/detect/restore） | 会话恢复 |
+| `session-persist.py` | `session_manage`（save/load/list） | 会话持久化 |
+| `project-initializer.py` | `workflow_dispatch`, `project_init` | 项目初始化 |
+| `context-compressor.py` | `context_compress` | 上下文压缩 |
+| `health-checker.py` | `server_health` | 健康检查 |
+| `decision-log.py` | `decision_log` | 决策日志 |
+| `token-budget-guard.py` | `token_budget`, `hook_manage` | Token预算/编码检查 |
+| `test-reporter.py` | `metrics_report` | 指标报告 |
 
-**端点**: `ws://{host}:{port}/ws`  
-**认证**: 无  
-**协议**: 双向文本帧，服务端主动推送变更事件
+### 1.2 外部API
 
-| 事件类型 | 触发时机 | 消息体 |
-|----------|----------|--------|
-| `created` | 条目新增 | `{type, entry_id, timestamp}` |
-| `updated` | 条目更新/合并 | `{type, entry_id, timestamp}` |
-| `deleted` | 条目删除 | `{type, entry_id, timestamp}` |
-| `rolled_back` | 版本回滚 | `{type, entry_id, target_version, timestamp}` |
-| `web_updated` | Web 更新 | `{type, entry_id, timestamp}` |
-| `web_created` | Web 创建 | `{type, entry_id, timestamp}` |
+#### 1.2.1 MCP协议（stdio传输）
 
----
+基于 MCP (Model Context Protocol) 标准，通过 stdio 传输层提供：
 
-### 1.4 外部 API — Web 搜索
+| 操作 | 说明 |
+|------|------|
+| `list_tools` | 列出所有已注册的MCP工具（20个） |
+| `call_tool` | 调用指定MCP工具，传入参数，返回结果 |
 
-**模块**: `web_search.py`  
-**传输层**: HTTP（urllib）  
-**搜索引擎**: DuckDuckGo HTML  
-**超时**: 15秒/请求  
-**认证**: 无
+MCP Server 名称：`xuansto-mcp-server`，版本 `8.0.0`
 
-| 函数 | 用途 | 入参 | 返回值 |
-|------|------|------|--------|
-| `search_official_docs(query, tech_stack?)` | 搜索官方文档 | query: str, tech_stack: list\|None | `[{title, url, content, source_name, source_rating, tech}]` |
-| `extract_and_structure(web_results, existing_entry?)` | 提取结构化内容 | web_results: list, existing_entry: dict\|None | `{title, content, scope, tags, source_path, source_rating, type, category, summary, confidence}` |
-| `detect_stale_entries(db_path, days?)` | 检测过期条目 | db_path: str, days: int(90) | `[dict]` |
-| `detect_new_tech_dependencies(project_path, db_path)` | 检测新技术依赖 | project_path: str, db_path: str | `[{name, dep_name, version}]` |
-| `auto_ingest_tech_knowledge(tech_name, tech_version?)` | 自动摄取技术知识 | tech_name: str, tech_version: str\|None | `{status, tech_name, entry_data?, sources_found, ...}` |
-| `classify_source_rating(url)` | URL 权威度评级 | url: str | int(1-5) |
+#### 1.2.2 HTTP API（FastAPI/uvicorn）
 
-**官方源映射**:
+知识库 HTTP REST API，基础路径 `/v1/knowledge/`：
 
-| 技术 | 官方源 | 评级 |
-|------|--------|------|
-| javascript | MDN (developer.mozilla.org) | 5 |
-| typescript | typescriptlang.org | 5 |
-| python | docs.python.org | 5 |
-| rust | doc.rust-lang.org | 5 |
-| go | go.dev | 5 |
-| react | react.dev | 5 |
-| vue | vuejs.org | 5 |
-| nextjs | nextjs.org | 5 |
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/v1/knowledge/health` | GET | 健康检查，返回引擎状态、降级等级、嵌入状态 |
+| `/v1/health/consistency` | GET | 数据一致性检查（SQLite vs ChromaDB） |
+| `/v1/knowledge/search` | POST | 知识检索（支持hybrid/semantic_only/keyword_only策略） |
+| `/v1/knowledge/stats` | POST | 统计信息（条目数、嵌入状态、降级等级） |
+| `/v1/knowledge/add` | POST | 新增知识条目（含去重检查和敏感内容过滤） |
+| `/v1/knowledge/get/{entry_id}` | GET | 获取指定条目 |
+| `/v1/knowledge/{entry_id}` | GET | 获取指定条目（兼容旧版） |
+| `/v1/knowledge/update/{entry_id}` | PUT | 更新条目（含乐观锁版本冲突重试） |
+| `/v1/knowledge/{entry_id}` | PUT | 更新条目（兼容旧版） |
+| `/v1/knowledge/delete/{entry_id}` | DELETE | 删除条目 |
+| `/v1/knowledge/{entry_id}` | DELETE | 删除条目（兼容旧版） |
+| `/v1/knowledge/rollback` | POST | 版本回滚 |
+| `/v1/knowledge/{entry_id}/versions` | GET | 获取版本历史 |
+| `/v1/knowledge/progressive_search` | POST | 渐进式检索（按任务类型和Token预算） |
+| `/v1/knowledge/deep_load` | POST | 深度加载指定条目完整内容 |
+| `/v1/knowledge/web_update` | POST | 从网络更新/创建知识条目 |
+| `/v1/knowledge/auto_retrieve` | POST | 自动检索（按任务类型和项目路径） |
+| `/v1/knowledge/backup` | POST | 创建备份（full/incremental/snapshot） |
+| `/ws` | WebSocket | 实时变更通知（created/updated/deleted/rolled_back/web_updated/web_created） |
 
----
+#### 1.2.3 Web搜索（web_search.py）
 
-### 1.5 内部 API — 模块间调用
-
-#### 1.5.1 KnowledgeServer → SQLiteEngine
-
-| 方法 | 用途 | 入参 | 返回值 | 线程安全 |
-|------|------|------|--------|----------|
-| `add_entry(entry)` | 新增条目 | dict | `{id, content_hash}` | ✅(RLock) |
-| `get_entry(entry_id)` | 获取条目 | str | dict\|None | ✅ |
-| `update_entry(entry_id, updates)` | 更新条目 | str, dict | dict\|None | ✅(RLock) |
-| `delete_entry(entry_id)` | 删除条目 | str | bool | ✅(RLock) |
-| `search_fts(query, scope?, top_k?, type_filters?, category_filters?)` | FTS5 全文检索 | str, ... | `[dict]` | ✅ |
-| `count_entries()` | 统计条目数 | — | `{total, general, workspace, experience}` | ✅ |
-| `count_by_embedding_status()` | 按嵌入状态统计 | — | `{pending: n, ready: n}` | ✅ |
-| `update_embedding_status(entry_id, status)` | 更新嵌入状态 | str, str | void | ✅(RLock) |
-| `get_pending_embeddings(limit?)` | 获取待嵌入条目 | int(50) | `[dict]` | ✅ |
-| `get_ready_entry_ids()` | 获取已嵌入ID集合 | — | `set[str]` | ✅ |
-| `batch_get_metadata(entry_ids)` | 批量获取元数据 | list[str] | `dict[str, dict]` | ✅ |
-| `restore_version(entry_id, target_version)` | 恢复历史版本 | str, int | dict\|None | ✅ |
-| `get_version_history(entry_id)` | 获取版本历史 | str | `[dict]` | ✅ |
-| `find_by_hash(content_hash)` | 按哈希查找 | str | dict\|None | ✅ |
-| `sync_tags(entry_id, tags)` | 同步标签 | str, list | void | ✅(RLock) |
-| `log_dedup(...)` | 记录去重日志 | ... | void | ✅(RLock) |
-| `increment_retry_count(entry_id)` | 增加重试计数 | str | void | ✅(RLock) |
-| `log_reconciliation(...)` | 记录一致性修复 | ... | void | ✅(RLock) |
-| `get_all_entries()` | 获取全部条目 | — | `[dict]` | ✅ |
-| `is_empty()` | 判空 | — | bool | ✅ |
-| `check_version(entry_id, expected_version)` | 乐观锁版本检查 | str, int | bool | ✅ |
-| `close()` | 关闭连接 | — | void | — |
-
-#### 1.5.2 KnowledgeServer → ChromaEngine
-
-| 方法 | 用途 | 入参 | 返回值 | 前置条件 |
-|------|------|------|--------|----------|
-| `add_embedding(entry_id, content, metadata?)` | 添加/更新向量 | str, str, dict? | void | `available=True` |
-| `search_semantic(query, top_k?)` | 语义检索 | str, int(20) | `[{id, content, _cosine_similarity}]` | `available=True` |
-| `delete_embedding(entry_id)` | 删除向量 | str | void | `available=True` |
-| `get_vector_count()` | 获取向量总数 | — | int | — |
-| `get_all_ids()` | 获取全部向量ID | — | `set[str]` | `available=True` |
-| `mark_stale_entries(limit?)` | 标记过期向量 | int(10) | `[str]` | `available=True` |
-| `get_stale_entry_ids(limit?)` | 获取过期向量ID | int(10) | `[str]` | `available=True` |
-| `close()` | 关闭连接 | — | void | — |
-
-**属性**:
-- `available: bool` — ChromaDB 是否可用
-
-#### 1.5.3 KnowledgeServer → EmbeddingManager
-
-| 方法/属性 | 用途 | 返回值 |
-|-----------|------|--------|
-| `generate_embedding(text)` | 生成嵌入向量 | `(embedding, dim)` |
-| `check_api_availability()` | 检查 API 可用性 | bool |
-| `level` | 当前等级 | int(0=API, 1=Local, 2=BM25) |
-| `level_name` | 等级名称 | str |
-| `dimension` | 向量维度 | int(1536/384/0) |
-| `degraded` | 是否降级 | bool |
-
-**降级链**: OpenAI API → sentence-transformers → BM25-only
-
-#### 1.5.4 KnowledgeServer → DegradationManager
-
-| 方法/属性 | 用途 | 返回值 |
-|-----------|------|--------|
-| `check_and_degrade()` | 检测并降级 | int(当前等级) |
-| `try_recover()` | 尝试恢复 | int(当前等级) |
-| `get_search_strategy()` | 获取搜索策略 | str(hybrid/keyword_only/file_search) |
-| `start_periodic_check()` | 启动定期检查 | void |
-| `stop_periodic_check()` | 停止定期检查 | void |
-| `level` | 当前降级等级 | int(0-3) |
-| `level_name` | 等级名称 | str |
-
-**降级等级**:
-
-| 等级 | 名称 | 搜索策略 | 含义 |
-|------|------|----------|------|
-| 0 | normal | hybrid | 全功能可用 |
-| 1 | local_semantic | hybrid | 本地语义嵌入 |
-| 2 | bm25_only | keyword_only | 仅关键词检索 |
-| 3 | file_search | file_search | 文件系统搜索 |
-
-#### 1.5.5 KnowledgeServer → HybridRetrievalEngine
-
-| 方法 | 用途 | 入参 | 返回值 |
-|------|------|------|--------|
-| `search(query, scope?, top_k?, strategy?, min_confidence?, tag_filters?, agent_role?, type_filters?, category_filters?)` | 混合检索 | ... | `{results, total, search_strategy}` |
-
-**RRF 融合参数**: `semantic_weight=0.7`, `keyword_weight=0.3`, `rrf_k=60`
-
-#### 1.5.6 KnowledgeServer → ProgressiveSearcher
-
-| 方法 | 用途 | 入参 | 返回值 |
-|------|------|------|--------|
-| `search(query, task_type, tech_stack, token_budget?)` | 渐进式检索 | ... | `{results, total, task_type, search_config, token_budget, pruned_entry_ids}` |
-| `deep_load(entry_id)` | 深度加载 | str | dict（含error字段表示不存在） |
-
-**任务类型搜索配置**:
-
-| task_type | 模式 | 最低置信度 | 作用域优先级 | 关键词权重加成 |
-|-----------|------|-----------|-------------|---------------|
-| bug_fix | hybrid | 0.6 | experience→workspace→general | +0.1 |
-| feature | semantic | 0.5 | workspace→general→experience | 0 |
-| refactor | context | 0.6 | workspace→experience→general | +0.05 |
-| review | keyword | 0.7 | general→experience→workspace | +0.2 |
-| deploy | precise | 0.8 | experience→general→workspace | +0.15 |
-| security | precise | 0.8 | general→experience→workspace | +0.2 |
-
-#### 1.5.7 MCP Server → KnowledgeServer
-
-`mcp_server.py` 中 `call_tool` 处理器直接调用 `server`（KnowledgeServer 实例）的方法:
-
-| MCP Tool | 调用的 server 方法/属性 |
-|----------|------------------------|
-| `knowledge_search` | `server.degradation.get_search_strategy()`, `server.retrieval.search()`, `server.degradation.level/name` |
-| `knowledge_add` | `SensitiveContentFilter.check()`, `InputValidator.validate_all()`, `server.dedup.check_duplicate()`, `server.dedup.merge_entries()`, `server.sqlite.*`, `server.chroma.*`, `server.exporter.export_entry()`, `server._touch_change()` |
-| `knowledge_update` | `SensitiveContentFilter.check()`, `InputValidator.validate_all()`, `server.sqlite.update_entry()`, `server.chroma.add_embedding()`, `server.sqlite.update_embedding_status()`, `server.exporter.export_entry()`, `server._touch_change()` |
-| `knowledge_delete` | `server.mcp_knowledge_delete()` |
-| `knowledge_stats` | `server.sqlite.count_entries()`, `server.sqlite.count_by_embedding_status()`, `server.sqlite.get_all_entries()`, `server.chroma.*`, `server.degradation.*`, `server.embedding_manager.*` |
-| `knowledge_rollback` | `server.mcp_knowledge_rollback_version()` |
-| `knowledge_auto_retrieve` | `server.auto_retrieve()` |
-| `knowledge_progressive_search` | `server.mcp_knowledge_progressive_search()` |
-| `knowledge_deep_load` | `server.mcp_knowledge_deep_load()` |
-| `knowledge_web_update` | `web_search.search_official_docs()`, `web_search.extract_and_structure()`, `server.sqlite.*`, `server.chroma.*`, `server.exporter.export_entry()`, `server._touch_change()` |
-
-#### 1.5.8 FastAPI Routes → KnowledgeServer
-
-`api_routes.py` 中各路由处理器调用 `server` 的方法/属性:
-
-| HTTP 端点 | 调用的 server 方法/属性 |
-|-----------|------------------------|
-| POST `/v1/knowledge/search` | `server.degradation.get_search_strategy()`, `server.retrieval.search()`, `server.degradation.level/name` |
-| POST `/v1/knowledge/stats` | `server.sqlite.*`, `server.chroma.*`, `server.degradation.*`, `server.embedding_manager.*` |
-| GET `/v1/knowledge/get/{id}` | `server.sqlite.get_entry()` |
-| POST `/v1/knowledge/add` | `InputValidator.validate_all()`, `SensitiveContentFilter.check()`, `server.dedup.*`, `server.sqlite.*`, `server.chroma.*`, `server.exporter.export_entry()`, `server._touch_change()`, `server.ws_manager.broadcast()` |
-| PUT `/v1/knowledge/update/{id}` | 同上 + 版本冲突重试(3次) |
-| DELETE `/v1/knowledge/delete/{id}` | `server.sqlite.delete_entry()`, `server.chroma.delete_embedding()`, `server._touch_change()`, `server.ws_manager.broadcast()` |
-| POST `/v1/knowledge/rollback` | `server.sqlite.restore_version()`, `server.chroma.add_embedding()`, `server.sqlite.update_embedding_status()`, `server._touch_change()`, `server.ws_manager.broadcast()` |
-| GET `/v1/knowledge/{id}/versions` | `server.sqlite.get_version_history()` |
-| POST `/v1/knowledge/progressive_search` | `server.progressive_searcher.search()`, `server.degradation.*` |
-| POST `/v1/knowledge/deep_load` | `server.progressive_searcher.deep_load()` |
-| POST `/v1/knowledge/auto_retrieve` | `server.auto_retrieve()` |
-| POST `/v1/knowledge/web_update` | `web_search.*`, `server.sqlite.*`, `server.chroma.*`, `server.exporter.export_entry()`, `server._touch_change()`, `server.ws_manager.broadcast()` |
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `search_official_docs` | `search_official_docs(query: str, tech_stack: list = None) -> list[dict]` | 搜索官方文档，返回结果列表 |
+| `extract_and_structure` | `extract_and_structure(results: list, existing_entry: dict = None) -> dict` | 从搜索结果提取结构化内容 |
+| `detect_stale_entries` | `detect_stale_entries(entries: list) -> list[dict]` | 检测过时条目 |
+| `detect_new_tech_dependencies` | `detect_new_tech_dependencies(tech_stack: list) -> list[dict]` | 检测新技术依赖 |
+| `auto_ingest_tech_knowledge` | `auto_ingest_tech_knowledge(tech_stack: list) -> dict` | 自动摄入技术知识 |
 
 ---
 
 ## 2. 接口依赖拓扑图
 
-### 2.1 系统整体架构
-
 ```mermaid
 graph TB
-    subgraph "外部调用方"
-        SKILL["Skill (SKILL.md)"]
-        CLI["CLI / 用户命令"]
-        EXT["外部 HTTP 客户端"]
-        WS_CLIENT["WebSocket 客户端"]
+    subgraph "Skill层（.trae/skills/xuansto-skill-v2/）"
+        SKILL[Skill命令路由]
+        SKILL --> |命令分发| CMD[commands/*.md]
     end
 
-    subgraph "协议层"
-        MCP_PROTO["MCP 协议 (stdio)"]
-        HTTP_PROTO["FastAPI HTTP"]
-        WS_PROTO["WebSocket"]
+    subgraph "MCP Server层（xuansto-mcp-server/）"
+        MCP[MCP FastMCP Server<br/>stdio传输]
+        MCP --> |工具注册| TOOLS[20个MCP工具]
+
+        subgraph "MCP工具"
+            TOOLS --> SA[skill_analyze]
+            TOOLS --> KS[knowledge_search]
+            TOOLS --> KI[knowledge_inject]
+            TOOLS --> QG[quality_gate_check]
+            TOOLS --> SD[spec_drift_detect]
+            TOOLS --> SS[security_scan]
+            TOOLS --> CS[code_simplify]
+            TOOLS --> SM[session_manage]
+            TOOLS --> WD[workflow_dispatch]
+            TOOLS --> AS[agent_status]
+            TOOLS --> AM[agent_manage]
+            TOOLS --> HM[hook_manage]
+            TOOLS --> RLS[resource_load_status]
+            TOOLS --> CC[context_compress]
+            TOOLS --> SH[server_health]
+            TOOLS --> DL[decision_log]
+            TOOLS --> TB[token_budget]
+            TOOLS --> PI[project_init]
+            TOOLS --> MR[metrics_report]
+            TOOLS --> CM[config_manage]
+        end
+
+        subgraph "核心模块"
+            TOOLS --> ERR[errors.py<br/>错误处理]
+            TOOLS --> DEG[degradation.py<br/>降级管理]
+            TOOLS --> HOOK[hook_engine.py<br/>Hook引擎]
+            TOOLS --> RATE[rate_limiter.py<br/>限流器]
+            TOOLS --> PROTO[protocol.py<br/>调用协议]
+            TOOLS --> CACHE[cache.py<br/>LRU缓存]
+            TOOLS --> DB[database.py<br/>SQLite]
+            TOOLS --> SEARCH[search_engine.py<br/>搜索引擎]
+            TOOLS --> VALID[validator.py<br/>输入校验]
+        end
+
+        DEG --> |脚本降级| SCRIPTS[scripts/*.py<br/>14个降级脚本]
+        DEG --> |内联降级| INLINE[_inline_*函数<br/>20个内联降级]
     end
 
-    subgraph "服务入口"
-        MCP_SERVER["mcp_server.py<br/>MCP Tool 注册/分发"]
-        API_APP["api.py<br/>FastAPI App 创建"]
-        API_ROUTES["api_routes.py<br/>CRUD 路由"]
-        WS_MGR["websocket_manager.py<br/>WS 连接管理"]
+    subgraph "知识库层（knowledge_server/）"
+        KB[KnowledgeServer]
+        KB --> SQLITE[db_engine.py<br/>SQLite]
+        KB --> CHROMA[vector_engine.py<br/>ChromaDB]
+        KB --> DEDUP[dedup.py<br/>去重检查]
+        KB --> KBDEG[degradation.py<br/>降级管理]
+        KB --> PROG[progressive_loader.py<br/>渐进加载]
+        KB --> EMBED[embedding.py<br/>嵌入生成]
+        KB --> EXPORT[exporter.py<br/>导出器]
+        KB --> WEB[web_search.py<br/>网络搜索]
+        KB --> HYBRID[hybrid_search.py<br/>混合搜索]
     end
 
-    subgraph "核心服务"
-        SERVER["server.py<br/>KnowledgeServer"]
-        DEGR["degradation.py<br/>DegradationManager"]
-        EMB["embedding.py<br/>EmbeddingManager"]
+    subgraph "外部接口"
+        HTTP[HTTP API<br/>FastAPI/uvicorn]
+        MCPSTDIO[MCP stdio<br/>协议传输]
+        WS[WebSocket<br/>实时通知]
     end
 
-    subgraph "检索引擎"
-        RETRIEVAL["hybrid_search.py<br/>HybridRetrievalEngine"]
-        PROG["progressive_search.py<br/>ProgressiveSearcher"]
-        WEB["web_search.py<br/>Web 搜索"]
-    end
+    SKILL --> |MCP调用| MCP
+    KB --> |注册路由| HTTP
+    KB --> |MCP工具| MCPSTDIO
+    KB --> |变更广播| WS
+    CHROMA --> |向量存储| VECSTORE[(ChromaDB<br/>向量数据库)]
+    SQLITE --> |关系存储| SQLITEDB[(SQLite<br/>知识库)]
+    WEB --> |HTTP请求| INTERNET((互联网))
 
-    subgraph "存储引擎"
-        SQLITE["db_engine.py<br/>SQLiteEngine"]
-        CHROMA["vector_engine.py<br/>ChromaEngine"]
-    end
-
-    subgraph "外部服务"
-        OPENAI["OpenAI API<br/>text-embedding-3-small"]
-        ST["sentence-transformers<br/>all-MiniLM-L6-v2"]
-        DDG["DuckDuckGo<br/>HTML 搜索"]
-        OFFICIAL["官方文档源<br/>(MDN, Python, React...)"]
-    end
-
-    SKILL -->|命令路由| MCP_PROTO
-    CLI -->|命令| MCP_PROTO
-    EXT -->|HTTP 请求| HTTP_PROTO
-    WS_CLIENT -->|WS 连接| WS_PROTO
-
-    MCP_PROTO --> MCP_SERVER
-    HTTP_PROTO --> API_APP
-    WS_PROTO --> WS_MGR
-
-    API_APP --> API_ROUTES
-    API_ROUTES --> SERVER
-    MCP_SERVER --> SERVER
-    WS_MGR --> SERVER
-
-    SERVER --> DEGR
-    SERVER --> EMB
-    SERVER --> RETRIEVAL
-    SERVER --> PROG
-    SERVER --> SQLITE
-    SERVER --> CHROMA
-    SERVER --> WEB
-
-    RETRIEVAL --> SQLITE
-    RETRIEVAL --> CHROMA
-    PROG --> RETRIEVAL
-    PROG --> SQLITE
-
-    CHROMA --> EMB
-    EMB -->|Level 0| OPENAI
-    EMB -->|Level 1| ST
-    WEB --> DDG
-    DDG --> OFFICIAL
-
-    DEGR --> EMB
-    DEGR --> CHROMA
-    DEGR --> SQLITE
+    style MCP fill:#4a90d9,color:#fff
+    style KB fill:#e67e22,color:#fff
+    style HTTP fill:#27ae60,color:#fff
+    style MCPSTDIO fill:#27ae60,color:#fff
+    style DEG fill:#e74c3c,color:#fff
 ```
 
-### 2.2 MCP Tool 调用链
+### 调用链路说明
 
-```mermaid
-sequenceDiagram
-    participant S as Skill/CLI
-    participant M as MCP Server
-    participant KS as KnowledgeServer
-    participant D as DegradationMgr
-    participant R as HybridRetrieval
-    participant PS as ProgressiveSearcher
-    participant SQL as SQLiteEngine
-    participant CHR as ChromaEngine
-    participant EMB as EmbeddingManager
-    participant WS as WebSearch
-
-    Note over S,WS: knowledge_search 调用链
-    S->>M: call_tool("knowledge_search", {query, top_k, ...})
-    M->>D: get_search_strategy()
-    D-->>M: "hybrid" | "keyword_only"
-    M->>R: search(query, strategy, ...)
-    R->>SQL: search_fts(query, ...)
-    R->>CHR: search_semantic(query, ...)
-    CHR->>EMB: generate_embedding(query)
-    R-->>M: {results, total, search_strategy}
-    M-->>S: TextContent(JSON)
-
-    Note over S,WS: knowledge_add 调用链
-    S->>M: call_tool("knowledge_add", {content, metadata, ...})
-    M->>M: SensitiveContentFilter.check(content)
-    M->>M: InputValidator.validate_all(content)
-    M->>KS: dedup.check_duplicate(entry_data)
-    alt 去重-合并
-        KS->>SQL: get_entry(existing_id)
-        KS->>SQL: update_entry(id, merged)
-        KS->>CHR: add_embedding(id, content, meta)
-        CHR->>EMB: generate_embedding(content)
-    else 去重-跳过
-        M-->>S: {status: "duplicate_rejected"}
-    else 新建
-        KS->>SQL: add_entry(entry_data)
-        KS->>CHR: add_embedding(id, content, meta)
-        CHR->>EMB: generate_embedding(content)
-    end
-    M-->>S: TextContent(JSON)
-
-    Note over S,WS: knowledge_web_update 调用链
-    S->>M: call_tool("knowledge_web_update", {entry_id/category/tags})
-    M->>SQL: get_entry(entry_id)
-    M->>WS: search_official_docs(query, tech_stack)
-    WS->>WS: _fetch_url(DuckDuckGo)
-    WS->>WS: _parse_ddg_results(html)
-    WS-->>M: [{title, url, content, source_rating, ...}]
-    M->>WS: extract_and_structure(web_results)
-    M->>SQL: update_entry / add_entry
-    M->>CHR: add_embedding
-    M-->>S: TextContent(JSON)
-```
-
-### 2.3 降级链路
-
-```mermaid
-stateDiagram-v2
-    [*] --> Normal: 启动时检测
-
-    state Normal {
-        [*] --> API_Embedding: OpenAI 可用
-    }
-
-    state Local_Semantic {
-        [*] --> ST_Embedding: sentence-transformers
-    }
-
-    state BM25_Only {
-        [*] --> FTS5_Search: SQLite FTS5
-    }
-
-    state File_Search {
-        [*] --> FS_Search: 文件系统遍历
-    }
-
-    Normal --> Local_Semantic: OpenAI API 失败
-    Local_Semantic --> BM25_Only: ST 模型失败
-    BM25_Only --> File_Search: SQLite 不可用
-
-    File_Search --> BM25_Only: SQLite 恢复
-    BM25_Only --> Local_Semantic: ST 恢复
-    Local_Semantic --> Normal: OpenAI 恢复
-
-    note right of Normal: level=0, strategy=hybrid
-    note right of Local_Semantic: level=1, strategy=hybrid
-    note right of BM25_Only: level=2, strategy=keyword_only
-    note right of File_Search: level=3, strategy=file_search
-```
-
-### 2.4 命令→MCP工具映射拓扑
-
-```mermaid
-graph LR
-    subgraph "Phase 0-1: 初始化/需求"
-        INIT["/init"] --> SA[skill_analyze]
-        INIT --> KS[knowledge_search]
-        INIT --> WD[workflow_dispatch]
-        INIT --> PI[project_init]
-        INIT --> DL[decision_log]
-        BRAIN["/brainstorm"] --> KS
-        BRAIN --> WD
-        CLARIFY["/clarify"] --> KS
-        CLARIFY --> WD
-        CLARIFY --> QG[quality_gate_check]
-    end
-
-    subgraph "Phase 2: 设计"
-        PLAN["/plan"] --> SA
-        PLAN --> KS
-        PLAN --> AS[agent_status]
-        PLAN --> WD
-        PLAN --> DL
-        PLAN --> TB[token_budget]
-        SPEC["/spec"] --> WD
-        SPEC --> QG
-        SPEC --> SDD[spec_drift_detect]
-        DESIGN["/design"] --> QG
-        DESIGN --> KS
-        DESIGN --> WD
-    end
-
-    subgraph "Phase 4-5: 实现/验证"
-        IMPL["/implement"] --> WD
-        IMPL --> QG
-        IMPL --> HM[hook_manage]
-        TEST["/test"] --> QG
-        TEST --> WD
-        REVIEW["/review"] --> QG
-        REVIEW --> SS[security_scan]
-        REVIEW --> CS[code_simplify]
-        FIX["/fix"] --> SM[session_manage]
-        FIX --> QG
-        FIX --> HM
-    end
-
-    subgraph "Phase 6-8: 交付"
-        ACCEPT["/accept"] --> QG
-        ACCEPT --> WD
-        SIMPLIFY["/simplify"] --> CS
-        SIMPLIFY --> QG
-        SIMPLIFY --> CC[context_compress]
-        DEPLOY["/deploy"] --> QG
-        DEPLOY --> SH[server_health]
-        DEPLOY --> WD
-    end
-
-    subgraph "跨Phase"
-        LEARN["/learn"] --> KS
-        LEARN --> KI[knowledge_inject]
-        LEARN --> SM
-        LOOP["/loop"] --> WD
-        LOOP --> SM
-        LOOP --> RLS[resource_load_status]
-        LOOP --> TB
-        LOOP --> DL
-        STATUS["/status"] --> WD
-        STATUS --> SM
-        STATUS --> SH
-    end
-```
+1. **Skill → MCP Server**：Skill命令通过MCP协议（stdio）调用MCP工具
+2. **MCP工具 → 核心模块**：工具函数调用核心模块（数据库、搜索引擎、缓存等）
+3. **MCP工具 → 降级链**：工具失败时，依次尝试脚本降级 → 内联降级 → 最小响应
+4. **知识库 → 存储层**：KnowledgeServer同时操作SQLite和ChromaDB
+5. **知识库 → 外部**：通过HTTP API和MCP stdio对外暴露，WebSocket推送变更通知
 
 ---
 
-## 3. 重构后 API 设计
+## 3. 重构后API设计
 
-### 3.1 Skill ↔ MCP Server 的 Tool 调用协议
+### 3.1 Skill ↔ MCP Server Tool 调用协议
 
-**问题 API-01**: 当前 Skill 层与 MCP Server 之间缺乏显式的调用协议定义，命令路由（`routes.yaml`）仅声明了 `mcp_tools` 列表，缺少调用时序和参数传递规范。
+#### 3.1.1 命令→工具映射
 
-**设计**: 定义 `SkillToolCall` 协议，统一 Skill → MCP Tool 的调用语义。
+Skill命令通过MCP `call_tool` 调用对应的MCP工具：
 
+| Skill命令 | MCP工具 | 参数映射 |
+|-----------|---------|---------|
+| `/init` | `project_init` | `action="init"`, `name`, `stack`, `directory` |
+| `/plan` | `workflow_dispatch` | `action="start"`, `workflow="sdd-tdd-full"` |
+| `/implement` | `workflow_dispatch` | `action="phase"`, `phase_action="advance"` |
+| `/test` | `quality_gate_check` | `gate_ids=["test_coverage", "test_quality"]` |
+| `/review` | `skill_analyze` | `depth="detailed"` |
+| `/fix` | `security_scan` + `code_simplify` | `severity_threshold="medium"`, `scope="recent"` |
+| `/status` | `server_health` | `action="check"` |
+| `/agent-status` | `agent_status` | `action="list"` |
+| `/audit` | `security_scan` | `severity_threshold="low"`, `include_agentic=True` |
+| `/simplify` | `code_simplify` | `scope="dir"` |
+| `/learn` | `knowledge_search` | `action="retrieve"`, `query` |
+| `/brainstorm` | `decision_log` | `action="log"` |
+| `/execute-plan` | `workflow_dispatch` | `action="status"` |
+| `/rollback` | `session_manage` | `action="restore"` |
+| `/deploy` | `quality_gate_check` | `gate_ids=["deploy_readiness"]` |
+
+#### 3.1.2 参数传递协议
+
+```json
+{
+  "tool_name": "knowledge_search",
+  "arguments": {
+    "action": "retrieve",
+    "query": "React hooks best practices",
+    "top_k": 5,
+    "search_type": "hybrid",
+    "scope": "workspace"
+  }
+}
 ```
-SkillToolCall 协议 v1
-├── 调用方: Skill (SKILL.md 命令路由)
-├── 传输: MCP stdio / HTTP+MCP
-├── 调用流程:
-│   1. Skill 解析用户意图 → 匹配 routes.yaml 命令
-│   2. 按命令定义的 mcp_tools 列表顺序调用
-│   3. 前一 Tool 返回值可作为后一 Tool 入参（链式调用）
-│   4. 任一 Tool 失败 → 查 constraints.yaml 降级脚本
-│   5. 全部 Tool 失败 → 返回降级结果（包装为统一 JSON）
-├── 超时: 单次 Tool 调用 30s，整链 120s
-├── 重试: 可重试错误（retryable=true）最多 2 次，指数退避
-└── 降级: MCP 不可用 → scripts/*.py --format json
+
+参数传递规则：
+- 所有参数通过 `arguments` 对象传递，键名与工具的 `inputSchema` 字段一致
+- 必填参数缺失时返回 `ERR_VALIDATION` 错误
+- 枚举参数值不匹配时返回校验错误
+- 额外参数（`extra="forbid"`）将被拒绝
+
+#### 3.1.3 结果处理协议
+
+```json
+{
+  "error": false,
+  "api_version": "3.0.0",
+  "data": {
+    "results": [...],
+    "total": 5,
+    "strategy": "hybrid"
+  }
+}
 ```
 
-**Tool 链式调用参数传递规则**:
-
-| 场景 | 传递方式 | 示例 |
-|------|----------|------|
-| 独立调用 | 无依赖 | `skill_analyze(skill_path=...)` |
-| 顺序依赖 | 前置结果注入 | `knowledge_search(query=plan_result.query)` |
-| 聚合依赖 | 多结果合并 | `decision_log(title=..., context=search_result+analyze_result)` |
+错误响应：
+```json
+{
+  "error": true,
+  "error_code": "ERR_VALIDATION",
+  "message": "参数校验失败",
+  "details": {...},
+  "retryable": false
+}
+```
 
 ### 3.2 MCP Server 对外接口
 
-**问题 API-02**: 当前 MCP Tool（10个知识库工具）与 `mcp-tools.md` 文档中定义的 19 个工具存在差异，MCP Server 仅实现了知识库相关工具，其余工具（`skill_analyze`, `quality_gate_check` 等）依赖外部 `xuansto-mcp-server`。
+#### 3.2.1 双传输架构
 
-**设计**: 将 MCP Server 对外接口分为两层。
+```
+                    ┌─────────────────────┐
+                    │   MCP Server v8.0   │
+                    │  (FastMCP Instance)  │
+                    └──────┬──────────────┘
+                           │
+              ┌────────────┼────────────┐
+              │            │            │
+    ┌─────────▼──┐  ┌──────▼─────┐  ┌──▼──────────┐
+    │ stdio传输   │  │ HTTP API   │  │ WebSocket   │
+    │ (MCP协议)  │  │ (FastAPI)  │  │ (实时通知)  │
+    └────────────┘  └────────────┘  └─────────────┘
+```
 
-#### 3.2.1 知识库 MCP Tool（内置，当前已实现）
+- **MCP stdio**：主传输通道，用于Skill ↔ MCP Server通信，支持 `list_tools`、`call_tool`
+- **HTTP API**：辅助传输，用于外部系统集成和调试，端口默认 `8765`
+- **WebSocket**：实时变更通知推送（`/ws`）
 
-| Tool | 分类 | 说明 |
-|------|------|------|
-| `knowledge_search` | 检索 | 混合检索 |
-| `knowledge_add` | 写入 | 新增条目 |
-| `knowledge_update` | 写入 | 更新条目 |
-| `knowledge_delete` | 写入 | 删除条目 |
-| `knowledge_stats` | 运维 | 统计信息 |
-| `knowledge_rollback` | 写入 | 版本回滚 |
-| `knowledge_auto_retrieve` | 检索 | 自动检索 |
-| `knowledge_progressive_search` | 检索 | 渐进式检索 |
-| `knowledge_deep_load` | 检索 | 深度加载 |
-| `knowledge_web_update` | 写入 | Web 更新 |
+#### 3.2.2 MCP工具清单（20个）
 
-#### 3.2.2 编排 MCP Tool（外部 xuansto-mcp-server）
-
-| Tool | 分类 | 降级脚本 |
-|------|------|----------|
-| `skill_analyze` | 分析 | `scripts/skill-test.py --analyze` |
-| `quality_gate_check` | 质量门禁 | `scripts/skill-test.py --gate` |
-| `spec_drift_detect` | 规格偏差 | `scripts/spec-drift-detector.py` |
-| `security_scan` | 安全扫描 | `scripts/agentic-security-scanner.py` |
-| `code_simplify` | 代码简化 | `scripts/code-simplifier.py` |
-| `session_manage` | 会话管理 | `scripts/init-session.py` 等 |
-| `workflow_dispatch` | 工作流调度 | `scripts/project-initializer.py` |
-| `agent_status` | Agent 查询 | 静态注册表 |
-| `agent_manage` | Agent 管理 | 静态注册表 |
-| `hook_manage` | Hook 管理 | 内联执行 |
-| `resource_load_status` | 资源加载 | 内联检查 |
-| `context_compress` | 上下文压缩 | `scripts/context-compressor.py` |
-| `server_health` | 健康检查 | `scripts/health-checker.py` |
-| `decision_log` | 决策日志 | 内联记录 |
-| `token_budget` | Token 预算 | 内联估算 |
-| `knowledge_inject` | 知识注入 | 内联注入 |
-| `project_init` | 项目初始化 | 内联模板 |
-| `metrics_report` | 指标报告 | 内联读取 |
+| 工具名 | 分类 | 只读 | 说明 |
+|--------|------|------|------|
+| `skill_analyze` | 分析 | ✅ | 技能结构分析 |
+| `knowledge_search` | 知识 | ✅ | 知识检索 |
+| `knowledge_inject` | 知识 | ❌ | 知识注入/沉淀 |
+| `quality_gate_check` | 质量 | ✅ | 门禁检查 |
+| `spec_drift_detect` | 质量 | ✅ | 规格漂移检测 |
+| `security_scan` | 安全 | ✅ | 安全扫描 |
+| `code_simplify` | 代码 | ✅ | 代码简化建议 |
+| `session_manage` | 会话 | ❌ | 会话管理 |
+| `workflow_dispatch` | 工作流 | ❌ | 工作流调度 |
+| `agent_status` | Agent | ✅ | Agent状态查询 |
+| `agent_manage` | Agent | ❌ | Agent实例管理 |
+| `hook_manage` | 系统 | ❌ | Hook管理 |
+| `resource_load_status` | 资源 | ✅ | 渐进式加载状态 |
+| `context_compress` | 上下文 | ✅ | 上下文压缩 |
+| `server_health` | 系统 | ✅ | 服务器健康检查 |
+| `decision_log` | 决策 | ❌ | 决策日志 |
+| `token_budget` | 预算 | ✅ | Token预算管理 |
+| `project_init` | 项目 | ❌ | 项目初始化 |
+| `metrics_report` | 监控 | ✅ | 指标报告 |
+| `config_manage` | 配置 | ❌ | 配置管理 |
 
 ### 3.3 渐进式加载相关接口
 
-**问题 API-03**: 渐进式加载（Phase 0-3）的接口分散在 `constraints.yaml`、`resource_load_status` Tool 和 SKILL.md 标记中，缺乏统一的加载状态查询和控制接口。
+`resource_load_status` 工具提供7种操作，控制渐进式加载生命周期：
 
-**设计**: 统一渐进式加载 API。
+#### 3.3.1 操作清单
 
-```mermaid
-sequenceDiagram
-    participant S as Skill
-    participant R as resource_load_status
-    participant KB as KnowledgeServer
-    participant FS as 文件系统
+| action | 说明 | 关键参数 |
+|--------|------|---------|
+| `status` | 查询资源加载状态 | `phase`, `resource_ids` |
+| `preload` | 预加载指定阶段资源 | `phase`, `resource_uris`, `priority`, `batch_mode`, `auto_upgrade` |
+| `cache` | 查看缓存状态 | 无 |
+| `clear_cache` | 清除缓存 | 无 |
+| `loading_progress` | 查询加载进度 | 无 |
+| `token_report` | Token使用报告 | 无 |
+| `disclosure_transition` | 阶段转换评估 | `target_phase` |
 
-    Note over S,FS: Phase 0: 骨架 (≤2K tokens)
-    S->>R: status()
-    R-->>S: {phase: 0, loaded: [P0_must], token_used: 1500}
-    S->>S: 仅展示命令列表
+#### 3.3.2 阶段体系
 
-    Note over S,FS: Phase 1: 功能 (≤5K tokens)
-    S->>R: preload(phase=1)
-    R->>FS: 加载命令路由+核心Agent
-    R-->>S: {phase: 1, loaded: [P0+P1], token_used: 4200}
+| 阶段 | 名称 | Token预算 | 可用功能 |
+|------|------|-----------|---------|
+| Phase 0 | skeleton | 2000 | 命令路由 |
+| Phase 1 | functional | 5000 | 命令执行、门禁检查、核心Agent |
+| Phase 2 | enhanced | 10000 | 知识检索、参考文档、Agent注册表 |
+| Phase 3 | full | 20000 | 全部功能、完整脚本集、模板库 |
 
-    Note over S,FS: Phase 2: 增强 (≤10K tokens)
-    S->>R: preload(phase=2)
-    R->>KB: knowledge_search 可用
-    R->>FS: 加载完整路由+Agent注册表
-    R-->>S: {phase: 2, loaded: [P0+P1+P2], token_used: 8500}
+#### 3.3.3 资源状态
 
-    Note over S,FS: Phase 3: 完整 (≤20K tokens)
-    S->>R: preload(phase=3)
-    R->>FS: 加载 Hook+模型路由+规则
-    R-->>S: {phase: 3, loaded: [ALL], token_used: 15000}
-```
-
-**渐进式加载 API 定义**:
-
-| 操作 | Tool | 参数 | 返回值 |
-|------|------|------|--------|
-| 查询状态 | `resource_load_status(action="status")` | — | `{phase, loaded_resources, token_used, token_budget, available_features, unavailable_features}` |
-| 预加载 | `resource_load_status(action="preload", phase=N)` | phase: 0-3 | `{phase, resources, total_resources, loaded_count, token_budget_used, token_budget_remaining}` |
-| 缓存查询 | `resource_load_status(action="cache")` | — | `{cached_resources, cache_size_kb}` |
-| 清除缓存 | `resource_load_status(action="clear_cache")` | — | `{cleared_count}` |
-| 加载进度 | `resource_load_status(action="loading_progress")` | — | `{current_phase, target_phase, progress_pct, estimated_tokens_remaining}` |
-
-**各 Phase 可用功能矩阵**:
-
-| 功能 | Phase 0 | Phase 1 | Phase 2 | Phase 3 |
-|------|---------|---------|---------|---------|
-| 命令列表 | ✅ | ✅ | ✅ | ✅ |
-| 命令执行 | ❌ | ✅ | ✅ | ✅ |
-| 工作流概览 | ❌ | ✅ | ✅ | ✅ |
-| 核心 Agent (13个) | ❌ | ✅ | ✅ | ✅ |
-| 完整 Agent (57个) | ❌ | ❌ | ✅ | ✅ |
-| 完整命令路由(含降级) | ❌ | ❌ | ✅ | ✅ |
-| knowledge_search | ❌ | ❌ | ✅ | ✅ |
-| 参考文档 | ❌ | ❌ | ✅ | ✅ |
-| Hook 系统 | ❌ | ❌ | ❌ | ✅ |
-| 模型路由 | ❌ | ❌ | ❌ | ✅ |
-| 关键规则 | ❌ | ❌ | ❌ | ✅ |
+| 状态 | 说明 |
+|------|------|
+| `loaded` | 已加载到缓存 |
+| `available` | 文件存在但未加载 |
+| `missing` | 文件不存在 |
+| `stale` | 缓存内容与源文件不一致 |
+| `expired` | 缓存已过期（TTL超时） |
 
 ---
 
 ## 4. 接口契约
 
-### 4.1 统一响应格式
+### 4.1 请求Schema（inputSchema）
 
-**问题 API-04**: MCP Tool 和 HTTP 端点使用不同的响应包装格式，MCP 返回 `TextContent(JSON)` 而 HTTP 直接返回 JSON，且错误格式不统一。
+所有MCP工具的 `inputSchema` 遵循 JSON Schema draft 2020-12 规范。
 
-**设计**: 统一为以下契约。
-
-#### 4.1.1 成功响应
+#### 4.1.1 skill_analyze
 
 ```json
 {
-  "status": "ok",
-  "data": {
-    // 业务数据
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "skill_path": {
+      "type": "string",
+      "description": "技能根目录路径"
+    },
+    "include_scripts": {
+      "type": "boolean",
+      "default": true,
+      "description": "是否分析scripts目录"
+    },
+    "include_agents": {
+      "type": "boolean",
+      "default": true,
+      "description": "是否分析agents目录"
+    },
+    "depth": {
+      "type": "string",
+      "default": "basic",
+      "description": "分析深度: 1/basic=基础, 2/detailed=详细, 3/full/comprehensive=全面"
+    }
   },
-  "meta": {
-    "tool": "knowledge_search",
-    "latency_ms": 89,
-    "degraded": false,
-    "version": "2.0.0"
-  }
+  "required": ["skill_path"],
+  "additionalProperties": false
 }
 ```
 
-#### 4.1.2 错误响应
+#### 4.1.2 knowledge_search
 
 ```json
 {
-  "status": "error",
-  "data": null,
-  "meta": {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "const": "retrieve",
+      "description": "操作类型: retrieve"
+    },
+    "query": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "搜索查询文本"
+    },
+    "top_k": {
+      "type": "integer",
+      "default": 5,
+      "minimum": 1,
+      "maximum": 50,
+      "description": "返回结果数量上限"
+    },
+    "search_type": {
+      "type": "string",
+      "enum": ["hybrid", "semantic_only", "keyword_only"],
+      "default": "hybrid",
+      "description": "搜索策略"
+    },
+    "scope": {
+      "type": ["string", "null"],
+      "enum": ["general", "workspace", "experience", null],
+      "default": null,
+      "description": "限定搜索范围"
+    },
+    "min_confidence": {
+      "type": "number",
+      "default": 0.0,
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "最低置信度阈值"
+    }
+  },
+  "required": ["action"],
+  "additionalProperties": false
+}
+```
+
+#### 4.1.3 knowledge_inject
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["inject", "list_available", "precipitate", "add", "update"],
+      "description": "操作类型"
+    },
+    "topics": {
+      "type": ["array", "null"],
+      "items": {"type": "string"},
+      "default": null,
+      "description": "知识主题列表(inject时使用)"
+    },
+    "scope": {
+      "type": "string",
+      "enum": ["general", "workspace", "experience"],
+      "default": "general",
+      "description": "知识范围"
+    },
+    "max_tokens": {
+      "type": "integer",
+      "default": 5000,
+      "minimum": 100,
+      "maximum": 50000,
+      "description": "最大注入Token数量"
+    },
+    "relevance_threshold": {
+      "type": "number",
+      "default": 0.5,
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "相关性阈值"
+    },
+    "category": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "经验分类(precipitate时使用)"
+    },
+    "title": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "经验标题(precipitate/add/update时使用)"
+    },
+    "content": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "经验内容(precipitate/add/update时使用)"
+    },
+    "tags": {
+      "type": ["array", "null"],
+      "items": {"type": "string"},
+      "default": null,
+      "description": "标签列表"
+    },
+    "confidence": {
+      "type": "number",
+      "default": 0.8,
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "置信度(precipitate时使用)"
+    },
+    "entry_id": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "知识条目ID(update时使用)"
+    }
+  },
+  "required": ["action"],
+  "additionalProperties": false
+}
+```
+
+#### 4.1.4 quality_gate_check
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "gate_ids": {
+      "type": ["array", "null"],
+      "items": {"type": "string"},
+      "default": null,
+      "description": "要检查的门禁ID列表，为空则检查全部"
+    },
+    "phase": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "按阶段过滤门禁(0-8)"
+    },
+    "project_path": {
+      "type": "string",
+      "default": ".",
+      "description": "项目根目录路径"
+    },
+    "severity_filter": {
+      "type": "string",
+      "enum": ["all", "BLOCK", "WARN"],
+      "default": "all",
+      "description": "严重级别过滤"
+    },
+    "force_refresh": {
+      "type": "boolean",
+      "default": false,
+      "description": "强制刷新缓存"
+    }
+  },
+  "additionalProperties": false
+}
+```
+
+#### 4.1.5 spec_drift_detect
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "spec_dir": {
+      "type": "string",
+      "default": ".trae/specs",
+      "description": "规格文档目录"
+    },
+    "src_dir": {
+      "type": "string",
+      "default": ".",
+      "description": "源代码目录"
+    }
+  },
+  "additionalProperties": false
+}
+```
+
+#### 4.1.6 security_scan
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "target": {
+      "type": "string",
+      "default": ".",
+      "description": "目标扫描目录"
+    },
+    "severity_threshold": {
+      "type": "string",
+      "enum": ["critical", "high", "medium", "low"],
+      "default": "medium",
+      "description": "最低报告严重级别"
+    },
+    "include_agentic": {
+      "type": "boolean",
+      "default": true,
+      "description": "是否包含OWASP Agentic Top 10检查"
+    },
+    "include_dependency": {
+      "type": "boolean",
+      "default": true,
+      "description": "是否包含依赖漏洞扫描"
+    }
+  },
+  "additionalProperties": false
+}
+```
+
+#### 4.1.7 code_simplify
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "target": {
+      "type": "string",
+      "description": "目标文件或目录路径"
+    },
+    "scope": {
+      "type": "string",
+      "enum": ["file", "dir", "recent"],
+      "default": "recent",
+      "description": "扫描范围"
+    },
+    "include_dedup": {
+      "type": "boolean",
+      "default": true,
+      "description": "是否包含重复代码检测"
+    }
+  },
+  "required": ["target"],
+  "additionalProperties": false
+}
+```
+
+#### 4.1.8 session_manage
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["save", "load", "list", "detect", "verify", "track", "restore"],
+      "description": "操作类型"
+    },
+    "completed_tasks": {
+      "type": ["array", "null"],
+      "items": {"type": "string"},
+      "default": null,
+      "description": "已完成任务列表(save时使用)"
+    },
+    "pending_tasks": {
+      "type": ["array", "null"],
+      "items": {"type": "string"},
+      "default": null,
+      "description": "未完成任务列表"
+    },
+    "decisions": {
+      "type": ["array", "null"],
+      "items": {"type": "string"},
+      "default": null,
+      "description": "关键决策列表"
+    },
+    "experience": {
+      "type": ["array", "null"],
+      "items": {"type": "string"},
+      "default": null,
+      "description": "经验沉淀列表(save时使用)"
+    },
+    "error_log": {
+      "type": ["array", "null"],
+      "items": {"type": "string"},
+      "default": null,
+      "description": "错误日志(detect时使用)"
+    },
+    "pattern_path": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "模式文件路径(verify时使用)"
+    },
+    "success": {
+      "type": "boolean",
+      "default": true,
+      "description": "验证是否成功(verify时使用)"
+    },
+    "current_phase": {
+      "type": ["integer", "null"],
+      "default": null,
+      "description": "当前阶段编号(track时使用)"
+    },
+    "current_task": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "当前任务描述(track时使用)"
+    }
+  },
+  "required": ["action"],
+  "additionalProperties": false
+}
+```
+
+#### 4.1.9 workflow_dispatch
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["start", "status", "abort", "phase", "recover", "snapshots"],
+      "description": "操作类型"
+    },
+    "workflow": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "工作流名称(start时使用): sdd-tdd-full, sdd-tdd-medium, sdd-tdd-fast等"
+    },
+    "project_path": {
+      "type": "string",
+      "default": ".",
+      "description": "项目根目录路径(start时使用)"
+    },
+    "workflow_id": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "工作流实例ID"
+    },
+    "phase_action": {
+      "type": ["string", "null"],
+      "enum": ["advance", "current", null],
+      "default": null,
+      "description": "阶段操作(phase时使用)"
+    },
+    "snapshot_phase": {
+      "type": ["integer", "null"],
+      "default": null,
+      "description": "恢复到指定阶段的快照(recover时使用)"
+    }
+  },
+  "required": ["action"],
+  "additionalProperties": false
+}
+```
+
+#### 4.1.10 agent_status
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["list", "by_phase", "detail", "match", "merge", "merge_policy"],
+      "description": "操作类型"
+    },
+    "phase": {
+      "type": ["integer", "null"],
+      "default": null,
+      "minimum": 0,
+      "maximum": 8,
+      "description": "按阶段查询Agent"
+    },
+    "agent_name": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Agent名称(detail时使用)"
+    },
+    "capabilities": {
+      "type": ["array", "null"],
+      "items": {"type": "string"},
+      "default": null,
+      "description": "Agent能力列表(match时使用)"
+    },
+    "project_file_count": {
+      "type": ["integer", "null"],
+      "default": null,
+      "minimum": 0,
+      "description": "项目文件数量(merge时使用)"
+    }
+  },
+  "required": ["action"],
+  "additionalProperties": false
+}
+```
+
+#### 4.1.11 agent_manage
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["create", "assign", "release", "instance_status", "destroy", "schedule"],
+      "description": "操作类型"
+    },
+    "agent_type": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Agent类型(create时使用)"
+    },
+    "capabilities": {
+      "type": ["array", "null"],
+      "items": {"type": "string"},
+      "default": null,
+      "description": "Agent能力列表(create时使用)"
+    },
+    "agent_id": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Agent实例ID"
+    },
+    "task": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "分配的任务描述(assign时使用)"
+    }
+  },
+  "required": ["action"],
+  "additionalProperties": false
+}
+```
+
+#### 4.1.12 hook_manage
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["list", "execute"],
+      "description": "操作类型"
+    },
+    "profile": {
+      "type": "string",
+      "enum": ["minimal", "standard", "strict"],
+      "default": "standard",
+      "description": "Hook配置级别"
+    },
+    "hook_name": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Hook名称(execute时使用)"
+    },
+    "context": {
+      "type": ["object", "null"],
+      "default": null,
+      "description": "执行上下文(execute时使用)"
+    }
+  },
+  "required": ["action"],
+  "additionalProperties": false
+}
+```
+
+#### 4.1.13 resource_load_status
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["status", "preload", "cache", "clear_cache", "loading_progress", "token_report", "disclosure_transition"],
+      "description": "操作类型"
+    },
+    "phase": {
+      "type": ["integer", "null"],
+      "default": null,
+      "minimum": 0,
+      "maximum": 3,
+      "description": "目标加载阶段(0-3)"
+    },
+    "resource_ids": {
+      "type": ["array", "null"],
+      "items": {"type": "string"},
+      "default": null,
+      "description": "指定资源ID列表"
+    },
+    "resource_uris": {
+      "type": ["array", "null"],
+      "items": {"type": "string"},
+      "default": null,
+      "description": "资源URI列表(preload时使用)"
+    },
+    "priority": {
+      "type": "string",
+      "enum": ["critical", "normal", "background"],
+      "default": "normal",
+      "description": "预加载优先级"
+    },
+    "batch_mode": {
+      "type": "boolean",
+      "default": false,
+      "description": "是否批量预加载模式"
+    },
+    "auto_upgrade": {
+      "type": "boolean",
+      "default": false,
+      "description": "自动升级阶段(Token预算超限时)"
+    },
+    "target_phase": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "目标阶段名称(disclosure_transition时使用): skeleton, functional, enhanced, full"
+    }
+  },
+  "required": ["action"],
+  "additionalProperties": false
+}
+```
+
+#### 4.1.14 context_compress
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "content": {
+      "type": "string",
+      "description": "待压缩的文本内容"
+    },
+    "strategy": {
+      "type": "string",
+      "enum": ["semantic", "selective", "lossless"],
+      "default": "semantic",
+      "description": "压缩策略"
+    },
+    "target_tokens": {
+      "type": "integer",
+      "default": 2000,
+      "minimum": 100,
+      "maximum": 50000,
+      "description": "目标Token数量"
+    },
+    "preserve_sections": {
+      "type": ["array", "null"],
+      "items": {"type": "string"},
+      "default": null,
+      "description": "必须保留的章节标题列表"
+    }
+  },
+  "required": ["content"],
+  "additionalProperties": false
+}
+```
+
+#### 4.1.15 server_health
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["check", "negotiate_version", "capabilities"],
+      "description": "操作类型"
+    },
+    "client_version": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "客户端API版本(negotiate_version时使用)"
+    }
+  },
+  "required": ["action"],
+  "additionalProperties": false
+}
+```
+
+#### 4.1.16 decision_log
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["log", "list", "query", "update", "export", "stats"],
+      "description": "操作类型"
+    },
+    "title": {"type": ["string", "null"], "default": null},
+    "description": {"type": ["string", "null"], "default": null},
+    "context": {"type": ["string", "null"], "default": null},
+    "alternatives": {"type": ["array", "null"], "items": {"type": "string"}, "default": null},
+    "decision": {"type": ["string", "null"], "default": null},
+    "rationale": {"type": ["string", "null"], "default": null},
+    "impact": {"type": ["string", "null"], "default": null},
+    "decided_by": {"type": ["string", "null"], "default": null},
+    "keyword": {"type": ["string", "null"], "default": null},
+    "tag": {"type": ["string", "null"], "default": null},
+    "date_from": {"type": ["string", "null"], "default": null},
+    "date_to": {"type": ["string", "null"], "default": null},
+    "limit": {"type": "integer", "default": 20, "minimum": 1, "maximum": 100},
+    "offset": {"type": "integer", "default": 0, "minimum": 0, "maximum": 10000},
+    "format": {"type": "string", "enum": ["json", "markdown"], "default": "json"},
+    "decision_id": {"type": ["string", "null"], "default": null},
+    "status": {
+      "type": ["string", "null"],
+      "enum": ["proposed", "accepted", "deprecated", "superseded", null],
+      "default": null
+    }
+  },
+  "required": ["action"],
+  "additionalProperties": false
+}
+```
+
+#### 4.1.17 token_budget
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["status", "set_budget", "recommend", "report", "enforce"],
+      "description": "操作类型"
+    },
+    "total_budget": {"type": ["integer", "null"], "default": null, "minimum": 1000},
+    "phase_allocations": {"type": ["object", "null"], "default": null},
+    "project_size": {"type": ["string", "null"], "enum": ["small", "medium", "large", null], "default": null},
+    "complexity": {"type": ["string", "null"], "enum": ["low", "medium", "high", null], "default": null},
+    "team_size": {"type": ["integer", "null"], "default": null, "minimum": 1, "maximum": 50},
+    "period": {"type": "string", "enum": ["daily", "weekly", "session"], "default": "session"}
+  },
+  "required": ["action"],
+  "additionalProperties": false
+}
+```
+
+#### 4.1.18 project_init
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["create", "validate", "detect_stack", "init", "detect", "configure"],
+      "description": "操作类型"
+    },
+    "name": {"type": ["string", "null"], "default": null},
+    "description": {"type": ["string", "null"], "default": null},
+    "stack": {"type": ["array", "null"], "items": {"type": "string"}, "default": null},
+    "template": {"type": ["string", "null"], "default": null},
+    "directory": {"type": ["string", "null"], "default": null},
+    "project_path": {"type": ["string", "null"], "default": null}
+  },
+  "required": ["action"],
+  "additionalProperties": false
+}
+```
+
+#### 4.1.19 metrics_report
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["query", "summary", "evaluate"],
+      "description": "操作类型"
+    },
+    "tool_name": {"type": ["string", "null"], "default": null},
+    "time_range": {
+      "type": "string",
+      "enum": ["1h", "6h", "24h", "7d", "all"],
+      "default": "all"
+    },
+    "metric_type": {
+      "type": "string",
+      "enum": ["calls", "errors", "latency", "all"],
+      "default": "all"
+    },
+    "criterion": {
+      "type": "string",
+      "enum": ["error_rate", "availability", "latency", "all"],
+      "default": "all"
+    }
+  },
+  "required": ["action"],
+  "additionalProperties": false
+}
+```
+
+#### 4.1.20 config_manage
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["reload", "status", "validate"],
+      "description": "操作类型"
+    }
+  },
+  "required": ["action"],
+  "additionalProperties": false
+}
+```
+
+### 4.2 响应Schema（outputSchema）
+
+#### 4.2.1 通用成功响应
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
     "error": {
-      "code": "VERSION_CONFLICT",
-      "message": "版本冲突：条目已被其他操作修改",
-      "details": {
-        "entry_id": "kb-20250122-abc123",
-        "current_version": 5,
-        "expected_version": 4,
-        "mcp_error_code": -32103
-      },
-      "retryable": true
+      "type": "boolean",
+      "const": false,
+      "description": "是否为错误响应"
+    },
+    "api_version": {
+      "type": "string",
+      "description": "API版本号",
+      "examples": ["3.0.0"]
+    },
+    "data": {
+      "type": "object",
+      "description": "响应数据，结构因工具而异"
+    },
+    "degradation_level": {
+      "type": ["string", "null"],
+      "description": "降级级别（降级响应时存在）"
+    },
+    "degraded": {
+      "type": "boolean",
+      "description": "是否为降级响应"
+    }
+  },
+  "required": ["error", "api_version"]
+}
+```
+
+#### 4.2.2 通用错误响应
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "error": {
+      "type": "boolean",
+      "const": true
+    },
+    "error_code": {
+      "type": "string",
+      "description": "错误码，如 ERR_VALIDATION, ERR_NOT_FOUND 等"
+    },
+    "code": {
+      "type": "string",
+      "description": "（已废弃，请使用error_code）错误码"
+    },
+    "message": {
+      "type": "string",
+      "description": "错误消息"
+    },
+    "details": {
+      "type": "object",
+      "description": "错误详情"
+    },
+    "retryable": {
+      "type": "boolean",
+      "description": "是否可重试"
+    },
+    "language": {
+      "type": "string",
+      "description": "消息语言"
+    },
+    "message_i18n": {
+      "type": ["string", "null"],
+      "description": "国际化消息（非中文时存在）"
+    },
+    "_deprecated_exception_type": {
+      "type": "string",
+      "description": "原始异常类型"
+    },
+    "_migration_note": {
+      "type": "string",
+      "description": "迁移提示"
+    }
+  },
+  "required": ["error", "error_code", "message", "retryable"]
+}
+```
+
+#### 4.2.3 knowledge_search 响应
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "error": {"type": "boolean", "const": false},
+    "api_version": {"type": "string"},
+    "data": {
+      "type": "object",
+      "properties": {
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {"type": "string"},
+              "title": {"type": "string"},
+              "content": {"type": "string"},
+              "scope": {"type": "string", "enum": ["general", "workspace", "experience"]},
+              "tags": {"type": "array", "items": {"type": "string"}},
+              "confidence": {"type": "number"},
+              "score": {"type": "number"},
+              "source_rating": {"type": "integer"},
+              "type": {"type": "string"},
+              "category": {"type": "string"}
+            }
+          }
+        },
+        "total": {"type": "integer"},
+        "strategy": {"type": "string"},
+        "query": {"type": "string"}
+      }
     }
   }
 }
 ```
 
-#### 4.1.3 冲突响应（非错误）
-
-```json
-{
-  "status": "conflict",
-  "data": {
-    "id": "kb-20250122-existing",
-    "status": "duplicate_rejected",
-    "dedup_status": "duplicate",
-    "similarity_score": 0.95
-  },
-  "meta": {}
-}
-```
-
-### 4.2 核心 Schema 定义
-
-#### 4.2.1 知识条目（KnowledgeEntry）
+#### 4.2.4 resource_load_status 响应（action=status）
 
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "KnowledgeEntry",
   "type": "object",
   "properties": {
-    "id": { "type": "string", "pattern": "^kb-\\d{8}-[a-f0-9]{6}$" },
-    "title": { "type": "string", "minLength": 1, "maxLength": 500 },
-    "content": { "type": "string", "minLength": 1 },
-    "scope": { "type": "string", "enum": ["general", "workspace", "experience"] },
-    "tags": { "type": "array", "items": { "type": "string" }, "maxItems": 20 },
-    "confidence": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.6 },
-    "source_path": { "type": ["string", "null"] },
-    "source_rating": { "type": "integer", "minimum": 1, "maximum": 5, "default": 3 },
-    "type": { "type": "string", "default": "unknown" },
-    "category": { "type": "string", "default": "uncategorized" },
-    "summary": { "type": ["string", "null"] },
-    "content_path": { "type": ["string", "null"] },
-    "version": { "type": "integer", "minimum": 1, "default": 1 },
-    "embedding_status": { "type": "string", "enum": ["pending", "ready"] },
-    "status": { "type": "string", "enum": ["active", "archived", "deleted"], "default": "active" },
-    "created": { "type": "string", "format": "date-time" },
-    "updated": { "type": "string", "format": "date-time" }
-  },
-  "required": ["id", "title", "content", "scope"]
-}
-```
-
-#### 4.2.2 检索结果（SearchResult）
-
-```json
-{
-  "title": "SearchResult",
-  "type": "object",
-  "properties": {
-    "results": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "id": { "type": "string" },
-          "title": { "type": "string" },
-          "content": { "type": "string" },
-          "scope": { "type": "string" },
-          "confidence": { "type": "number" },
-          "tags": { "type": "array", "items": { "type": "string" } },
-          "type": { "type": "string" },
-          "category": { "type": "string" },
-          "_truncated": { "type": "boolean", "default": false }
-        }
+    "error": {"type": "boolean", "const": false},
+    "api_version": {"type": "string"},
+    "data": {
+      "type": "object",
+      "properties": {
+        "resources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {"type": "string"},
+              "type": {"type": "string"},
+              "path": {"type": "string"},
+              "status": {"type": "string", "enum": ["loaded", "available", "missing", "stale", "expired"]},
+              "phase": {"type": ["integer", "null"]}
+            }
+          }
+        },
+        "total": {"type": "integer"},
+        "loaded": {"type": "integer"},
+        "stale": {"type": "integer"},
+        "expired": {"type": "integer"},
+        "available_functions": {
+          "type": "object",
+          "properties": {
+            "command_routing": {"type": "boolean"},
+            "command_execution": {"type": "boolean"},
+            "quality_gates": {"type": "boolean"},
+            "knowledge_search": {"type": "boolean"},
+            "reference_docs": {"type": "boolean"},
+            "agent_details": {"type": "boolean"},
+            "full_scripts": {"type": "boolean"}
+          }
+        },
+        "disclosure_note": {"type": "string"},
+        "upgrade_hint": {"type": "string"},
+        "available_commands": {"type": "array", "items": {"type": "string"}},
+        "token_budget": {"type": "integer"},
+        "token_usage": {"type": "object"},
+        "transitions": {"type": "array"}
       }
-    },
-    "total": { "type": "integer" },
-    "search_strategy": { "type": "string", "enum": ["hybrid", "semantic_only", "keyword_only", "file_search"] },
-    "degradation_level": { "type": "integer", "minimum": 0, "maximum": 3 },
-    "degradation_name": { "type": "string" }
+    }
   }
 }
 ```
 
-#### 4.2.3 降级状态（DegradationStatus）
+#### 4.2.5 server_health 响应（action=check）
 
 ```json
 {
-  "title": "DegradationStatus",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
-    "level": { "type": "integer", "enum": [0, 1, 2, 3] },
-    "name": { "type": "string", "enum": ["normal", "local_semantic", "bm25_only", "file_search"] },
-    "search_strategy": { "type": "string" },
-    "embedding_level": { "type": "integer", "enum": [0, 1, 2] },
-    "embedding_level_name": { "type": "string", "enum": ["api", "local_semantic", "bm25_only"] },
-    "chroma_available": { "type": "boolean" }
+    "error": {"type": "boolean", "const": false},
+    "api_version": {"type": "string"},
+    "data": {
+      "type": "object",
+      "properties": {
+        "status": {"type": "string", "enum": ["healthy", "degraded", "unhealthy"]},
+        "version": {"type": "string"},
+        "uptime_seconds": {"type": "number"},
+        "mcp_available": {"type": "boolean"},
+        "tools_registered": {"type": "integer"},
+        "degradation": {
+          "type": "object",
+          "properties": {
+            "level": {"type": "string"},
+            "name": {"type": "string"},
+            "components": {"type": "object"}
+          }
+        },
+        "database": {
+          "type": "object",
+          "properties": {
+            "available": {"type": "boolean"},
+            "entry_count": {"type": "integer"}
+          }
+        }
+      }
+    }
   }
 }
 ```
 
 ### 4.3 版本管理建议
 
-**问题 API-05**: 当前 `KB_VERSION = "2.0.0"` 硬编码在 `config.py` 中，Schema 版本（`SCHEMA_VERSION = 12`）与 API 版本独立管理，缺乏语义化版本策略。
+#### 4.3.1 API版本3.0.0
 
-**建议**:
+采用语义化版本控制（SemVer）：
 
-| 版本类型 | 当前值 | 管理方式 | 建议策略 |
-|----------|--------|----------|----------|
-| API 版本 | 2.0.0 | `config.py` KB_VERSION | 语义化版本: MAJOR(破坏性变更).MINOR(新增功能).PATCH(修复) |
-| Schema 版本 | 12 | `config.py` SCHEMA_VERSION | 单调递增整数，通过 `schema_version` 表追踪 |
-| MCP 协议版本 | — | MCP SDK 内置 | 跟随 MCP 协议规范 |
+| 版本段 | 含义 | 变更规则 |
+|--------|------|---------|
+| **主版本**（3） | 不兼容的API变更 | 删除工具、修改必填参数、改变响应结构 |
+| **次版本**（0） | 向后兼容的功能新增 | 新增工具、新增可选参数、新增响应字段 |
+| **修订号**（0） | 向后兼容的问题修复 | Bug修复、性能优化、文档更新 |
 
-**版本兼容性规则**:
+#### 4.3.2 版本协商机制
 
-- **MAJOR 升级**: 删除/重命名 Tool、修改必填参数、变更响应结构 → 需客户端同步升级
-- **MINOR 升级**: 新增 Tool、新增可选参数、新增响应字段 → 向后兼容
-- **PATCH 升级**: Bug 修复、性能优化、文档更新 → 完全兼容
+通过 `server_health` 工具的 `negotiate_version` 操作：
 
-**API 版本路由策略**:
-
-```
-/v1/knowledge/search   ← 当前稳定版
-/v2/knowledge/search   ← 未来 MAJOR 版本（预留）
+```json
+{
+  "action": "negotiate_version",
+  "client_version": "3.0.0"
+}
 ```
 
-**Schema 迁移策略**: 当前通过 `_migrate_v9` ~ `_migrate_v12` 递增迁移，建议增加迁移回滚支持。
+响应：
+```json
+{
+  "error": false,
+  "api_version": "3.0.0",
+  "data": {
+    "negotiated_version": "3.0.0",
+    "compatible": true,
+    "server_version": "3.0.0",
+    "supported_versions": ["3.0.0", "2.1.0", "2.0.0"],
+    "deprecated_features": [],
+    "breaking_changes": []
+  }
+}
+```
+
+#### 4.3.3 版本兼容性策略
+
+- 客户端与服务器主版本号一致时完全兼容
+- 客户端次版本号 ≤ 服务器次版本号时兼容
+- 修订号差异不影响兼容性
+- 不兼容时返回降级建议和迁移指南
 
 ---
 
 ## 5. 异常处理、重试与降级方案
 
-### 5.1 异常分类与处理
+### 5.1 错误码体系
 
-**问题 API-06**: 异常处理分散在各模块，缺乏统一的异常分类和传播机制。MCP 层将所有错误包装为 `TextContent(JSON)`，HTTP 层使用 `HTTPException`，两者映射关系不明确。
+#### 5.1.1 MCP标准错误码
 
-**设计**: 统一异常分类。
+| 错误码 | 名称 | 说明 |
+|--------|------|------|
+| -32700 | ParseError | JSON解析失败 |
+| -32600 | InvalidRequest | 请求格式不合法 |
+| -32601 | MethodNotFound | 方法/工具不存在 |
+| -32602 | InvalidParams | 参数无效 |
+| -32603 | InternalError | 服务器内部错误 |
 
-| 异常类别 | 错误码范围 | HTTP 状态码 | MCP 错误码 | 可重试 | 示例 |
-|----------|-----------|-------------|-----------|--------|------|
-| 客户端错误 | -32100~-32106 | 400/404/409/422 | 同左 | 否 | 参数缺失、条目不存在 |
-| 版本冲突 | -32103 | 409 | -32103 | 是 | 乐观锁冲突 |
-| 认证错误 | — | 401/403 | — | 否 | API Key 无效/权限不足 |
-| 限流 | — | 429 | — | 是(退避) | 请求频率超限 |
-| 服务降级 | — | 503 | -32603 | 是 | 检索引擎不可用 |
-| 服务关闭 | — | 503 | — | 否 | 服务器正在关闭 |
-| 内部错误 | -32603 | 500 | -32603 | 否 | 未预期异常 |
-| 敏感内容 | -32106 | 422 | -32106 | 否 | 内容含 API Key |
+#### 5.1.2 应用错误码
 
-### 5.2 重试策略
+| 错误码 | 常量 | HTTP状态码 | 说明 |
+|--------|------|-----------|------|
+| -32100 | `ERR_VALIDATION` | 400 | 参数校验失败 |
+| -32101 | `ERR_NOT_FOUND` | 404 | 资源未找到 |
+| -32102 | `ERR_TIMEOUT` | 408 | 操作超时 |
+| -32103 | `ERR_DEGRADATION` | 503 | 服务降级 |
+| -32104 | `ERR_CONFIG` | 500 | 配置错误 |
+| -32105 | `ERR_INTERNAL` | 500 | 内部错误 |
+| -32106 | `ERR_RATE_LIMIT` | 429 | 请求频率超限 |
+| -32107 | `ERR_PERMISSION` | 403 | 权限不足 |
 
-**问题 API-07**: 当前仅 HTTP `update_entry` 路由实现了版本冲突重试（3次），其余操作无重试机制。嵌入重试通过后台 `_retry_loop` 异步处理。
-
-**设计**: 分层重试策略。
-
-#### 5.2.1 同步重试（调用方）
-
-| 场景 | 最大重试 | 退避策略 | 适用接口 |
-|------|----------|----------|----------|
-| 版本冲突 | 3 | 立即重试（重新获取版本号） | `knowledge_update` (HTTP) |
-| 可重试服务错误 | 2 | 指数退避 1s→2s→4s | 所有 `retryable=true` 的错误 |
-| 限流 | 1 | 等待 `retry_after` 秒 | HTTP 429 |
-| 嵌入失败 | — | 后台异步重试 | `add_embedding` |
-
-#### 5.2.2 异步重试（后台任务）
-
-| 任务 | 检查间隔 | 最大重试 | 退避 | 实现 |
-|------|----------|----------|------|------|
-| 待嵌入条目重试 | 60s | 5次（embedding_retry_count） | 线性 | `_retry_loop` → `_retry_pending_embeddings` |
-| 过期向量重新嵌入 | 60s | 无限制 | 线性 | `_retry_loop` → `_re_embed_stale_entries` |
-| 降级恢复检测 | 30s | 无限制 | 固定间隔 | `DegradationManager._periodic_check_loop` |
-| SQLite 备份 | 6h | — | — | `_schedule_sqlite_backup` |
-| Chroma 备份 | 24h | — | — | `_schedule_chroma_backup` |
-| 增量同步 | 300s | — | — | `_schedule_incremental_sync` |
-| 生命周期归档 | 可配置 | — | — | `_schedule_lifecycle_check` |
-
-### 5.3 降级方案
-
-**问题 API-08**: 降级方案分散在 `constraints.yaml`（脚本降级）、`DegradationManager`（引擎降级）和 `EmbeddingManager`（嵌入降级）三处，缺乏统一的降级协调机制。
-
-**设计**: 三层降级体系。
-
-#### 5.3.1 第一层：MCP → 脚本降级
-
-当 MCP Server 完全不可用时，按 `constraints.yaml` 中 `tool_fallbacks` 映射降级到脚本调用。
-
-| MCP Tool | 降级脚本 | 结果格式 |
-|----------|----------|----------|
-| `skill_analyze` | `scripts/skill-test.py --analyze` | 包装为 MCP 相同 JSON |
-| `quality_gate_check` | `scripts/skill-test.py --gate` | 同上 |
-| `knowledge_search` | `scripts/knowledge-server.py --search` | 同上 |
-| `knowledge_inject` | `scripts/knowledge_server/main.py --inject` | 同上 |
-| `spec_drift_detect` | `scripts/spec-drift-detector.py` → 内联漂移检测 | 同上 |
-| `security_scan` | `scripts/agentic-security-scanner.py` → 内联扫描 | 同上 |
-| `code_simplify` | `scripts/code-simplifier.py` → 内联简化 | 同上 |
-| `session_manage` | `scripts/init-session.py` / `session-catchup.py` / `session-persist.py` | 同上 |
-| `workflow_dispatch` | `scripts/project-initializer.py` / 内联 Phase 推进 | 同上 |
-| `agent_status` | 静态注册表查询(agents/目录) | 同上 |
-| `hook_manage` | 内联 Hook 执行 | 同上 |
-| `resource_load_status` | 内联状态检查(resource_state.json) | 同上 |
-| `context_compress` | `scripts/context-compressor.py` | 同上 |
-| `server_health` | `scripts/health-checker.py` → 降级状态返回 | 同上 |
-| `decision_log` | 内联 JSON 记录 | 同上 |
-| `token_budget` | 内联估算 | 同上 |
-
-**降级检测**: 尝试调用 `skill_analyze`，失败则进入降级模式。
-
-#### 5.3.2 第二层：引擎降级（DegradationManager）
-
-```mermaid
-graph TD
-    A[请求到达] --> B{SQLite 可用?}
-    B -->|否| C[Level 3: file_search]
-    B -->|是| D{Embedding 等级?}
-    D -->|BM25_ONLY| E[Level 2: keyword_only]
-    D -->|LOCAL| F[Level 1: local_semantic]
-    D -->|API| G{ChromaDB 可用?}
-    G -->|否| E
-    G -->|是| H{向量搜索可用?}
-    H -->|否| F
-    H -->|是| I[Level 0: normal/hybrid]
-
-    C -->|恢复| J[try_recover → Level 2]
-    E -->|恢复| K[try_recover → Level 1/0]
-    F -->|恢复| L[try_recover → Level 0]
-```
-
-**定期检查**: `DegradationManager` 每 30 秒执行一次 `check_and_degrade` 或 `try_recover`。
-
-#### 5.3.3 第三层：嵌入降级（EmbeddingManager）
-
-| 等级 | 名称 | 模型 | 维度 | 触发条件 |
-|------|------|------|------|----------|
-| 0 | api | text-embedding-3-small | 1536 | OpenAI API Key 可用且探测成功 |
-| 1 | local_semantic | all-MiniLM-L6-v2 | 384 | OpenAI 不可用，sentence-transformers 可用 |
-| 2 | bm25_only | — | 0 | 两者均不可用 |
-
-**恢复机制**: `check_api_availability()` 每 300 秒探测一次 OpenAI API，成功则恢复到 Level 0。
-
-#### 5.3.4 知识检索降级链
+#### 5.1.3 异常类层次
 
 ```
-ChromaDB 语义检索 (hybrid)
-    ↓ ChromaDB 不可用
-SQLite FTS5 全文检索 (keyword_only)
-    ↓ SQLite 不可用
-文件系统遍历 (file_search)
-    ↓ 文件系统不可用
-返回空结果 + degradation_level=3
+XuanstoMCPError (基类)
+├── ValidationError          → ERR_VALIDATION
+├── PathNotFoundError        → ERR_NOT_FOUND
+├── ScriptExecutionError     → ERR_INTERNAL
+├── DegradationError         → ERR_DEGRADATION
+└── RetryExhaustedError      → ERR_INTERNAL
 ```
 
-#### 5.3.5 Hook 系统降级
+#### 5.1.4 错误分类
 
-| Profile | PreToolUse | PostToolUse | SessionStart | Stop | PreCompact |
-|---------|------------|-------------|--------------|------|------------|
-| minimal | security-block | — | — | session-save | — |
-| standard | +token-budget-check | +auto-format, encoding-check | +load-context, kb-health-check | +git-status-check, experience-precipitate | +save-state |
-| strict | +dangerous-cmd-confirm | +console-log-detect, type-check | +platform-detect | +pattern-detect | +decision-log-persist |
+| 类别 | 错误码 | 可重试 | 说明 |
+|------|--------|--------|------|
+| **瞬态错误** | TIMEOUT, CONNECTION_ERROR, CONNECTION_RESET, SERVICE_UNAVAILABLE, DEGRADATION, RATE_LIMITED | ✅ | 网络抖动、服务暂时不可用 |
+| **永久错误** | VALIDATION_ERROR, PATH_NOT_FOUND, WORKFLOW_NOT_FOUND, PERMISSION_DENIED, INVALID_INPUT | ❌ | 参数错误、资源不存在 |
 
-**降级行为**: Hook 执行失败不阻塞主流程，仅记录警告日志。
+### 5.2 降级策略
+
+#### 5.2.1 四级降级链
+
+```
+MCP工具调用 ──失败──→ 脚本降级 ──失败──→ 内联降级 ──失败──→ 错误响应
+   (Level 0)          (Level 1)         (Level 2)        (Level 3)
+```
+
+| 级别 | 名称 | 机制 | 响应标记 |
+|------|------|------|---------|
+| Level 0 | MCP工具 | 直接调用MCP工具函数 | `degraded: false` |
+| Level 1 | 脚本降级 | `subprocess.run`调用Python脚本 | `degraded: true, source: "fallback"` |
+| Level 2 | 内联降级 | 调用`_inline_*`函数 | `degraded: true, degradation_level: "inline"` |
+| Level 3 | 最小响应 | 返回空结果/默认值 | `degraded: true, degradation_level: "minimal"` |
+
+#### 5.2.2 降级管理器（DegradationManager）
+
+管理4个组件的健康状态和降级：
+
+| 组件 | 降级级别 | 说明 |
+|------|---------|------|
+| `search_engine` | `chromadb` → `sqlite_fts` → `keyword` | 搜索引擎降级链 |
+| `knowledge_base` | `full` → `workspace_only` → `no_knowledge` | 知识库降级链 |
+| `hooks` | `full_hooks` → `essential_only` → `no_hooks` | Hook系统降级链 |
+| `resources` | `full_resources` → `cached_only` → `minimal` | 资源加载降级链 |
+
+整体降级等级映射：
+
+| 组件级别 | 映射到 | 整体等级 |
+|---------|--------|---------|
+| chromadb / full / full_hooks / full_resources / normal | → | L1_NORMAL |
+| sqlite_fts / workspace_only / essential_only / cached_only / degraded | → | L2_LOCAL_SEMANTIC |
+| keyword / no_knowledge / no_hooks / minimal / unavailable | → | L3_BM25_ONLY |
+
+#### 5.2.3 降级恢复机制
+
+- **健康检查间隔**：30秒（可配置）
+- **恢复退避**：基础5秒，指数退避（×2），最大300秒，加随机抖动
+- **状态持久化**：降级状态写入 `degradation_state.json`，含SHA-256完整性校验
+- **自动恢复**：健康监控线程定期检查并尝试恢复
+
+#### 5.2.4 降级配置热更新
+
+- 支持通过 `fallback_config.yaml` 动态配置降级映射
+- 使用 `watchfiles`（如可用）或5秒轮询检测配置变更
+- 配置变更自动刷新 `FALLBACK_MAP`
+
+### 5.3 重试机制
+
+#### 5.3.1 3-Strike Protocol
+
+```
+Strike 1: 自动修复
+    ↓ 失败
+Strike 2: 换策略
+    ↓ 失败
+Strike 3: 升级处理
+```
+
+| Strike | 策略 | 说明 |
+|--------|------|------|
+| Strike 1 | 自动修复 | 重试相同调用，修正参数（如版本冲突时刷新版本号） |
+| Strike 2 | 换策略 | 切换到降级方案（脚本降级/内联降级） |
+| Strike 3 | 升级处理 | 返回错误响应，通知上层 |
+
+#### 5.3.2 重试配置
+
+| 错误类型 | 最大重试 | 延迟策略 | 基础延迟 |
+|---------|---------|---------|---------|
+| `version_conflict` | 3次 | 立即重试（无延迟） | 0秒 |
+| `service_error` | 2次 | 指数退避 | 1秒 |
+| `embedding_failure` | 5次 | 固定延迟 | 60秒 |
+| 通用瞬态错误 | 3次 | 指数退避 | 1秒 |
+
+#### 5.3.3 重试流程
+
+```
+retry_tool_call(tool_name, fn, kwargs, max_retries=3, base_delay=1.0):
+    for attempt in 0..max_retries:
+        try:
+            result = fn(**kwargs)
+            return result
+        except PermanentError:
+            raise  # 永久错误不重试
+        except TransientError:
+            if attempt == max_retries:
+                raise RetryExhaustedError
+            delay = base_delay * (2 ** attempt)
+            sleep(delay)
+```
+
+#### 5.3.4 Hook拦截与重试
+
+工具调用经过Hook引擎拦截：
+
+```
+Pre-Hook执行 → 安全检查 → 限流检查 → 工具调用(含重试) → Post-Hook执行
+     │              │           │              │                │
+     ↓              ↓           ↓              ↓                ↓
+  block?        security?   rate_limit?    retry_tool_call   修改结果?
+```
+
+- Pre-Hook返回`block`时，直接返回阻止响应
+- 安全Hook执行失败时，默认阻止（安全优先）
+- 限流超限时返回`ERR_RATE_LIMIT`错误
+- 所有Hook错误收集到`hook_errors`字段
 
 ---
 
-## 问题汇总
+## 附录
 
-| 编号 | 严重度 | 描述 | 建议 |
-|------|--------|------|------|
-| API-01 | 中 | Skill ↔ MCP Server 缺乏显式调用协议 | 定义 SkillToolCall 协议，规范调用时序和参数传递 |
-| API-02 | 高 | MCP Tool 实现与文档定义不一致（10 vs 19） | 明确分层：内置知识库 Tool + 外部编排 Tool |
-| API-03 | 中 | 渐进式加载接口分散 | 统一 resource_load_status API，增加 Phase 查询/预加载 |
-| API-04 | 中 | MCP/HTTP 响应格式不统一 | 统一 make_response/make_error_response 契约 |
-| API-05 | 低 | 版本管理缺乏语义化策略 | 引入语义化版本，分离 API/Schema/协议版本 |
-| API-06 | 高 | 异常处理分散，MCP/HTTP 映射不明确 | 统一异常分类，建立错误码→HTTP 状态码映射表 |
-| API-07 | 中 | 重试机制不完整 | 分层重试：同步重试(版本冲突/可重试错误) + 异步重试(嵌入/降级恢复) |
-| API-08 | 高 | 三层降级缺乏统一协调 | 建立降级协调器，统一降级检测→降级执行→恢复探测流程 |
+### A. HTTP API认证模型
+
+| 模式 | 认证方式 | 权限级别 |
+|------|---------|---------|
+| 本地模式 | 无需认证 | 完全访问 |
+| 远程模式 | `X-API-Key` Header | `read-only` / `read-write` / `admin` |
+
+权限矩阵：
+
+| 操作 | read-only | read-write | admin |
+|------|-----------|------------|-------|
+| GET / 搜索 | ✅ | ✅ | ✅ |
+| POST 新增 | ❌ | ✅ | ✅ |
+| PUT 更新 | ❌ | ✅ | ✅ |
+| DELETE 删除 | ❌ | ✅ | ✅ |
+| 备份/回滚 | ❌ | ❌ | ✅ |
+
+### B. WebSocket通知类型
+
+| type | 触发场景 | 数据 |
+|------|---------|------|
+| `created` | 新增条目 | `{entry_id, timestamp}` |
+| `updated` | 更新条目 | `{entry_id, timestamp}` |
+| `deleted` | 删除条目 | `{entry_id, timestamp}` |
+| `rolled_back` | 版本回滚 | `{entry_id, target_version, timestamp}` |
+| `web_updated` | 网络更新 | `{entry_id, timestamp}` |
+| `web_created` | 网络创建 | `{entry_id, timestamp}` |
+
+### C. MCP通知类型
+
+| 通知 | 触发场景 |
+|------|---------|
+| `degradation_change` | 降级等级变更 |
+| `phase_transition` | 渐进式加载阶段推进 |
+| `phase_degradation` | 渐进式加载阶段降级 |
+| `tools/list_changed` | 工具列表变更（阶段变更触发） |
+| `token_budget_exceeded` | Token预算超限 |
+
+### D. 数据库Schema版本
+
+当前Schema版本：**12**
+
+核心表：
+- `knowledge_entries` — 知识条目主表
+- `knowledge_tags` — 标签关联表
+- `knowledge_fts` — FTS5全文搜索虚拟表
+- `version_history` — 版本历史表
+- `dedup_log` — 去重日志表
+- `usage_logs` — 使用日志表
+- `backup_history` — 备份历史表
+- `reconciliation_log` — 一致性校验日志表
