@@ -1,1481 +1,860 @@
-# xuansto-skill-v2 数据存储设计文档
+# 数据库设计文档
 
-> 版本: 8.0.0 | 编写日期: 2026-05-24 | 编码: UTF-8 | 行尾: LF
-
----
-
-## 目录
-
-1. [当前数据存储盘点](#1-当前数据存储盘点)
-2. [持久化/缓存数据实体清单](#2-持久化缓存数据实体清单)
-3. [数据生命周期](#3-数据生命周期)
-4. [重构后数据模型](#4-重构后数据模型)
-5. [ER图与实体关系描述](#5-er图与实体关系描述)
-6. [数据迁移策略](#6-数据迁移策略)
-7. [存储技术选型建议](#7-存储技术选型建议)
+> 版本: 8.0.0 | Skill目录: `.trae/skills/xuansto-skill-v2/` | MCP Server: `xuansto-mcp-server/`
 
 ---
 
 ## 1. 当前数据存储盘点
 
-### 1.1 存储介质总览
+### 1.1 SQLite 数据库
 
-| 编号 | 存储介质 | 用途 | 位置 | 读/写频率 | 持久性 |
-|------|----------|------|------|-----------|--------|
-| S-01 | **SQLite 数据库** | 知识条目主存储、版本历史、去重日志、使用日志、备份历史、对账日志 | `.knowledge/index/knowledge.db` | 高频读写 | 持久 |
-| S-02 | **ChromaDB 向量库** | 语义搜索嵌入向量（含主集合+primary集合） | `.knowledge/index/chroma_db/` | 中频写/高频读 | 持久 |
-| S-03 | **YAML 配置文件** | 默认配置、约束定义、Agent注册表、命令路由 | `configs/default.yaml`, `constraints.yaml`, `agents/registry.yaml`, `commands/routes.yaml` | 低频读 | 持久 |
-| S-04 | **JSON 配置文件** | Hook系统配置、评估触发配置 | `hooks/hooks.json`, `evals/trigger_eval.json` | 低频读 | 持久 |
-| S-05 | **XML 配置文件** | MCP评估配置 | `evals/mcp_evaluation.xml` | 低频读 | 持久 |
-| S-06 | **JSON 状态文件** | 渐进式加载状态 | `resource_state.json` | 中频读写 | 持久 |
-| S-07 | **Markdown 会话文件** | 会话摘要（已完成/未完成任务、决策、经验） | `.skill-logs/session-*.md` | 低频写 | 持久 |
-| S-08 | **Markdown 任务文件** | 任务计划、发现、进度 | `.agent_cache/{task_name}/task_plan.md`, `findings.md`, `progress.md` | 中频写 | 持久 |
-| S-09 | **JSON 模式文件** | 经验模式检测（错误模式、置信度） | `.knowledge/experience/patterns/pattern-*.json` | 低频写 | 持久 |
-| S-10 | **Markdown 知识文件** | 知识条目的文件系统源（按scope/category组织） | `{scope}/{category}/*.md` | 中频读写 | 持久 |
-| S-11 | **Markdown 导出文件** | 知识条目导出（YAML frontmatter + content） | `{scope}/{category}/{title}.md` | 中频写 | 持久 |
-| S-12 | **备份文件** | SQLite备份(.db)、ChromaDB备份(.tar.gz)、JSON备份 | `.knowledge/backup/{full,incremental,snapshot,scheduled}/` | 定时写 | 持久 |
-| S-13 | **日志文件** | 知识服务器运行日志（JSON格式，轮转10MB×5） | `.knowledge/logs/knowledge-server.log` | 高频写 | 持久(轮转) |
-| S-14 | **临时脚本目录** | 临时脚本存放 | `.knowledge/temp-scripts/` | 临时写 | 临时 |
-| S-15 | **错误日志目录** | 脚本执行错误记录 | `.knowledge/script-errors/` | 低频写 | 持久 |
-| S-16 | **Token使用日志** | Token消耗记录 | `.knowledge/token-usage/` | 中频写 | 持久 |
-| S-17 | **归档目录** | 生命周期归档条目 | `.knowledge/archive/` | 低频写 | 持久 |
-| S-18 | **内存状态** | 降级级别、嵌入管理器级别、WebSocket连接、活跃请求计数 | `DegradationManager._level`, `EmbeddingManager._level`, `KnowledgeServer` 实例属性 | 高频读写 | 易失 |
-| S-19 | **环境变量** | API密钥、服务器配置覆盖 | `OPENAI_API_KEY`, `KB_HOST`, `KB_PORT`, `KB_LOG_LEVEL`, `KNOWLEDGE_BACKUP_KEY` | 启动时读 | 外部 |
+**主数据库**: `xuansto-mcp-server/src/xuansto_mcp/core/database.py` 管理，路径为 `.xuansto/xuansto.db`。
 
-### 1.2 存储介质分布图
+| 表名 | 用途 | 关键字段 |
+|------|------|----------|
+| `workflow_instances` | 工作流实例状态 | id, workflow_type, current_phase, status, data_json |
+| `session_states` | 会话状态 | id, session_data_json |
+| `resource_load_states` | 资源加载状态 | id, phase, resources_json |
+| `degradation_states` | 降级状态 | id, component_name, level, data_json |
+| `error_patterns` | 错误模式 | id, pattern, error_type, data_json |
+| `metrics` | 运行指标 | id(AUTO), tool_name, metric_type, value_json |
+| `decision_records` | 决策记录(双写) | id, workflow_id, decision_data_json |
+| `knowledge_entries` | 知识条目 | id, title, content, scope, tags_json, sync_status, deleted_at |
+| `reconciliation_log` | 数据对账日志 | id(AUTO), entry_id, store, issue_type, resolved |
+| `token_budget_states` | Token预算状态 | id, total_budget, used, phase_allocations_json, usage_by_phase_json |
+| `experience_patterns` | 经验模式 | id, error_type, pattern_json, confidence, status, occurrence_count |
 
-```mermaid
-graph TB
-    subgraph 持久存储
-        SQLite["SQLite<br/>knowledge.db"]
-        Chroma["ChromaDB<br/>chroma_db/"]
-        YAML["YAML 配置<br/>default.yaml<br/>constraints.yaml<br/>registry.yaml<br/>routes.yaml"]
-        JSON["JSON 配置<br/>hooks.json<br/>trigger_eval.json<br/>resource_state.json"]
-        MD["Markdown 文件<br/>知识源文件<br/>会话摘要<br/>任务计划"]
-        Backup["备份文件<br/>backup/"]
-        Log["日志文件<br/>logs/"]
-    end
+**决策专用数据库**: `xuansto-mcp-server/src/xuansto_mcp/tools/decision_log.py` 管理，路径为 `.xuansto/decisions.db`。
 
-    subgraph 临时存储
-        Temp["临时脚本<br/>temp-scripts/"]
-        Memory["内存状态<br/>降级级别<br/>嵌入级别<br/>WebSocket"]
-    end
+| 表名 | 用途 | 关键字段 |
+|------|------|----------|
+| `decisions` | 架构决策记录(ADR) | id, title, context, decision, rationale, alternatives, status |
+| `decisions_fts` | FTS5全文索引 | id(UNINDEXED), title, context, decision |
 
-    subgraph 外部依赖
-        Env["环境变量<br/>OPENAI_API_KEY<br/>KB_HOST/PORT"]
-        OpenAI["OpenAI API<br/>text-embedding-3-small"]
-    end
+**知识库数据库**: `xuansto-mcp-server/src/xuansto_mcp/core/search_engine.py` 引用，路径为 `xuansto-mcp-server/src/xuansto_mcp/data/knowledge/index/knowledge.db`。
 
-    SQLite --> Chroma
-    Chroma --> OpenAI
-    Memory --> SQLite
-    Memory --> Chroma
-    Memory --> Env
-```
+### 1.2 ChromaDB 向量存储
 
-### 1.3 已识别问题
+**管理模块**: `xuansto-mcp-server/src/xuansto_mcp/core/search_engine.py` 中的 `ChromaDBSearchEngine`。
 
-| 问题编号 | 严重程度 | 描述 |
-|----------|----------|------|
-| DB-01 | 高 | **双引擎一致性风险**：SQLite与ChromaDB之间无事务保证，embedding写入失败后仅标记pending，可能导致数据不一致 |
-| DB-02 | 中 | **会话状态无结构化存储**：会话摘要以Markdown文件存储，无法程序化查询和聚合 |
-| DB-03 | 中 | **决策日志无持久化**：decision_log MCP工具的数据存储机制未定义，PreCompact时才持久化到`.agent_cache/decision-log.md` |
-| DB-04 | 中 | **Token预算状态无持久化**：token_budget MCP工具的状态仅存于内存，会话中断后丢失 |
-| DB-05 | 低 | **配置分散**：知识库配置分布在`config.yaml`、`platform-config.yaml`、`default.yaml`、`constraints.yaml`多处 |
-| DB-06 | 低 | **resource_state.json格式兼容**：旧格式（纯字符串列表）与新格式（含progress对象）需自动升级 |
-| DB-07 | 中 | **经验模式文件无索引**：`.knowledge/experience/patterns/`下的JSON文件无统一索引，查询需遍历文件系统 |
-| DB-08 | 高 | **备份无加密默认**：备份文件默认明文存储，需手动设置`KNOWLEDGE_BACKUP_KEY`环境变量才启用加密 |
-| DB-09 | 中 | **ChromaDB集合分裂**：存在`knowledge`和`knowledge_primary`两个集合，embedding级别切换时可能导致查询遗漏 |
-| DB-10 | 低 | **Schema迁移无回滚**：SQLite schema迁移(v9-v12)仅支持前向，无回滚机制 |
+- **路径**: `xuansto-mcp-server/src/xuansto_mcp/data/knowledge/index/chroma_db/`
+- **Collection**: `knowledge`
+- **存储内容**: 知识条目的向量嵌入（document + metadata + embedding）
+- **降级链**: ChromaDB → SQLite FTS5 BM25 → 关键词匹配（SimpleSearchEngine）
+- **双写机制**: `persist_knowledge_dual_write()` 先写SQLite标记`sync_status=pending`，再写ChromaDB，成功后标记`sync_status=ready`
+
+### 1.3 文件系统
+
+| 目录/文件 | 用途 | 管理模块 |
+|-----------|------|----------|
+| `.xuansto/` | MCP Server工作目录 | `core/config.py` → `WORK_DIR` |
+| `.xuansto/workflows/` | 工作流实例JSON | `tools/workflow_dispatch.py` |
+| `.xuansto/workflow_states.json` | 活跃工作流快照 | `tools/workflow_dispatch.py` |
+| `.xuansto/workflow_snapshots/` | 工作流阶段快照(gz压缩) | `tools/workflow_dispatch.py` |
+| `.xuansto/agent_instances.json` | Agent实例持久化 | `tools/agent_manage.py` |
+| `.xuansto/resource_state.json` | 资源加载状态 | `tools/resource_load_status.py` |
+| `.xuansto/token_budget.json` | Token预算状态 | `tools/token_budget.py` |
+| `.xuansto/sessions/` | 会话记录(Markdown) | `tools/session_manage.py` |
+| `.xuansto/sessions/current.json` | 当前追踪会话状态 | `tools/session_manage.py` |
+| `.xuansto/patterns/` | 错误模式检测记录 | `tools/session_manage.py` |
+| `.xuansto/decisions.json` | 决策记录(旧格式，已迁移至SQLite) | `tools/decision_log.py` |
+| `.xuansto/plans/` | 计划缓存 | `.skill-config.yaml` |
+| `.knowledge/` | 知识库根目录 | `core/config.py` → `KNOWLEDGE_DIR` |
+| `.knowledge/general/` | 通用知识(Markdown) | `tools/knowledge_inject.py` |
+| `.knowledge/workspace/` | 工作区知识(Markdown) | `tools/knowledge_inject.py` |
+| `.knowledge/experience/` | 经验沉淀(Markdown+YAML frontmatter) | `tools/knowledge_inject.py` |
+| `.knowledge/temp-scripts/` | 临时脚本 | `configs/default.yaml` |
+| `.knowledge/script-errors/` | 脚本错误日志 | `configs/default.yaml` |
+| `memory/fixes/` | 修复记录 | Skill目录结构 |
+| `memory/patterns/testing/` | 测试模式记录 | Skill目录结构 |
+
+### 1.4 YAML 配置
+
+| 文件 | 用途 | 管理模块 |
+|------|------|----------|
+| `constraints.yaml` | 约束与降级规则、Token预算、资源优先级、披露策略 | Skill核心约束 |
+| `.skill-config.yaml` | 运行时配置(循环控制、计划缓存、按需加载、知识服务) | `core/config.py` |
+| `configs/default.yaml` | 默认配置(编排器、门禁、通信、桌面、安全、成本优化等) | `core/config.py` |
+| `.xuansto-config.yaml` | MCP Server运行时配置(门禁脚本、Hook脚本、降级) | `core/config.py` → 热重载 |
+| `agents/registry.yaml` | Agent注册表 | `tools/agent_status.py` |
+| `commands/routes.yaml` | 命令路由表 | `tools/resource_load_status.py` |
+| `workflows/_yaml/*.yaml` | 工作流定义 | `tools/workflow_dispatch.py` |
+
+### 1.5 内存状态
+
+| 变量 | 模块 | 用途 |
+|------|------|------|
+| `_ACTIVE_WORKFLOWS` | `tools/workflow_dispatch.py` | 活跃工作流实例缓存(dict) |
+| `_AGENT_INSTANCES` | `tools/agent_manage.py` | Agent实例缓存(dict) |
+| `_RESTORED_STATE` | `tools/session_manage.py` | 启动时恢复的会话状态 |
+| `_current_phase` | `tools/resource_load_status.py` | 当前渐进式加载阶段(0-3) |
+| `_loaded_resources` | `tools/resource_load_status.py` | 已加载资源集合(set) |
+| `_resource_lru` | `tools/resource_load_status.py` | 资源内容LRU缓存 |
+| `_LOADED_PROGRESS` | `tools/resource_load_status.py` | 加载进度跟踪 |
+| `_TRANSITION_HISTORY` | `tools/resource_load_status.py` | 阶段转换历史 |
+| `_TOKEN_METRICS` | `tools/resource_load_status.py` | Token使用指标(按工具) |
+| `_PHASE_TOKEN_USAGE` | `tools/resource_load_status.py` | 阶段Token使用量 |
+| `_cache` | `tools/decision_log.py` | 决策条目内存缓存 |
+| `_injected_topics` | `tools/knowledge_inject.py` | 当前会话已注入主题集合 |
+
+### 1.6 渐进式加载状态 (ProgressiveLoader._state)
+
+由 `tools/resource_load_status.py` 管理，核心状态字段：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `current_phase` | int (0-3) | 当前加载阶段: 0=骨架, 1=功能, 2=增强, 3=完整 |
+| `loaded_resources` | set[str] | 已加载资源ID集合 |
+| `progress` | dict | 加载进度(total_resources, loaded_resources, loading, started_at, completed_at) |
+| `transition_history` | list[DisclosureTransition] | 阶段转换历史(最近50条) |
 
 ---
 
 ## 2. 持久化/缓存数据实体清单
 
-### 2.1 SQLite 数据库实体
-
-#### 2.1.1 knowledge_entries（知识条目主表）
-
-```sql
-CREATE TABLE knowledge_entries (
-    id TEXT PRIMARY KEY,                    -- 格式: kb-{YYYYMMDD}-{hex6}
-    title TEXT NOT NULL,
-    content TEXT NOT NULL,
-    scope TEXT NOT NULL CHECK(scope IN ('general','workspace','experience')),
-    tags TEXT DEFAULT '[]',                 -- JSON数组字符串
-    confidence REAL DEFAULT 0.6 CHECK(confidence BETWEEN 0 AND 1),
-    source_path TEXT,
-    source_rating INTEGER DEFAULT 3 CHECK(source_rating BETWEEN 1 AND 5),
-    occurrences INTEGER DEFAULT 1,
-    content_hash TEXT,                      -- SHA-256前32字符
-    type TEXT NOT NULL DEFAULT 'unknown',
-    category TEXT NOT NULL DEFAULT 'uncategorized',
-    summary TEXT,
-    content_path TEXT,
-    source TEXT,                            -- v10新增
-    last_validated TEXT,
-    success_count INTEGER DEFAULT 0,
-    failure_count INTEGER DEFAULT 0,
-    version INTEGER DEFAULT 1,             -- 乐观锁版本号
-    embedding_status TEXT DEFAULT 'pending' CHECK(embedding_status IN ('pending','ready')),
-    embedding_retry_count INTEGER DEFAULT 0, -- v9新增
-    status TEXT DEFAULT 'active' CHECK(status IN ('active','archived','deleted')), -- v12新增
-    last_accessed TEXT,                     -- v12新增
-    created TEXT DEFAULT (datetime('now')),
-    updated TEXT DEFAULT (datetime('now'))
-);
-```
-
-**JSON示例**：
+### 2.1 KnowledgeEntry（知识条目）
 
 ```json
 {
-  "id": "kb-20260524-a1b2c3",
-  "title": "React useEffect清理函数最佳实践",
-  "content": "在React组件中使用useEffect时，必须返回清理函数以避免内存泄漏...",
+  "id": "added-react_patterns-20260525T080000Z",
+  "title": "React组件设计模式",
+  "content": "## 模式概述\n...",
   "scope": "general",
-  "tags": ["react", "hooks", "memory-leak"],
+  "tags": ["react", "design-patterns"],
   "confidence": 0.85,
-  "source_path": "general/frontend/react-hooks.md",
-  "source_rating": 4,
-  "occurrences": 3,
-  "content_hash": "e3b0c44298fc1c149afbf4c8996fb924",
-  "type": "pattern",
+  "type": "general",
   "category": "frontend",
-  "summary": "useEffect必须返回清理函数防止内存泄漏",
-  "content_path": null,
-  "source": null,
-  "last_validated": "2026-05-20 10:30:00",
-  "success_count": 5,
-  "failure_count": 0,
-  "version": 3,
+  "source_path": ".knowledge/general/added-react_patterns-20260525T080000Z.md",
   "embedding_status": "ready",
-  "embedding_retry_count": 0,
-  "status": "active",
-  "last_accessed": "2026-05-24 08:15:00",
-  "created": "2026-05-01 12:00:00",
-  "updated": "2026-05-24 08:15:00"
+  "version": 1,
+  "sync_status": "ready",
+  "deleted_at": null,
+  "created_at": "2026-05-25T08:00:00+00:00",
+  "updated_at": "2026-05-25T08:00:00+00:00"
 }
 ```
 
-#### 2.1.2 knowledge_tags（标签关联表）
-
-```sql
-CREATE TABLE knowledge_tags (
-    entry_id TEXT NOT NULL,
-    tag TEXT NOT NULL,
-    PRIMARY KEY (entry_id, tag),
-    FOREIGN KEY (entry_id) REFERENCES knowledge_entries(id) ON DELETE CASCADE
-);
-```
-
-#### 2.1.3 knowledge_fts（全文搜索虚拟表）
-
-```sql
-CREATE VIRTUAL TABLE knowledge_fts USING fts5(
-    id UNINDEXED,
-    summary,
-    type,
-    category,
-    content='knowledge_entries',
-    content_rowid='rowid',
-    tokenize='unicode61'
-);
-```
-
-#### 2.1.4 version_history（版本历史表）
-
-```sql
-CREATE TABLE version_history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    entry_id TEXT NOT NULL,
-    version INTEGER NOT NULL,
-    title TEXT,
-    content TEXT,
-    scope TEXT,
-    tags TEXT,
-    confidence REAL,
-    source_path TEXT,
-    source_rating INTEGER,
-    content_hash TEXT,
-    change_type TEXT DEFAULT 'update',
-    content_snapshot TEXT,
-    saved_at TEXT DEFAULT (datetime('now')),
-    UNIQUE(entry_id, version)
-);
-```
-
-#### 2.1.5 dedup_log（去重日志表）
-
-```sql
-CREATE TABLE dedup_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    new_entry_id TEXT NOT NULL,
-    existing_entry_id TEXT NOT NULL,
-    similarity_score REAL NOT NULL,
-    action TEXT NOT NULL CHECK(action IN ('skip', 'merge', 'keep_both')),
-    merged_at TEXT,
-    FOREIGN KEY (new_entry_id) REFERENCES knowledge_entries(id),
-    FOREIGN KEY (existing_entry_id) REFERENCES knowledge_entries(id)
-);
-```
-
-#### 2.1.6 usage_logs（使用日志表）
-
-```sql
-CREATE TABLE usage_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    entry_id TEXT,
-    agent_role TEXT,
-    query_text TEXT,
-    result_count INTEGER DEFAULT 0,
-    elapsed_ms REAL DEFAULT 0.0,
-    timestamp TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (entry_id) REFERENCES knowledge_entries(id) ON DELETE SET NULL
-);
-```
-
-#### 2.1.7 reconciliation_log（对账日志表）
-
-```sql
-CREATE TABLE reconciliation_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    check_time TEXT NOT NULL,
-    sqlite_ready_count INTEGER,
-    chroma_vector_count INTEGER,
-    missing_in_chroma INTEGER DEFAULT 0,
-    orphan_in_chroma INTEGER DEFAULT 0,
-    fixed_count INTEGER DEFAULT 0,
-    details TEXT
-);
-```
-
-#### 2.1.8 backup_history（备份历史表）
-
-```sql
-CREATE TABLE backup_history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    backup_type TEXT NOT NULL,
-    destination TEXT,
-    entry_count INTEGER DEFAULT 0,
-    size_bytes INTEGER DEFAULT 0,
-    status TEXT DEFAULT 'completed',
-    created_at TEXT DEFAULT (datetime('now'))
-);
-```
-
-#### 2.1.9 schema_version（Schema版本表）
-
-```sql
-CREATE TABLE schema_version (
-    version INTEGER PRIMARY KEY,
-    applied_at TEXT DEFAULT (datetime('now')),
-    description TEXT
-);
-```
-
-**当前Schema版本**: 12
-
-### 2.2 ChromaDB 向量库实体
-
-| 集合名 | 用途 | 嵌入维度 | 距离度量 | 触发条件 |
-|--------|------|----------|----------|----------|
-| `knowledge` | 默认集合，sentence-transformers嵌入或ChromaDB内置嵌入 | 384 / 动态 | cosine | 始终存在 |
-| `knowledge_primary` | 主集合，OpenAI API嵌入 | 1536 | cosine | EmbeddingManager.level == LEVEL_API |
-
-**ChromaDB元数据结构**：
+### 2.2 LoadingState（加载状态）
 
 ```json
 {
-  "scope": "workspace",
-  "title": "React useEffect清理函数最佳实践"
-}
-```
-
-**ChromaDB文档结构**：
-
-```json
-{
-  "ids": ["kb-20260524-a1b2c3"],
-  "embeddings": [[0.012, -0.034, ...]],
-  "metadatas": [{"scope": "workspace", "title": "..."}],
-  "documents": ["在React组件中使用useEffect时..."]
-}
-```
-
-### 2.3 YAML 配置实体
-
-#### 2.3.1 configs/default.yaml（默认配置）
-
-```yaml
-orchestrator:
-  max_concurrent_agents: 3
-  system_parallel_capacity: 10
-  task_timeout_minutes: 60
-  retry_policy:
-    max_retries: 3
-    backoff: exponential
-  lean_mode: false
-  agent_merge_policy:
-    enabled: true
-    auto_activate: true
-    merge_rules: [...]
-
-quality_gates:
-  enforcement: strict
-  bypass_requires_approval: true
-  coverage_threshold:
-    unit: 80
-    integration: 70
-    high_risk_modules: 90
-
-knowledge_base:
-  general:
-    auto_sync: true
-    sync_interval: weekly
-  workspace:
-    auto_update: true
-    track_changes: true
-  experience:
-    auto_extract: true
-    review_required: true
-    min_confidence: 0.8
-
-token_optimization:
-  budget: 100000
-  warn_threshold: 0.8
-  block_threshold: 1.0
-  compression_level: semantic
-  logging:
-    enabled: true
-    output: ".knowledge/token-usage"
-    granularity: task
-```
-
-#### 2.3.2 constraints.yaml（约束配置）
-
-```yaml
-version: "8.0.0"
-token_budgets:
-  phase_0_skeleton: { budget: 2000 }
-  phase_1_functional: { budget: 5000 }
-  phase_2_enhanced: { budget: 10000 }
-  phase_3_full: { budget: 20000 }
-
-resource_priority:
-  P0_must: ["SKILL.md核心约束", "命令路由表", "Agent索引表"]
-  P1_important: ["命令详细步骤", "工作流Phase定义", "MCP工具参数"]
-  P2_enhanced: ["参考文档", "模板文件", "知识库"]
-  P3_optional: ["示例文档", "评估配置", "披露资源"]
-
-disclosure:
-  skill_md_phase_markers:
-    phase_0: { start: "<!-- PHASE_0_START -->", end: "<!-- PHASE_0_END -->" }
-    phase_1: { start: "<!-- PHASE_1_START -->", end: "<!-- PHASE_1_END -->" }
-    phase_2: { start: "<!-- PHASE_2_START -->", end: "<!-- PHASE_2_END -->" }
-    phase_3: { start: "<!-- PHASE_3_START -->", end: "<!-- PHASE_3_END -->" }
-```
-
-#### 2.3.3 agents/registry.yaml（Agent注册表）
-
-```yaml
-version: "8.0.0"
-total_agents: 57
-total_layers: 13
-layers:
-  - name: 编排
-    count: 3
-    agents:
-      - name: Orchestrator
-        file: orchestrator/orchestrator.md
-        phases: [0, 1, 2]
-        model_routing: deep
-```
-
-#### 2.3.4 commands/routes.yaml（命令路由表）
-
-```yaml
-routing_priority: "精确匹配 > 语义匹配 > 更具体命令优先 > 默认/sprint兜底"
-routes:
-  - intent: "从零开始新项目"
-    command: "/init"
-    mcp_tools: [skill_analyze, knowledge_search, workflow_dispatch, project_init, decision_log]
-    fallback: "知识检索: ChromaDB→SQLite FTS→关键词"
-    phase: 0
-    detail: commands/init.md
-```
-
-### 2.4 JSON 配置/状态实体
-
-#### 2.4.1 hooks/hooks.json（Hook系统配置）
-
-```json
-{
-  "version": "1.0.0",
-  "profiles": {
-    "minimal": { "PreToolUse": ["security-block"], "Stop": ["session-save"] },
-    "standard": { "PreToolUse": ["security-block", "token-budget-check"], "PostToolUse": ["auto-format", "encoding-check"] },
-    "strict": { "PreToolUse": ["security-block", "token-budget-check", "dangerous-cmd-confirm"] }
-  },
-  "hooks": {
-    "security-block": { "type": "PreToolUse", "matcher": "...", "action": "block" },
-    "token-budget-check": { "type": "PreToolUse", "threshold_warn": 0.8, "threshold_block": 0.95 },
-    "session-save": { "type": "Stop", "target": ".skill-logs/session-{timestamp}.md" }
-  }
-}
-```
-
-#### 2.4.2 resource_state.json（渐进式加载状态）
-
-**新格式**（向后兼容）：
-
-```json
-{
-  "phase": "functional",
-  "loaded": ["quality-gates", "agent-registry", "workflow-phases"],
+  "phase": "enhanced",
+  "loaded": [
+    "skill-config",
+    "agent-registry",
+    "quality-gates",
+    "brainstorm-workflow",
+    "agent-product-manager",
+    "agent-orchestrator",
+    "agent-system-architect",
+    "knowledge-general",
+    "sdd-tdd-full",
+    "sdd-tdd-medium",
+    "sdd-tdd-fast",
+    "mcp-tools",
+    "workflow-phases",
+    "agent-registry-full",
+    "progressive-loading"
+  ],
   "progress": {
-    "quality-gates": { "progress": 1.0, "loaded_at": 1716360000.0 },
-    "agent-registry": { "progress": 1.0, "loaded_at": 1716360001.0 }
+    "total_resources": 8,
+    "loaded_resources": 6,
+    "loading": false,
+    "started_at": "2026-05-25T08:00:00+00:00",
+    "completed_at": "2026-05-25T08:00:05+00:00"
   },
-  "last_updated": 1716360001.0
+  "last_updated": "2026-05-25T08:00:05+00:00"
 }
 ```
 
-**旧格式**（纯字符串列表，自动升级）：
+### 2.3 SessionState（会话状态）
 
 ```json
 {
-  "phase": "skeleton",
-  "loaded": ["skill-config", "quality-gates"],
-  "last_updated": 1716360000.0
-}
-```
-
-#### 2.4.3 evals/trigger_eval.json（评估触发配置）
-
-```json
-{
-  "version": "2.0.0",
-  "skill": "xuansto-skill",
-  "eval_type": "skill_trigger_accuracy",
-  "should_trigger": [
-    { "id": 1, "query": "...", "reason": "..." }
+  "current_phase": 4,
+  "current_task": "实现用户认证模块",
+  "completed_phases": [0, 1, 2, 3],
+  "decisions": [
+    "选择JWT作为认证方案",
+    "使用bcrypt进行密码哈希"
   ],
-  "should_not_trigger": [
-    { "id": 11, "query": "...", "reason": "..." }
+  "pending_tasks": [
+    "实现Token刷新机制",
+    "添加权限中间件"
   ],
-  "metrics": {
-    "trigger_rate": "...",
-    "rejection_rate": "...",
-    "accuracy": "...",
-    "target_accuracy": 0.80
-  }
+  "experience": [
+    "bcrypt比scrypt更适合Web场景"
+  ],
+  "timestamp": "2026-05-25T08:00:00",
+  "updated_at": "2026-05-25T10:30:00"
 }
 ```
 
-#### 2.4.4 经验模式文件（.knowledge/experience/patterns/pattern-*.json）
+### 2.4 WorkflowState（工作流状态）
 
 ```json
 {
-  "error": "ModuleNotFoundError: No module named 'xxx'",
-  "count": 3,
-  "confidence": 0.55,
-  "status": "draft",
-  "created_at": "2026-05-24T10:30:00",
-  "verified": false
+  "workflow_id": "wf-a1b2c3d4",
+  "workflow": "sdd-tdd-full",
+  "project_path": "/home/user/my-project",
+  "status": "running",
+  "current_phase": 4,
+  "started_at": "2026-05-25T08:00:00+00:00",
+  "completed_phases": [0, 1, 2, 3],
+  "phase_definitions": [
+    {"id": 0, "name": "初始化", "gates": ["DESIGN-SYSTEM-COMPLETE"]},
+    {"id": 1, "name": "需求分析", "gates": ["BRAINSTORM-COMPLETE", "GATE-001"]}
+  ],
+  "aborted_at": null,
+  "completed_at": null
 }
 ```
 
-### 2.5 Markdown 文件实体
+### 2.5 DecisionEntry（决策条目）
 
-#### 2.5.1 会话摘要（.skill-logs/session-*.md）
-
-```markdown
-# Session 20260524-103000
-
-## 已完成任务
-- 实现用户认证模块
-- 编写单元测试
-
-## 未完成任务
-- 集成测试编写
-
-## 关键决策
-- 选择JWT而非Session方案
-
-## 经验沉淀
-- FastAPI依赖注入可简化中间件逻辑
+```json
+{
+  "id": "ADR-20260525-001",
+  "title": "选择React作为前端框架",
+  "description": "项目前端技术栈选型决策",
+  "context": "新项目需要选择前端框架，团队有React和Vue经验",
+  "alternatives": ["Vue 3", "Angular", "Svelte"],
+  "decision": "采用React 18+TypeScript",
+  "rationale": "团队React经验更丰富，生态系统更成熟，TypeScript支持更好",
+  "impact": "影响前端架构、组件库选择、构建工具链",
+  "decided_by": "system-architect",
+  "tags": ["frontend", "architecture"],
+  "status": "accepted",
+  "created_at": "2026-05-25T08:00:00",
+  "updated_at": "2026-05-25T08:00:00"
+}
 ```
 
-#### 2.5.2 任务计划（.agent_cache/{task}/task_plan.md）
+### 2.6 TokenBudgetState（Token预算）
 
-```markdown
-# Task Plan
-- **Task Name**: user-auth-module
-- **Created At**: 2026-05-24T10:00:00Z
-- **Current Phase**: Phase 0
-- **Progress**: 0%
-
-## Phase Status
-| Phase | Name | Status |
-|-------|------|--------|
-| Phase 0 | Design | Pending |
-...
+```json
+{
+  "total_budget": 150000,
+  "used": 45000,
+  "remaining": 105000,
+  "phase_allocations": {
+    "0": 8000,
+    "1": 15000,
+    "2": 22000,
+    "3": 12000,
+    "4": 45000,
+    "5": 18000,
+    "6": 10000,
+    "7": 12000,
+    "8": 8000
+  },
+  "usage_by_phase": {
+    "0": {"estimated_tokens": 5000, "resource_count": 1},
+    "1": {"estimated_tokens": 8000, "resource_count": 6},
+    "2": {"estimated_tokens": 12000, "resource_count": 8}
+  },
+  "session_id": "default"
+}
 ```
 
-#### 2.5.3 知识导出文件（{scope}/{category}/{title}.md）
+### 2.7 AgentInstance（Agent实例）
 
-```markdown
----
-id: kb-20260524-a1b2c3
-type: pattern
-category: frontend
-tags:
-  - react
-  - hooks
-version: 3
-updated: '2026-05-24 08:15:00'
-scope: general
-confidence: 0.85
-title: React useEffect清理函数最佳实践
-summary: useEffect必须返回清理函数防止内存泄漏
-source_path: general/frontend/react-hooks.md
----
-在React组件中使用useEffect时，必须返回清理函数以避免内存泄漏...
+```json
+{
+  "agent_id": "agent-e5f6a7b8",
+  "agent_type": "developer",
+  "capabilities": ["code_review", "testing", "refactoring"],
+  "status": "idle",
+  "task": "",
+  "created_at": 1716620400.0,
+  "last_active_at": "2026-05-25T10:30:00+00:00",
+  "task_count": 3,
+  "total_duration_ms": 45000,
+  "history": [
+    {"action": "assign", "task": "实现登录接口", "timestamp": 1716620400.0},
+    {"action": "release", "task": "实现登录接口", "duration_ms": 15000, "timestamp": 1716620415.0}
+  ]
+}
 ```
 
 ---
 
 ## 3. 数据生命周期
 
-### 3.1 知识条目生命周期
+### 3.1 知识条目 CRUD
 
-```mermaid
-stateDiagram-v2
-    [*] --> Pending : add_entry()
-    Pending --> Ready : embedding成功
-    Pending --> Pending : embedding失败(retry<5)
-    Pending --> Abandoned : retry>=5
-    Ready --> Active : 首次访问
-    Active --> Active : update_entry()
-    Active --> Archived : LifecycleManager(90天+低置信度)
-    Active --> Deleted : delete_entry()
-    Archived --> Active : restore_version()
-    Deleted --> [*]
+| 操作 | 触发条件 | 存储层 | 说明 |
+|------|----------|--------|------|
+| **Create** | `knowledge_inject(add)` / `knowledge_inject(precipitate)` | SQLite + ChromaDB + 文件系统 | 双写：先SQLite标记pending，再ChromaDB，成功后标记ready |
+| **Read** | `knowledge_search(retrieve)` / `knowledge_inject(inject)` | ChromaDB → SQLite FTS5 → 文件系统 | 搜索引擎降级链：hybrid → semantic → keyword |
+| **Update** | `knowledge_inject(update)` | SQLite + ChromaDB | 更新字段后重新索引向量 |
+| **Delete** | 软删除：设置`deleted_at`字段 | SQLite | 不物理删除，保留审计轨迹 |
+| **Reconcile** | 启动时 / 手动触发 | SQLite + ChromaDB | 修复sync_status≠ready的条目 |
 
-    state Active {
-        [*] --> V1
-        V1 --> V2 : update(保存版本历史)
-        V2 --> V3 : update(保存版本历史)
-        V3 --> V2 : restore_version(2)
-    }
-```
+### 3.2 会话 保存/加载/恢复
 
-| 阶段 | 触发条件 | 存储位置 | 数据变更 |
-|------|----------|----------|----------|
-| 创建 | `knowledge_add` / 首次导入 / 增量同步 | SQLite + ChromaDB(pending) | INSERT knowledge_entries, INSERT knowledge_fts(触发器) |
-| 嵌入就绪 | EmbeddingManager生成成功 | ChromaDB | UPDATE embedding_status='ready', UPSERT向量 |
-| 嵌入重试 | 后台重试线程(60s间隔) | ChromaDB | UPDATE embedding_retry_count+1 |
-| 更新 | `knowledge_update` | SQLite + ChromaDB | UPDATE knowledge_entries, INSERT version_history, UPDATE knowledge_fts(触发器) |
-| 去重检测 | `knowledge_add`前检查 | SQLite + ChromaDB | INSERT dedup_log, 可能MERGE到已有条目 |
-| 访问记录 | `deep_load` / 搜索命中 | SQLite | INSERT usage_logs, UPDATE last_accessed |
-| 归档 | LifecycleManager定时检查(86400s) | SQLite + 文件系统 | UPDATE status='archived', 移动源文件到archive/ |
-| 删除 | `knowledge_delete` | SQLite + ChromaDB | DELETE knowledge_entries, DELETE向量, INSERT version_history(change_type='delete') |
-| 版本回滚 | `knowledge_rollback` | SQLite + ChromaDB | 保存当前版本到version_history, UPDATE为历史版本数据, 重新嵌入 |
+| 操作 | 触发条件 | 存储层 | 说明 |
+|------|----------|--------|------|
+| **Save** | `session_manage(save)` | 文件系统(`.xuansto/sessions/`) | 生成Markdown会话记录，保留最近10个 |
+| **Track** | `session_manage(track)` | 文件系统(`.xuansto/sessions/current.json`) | 实时追踪当前阶段/任务/决策 |
+| **Load** | `session_manage(load)` | 文件系统 | 读取最新会话记录 |
+| **Restore** | `session_manage(restore)` / 启动时 | 文件系统 + 内存 | 启动时自动恢复`current.json`到`_RESTORED_STATE` |
+| **Detect** | `session_manage(detect)` | 文件系统(`.xuansto/patterns/`) | 从错误日志提取重复模式 |
+| **Verify** | `session_manage(verify)` | 文件系统 | 提升模式置信度，≥0.80标记为verified |
 
-### 3.2 会话生命周期
+### 3.3 工作流 启动/推进/中止
 
-```mermaid
-stateDiagram-v2
-    [*] --> 初始化 : init-session.py --task-name
-    初始化 --> 活跃 : 命令执行
-    活跃 --> 活跃 : 任务推进
-    活跃 --> 持久化 : session-persist.py save
-    活跃 --> 压缩前保存 : PreCompact Hook
-    持久化 --> 恢复 : session-persist.py load
-    压缩前保存 --> 恢复 : SessionStart Hook
-    恢复 --> 活跃 : 继续执行
-    持久化 --> 清理 : 保留最近10个
-    清理 --> [*]
-```
+| 操作 | 触发条件 | 存储层 | 说明 |
+|------|----------|--------|------|
+| **Start** | `workflow_dispatch(start)` | 内存 + 文件系统 + SQLite | 创建实例，写入`_ACTIVE_WORKFLOWS` + JSON文件 + SQLite |
+| **Advance** | `workflow_dispatch(phase, advance)` | 内存 + 文件系统 + SQLite | 检查门禁→推进阶段→保存快照→持久化 |
+| **Abort** | `workflow_dispatch(abort)` | 内存 + 文件系统 | 标记status=aborted，从活跃列表移除 |
+| **Recover** | `workflow_dispatch(recover)` | 文件系统(gz快照) | 从快照恢复到指定阶段 |
+| **Snapshot** | 每次阶段推进 | 文件系统(gz压缩) | 保存到`.xuansto/workflow_snapshots/`，TTL 30天，最多20个/工作流 |
+| **Startup** | MCP Server启动 | 文件系统 | 加载所有非aborted工作流到内存 |
 
-| 阶段 | 触发条件 | 存储位置 | 数据变更 |
-|------|----------|----------|----------|
-| 初始化 | `/init` 命令 | `.agent_cache/{task}/` | 创建task_plan.md, findings.md, progress.md |
-| 会话保存 | Stop Hook / 手动 | `.skill-logs/session-{ts}.md` | 写入Markdown摘要 |
-| 压缩前保存 | PreCompact Hook | `.agent_cache/` | 保存current_phase, workflow_state, active_agents |
-| 决策持久化 | PreCompact Hook(strict) | `.agent_cache/decision-log.md` | 写入决策日志 |
-| 会话恢复 | SessionStart Hook | 内存 | 读取最近session文件 |
-| 清理 | save_session后自动 | `.skill-logs/` | 删除超过10个的旧会话文件 |
+### 3.4 加载阶段 推进/降级
 
-### 3.3 渐进式加载生命周期
-
-```mermaid
-stateDiagram-v2
-    [*] --> Skeleton : Skill首次触发(Phase 0)
-    Skeleton --> Functional : 命令执行
-    Functional --> Enhanced : 参考文档请求/Agent调度
-    Enhanced --> Full : 深度分析/桌面构建
-    Full --> Enhanced : Token>80%
-    Enhanced --> Functional : Token>95%
-    Functional --> Skeleton : Token>95%且无活动
-```
-
-| 转换 | 触发条件 | 存储变更 | resource_state.json更新 |
-|------|----------|----------|------------------------|
-| →Skeleton | Skill触发 | 加载P0资源 | phase="skeleton", loaded=[P0 items] |
-| →Functional | 命令路由匹配 | 加载P1资源 | phase="functional", loaded+=[P1 items] |
-| →Enhanced | Agent调度/知识检索 | 加载P2资源 | phase="enhanced", loaded+=[P2 items] |
-| →Full | /build-desktop等 | 加载P3资源 | phase="full", loaded+=[P3 items] |
-| →降级 | Token阈值触发 | 释放对应优先级资源 | phase回退, loaded减少 |
-
-### 3.4 降级状态生命周期
-
-```mermaid
-stateDiagram-v2
-    [*] --> Normal : API+ChromaDB可用
-    Normal --> LocalSemantic : OpenAI API不可用
-    Normal --> BM25Only : ChromaDB不可用
-    LocalSemantic --> BM25Only : sentence-transformers不可用
-    BM25Only --> FileSearch : SQLite不可用
-    FileSearch --> BM25Only : SQLite恢复
-    BM25Only --> LocalSemantic : 本地模型恢复
-    LocalSemantic --> Normal : API+ChromaDB恢复
-```
-
-| 级别 | 名称 | 搜索策略 | 检测间隔 | 恢复条件 |
-|------|------|----------|----------|----------|
-| 0 | normal | hybrid | 30s | - |
-| 1 | local_semantic | hybrid | 30s | OpenAI API可用+ChromaDB查询成功 |
-| 2 | bm25_only | keyword_only | 30s | 嵌入引擎恢复+ChromaDB可用 |
-| 3 | file_search | file_search | 30s | SQLite恢复 |
-
-### 3.5 备份生命周期
-
-| 操作 | 触发条件 | 频率 | 保留策略 |
-|------|----------|------|----------|
-| SQLite定时备份 | 定时器 | 每6小时 | 保留最近10个 |
-| ChromaDB定时备份 | 定时器 | 每24小时 | 保留最近7个 |
-| 备份清理 | 定时器 | 每24小时 | 删除超限备份 |
-| 手动备份 | `knowledge_rollback` API | 按需 | 用户管理 |
-| WAL检查点 | 关闭时 | 一次性 | - |
+| 操作 | 触发条件 | 存储层 | 说明 |
+|------|----------|--------|------|
+| **Advance** | `resource_load_status(preload)` | 内存 + 文件系统 | 推进`_current_phase`，更新`resource_state.json` |
+| **Degrade** | Token使用率≥80% / `token_budget(enforce)` | 内存 + 文件系统 | 回退`_current_phase`一级，发送降级通知 |
+| **Auto-advance** | 用户执行命令时(Phase 0→1) | 内存 | `auto_advance_on_command()`自动从骨架升级到功能阶段 |
+| **Cache** | 资源预加载 | 内存(LRU) | 100条上限，1小时TTL，SHA256完整性校验 |
+| **Startup** | MCP Server启动 | 文件系统 | 从`resource_state.json`恢复加载阶段 |
 
 ---
 
 ## 4. 重构后数据模型
 
-### 4.1 MCP Server 所需状态存储结构体
-
-#### 4.1.1 KnowledgeEntry（知识条目）
+### 4.1 MCP Server 状态/资源存储结构体定义
 
 ```python
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Optional
-
-class EntryScope(str, Enum):
-    GENERAL = "general"
-    WORKSPACE = "workspace"
-    EXPERIENCE = "experience"
-
-class EntryStatus(str, Enum):
-    ACTIVE = "active"
-    ARCHIVED = "archived"
-    DELETED = "deleted"
-
-class EmbeddingStatus(str, Enum):
-    PENDING = "pending"
-    READY = "ready"
-    FAILED = "failed"
+from typing import Any
 
 @dataclass
 class KnowledgeEntry:
     id: str
     title: str
     content: str
-    scope: EntryScope
+    scope: str = "general"
     tags: list[str] = field(default_factory=list)
-    confidence: float = 0.6
-    source_path: Optional[str] = None
-    source_rating: int = 3
-    occurrences: int = 1
-    content_hash: Optional[str] = None
-    type: str = "unknown"
-    category: str = "uncategorized"
-    summary: Optional[str] = None
-    content_path: Optional[str] = None
-    source: Optional[str] = None
-    last_validated: Optional[str] = None
-    success_count: int = 0
-    failure_count: int = 0
+    confidence: float = 0.0
+    type: str = ""
+    category: str = ""
+    source_path: str = ""
+    embedding_status: str = "pending"
     version: int = 1
-    embedding_status: EmbeddingStatus = EmbeddingStatus.PENDING
-    embedding_retry_count: int = 0
-    status: EntryStatus = EntryStatus.ACTIVE
-    last_accessed: Optional[str] = None
-    created: Optional[str] = None
-    updated: Optional[str] = None
-```
-
-#### 4.1.2 LoadingProgress（渐进式加载进度）
-
-```python
-from dataclasses import dataclass
-from enum import Enum
-from typing import Optional
-
-class LoadPhase(str, Enum):
-    SKELETON = "skeleton"
-    FUNCTIONAL = "functional"
-    ENHANCED = "enhanced"
-    FULL = "full"
-
-@dataclass
-class ResourceProgress:
-    progress: float
-    loaded_at: Optional[float] = None
-    content_hash: Optional[str] = None
-    ttl: Optional[int] = None
+    sync_status: str = "pending"
+    deleted_at: str | None = None
+    created_at: str = ""
+    updated_at: str = ""
 
 @dataclass
 class LoadingState:
-    phase: LoadPhase = LoadPhase.SKELETON
+    phase: int = 0
+    phase_name: str = "skeleton"
     loaded: list[str] = field(default_factory=list)
-    progress: dict[str, ResourceProgress] = field(default_factory=dict)
-    last_updated: Optional[float] = None
-```
-
-**resource_state.json 映射**：
-
-```json
-{
-  "phase": "functional",
-  "loaded": ["quality-gates", "agent-registry"],
-  "progress": {
-    "quality-gates": { "progress": 1.0, "loaded_at": 1716360000.0, "content_hash": null, "ttl": null }
-  },
-  "last_updated": 1716360001.0
-}
-```
-
-#### 4.1.3 DegradationState（降级状态）
-
-```python
-from dataclasses import dataclass
-from enum import Enum
-
-class DegradationLevel(int, Enum):
-    NORMAL = 0
-    LOCAL_SEMANTIC = 1
-    BM25_ONLY = 2
-    FILE_SEARCH = 3
-
-class EmbeddingLevel(int, Enum):
-    API = 0
-    LOCAL = 1
-    BM25_ONLY = 2
-
-@dataclass
-class DegradationState:
-    level: DegradationLevel = DegradationLevel.NORMAL
-    embedding_level: EmbeddingLevel = EmbeddingLevel.BM25_ONLY
-    search_strategy: str = "hybrid"
-    last_check_time: Optional[float] = None
-    check_interval: int = 30
-    auto_recover: bool = True
-
-    @property
-    def level_name(self) -> str:
-        return {0: "normal", 1: "local_semantic", 2: "bm25_only", 3: "file_search"}.get(self.level, "unknown")
-
-    @property
-    def embedding_level_name(self) -> str:
-        return {0: "api", 1: "local_semantic", 2: "bm25_only"}.get(self.embedding_level, "unknown")
-```
-
-#### 4.1.4 SessionState（会话状态）
-
-```python
-from dataclasses import dataclass, field
-from typing import Optional
+    progress: dict[str, Any] = field(default_factory=lambda: {
+        "total_resources": 0,
+        "loaded_resources": 0,
+        "loading": False,
+        "started_at": None,
+        "completed_at": None,
+    })
+    last_updated: str = ""
 
 @dataclass
 class SessionState:
-    task_name: str
-    created_at: str
-    current_phase: int = 0
-    progress_percent: int = 0
-    completed_tasks: list[str] = field(default_factory=list)
+    current_phase: int | None = None
+    current_task: str | None = None
+    completed_phases: list[int] = field(default_factory=list)
+    decisions: list[str] = field(default_factory=list)
     pending_tasks: list[str] = field(default_factory=list)
-    key_decisions: list[str] = field(default_factory=list)
     experience: list[str] = field(default_factory=list)
-    active_agents: list[str] = field(default_factory=list)
-    workflow_state: Optional[dict] = None
-    last_updated: Optional[str] = None
-```
-
-#### 4.1.5 DecisionLogEntry（决策日志条目）
-
-```python
-from dataclasses import dataclass, field
-from typing import Optional
+    timestamp: str = ""
+    updated_at: str = ""
 
 @dataclass
-class DecisionLogEntry:
+class WorkflowState:
+    workflow_id: str
+    workflow: str
+    project_path: str
+    status: str = "running"
+    current_phase: int = 0
+    started_at: str = ""
+    completed_phases: list[int] = field(default_factory=list)
+    phase_definitions: list[dict[str, Any]] = field(default_factory=list)
+    aborted_at: str | None = None
+    completed_at: str | None = None
+
+@dataclass
+class DecisionEntry:
     id: str
-    decision: str
-    rationale: str
+    title: str
+    description: str = ""
+    context: str = ""
     alternatives: list[str] = field(default_factory=list)
-    context: Optional[str] = None
-    confidence: float = 0.0
-    phase: int = 0
-    agent_role: Optional[str] = None
-    timestamp: Optional[str] = None
-```
-
-#### 4.1.6 TokenBudgetState（Token预算状态）
-
-```python
-from dataclasses import dataclass
-from typing import Optional
+    decision: str = ""
+    rationale: str = ""
+    impact: str = ""
+    decided_by: str = ""
+    tags: list[str] = field(default_factory=list)
+    status: str = "proposed"
+    created_at: str = ""
+    updated_at: str = ""
 
 @dataclass
 class TokenBudgetState:
-    total_budget: int = 100000
-    used_tokens: int = 0
-    warn_threshold: float = 0.8
-    block_threshold: float = 1.0
-    compression_level: str = "semantic"
-    current_phase_budget: Optional[int] = None
-    last_updated: Optional[str] = None
+    total_budget: int = 0
+    used: int = 0
+    remaining: int = 0
+    phase_allocations: dict[str, int] = field(default_factory=dict)
+    usage_by_phase: dict[str, Any] = field(default_factory=dict)
+    session_id: str = "default"
 
-    @property
-    def usage_ratio(self) -> float:
-        return self.used_tokens / self.total_budget if self.total_budget > 0 else 0.0
+@dataclass
+class AgentInstance:
+    agent_id: str
+    agent_type: str
+    capabilities: list[str] = field(default_factory=list)
+    status: str = "idle"
+    task: str = ""
+    created_at: float = 0.0
+    last_active_at: str = ""
+    task_count: int = 0
+    total_duration_ms: int = 0
+    history: list[dict[str, Any]] = field(default_factory=list)
 
-    @property
-    def is_warn(self) -> bool:
-        return self.usage_ratio >= self.warn_threshold
+@dataclass
+class DegradationState:
+    id: str
+    component_name: str
+    level: str = "none"
+    data: dict[str, Any] = field(default_factory=dict)
+    updated_at: str = ""
 
-    @property
-    def is_block(self) -> bool:
-        return self.usage_ratio >= self.block_threshold
-```
-
-#### 4.1.7 ExperiencePattern（经验模式）
-
-```python
-from dataclasses import dataclass
-from typing import Optional
+@dataclass
+class ErrorPattern:
+    id: str
+    pattern: str
+    error_type: str
+    data: dict[str, Any] = field(default_factory=dict)
+    created_at: str = ""
 
 @dataclass
 class ExperiencePattern:
     id: str
-    error: str
-    count: int = 1
-    confidence: float = 0.40
-    status: str = "draft"
-    created_at: Optional[str] = None
-    verified: bool = False
-    solution: Optional[str] = None
-    tags: list[str] = field(default_factory=list)
-```
-
-#### 4.1.8 BackupRecord（备份记录）
-
-```python
-from dataclasses import dataclass
-from typing import Optional
+    error_type: str
+    pattern: dict[str, Any] = field(default_factory=dict)
+    confidence: float = 0.0
+    status: str = "active"
+    occurrence_count: int = 1
+    created_at: str = ""
+    updated_at: str = ""
 
 @dataclass
-class BackupRecord:
-    id: int
-    backup_type: str
-    destination: Optional[str] = None
-    entry_count: int = 0
-    size_bytes: int = 0
-    status: str = "completed"
-    created_at: Optional[str] = None
-    encrypted: bool = False
+class MetricRecord:
+    tool_name: str
+    metric_type: str
+    value: dict[str, Any] = field(default_factory=dict)
+    timestamp: str = ""
+
+@dataclass
+class ReconciliationLog:
+    entry_id: str
+    store: str
+    issue_type: str
+    details: dict[str, Any] = field(default_factory=dict)
+    resolved: bool = False
+    created_at: str = ""
+    resolved_at: str | None = None
 ```
 
-### 4.2 渐进式加载相关字段定义
+### 4.2 渐进式加载相关字段
 
-| 字段 | 类型 | 说明 | 默认值 |
-|------|------|------|--------|
-| `phase` | LoadPhase | 当前加载阶段 | skeleton |
-| `loaded` | list[str] | 已加载资源URI列表 | [] |
-| `progress.{resource}` | ResourceProgress | 单资源加载进度 | - |
-| `progress.{resource}.progress` | float | 加载进度[0.0, 1.0] | 0.0 |
-| `progress.{resource}.loaded_at` | float\|None | 加载完成时间戳 | None |
-| `progress.{resource}.content_hash` | str\|None | 内容哈希(缓存校验) | None |
-| `progress.{resource}.ttl` | int\|None | 缓存TTL(秒), None=不过期 | None |
-| `last_updated` | float | 最后更新时间戳 | None |
+```python
+@dataclass
+class DisclosureTransition:
+    from_phase: str = ""
+    to_phase: str = ""
+    started_at: str | None = None
+    completed_at: str | None = None
+    resources_affected: list[str] = field(default_factory=list)
+    status: str = "pending"
+    current_phase: str = ""
+    target_phase: str = ""
+    required_resources: list[str] = field(default_factory=list)
+    estimated_tokens: int = 0
+    available_alternatives: list[str] = field(default_factory=list)
+    transition_hint: str = ""
 
-### 4.3 MCP工具与数据实体映射
+@dataclass
+class ResourceCacheEntry:
+    content: str
+    cached_at: float
+    access_count: int = 0
+    content_hash: str = ""
+    ttl_seconds: int = 3600
+    source_path: str | None = None
 
-| MCP工具 | 读取实体 | 写入实体 | 缓存影响 |
-|---------|----------|----------|----------|
-| knowledge_search | knowledge_entries, knowledge_fts, ChromaDB | usage_logs | 无 |
-| knowledge_add | knowledge_entries(去重检查), ChromaDB | knowledge_entries, knowledge_tags, knowledge_fts, dedup_log, ChromaDB | 清除resource_state缓存 |
-| knowledge_update | knowledge_entries | knowledge_entries, version_history, knowledge_fts, ChromaDB | 清除resource_state缓存 |
-| knowledge_delete | knowledge_entries | knowledge_entries, version_history, ChromaDB | 清除resource_state缓存 |
-| knowledge_stats | knowledge_entries, ChromaDB | 无 | 无 |
-| knowledge_rollback | version_history | knowledge_entries, ChromaDB | 清除resource_state缓存 |
-| knowledge_progressive_search | knowledge_entries, ChromaDB | usage_logs | 无 |
-| knowledge_deep_load | knowledge_entries | usage_logs | 无 |
-| knowledge_auto_retrieve | knowledge_entries, ChromaDB, 文件系统 | usage_logs | 无 |
-| knowledge_web_update | knowledge_entries, ChromaDB, 外部网络 | knowledge_entries, ChromaDB | 清除resource_state缓存 |
-| session_manage | SessionState | SessionState | 无 |
-| decision_log | DecisionLogEntry | DecisionLogEntry | 无 |
-| token_budget | TokenBudgetState | TokenBudgetState | 触发加载降级 |
-| resource_load_status | LoadingState | LoadingState | 可能触发Phase推进 |
-| workflow_dispatch | SessionState | SessionState | 无 |
-| agent_status | agents/registry.yaml | 无 | 无 |
-| hook_manage | hooks/hooks.json | hooks/hooks.json | 无 |
+@dataclass
+class LoadingProgress:
+    total_resources: int = 0
+    loaded_resources: int = 0
+    current_phase: int | None = None
+    loading: bool = False
+    started_at: str | None = None
+    completed_at: str | None = None
+```
 
----
-
-## 5. ER图与实体关系描述
-
-### 5.1 核心实体关系图
+### 4.3 实体关系图
 
 ```mermaid
 erDiagram
-    knowledge_entries ||--o{ knowledge_tags : "has tags"
-    knowledge_entries ||--o{ version_history : "has versions"
-    knowledge_entries ||--o{ usage_logs : "tracked by"
-    knowledge_entries ||--o{ dedup_log : "new entry ref"
-    knowledge_entries ||--o{ dedup_log : "existing entry ref"
-    knowledge_entries }o--|| schema_version : "schema governed"
+    KnowledgeEntry ||--o{ ReconciliationLog : "sync_status追踪"
+    KnowledgeEntry }o--|| ChromaDBCollection : "向量嵌入"
 
-    knowledge_entries {
-        TEXT id PK
-        TEXT title
-        TEXT content
-        TEXT scope
-        TEXT tags
-        REAL confidence
-        TEXT source_path
-        INT source_rating
-        INT occurrences
-        TEXT content_hash
-        TEXT type
-        TEXT category
-        TEXT summary
-        TEXT content_path
-        TEXT source
-        TEXT last_validated
-        INT success_count
-        INT failure_count
-        INT version
-        TEXT embedding_status
-        INT embedding_retry_count
-        TEXT status
-        TEXT last_accessed
-        TEXT created
-        TEXT updated
+    WorkflowState ||--o{ DecisionEntry : "产生决策"
+    WorkflowState ||--o{ WorkflowSnapshot : "阶段快照"
+    WorkflowState }o--|| TokenBudgetState : "消耗预算"
+
+    SessionState ||--o{ DecisionEntry : "记录决策"
+    SessionState }o--|| LoadingState : "关联加载阶段"
+
+    AgentInstance }o--|| WorkflowState : "分配到工作流"
+    AgentInstance }o--o{ ErrorPattern : "产生错误模式"
+
+    LoadingState ||--o{ DisclosureTransition : "阶段转换"
+    LoadingState }o--|| ResourceCacheEntry : "资源缓存"
+
+    DegradationState }o--|| LoadingState : "触发降级"
+    TokenBudgetState }o--|| DegradationState : "预算超限触发"
+
+    ExperiencePattern }o--o{ ErrorPattern : "从错误提取"
+
+    KnowledgeEntry {
+        string id PK
+        string title
+        string content
+        string scope
+        list tags
+        float confidence
+        string type
+        string category
+        string source_path
+        string embedding_status
+        int version
+        string sync_status
+        string deleted_at
+        string created_at
+        string updated_at
     }
 
-    knowledge_tags {
-        TEXT entry_id PK_FK
-        TEXT tag PK
+    ChromaDBCollection {
+        string collection_name
+        string persist_path
     }
 
-    version_history {
-        INT id PK
-        TEXT entry_id FK
-        INT version
-        TEXT title
-        TEXT content
-        TEXT scope
-        TEXT tags
-        REAL confidence
-        TEXT source_path
-        INT source_rating
-        TEXT content_hash
-        TEXT change_type
-        TEXT content_snapshot
-        TEXT saved_at
+    ReconciliationLog {
+        int id PK
+        string entry_id FK
+        string store
+        string issue_type
+        dict details
+        bool resolved
+        string created_at
+        string resolved_at
     }
-
-    usage_logs {
-        INT id PK
-        TEXT entry_id FK
-        TEXT agent_role
-        TEXT query_text
-        INT result_count
-        REAL elapsed_ms
-        TEXT timestamp
-    }
-
-    dedup_log {
-        INT id PK
-        TEXT new_entry_id FK
-        TEXT existing_entry_id FK
-        REAL similarity_score
-        TEXT action
-        TEXT merged_at
-    }
-
-    reconciliation_log {
-        INT id PK
-        TEXT check_time
-        INT sqlite_ready_count
-        INT chroma_vector_count
-        INT missing_in_chroma
-        INT orphan_in_chroma
-        INT fixed_count
-        TEXT details
-    }
-
-    backup_history {
-        INT id PK
-        TEXT backup_type
-        TEXT destination
-        INT entry_count
-        INT size_bytes
-        TEXT status
-        TEXT created_at
-    }
-
-    schema_version {
-        INT version PK
-        TEXT applied_at
-        TEXT description
-    }
-```
-
-### 5.2 外部实体关系图
-
-```mermaid
-erDiagram
-    LoadingState ||--o{ ResourceProgress : "tracks"
-    SessionState ||--o{ DecisionLogEntry : "contains"
-    SessionState ||--o{ ExperiencePattern : "generates"
-    DegradationState ||--o{ KnowledgeEntry : "affects search"
-    TokenBudgetState ||--|| LoadingState : "triggers phase change"
 
     LoadingState {
-        ENUM phase
-        LIST loaded
-        DICT progress
-        FLOAT last_updated
-    }
-
-    ResourceProgress {
-        FLOAT progress
-        FLOAT loaded_at
-        TEXT content_hash
-        INT ttl
+        int phase
+        string phase_name
+        list loaded
+        dict progress
+        string last_updated
     }
 
     SessionState {
-        TEXT task_name PK
-        TEXT created_at
-        INT current_phase
-        INT progress_percent
-        LIST completed_tasks
-        LIST pending_tasks
-        LIST key_decisions
-        LIST experience
-        LIST active_agents
-        DICT workflow_state
+        int current_phase
+        string current_task
+        list completed_phases
+        list decisions
+        list pending_tasks
+        list experience
+        string timestamp
+        string updated_at
     }
 
-    DecisionLogEntry {
-        TEXT id PK
-        TEXT decision
-        TEXT rationale
-        LIST alternatives
-        TEXT context
-        REAL confidence
-        INT phase
-        TEXT agent_role
-        TEXT timestamp
+    WorkflowState {
+        string workflow_id PK
+        string workflow
+        string project_path
+        string status
+        int current_phase
+        string started_at
+        list completed_phases
+        list phase_definitions
+        string aborted_at
+        string completed_at
     }
 
-    ExperiencePattern {
-        TEXT id PK
-        TEXT error
-        INT count
-        REAL confidence
-        TEXT status
-        TEXT created_at
-        BOOL verified
+    WorkflowSnapshot {
+        string workflow_id FK
+        int phase
+        float timestamp
+        string time_iso
+        dict state
     }
 
-    DegradationState {
-        INT level
-        INT embedding_level
-        TEXT search_strategy
-        FLOAT last_check_time
-        INT check_interval
-        BOOL auto_recover
+    DecisionEntry {
+        string id PK
+        string title
+        string description
+        string context
+        list alternatives
+        string decision
+        string rationale
+        string impact
+        string decided_by
+        list tags
+        string status
+        string created_at
+        string updated_at
     }
 
     TokenBudgetState {
-        INT total_budget
-        INT used_tokens
-        REAL warn_threshold
-        REAL block_threshold
-        TEXT compression_level
+        int total_budget
+        int used
+        int remaining
+        dict phase_allocations
+        dict usage_by_phase
+        string session_id
     }
-```
 
-### 5.3 存储介质与实体映射
+    AgentInstance {
+        string agent_id PK
+        string agent_type
+        list capabilities
+        string status
+        string task
+        float created_at
+        string last_active_at
+        int task_count
+        int total_duration_ms
+    }
 
-```mermaid
-erDiagram
-    SQLite ||--|{ knowledge_entries : stores
-    SQLite ||--|{ knowledge_tags : stores
-    SQLite ||--|{ version_history : stores
-    SQLite ||--|{ usage_logs : stores
-    SQLite ||--|{ dedup_log : stores
-    SQLite ||--|{ reconciliation_log : stores
-    SQLite ||--|{ backup_history : stores
-    SQLite ||--|{ schema_version : stores
+    DegradationState {
+        string id PK
+        string component_name
+        string level
+        dict data
+        string updated_at
+    }
 
-    ChromaDB ||--|{ EmbeddingVector : stores
+    ErrorPattern {
+        string id PK
+        string pattern
+        string error_type
+        dict data
+        string created_at
+    }
 
-    FileSystem ||--|{ KnowledgeSourceFile : stores
-    FileSystem ||--|{ SessionFile : stores
-    FileSystem ||--|{ TaskPlanFile : stores
-    FileSystem ||--|{ ExperiencePatternFile : stores
-    FileSystem ||--|{ BackupFile : stores
-    FileSystem ||--|{ LogFile : stores
+    ExperiencePattern {
+        string id PK
+        string error_type
+        dict pattern
+        float confidence
+        string status
+        int occurrence_count
+        string created_at
+        string updated_at
+    }
 
-    YAMLFile ||--|{ DefaultConfig : stores
-    YAMLFile ||--|{ ConstraintsConfig : stores
-    YAMLFile ||--|{ AgentRegistry : stores
-    YAMLFile ||--|{ CommandRoutes : stores
+    DisclosureTransition {
+        string from_phase
+        string to_phase
+        string started_at
+        string completed_at
+        list resources_affected
+        string status
+        string current_phase
+        string target_phase
+        list required_resources
+        int estimated_tokens
+        list available_alternatives
+        string transition_hint
+    }
 
-    JSONFile ||--|{ HooksConfig : stores
-    JSONFile ||--|{ ResourceState : stores
-    JSONFile ||--|{ EvalConfig : stores
+    ResourceCacheEntry {
+        string content
+        float cached_at
+        int access_count
+        string content_hash
+        int ttl_seconds
+        string source_path
+    }
 
-    Memory ||--|{ DegradationState : stores
-    Memory ||--|{ EmbeddingLevel : stores
-    Memory ||--|{ WebSocketConnections : stores
-
-    EmbeddingVector {
-        TEXT id PK
-        LIST embedding
-        DICT metadata
-        TEXT document
+    MetricRecord {
+        string tool_name
+        string metric_type
+        dict value
+        string timestamp
     }
 ```
 
 ---
 
-## 6. 数据迁移策略
+## 5. 数据迁移策略
 
-### 6.1 已有Schema迁移记录
+### 5.1 决策记录 JSON → SQLite
 
-| 版本 | 迁移内容 | 影响表 | 回滚支持 |
-|------|----------|--------|----------|
-| v9 | 新增embedding_retry_count列，默认pending状态 | knowledge_entries | 否 |
-| v10 | 新增source列，新增usage_logs表，schema_version新增description列 | knowledge_entries, usage_logs, schema_version | 否 |
-| v11 | 新增backup_history表 | backup_history | 否(CREATE IF NOT EXISTS) |
-| v12 | 新增status/last_accessed列，新增对应索引 | knowledge_entries | 否 |
+**当前状态**: `decision_log.py` 已实现自动迁移 `_migrate_json_to_sqlite()`。
 
-### 6.2 resource_state.json 格式迁移
+**迁移步骤**:
+1. 启动时检测 `.xuansto/decisions.json` 是否存在
+2. 若存在，读取JSON数组，逐条 `INSERT OR IGNORE` 到 `decisions` 表
+3. 仅在SQLite表为空时执行迁移（避免重复导入）
+4. 迁移完成后保留原JSON文件（不自动删除）
 
-**迁移路径**：旧格式 → 新格式
+### 5.2 经验模式 JSON → SQLite
 
-```python
-def migrate_resource_state(data: dict) -> dict:
-    if "progress" not in data:
-        loaded = data.get("loaded", [])
-        data["progress"] = {
-            resource: {"progress": 1.0, "loaded_at": data.get("last_updated")}
-            for resource in loaded
-        }
-    return data
-```
+**当前状态**: `database.py` 已实现 `migrate_experience_patterns_from_json()`。
 
-**兼容性**：读取时自动升级，写入时使用新格式。
+**迁移步骤**:
+1. 检测 `knowledge/experience_patterns.json` 是否存在
+2. 读取JSON，逐条 `persist_state("experience_patterns", pattern)`
+3. 迁移完成后保留原JSON文件
 
-### 6.3 建议的新增迁移
+### 5.3 ChromaDB 路径迁移
 
-#### 迁移DB-M01：SessionState结构化存储
+**当前状态**: `config.py` 已实现 `_migrate_chroma_path()`。
 
-**当前状态**：Markdown文件存储，无法程序化查询
+**迁移步骤**:
+1. 检测旧路径 `knowledge/index/chroma/` 是否存在且非空
+2. 检测新路径 `knowledge/index/chroma_db/` 是否冲突
+3. 无冲突时 `shutil.move` 整体迁移
+4. 冲突时记录警告，使用新路径
 
-**目标状态**：SQLite表存储
+### 5.4 资源状态格式迁移
 
-```sql
-CREATE TABLE IF NOT EXISTS session_states (
-    id TEXT PRIMARY KEY,
-    task_name TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    current_phase INTEGER DEFAULT 0,
-    progress_percent INTEGER DEFAULT 0,
-    completed_tasks TEXT DEFAULT '[]',
-    pending_tasks TEXT DEFAULT '[]',
-    key_decisions TEXT DEFAULT '[]',
-    experience TEXT DEFAULT '[]',
-    active_agents TEXT DEFAULT '[]',
-    workflow_state TEXT,
-    last_updated TEXT DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_session_task ON session_states(task_name);
-CREATE INDEX IF NOT EXISTS idx_session_updated ON session_states(last_updated);
-```
+**当前状态**: `resource_load_status.py` 中 `_load_resource_state()` 兼容多种格式。
 
-**迁移步骤**：
-1. 创建session_states表
-2. 编写迁移脚本解析现有`.skill-logs/session-*.md`文件
-3. 提取结构化数据写入SQLite
-4. 保留原Markdown文件作为备份
+**迁移步骤**:
+1. 检测 `resource_state.json` 格式版本
+2. 旧格式(list): 直接转为set，调用 `_save_resource_state()` 升级为v3格式
+3. 旧格式(dict无version): 读取 `resources`/`loaded` 字段，升级为v3格式
+4. v3格式(dict含version=3): 直接使用，校验 `_hash` 完整性
 
-#### 迁移DB-M02：DecisionLog结构化存储
-
-**当前状态**：PreCompact时写入`.agent_cache/decision-log.md`
-
-**目标状态**：SQLite表存储
-
-```sql
-CREATE TABLE IF NOT EXISTS decision_logs (
-    id TEXT PRIMARY KEY,
-    decision TEXT NOT NULL,
-    rationale TEXT,
-    alternatives TEXT DEFAULT '[]',
-    context TEXT,
-    confidence REAL DEFAULT 0.0,
-    phase INTEGER DEFAULT 0,
-    agent_role TEXT,
-    session_id TEXT,
-    timestamp TEXT DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_decision_phase ON decision_logs(phase);
-CREATE INDEX IF NOT EXISTS idx_decision_session ON decision_logs(session_id);
-CREATE INDEX IF NOT EXISTS idx_decision_timestamp ON decision_logs(timestamp);
-```
-
-#### 迁移DB-M03：TokenBudgetState持久化
-
-**当前状态**：纯内存，会话丢失
-
-**目标状态**：SQLite表存储
-
-```sql
-CREATE TABLE IF NOT EXISTS token_budget_states (
-    id INTEGER PRIMARY KEY CHECK(id = 1),
-    total_budget INTEGER DEFAULT 100000,
-    used_tokens INTEGER DEFAULT 0,
-    warn_threshold REAL DEFAULT 0.8,
-    block_threshold REAL DEFAULT 1.0,
-    compression_level TEXT DEFAULT 'semantic',
-    current_phase_budget INTEGER,
-    last_updated TEXT DEFAULT (datetime('now'))
-);
-```
-
-#### 迁移DB-M04：ExperiencePattern索引化
-
-**当前状态**：文件系统JSON文件，无索引
-
-**目标状态**：SQLite表存储
-
-```sql
-CREATE TABLE IF NOT EXISTS experience_patterns (
-    id TEXT PRIMARY KEY,
-    error TEXT NOT NULL,
-    count INTEGER DEFAULT 1,
-    confidence REAL DEFAULT 0.40,
-    status TEXT DEFAULT 'draft' CHECK(status IN ('draft','verified','deprecated')),
-    created_at TEXT,
-    verified INTEGER DEFAULT 0,
-    solution TEXT,
-    tags TEXT DEFAULT '[]'
-);
-CREATE INDEX IF NOT EXISTS idx_pattern_error ON experience_patterns(error);
-CREATE INDEX IF NOT EXISTS idx_pattern_status ON experience_patterns(status);
-CREATE INDEX IF NOT EXISTS idx_pattern_confidence ON experience_patterns(confidence);
-```
-
-#### 迁移DB-M05：ChromaDB集合统一
-
-**当前状态**：`knowledge` + `knowledge_primary`双集合
-
-**目标状态**：单集合 + 元数据标记嵌入级别
+### 5.5 通用迁移框架建议
 
 ```python
-def migrate_chroma_collections(chroma_engine):
-    primary = chroma_engine._primary_collection
-    default = chroma_engine._collection
-    if primary is None:
-        return
-
-    result = primary.get(include=["embeddings", "metadatas", "documents"])
-    if result and result["ids"]:
-        for i, entry_id in enumerate(result["ids"]):
-            meta = result["metadatas"][i] if result["metadatas"] else {}
-            meta["embedding_tier"] = "api"
-            default.upsert(
-                ids=[entry_id],
-                embeddings=[result["embeddings"][i]] if result.get("embeddings") else None,
-                metadatas=[meta],
-                documents=[result["documents"][i]] if result.get("documents") else None,
-            )
-
-    primary.delete(ids=result["ids"])
+MIGRATION_REGISTRY: list[dict[str, Any]] = [
+    {
+        "name": "decisions_json_to_sqlite",
+        "source": ".xuansto/decisions.json",
+        "target": ".xuansto/decisions.db",
+        "fn": _migrate_json_to_sqlite,
+        "reversible": False,
+    },
+    {
+        "name": "experience_patterns_json_to_sqlite",
+        "source": "knowledge/experience_patterns.json",
+        "target": "xuansto.db::experience_patterns",
+        "fn": migrate_experience_patterns_from_json,
+        "reversible": False,
+    },
+    {
+        "name": "chromadb_path_migration",
+        "source": "knowledge/index/chroma/",
+        "target": "knowledge/index/chroma_db/",
+        "fn": _migrate_chroma_path,
+        "reversible": True,
+    },
+    {
+        "name": "resource_state_format_upgrade",
+        "source": ".xuansto/resource_state.json",
+        "target": ".xuansto/resource_state.json",
+        "fn": _load_resource_state,
+        "reversible": False,
+    },
+]
 ```
 
-### 6.4 迁移执行顺序
+---
 
-```mermaid
-graph TD
-    Start[开始迁移] --> M01[DB-M01: SessionState]
-    M01 --> M02[DB-M02: DecisionLog]
-    M02 --> M03[DB-M03: TokenBudgetState]
-    M03 --> M04[DB-M04: ExperiencePattern]
-    M04 --> M05[DB-M05: ChromaDB集合统一]
-    M05 --> Verify[数据一致性校验]
-    Verify --> Done[迁移完成]
+## 6. 存储技术选型建议
 
-    M01 -.-> |保留原文件| Backup1[备份.skill-logs/]
-    M02 -.-> |保留原文件| Backup2[备份.agent_cache/]
-    M04 -.-> |保留原文件| Backup3[备份.experience/patterns/]
-    M05 -.-> |备份chroma_db/| Backup4[备份ChromaDB]
-```
+### 6.1 SQLite 适用场景
 
-### 6.5 迁移安全保障
-
-| 措施 | 说明 |
+| 场景 | 理由 |
 |------|------|
-| 全量备份 | 迁移前执行`create_backup("full")` |
-| 保留原文件 | Markdown/JSON文件迁移后不删除，标记为`.migrated` |
-| 幂等性 | 所有CREATE TABLE使用IF NOT EXISTS，INSERT使用INSERT OR IGNORE |
-| 回滚脚本 | 每个迁移提供对应回滚SQL |
-| 校验步骤 | 迁移后对比记录数、内容哈希 |
+| 结构化数据CRUD | 关系模型、事务支持、ACID保证 |
+| 知识条目元数据 | 需要按scope/tags/status查询，索引高效 |
+| 决策记录 | 需要FTS5全文搜索、日期范围查询、状态过滤 |
+| 工作流/会话状态 | 需要持久化+快速恢复，单机场景无需分布式 |
+| Token预算 | 结构化字段、频繁更新、需要原子操作 |
+| 经验模式 | 需要按error_type/confidence/status聚合查询 |
+| 指标数据 | 时序写入、按tool_name/timestamp索引、定期清理 |
 
----
+**优势**: 零配置、单文件部署、WAL模式并发读、FTS5全文搜索、成熟稳定
 
-## 7. 存储技术选型建议
+**局限**: 不支持多进程写并发、无内置向量搜索、单机无法水平扩展
 
-### 7.1 当前技术栈评估
+### 6.2 ChromaDB 适用场景
 
-| 技术 | 用途 | 优势 | 劣势 | 评分 |
-|------|------|------|------|------|
-| SQLite | 知识条目主存储 | 零配置、单文件、WAL模式支持并发读、FTS5全文搜索 | 单写者限制、无分布式、无内置向量搜索 | ★★★★☆ |
-| ChromaDB | 向量存储 | 开箱即用、支持多种嵌入模型、PersistentClient | 依赖重、集合分裂问题(DB-09)、无事务 | ★★★☆☆ |
-| 文件系统(MD/JSON) | 配置/会话/经验 | 人类可读、Git友好 | 无索引、无查询能力、并发风险 | ★★☆☆☆ |
-| 内存 | 运行时状态 | 零延迟 | 易失性、无持久化 | ★★★☆☆ |
+| 场景 | 理由 |
+|------|------|
+| 语义搜索 | 向量相似度检索，理解查询意图而非关键词匹配 |
+| 知识条目嵌入 | 需要按语义相关性排序，而非精确匹配 |
+| 混合搜索(hybrid) | 结合语义(60%权重) + BM25(40%权重)的最优召回 |
 
-### 7.2 选型建议
+**优势**: 开箱即用的向量数据库、PersistentClient本地部署、与SQLite互补
 
-#### 建议1：SQLite作为统一持久化层（优先级：高）
+**局限**: 额外依赖(需安装chromadb包)、写入可能失败需对账(reconciliation)、索引构建耗时
 
-**理由**：
-- 已有成熟的SQLite引擎和Schema迁移机制
-- 单文件部署，零运维成本
-- WAL模式支持并发读取
-- FTS5提供全文搜索能力
-- 可通过JSON扩展函数处理半结构化数据
+### 6.3 文件系统 适用场景
 
-**适用场景**：SessionState、DecisionLog、TokenBudgetState、ExperiencePattern的结构化存储
+| 场景 | 理由 |
+|------|------|
+| Markdown知识文档 | 人类可读、Git友好、YAML frontmatter元数据 |
+| 工作流快照 | 大型JSON、gzip压缩节省空间、按需恢复 |
+| 会话记录 | Markdown格式便于人工审阅、无需查询 |
+| YAML配置 | 声明式配置、热重载、版本控制友好 |
+| Agent实例持久化 | 简单JSON、启动时全量加载到内存 |
 
-#### 建议2：ChromaDB保持可选依赖（优先级：中）
+**优势**: 人类可读、Git版本控制、无需数据库依赖、调试方便
 
-**理由**：
-- ChromaDB为可选依赖，不可用时自动降级到SQLite FTS5
-- 向量搜索在知识检索场景有显著优势
-- 但需解决DB-09（集合分裂）问题
+**局限**: 无原子性保证(需atomic_write辅助)、无索引、并发写入需加锁、大量文件时性能下降
 
-**改进建议**：
-- 统一为单集合，通过元数据`embedding_tier`区分嵌入级别
-- 增加ChromaDB健康检查和自动修复机制
-- 考虑`sqlite-vss`作为ChromaDB的轻量替代
+### 6.4 内存状态 适用场景
 
-#### 建议3：配置文件保持YAML/JSON格式（优先级：低）
+| 场景 | 理由 |
+|------|------|
+| 活跃工作流缓存 | 频繁读写、延迟敏感、启动时从文件恢复 |
+| 资源LRU缓存 | 热数据加速、TTL过期淘汰、容量上限 |
+| 加载阶段状态 | 全局单例、高频读取、阶段推进时持久化 |
+| Token使用指标 | 实时累加、按工具统计、无需持久化(会话级) |
 
-**理由**：
-- 配置文件需要人类可读和Git可追踪
-- YAML/JSON是Skill系统的标准配置格式
-- 不适合迁移到SQLite（配置变更频率低，查询需求低）
+**优势**: 零延迟、无序列化开销
 
-**改进建议**：
-- 合并分散的配置到统一入口（解决DB-05）
-- 增加配置文件校验和热重载机制
+**局限**: 进程重启丢失(需启动恢复)、多进程不共享、内存占用
 
-#### 建议4：引入sqlite-vec/sqlite-vss替代ChromaDB（优先级：低，长期）
+### 6.5 选型决策矩阵
 
-**理由**：
-- 减少外部依赖（ChromaDB依赖链较重）
-- 统一存储引擎为SQLite
-- 向量搜索与结构化查询在同一事务中
-
-**风险**：
-- sqlite-vec/sqlite-vss成熟度不如ChromaDB
-- 嵌入维度限制（部分实现限制向量维度）
-- 性能可能不如专用向量数据库
-
-### 7.3 技术选型决策矩阵
-
-| 需求 | SQLite | ChromaDB | 文件系统 | 内存 |
-|------|--------|----------|----------|------|
-| 结构化查询 | ★★★★★ | ★★☆☆☆ | ★☆☆☆☆ | ★★★☆☆ |
-| 全文搜索 | ★★★★☆(FTS5) | ★☆☆☆☆ | ★★☆☆☆ | ★☆☆☆☆ |
-| 向量搜索 | ★★☆☆☆(vss) | ★★★★★ | ☆☆☆☆☆ | ★☆☆☆☆ |
-| 事务支持 | ★★★★★ | ★★☆☆☆ | ☆☆☆☆☆ | ☆☆☆☆☆ |
-| 零配置部署 | ★★★★★ | ★★★☆☆ | ★★★★★ | ★★★★★ |
-| 并发读取 | ★★★★☆(WAL) | ★★★☆☆ | ★★★★★ | ★★★★★ |
-| 人类可读 | ★☆☆☆☆ | ☆☆☆☆☆ | ★★★★★ | ☆☆☆☆☆ |
-| Git友好 | ★★☆☆☆ | ☆☆☆☆☆ | ★★★★★ | ☆☆☆☆☆ |
-| 持久性 | ★★★★★ | ★★★★☆ | ★★★★★ | ☆☆☆☆☆ |
-
-### 7.4 推荐架构
-
-```mermaid
-graph TB
-    subgraph 统一持久层
-        SQLite["SQLite (WAL模式)<br/>知识条目<br/>会话状态<br/>决策日志<br/>Token预算<br/>经验模式<br/>版本历史<br/>操作日志"]
-    end
-
-    subgraph 向量层(可选)
-        Chroma["ChromaDB<br/>语义嵌入向量<br/>单集合+元数据标记"]
-        AltVec["sqlite-vec<br/>(长期替代方案)"]
-    end
-
-    subgraph 配置层
-        YAML["YAML/JSON<br/>default.yaml<br/>constraints.yaml<br/>registry.yaml<br/>routes.yaml<br/>hooks.json"]
-    end
-
-    subgraph 缓存层
-        ResourceState["resource_state.json<br/>渐进式加载状态"]
-        Memory["内存缓存<br/>降级状态<br/>嵌入级别<br/>WebSocket连接"]
-    end
-
-    subgraph 文件层
-        Export["Markdown导出<br/>{scope}/{category}/*.md"]
-        Backup["备份文件<br/>backup/"]
-        Log["运行日志<br/>logs/"]
-    end
-
-    SQLite --> Chroma
-    SQLite --> AltVec
-    Memory --> SQLite
-    Memory --> Chroma
-    ResourceState --> Memory
-```
-
-### 7.5 问题修复优先级
-
-| 优先级 | 问题编号 | 修复建议 | 预估工作量 |
-|--------|----------|----------|-----------|
-| P0 | DB-01 | 引入双写确认机制：SQLite写入成功后标记pending，ChromaDB写入成功后标记ready，增加定时对账 | 3天 |
-| P0 | DB-08 | 备份默认启用加密（生成随机密钥写入.knowledge/目录），或至少在备份元数据中标记加密状态 | 1天 |
-| P1 | DB-09 | 统一ChromaDB为单集合，通过元数据embedding_tier区分 | 2天 |
-| P1 | DB-02 | 迁移DB-M01：SessionState结构化存储 | 2天 |
-| P1 | DB-03 | 迁移DB-M02：DecisionLog结构化存储 | 1天 |
-| P1 | DB-04 | 迁移DB-M03：TokenBudgetState持久化 | 1天 |
-| P2 | DB-07 | 迁移DB-M04：ExperiencePattern索引化 | 1天 |
-| P2 | DB-05 | 合并配置入口，增加配置校验 | 2天 |
-| P2 | DB-06 | resource_state.json格式迁移（已实现自动升级） | 0天 |
-| P3 | DB-10 | 增加Schema迁移回滚机制 | 3天 |
-
----
-
-> 文档结束 | 生成时间: 2026-05-24 | 基于 xuansto-skill-v2 v8.0.0 源码分析
+| 数据类型 | 推荐存储 | 备选存储 | 降级方案 |
+|----------|----------|----------|----------|
+| 知识条目(元数据) | SQLite | - | 文件系统扫描 |
+| 知识条目(向量) | ChromaDB | - | SQLite FTS5 BM25 |
+| 知识条目(原文) | 文件系统 | - | SQLite content字段 |
+| 决策记录 | SQLite(FTS5) | - | JSON文件 |
+| 工作流状态 | 文件系统(JSON) | SQLite | 内存(重启丢失) |
+| 会话状态 | 文件系统(JSON+MD) | SQLite | 内存 |
+| Agent实例 | 文件系统(JSON) | SQLite | 内存 |
+| 加载状态 | 文件系统(JSON) | SQLite | 内存 |
+| Token预算 | 文件系统(JSON) + SQLite双写 | - | 内存 |
+| 降级状态 | SQLite | - | 内存 |
+| 运行指标 | SQLite | - | 内存(定期持久化) |
+| 配置 | YAML文件 | - | 硬编码默认值 |
+| 资源缓存 | 内存(LRU) | - | 重新加载 |

@@ -110,6 +110,24 @@ _RESOURCE_PRIORITY_MAP = {
     "P3_optional": 3,
 }
 
+COMMAND_PHASE_MAP: dict[str, LoadPhase] = {
+    "/init": LoadPhase.FUNCTIONAL,
+    "/sprint": LoadPhase.FUNCTIONAL,
+    "/implement": LoadPhase.FUNCTIONAL,
+    "/audit": LoadPhase.ENHANCED,
+    "/refactor": LoadPhase.ENHANCED,
+    "/loop": LoadPhase.ENHANCED,
+    "/build-desktop": LoadPhase.FULL,
+    "/deploy": LoadPhase.FULL,
+}
+
+PHASE_SKILL_MAP: dict[int, LoadPhase] = {
+    0: LoadPhase.SKELETON,
+    1: LoadPhase.FUNCTIONAL,
+    2: LoadPhase.ENHANCED,
+    3: LoadPhase.FULL,
+}
+
 
 @dataclass
 class LoadingState:
@@ -117,14 +135,20 @@ class LoadingState:
     loaded_resources: list[str] = field(default_factory=list)
     progress: dict[str, dict[str, Any]] = field(default_factory=dict)
     last_updated: float = field(default_factory=time.time)
+    degraded: bool = False
+    degraded_from: Optional[str] = None
 
     def to_dict(self) -> dict:
-        return {
+        result = {
             "phase": self.current_phase.value,
             "loaded": self.loaded_resources,
             "progress": self.progress,
             "last_updated": self.last_updated,
         }
+        if self.degraded:
+            result["degraded"] = True
+            result["degraded_from"] = self.degraded_from
+        return result
 
     @classmethod
     def from_dict(cls, data: dict) -> "LoadingState":
@@ -155,11 +179,18 @@ class LoadingState:
         if not isinstance(last_updated, (int, float)):
             last_updated = time.time()
 
+        degraded = bool(data.get("degraded", False))
+        degraded_from = data.get("degraded_from")
+        if degraded_from is not None and not isinstance(degraded_from, str):
+            degraded_from = None
+
         return cls(
             current_phase=phase,
             loaded_resources=loaded,
             progress=progress,
             last_updated=last_updated,
+            degraded=degraded,
+            degraded_from=degraded_from,
         )
 
 
@@ -183,6 +214,8 @@ class ProgressiveLoader:
 
         now = time.time()
         self._state.current_phase = target_phase
+        self._state.degraded = False
+        self._state.degraded_from = None
 
         new_resources = _PHASE_AVAILABLE_RESOURCES.get(target_phase, [])
         for res in new_resources:
@@ -231,16 +264,24 @@ class ProgressiveLoader:
         current = self._state.current_phase
 
         if current == LoadPhase.FULL:
+            self._state.degraded = True
+            self._state.degraded_from = current.value
             self._state.current_phase = LoadPhase.ENHANCED
             self._remove_resources_for_phase(LoadPhase.FULL)
         elif current == LoadPhase.ENHANCED:
+            self._state.degraded = True
+            self._state.degraded_from = current.value
             self._state.current_phase = LoadPhase.FUNCTIONAL
             self._remove_resources_for_phase(LoadPhase.ENHANCED)
         elif current == LoadPhase.FUNCTIONAL:
             idle_seconds = now - self._last_activity_time
             if idle_seconds > 300:
+                self._state.degraded = True
+                self._state.degraded_from = current.value
                 self._state.current_phase = LoadPhase.SKELETON
                 self._remove_resources_for_phase(LoadPhase.FUNCTIONAL)
+            else:
+                return self._state
         else:
             return self._state
 
@@ -263,6 +304,17 @@ class ProgressiveLoader:
 
     def record_activity(self):
         self._last_activity_time = time.time()
+
+    def get_phase_for_command(self, command: str) -> Optional[LoadPhase]:
+        return COMMAND_PHASE_MAP.get(command)
+
+    def sync_from_skill_phase(self, skill_phase: int) -> LoadingState:
+        target = PHASE_SKILL_MAP.get(skill_phase)
+        if target is None:
+            return self._state
+        if target.index > self._state.current_phase.index:
+            return self.advance_phase(target)
+        return self._state
 
     def to_dict(self) -> dict:
         return self._state.to_dict()

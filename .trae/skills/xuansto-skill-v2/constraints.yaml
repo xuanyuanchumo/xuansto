@@ -186,20 +186,55 @@ degradation:
   script_fallback: "使用 python scripts/xxx.py --format json 调用"
   result_format: "降级模式下结果包装为与MCP工具相同的JSON结构"
   tool_fallbacks:
-    skill_analyze: "scripts/skill-test.py --analyze"
-    quality_gate_check: "scripts/skill-test.py --gate"
-    knowledge_search: "scripts/knowledge-server.py --search"
-    knowledge_inject: "scripts/knowledge_server/main.py --inject"
-    spec_drift_detect: "scripts/spec-drift-detector.py → 内联漂移检测"
-    security_scan: "scripts/agentic-security-scanner.py → 内联agentic+dependency扫描"
-    code_simplify: "scripts/code-simplifier.py → 内联simplify+dedup"
-    session_manage: "scripts/init-session.py / scripts/session-catchup.py / scripts/session-persist.py"
-    workflow_dispatch: "scripts/project-initializer.py (start) / 内联Phase推进"
-    agent_status: "静态注册表查询(agents/目录) / scripts/skill-test.py --agents"
-    hook_manage: "scripts/check-encoding.py / scripts/token-budget-guard.py / scripts/session-persist.py / 内联Hook执行"
-    resource_load_status: "内联状态检查(resource_state.json)"
-    context_compress: "scripts/context-compressor.py"
-    server_health: "scripts/health-checker.py → 降级状态返回"
+    skill_analyze:
+      script: scripts/skill_analyze.py
+      args: ["--format", "json"]
+    quality_gate_check:
+      script: scripts/quality_gate_check.py
+      args: ["--format", "json"]
+    spec_drift_detect:
+      script: scripts/spec_drift_detect.py
+      args: ["--format", "json"]
+      inline: _inline_spec_drift_detect
+    security_scan:
+      script: scripts/security_scan.py
+      args: ["--format", "json"]
+      inline: _inline_security_scan
+    code_simplify:
+      script: scripts/code_simplify.py
+      args: ["--format", "json"]
+      inline: _inline_code_simplify
+    session_manage:
+      script: scripts/session_manage.py
+      args: ["--format", "json"]
+    workflow_dispatch:
+      script: scripts/workflow_dispatch.py
+      args: ["--format", "json"]
+      inline: _inline_workflow_dispatch
+    agent_status:
+      script: scripts/agent_status.py
+      args: ["--format", "json"]
+      inline: _inline_agent_status
+    hook_manage:
+      script: scripts/hook_manage.py
+      args: ["--format", "json"]
+      inline: _inline_hook_manage
+    context_compress:
+      script: scripts/context_compress.py
+      args: ["--format", "json"]
+    server_health:
+      script: scripts/server_health.py
+      args: ["--format", "json"]
+      inline: _inline_server_health
+    decision_log:
+      script: scripts/decision_log.py
+      args: ["--format", "json"]
+    token_budget:
+      script: scripts/token_budget.py
+      args: ["--format", "json"]
+    knowledge_inject:
+      script: scripts/knowledge_inject.py
+      args: ["--format", "json"]
   knowledge_search_degradation: "ChromaDB→SQLite FTS→关键词匹配"
 
 key_rules:

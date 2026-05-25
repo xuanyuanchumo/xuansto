@@ -11,6 +11,7 @@
 .trae/skills/xuansto-skill-v2/.knowledge/backup/
 
 .xuansto/
+chroma_db/
 
 .venv/
 .venv2/
@@ -38,6 +39,14 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+.env.production
+
+credentials/
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
 
 *.log
 logs/

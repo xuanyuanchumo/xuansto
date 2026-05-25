@@ -6,7 +6,8 @@ from datetime import datetime, timezone
 from .config import mcp_available, make_response, make_error_response
 from .security import InputValidator, SensitiveContentFilter
 from .progressive_loader import LoadPhase, ProgressiveLoader
-from .skill_tools import get_skill_tool_definitions, SkillToolHandler, SKILL_TOOL_NAMES
+from .tools import get_skill_tool_definitions, SKILL_TOOL_NAMES
+from .skill_tools import SkillToolHandler
 
 logger = logging.getLogger("knowledge-server")
 
@@ -1088,6 +1089,8 @@ def register_mcp_tools(server, mcp_server):
                     "available_commands": loader.get_available_commands(),
                     "disclosure_note": loader.get_disclosure_note(),
                     "upgrade_hint": loader.get_upgrade_hint(),
+                    "degraded": state.degraded,
+                    "degraded_from": state.degraded_from,
                     "timestamp": now_iso,
                 }
                 return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
@@ -1114,6 +1117,8 @@ def register_mcp_tools(server, mcp_server):
                     "available_commands": loader.get_available_commands(),
                     "disclosure_note": loader.get_disclosure_note(),
                     "upgrade_hint": loader.get_upgrade_hint(),
+                    "degraded": state.degraded,
+                    "degraded_from": state.degraded_from,
                     "timestamp": now_iso,
                 }
                 return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
@@ -1131,6 +1136,8 @@ def register_mcp_tools(server, mcp_server):
                     "cached_resources": list(progress.keys()),
                     "cache_details": progress,
                     "loaded_count": len(state.loaded_resources),
+                    "degraded": state.degraded,
+                    "degraded_from": state.degraded_from,
                     "timestamp": now_iso,
                 }
                 return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
@@ -1146,6 +1153,8 @@ def register_mcp_tools(server, mcp_server):
                     "loaded_count": len(state.loaded_resources),
                     "disclosure_note": loader.get_disclosure_note(),
                     "upgrade_hint": loader.get_upgrade_hint(),
+                    "degraded": state.degraded,
+                    "degraded_from": state.degraded_from,
                     "timestamp": now_iso,
                 }
                 return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
@@ -1163,6 +1172,8 @@ def register_mcp_tools(server, mcp_server):
                     "progress": progress,
                     "total_resources": len(loader.get_available_resources()),
                     "loaded_count": len(state.loaded_resources),
+                    "degraded": state.degraded,
+                    "degraded_from": state.degraded_from,
                     "timestamp": now_iso,
                 }
                 return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
