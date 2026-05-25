@@ -92,7 +92,7 @@ async def test_server_health_includes_performance_metrics():
             tool_fn = fn
             break
 
-    result = await tool_fn.fn()
+    result = await tool_fn.fn(action="check")
     data = result["data"]
     assert "performance_metrics" in data
     pm = data["performance_metrics"]
@@ -116,7 +116,7 @@ async def test_server_health_empty_performance_metrics():
             tool_fn = fn
             break
 
-    result = await tool_fn.fn()
+    result = await tool_fn.fn(action="check")
     data = result["data"]
     assert "performance_metrics" in data
     assert data["performance_metrics"] == {}

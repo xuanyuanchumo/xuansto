@@ -107,7 +107,7 @@ def test_export_decisions_json(decisions_dir, decisions_db):
          patch("xuansto_mcp.tools.decision_log.DECISIONS_DB", decisions_db), \
          patch("xuansto_mcp.tools.decision_log.notify"):
         _log_decision(title="Export test")
-        result = _export_decisions(format="json")
+        result = _export_decisions(export_format="json")
         assert result["format"] == "json"
         assert result["total"] >= 1
 
@@ -117,7 +117,7 @@ def test_export_decisions_markdown(decisions_dir, decisions_db):
          patch("xuansto_mcp.tools.decision_log.DECISIONS_DB", decisions_db), \
          patch("xuansto_mcp.tools.decision_log.notify"):
         _log_decision(title="MD Export", decision="Use MD")
-        result = _export_decisions(format="markdown")
+        result = _export_decisions(export_format="markdown")
         assert result["format"] == "markdown"
         assert "ADR" in result["content"]
 
@@ -157,7 +157,7 @@ async def test_decision_log_export_positive(mcp_server, decisions_dir, decisions
     tool_fn = mcp_server._tool_manager._tools["decision_log"].fn
     with patch("xuansto_mcp.tools.decision_log.DECISIONS_FILE", decisions_dir), \
          patch("xuansto_mcp.tools.decision_log.DECISIONS_DB", decisions_db):
-        result = await tool_fn(action="export", format="json")
+        result = await tool_fn(action="export", export_format="json")
         assert result.get("error") is False
 
 

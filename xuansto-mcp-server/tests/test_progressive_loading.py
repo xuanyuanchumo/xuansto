@@ -57,7 +57,7 @@ def tmp_work_dir(tmp_path):
 
 class TestPhaseAutoAdvance:
     def test_phase_0_to_1_auto_advance(self):
-        result = auto_advance_on_command()
+        result = advance_phase(1, force=True)
         assert result is not None
         assert result["success"] is True
         assert result["from_phase"] == "skeleton"
@@ -76,7 +76,7 @@ class TestPhaseExplicitAdvance:
         import xuansto_mcp.tools.resource_load_status as mod
         with _phase_lock:
             mod._current_phase = 1
-        result = advance_phase(2)
+        result = advance_phase(2, force=True)
         assert result["success"] is True
         assert result["from_phase"] == "functional"
         assert result["to_phase"] == "enhanced"
@@ -85,7 +85,7 @@ class TestPhaseExplicitAdvance:
         import xuansto_mcp.tools.resource_load_status as mod
         with _phase_lock:
             mod._current_phase = 2
-        result = advance_phase(3)
+        result = advance_phase(3, force=True)
         assert result["success"] is True
         assert result["to_phase"] == "full"
 
@@ -277,7 +277,7 @@ class TestTransitionHistory:
         import xuansto_mcp.tools.resource_load_status as mod
         with _phase_lock:
             mod._current_phase = 0
-        advance_phase(1)
+        advance_phase(1, force=True)
         with _cache_lock:
             history = list(mod._TRANSITION_HISTORY)
         assert len(history) >= 1

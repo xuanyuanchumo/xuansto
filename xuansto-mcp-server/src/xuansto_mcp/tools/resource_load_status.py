@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import threading
@@ -13,12 +14,12 @@ from mcp.types import ToolAnnotations
 
 from ..core import atomic_write
 from ..core.cache import LRUCache
-from ..core.config import SKILL_ROOT, REFERENCES_DIR, AGENTS_DIR, COMMANDS_DIR, TEMPLATES_DIR, WORK_DIR
-from ..core.errors import make_error_response, make_success_response, XuanstoMCPError, ERR_VALIDATION
+from ..core.config import SKILL_ROOT, WORK_DIR
+from ..core.errors import ERR_VALIDATION, make_error_response, make_success_response
 from ..core.logging_config import get_logger
 from ..core.notifications import notify, send_mcp_notification
 from ..core.validator import validate_input
-from ..models.schemas import ResourceLoadStatusInput, DisclosureTransition
+from ..models.schemas import DisclosureTransition, ResourceLoadStatusInput
 
 logger = get_logger("resource_load_status")
 
@@ -76,6 +77,13 @@ PHASE_TOKEN_BUDGET: dict[int, int] = {
     1: 5000,
     2: 10000,
     3: 20000,
+}
+
+PHASE_NAME_TOKEN_BUDGET: dict[str, int] = {
+    "skeleton": 2000,
+    "functional": 5000,
+    "enhanced": 10000,
+    "full": 20000,
 }
 
 PHASE_AVAILABLE_FUNCTIONS: dict[int, dict[str, bool]] = {
@@ -145,6 +153,7 @@ _CACHE_TTL_SECONDS = 3600
 _CACHE_MAX_ENTRIES = 100
 
 _resource_lru = LRUCache(maxsize=_CACHE_MAX_ENTRIES)
+_RESOURCE_CACHE = _resource_lru
 
 _cache_lock = threading.Lock()
 
@@ -198,8 +207,51 @@ _UPGRADE_HINTS: dict[int, str] = {
     3: "已达最高阶段，无需升级",
 }
 
+PHASE_TRANSITION_CONDITIONS: dict[str, dict[str, Any]] = {
+    "skeleton_to_functional": {
+        "min_tools_available": 5,
+        "min_resources_loaded": 3,
+        "description": "核心工具和基础资源已加载",
+    },
+    "functional_to_enhanced": {
+        "min_tools_available": 12,
+        "min_resources_loaded": 10,
+        "description": "大部分工具和参考文档已加载",
+    },
+    "enhanced_to_full": {
+        "min_tools_available": 20,
+        "min_resources_loaded": 18,
+        "description": "所有工具、资源和Hook系统已加载",
+    },
+}
+
+PHASE_AVAILABLE_FEATURES: dict[str, dict[str, list[str]]] = {
+    "skeleton": {
+        "available": ["/status", "/help", "/budget", "基础状态查询"],
+        "unavailable": ["工作流执行", "Agent管理", "知识检索", "代码分析"],
+    },
+    "functional": {
+        "available": ["/init", "/plan", "/implement", "工作流执行", "Agent管理", "知识检索"],
+        "unavailable": ["完整参考文档", "Hook系统", "高级分析"],
+    },
+    "enhanced": {
+        "available": ["/review", "/test", "/fix", "完整参考文档", "高级分析"],
+        "unavailable": ["Hook系统", "全部配置选项"],
+    },
+    "full": {
+        "available": ["所有31个命令", "Hook系统", "全部配置选项", "完整审计日志"],
+        "unavailable": [],
+    },
+}
+
+_PHASE_TRANSITION_KEYS: dict[int, str] = {
+    0: "skeleton_to_functional",
+    1: "functional_to_enhanced",
+    2: "enhanced_to_full",
+}
+
 _PHASE_AVAILABLE_COMMANDS: dict[int, list[str]] = {
-    0: ["/status", "/agent-status", "/init"],
+    0: ["/status", "/help", "/budget"],
     1: ["/sprint", "/clarify", "/plan", "/spec", "/design", "/implement", "/test", "/review", "/fix", "/accept", "/deploy", "/build", "/brainstorm", "/execute-plan", "/status", "/agent-status", "/init"],
     2: ["/sprint", "/clarify", "/plan", "/spec", "/design", "/implement", "/test", "/review", "/fix", "/accept", "/deploy", "/build", "/brainstorm", "/execute-plan", "/audit", "/build-desktop", "/release-desktop", "/refactor", "/simplify", "/loop", "/cancel-loop", "/learn", "/design-system", "/rollback", "/status", "/agent-status", "/init"],
     3: ["/sprint", "/clarify", "/plan", "/spec", "/design", "/implement", "/test", "/review", "/fix", "/accept", "/deploy", "/build-desktop", "/release-desktop", "/refactor", "/audit", "/agent-status", "/learn", "/brainstorm", "/execute-plan", "/design-system", "/simplify", "/loop", "/cancel-loop", "/build", "/init", "/status", "/rollback"],
@@ -223,6 +275,22 @@ _current_phase: int = 0
 
 _phase_lock = threading.RLock()
 
+_phase_state: dict[str, Any] = {
+    "phase_metrics": {
+        "skeleton": {"tokens_consumed": 0, "load_duration_ms": 0, "resources_loaded": 0},
+        "functional": {"tokens_consumed": 0, "load_duration_ms": 0, "resources_loaded": 0},
+        "enhanced": {"tokens_consumed": 0, "load_duration_ms": 0, "resources_loaded": 0},
+        "full": {"tokens_consumed": 0, "load_duration_ms": 0, "resources_loaded": 0},
+    },
+    "phase_transition_timestamps": {
+        "skeleton": None,
+        "functional": None,
+        "enhanced": None,
+        "full": None,
+    },
+    "last_transition_at": None,
+}
+
 
 def _get_loading_disclosure() -> dict[str, Any]:
     state_file = WORK_DIR / "resource_state.json"
@@ -245,6 +313,12 @@ def _get_loading_disclosure() -> dict[str, Any]:
     token_budget = PHASE_TOKEN_BUDGET.get(current_phase, PHASE_TOKEN_BUDGET[0])
     with _PHASE_TOKEN_USAGE_LOCK:
         phase_usage = _PHASE_TOKEN_USAGE.get(current_phase, {"estimated_tokens": 0, "resource_count": 0})
+    if not isinstance(phase_usage, dict):
+        phase_usage = {"estimated_tokens": 0, "resource_count": 0}
+    phase_usage = {
+        "estimated_tokens": _safe_int(phase_usage.get("estimated_tokens")),
+        "resource_count": _safe_int(phase_usage.get("resource_count")),
+    }
     return {
         "available_functions": available_functions,
         "disclosure_note": disclosure_note,
@@ -301,12 +375,23 @@ def _estimate_tokens(text: str) -> int:
     return max(1, len(text) // _TOKEN_ESTIMATE_RATIO)
 
 
+def _safe_int(value: Any, default: int = 0) -> int:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, (float, str)):
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return default
+    return default
+
+
 def _update_phase_token_usage(phase: int, estimated_tokens: int) -> None:
     with _PHASE_TOKEN_USAGE_LOCK:
         if phase not in _PHASE_TOKEN_USAGE:
             _PHASE_TOKEN_USAGE[phase] = {"estimated_tokens": 0, "resource_count": 0}
-        _PHASE_TOKEN_USAGE[phase]["estimated_tokens"] += estimated_tokens
-        _PHASE_TOKEN_USAGE[phase]["resource_count"] += 1
+        _PHASE_TOKEN_USAGE[phase]["estimated_tokens"] = _safe_int(_PHASE_TOKEN_USAGE[phase].get("estimated_tokens")) + estimated_tokens
+        _PHASE_TOKEN_USAGE[phase]["resource_count"] = _safe_int(_PHASE_TOKEN_USAGE[phase].get("resource_count")) + 1
 
 
 def record_token_usage(tool_name: str, input_text: str, output_text: str) -> None:
@@ -320,9 +405,9 @@ def record_token_usage(tool_name: str, input_text: str, output_text: str) -> Non
                 "call_count": 0,
             }
         metrics = _TOKEN_METRICS[tool_name]
-        metrics["total_input_tokens"] += input_tokens
-        metrics["total_output_tokens"] += output_tokens
-        metrics["call_count"] += 1
+        metrics["total_input_tokens"] = _safe_int(metrics.get("total_input_tokens")) + input_tokens
+        metrics["total_output_tokens"] = _safe_int(metrics.get("total_output_tokens")) + output_tokens
+        metrics["call_count"] = _safe_int(metrics.get("call_count")) + 1
 
 
 def _compute_file_hash(path: Path) -> str:
@@ -559,12 +644,83 @@ def can_advance_to(target_phase: int) -> bool:
         return target_phase > _current_phase
 
 
-def advance_phase(target_phase: int) -> dict[str, Any]:
+def _check_transition_conditions(from_phase: int) -> dict[str, Any]:
+    transition_key = _PHASE_TRANSITION_KEYS.get(from_phase)
+    if transition_key is None:
+        return {"can_transition": True, "conditions_met": True, "missing": [], "description": "已达最高阶段或无需条件"}
+    conditions = PHASE_TRANSITION_CONDITIONS.get(transition_key, {})
+    min_tools = conditions.get("min_tools_available", 0)
+    min_resources = conditions.get("min_resources_loaded", 0)
+    description = conditions.get("description", "")
+    loaded_resources = _get_loaded_resources()
+    loaded_count = len(loaded_resources)
+    with _PHASE_TOKEN_USAGE_LOCK:
+        tools_snapshot = dict(_PHASE_TOKEN_USAGE)
+    tools_available = sum(1 for v in tools_snapshot.values() if isinstance(v, dict) and _safe_int(v.get("resource_count")) > 0)
+    missing: list[str] = []
+    if loaded_count < min_resources:
+        missing.append(f"资源加载不足: 当前{loaded_count}, 需要{min_resources}")
+    if tools_available < min_tools:
+        missing.append(f"工具可用不足: 当前{tools_available}, 需要{min_tools}")
+    can_transition = len(missing) == 0
+    return {
+        "can_transition": can_transition,
+        "conditions_met": can_transition,
+        "transition_key": transition_key,
+        "description": description,
+        "current_tools_available": tools_available,
+        "min_tools_available": min_tools,
+        "current_resources_loaded": loaded_count,
+        "min_resources_loaded": min_resources,
+        "missing": missing,
+    }
+
+
+def advance_phase(target_phase: int, force: bool = False) -> dict[str, Any]:
     global _current_phase
     if not can_advance_to(target_phase):
         return {"success": False, "reason": "invalid_target", "current_phase": _current_phase, "target_phase": target_phase}
     with _phase_lock:
         from_phase = _current_phase
+        if not force:
+            transition_check = _check_transition_conditions(from_phase)
+            if not transition_check["can_transition"]:
+                return {
+                    "success": False,
+                    "reason": "conditions_not_met",
+                    "current_phase": from_phase,
+                    "target_phase": target_phase,
+                    "transition_check": transition_check,
+                    "hint": "使用 force=True 可跳过条件验证",
+                }
+        now_iso = datetime.now(timezone.utc).isoformat()
+        now_ts = time.time()
+        from_name = PHASE_NAMES.get(from_phase, "skeleton")
+        to_name = PHASE_NAMES.get(target_phase, "skeleton")
+        last_transition_at = _phase_state.get("last_transition_at")
+        duration_ms = 0
+        if last_transition_at is not None:
+            try:
+                from datetime import datetime as _dt
+                last_dt = _dt.fromisoformat(last_transition_at)
+                duration_ms = int((now_ts - last_dt.timestamp()) * 1000)
+            except (ValueError, OSError):
+                pass
+        with _PHASE_TOKEN_USAGE_LOCK:
+            phase_usage = dict(_PHASE_TOKEN_USAGE)
+        cumulative_tokens = 0
+        for v in phase_usage.values():
+            if isinstance(v, dict):
+                cumulative_tokens += _safe_int(v.get("estimated_tokens"))
+        phase_resources = PHASE_RESOURCE_MAP.get(target_phase, [])
+        resources_loaded_count = sum(1 for r in phase_resources if r["id"] in _get_loaded_resources())
+        _phase_state["phase_metrics"][to_name] = {
+            "tokens_consumed": cumulative_tokens,
+            "load_duration_ms": duration_ms,
+            "resources_loaded": resources_loaded_count,
+        }
+        _phase_state["phase_transition_timestamps"][to_name] = now_iso
+        _phase_state["last_transition_at"] = now_iso
         _current_phase = target_phase
     from_name = PHASE_NAMES.get(from_phase, "skeleton")
     to_name = PHASE_NAMES.get(target_phase, "skeleton")
@@ -582,6 +738,15 @@ def advance_phase(target_phase: int) -> dict[str, Any]:
         "to_phase": to_name,
     })
     notify(f"Phase advanced: {from_name} -> {to_name}", "info")
+    new_budget = PHASE_TOKEN_BUDGET.get(target_phase, PHASE_TOKEN_BUDGET[3])
+    try:
+        from .token_budget import _set_budget
+        budget_result = _set_budget(total_budget=new_budget)
+        logger.info("Token budget auto-updated on phase advance to %s: %d", to_name, new_budget)
+        notify(f"Token budget auto-set to {new_budget} for phase {to_name}", "info")
+    except Exception as exc:
+        budget_result = {"error": str(exc)}
+        logger.warning("Failed to auto-update token budget on phase advance: %s", exc)
     state_file = _get_state_file()
     try:
         state_data = json.loads(state_file.read_text(encoding="utf-8")) if state_file.exists() else {}
@@ -589,7 +754,22 @@ def advance_phase(target_phase: int) -> dict[str, Any]:
         atomic_write(state_file, json.dumps(state_data, ensure_ascii=False, indent=2))
     except (json.JSONDecodeError, OSError):
         pass
-    return {"success": True, "from_phase": from_name, "to_phase": to_name, "loaded_resources": resources}
+    from_features = PHASE_AVAILABLE_FEATURES.get(from_name, {})
+    to_features = PHASE_AVAILABLE_FEATURES.get(to_name, {})
+    newly_available = [f for f in to_features.get("available", []) if f not in from_features.get("available", [])]
+    still_unavailable = to_features.get("unavailable", [])
+    result = {
+        "success": True,
+        "from_phase": from_name,
+        "to_phase": to_name,
+        "loaded_resources": resources,
+        "newly_available": newly_available,
+        "still_unavailable": still_unavailable,
+        "phase_metrics": _phase_state["phase_metrics"].get(to_name, {}),
+    }
+    if isinstance(budget_result, dict) and "error" not in budget_result:
+        result["token_budget_update"] = budget_result
+    return result
 
 
 def degrade_phase() -> dict[str, Any]:
@@ -628,9 +808,10 @@ def check_token_budget() -> dict[str, Any]:
     with _phase_lock:
         current = _current_phase
     budget = PHASE_TOKEN_BUDGETS.get(current, 2000)
+    budget = _safe_int(budget, 2000)
     with _PHASE_TOKEN_USAGE_LOCK:
         usage_data = _PHASE_TOKEN_USAGE.get(current, {"estimated_tokens": 0})
-    estimated_tokens = usage_data.get("estimated_tokens", 0) if isinstance(usage_data, dict) else 0
+    estimated_tokens = _safe_int(usage_data.get("estimated_tokens", 0)) if isinstance(usage_data, dict) else 0
     usage_ratio = estimated_tokens / budget if budget > 0 else 0
     exceeded = usage_ratio >= 0.8
     result: dict[str, Any] = {
@@ -732,11 +913,13 @@ def register(mcp: FastMCP) -> None:
         logger.info("resource_load_status called: action=%s", action)
         try:
             if action == "status":
+                with _phase_lock:
+                    current_phase_idx = _current_phase
                 resources = []
                 if phase is not None:
                     resources = _collect_resources_up_to_phase(phase)
                 elif resource_ids:
-                    for pid, res_list in PHASE_RESOURCE_MAP.items():
+                    for _pid, res_list in PHASE_RESOURCE_MAP.items():
                         for r in res_list:
                             if r["id"] in resource_ids:
                                 resources.append(r)
@@ -745,14 +928,14 @@ def register(mcp: FastMCP) -> None:
                 result = []
                 resource_map = {}
                 for r in resources:
-                    status = _check_resource_status(r["id"], r["path"])
-                    entry = {"id": r["id"], "type": r["type"], "path": r["path"], "status": status, "phase": None}
+                    r_status = _check_resource_status(r["id"], r["path"])
+                    entry = {"id": r["id"], "type": r["type"], "path": r["path"], "status": r_status, "phase": None}
                     for pid, res_list in PHASE_RESOURCE_MAP.items():
                         if any(res["id"] == r["id"] for res in res_list):
                             entry["phase"] = pid
                             break
                     result.append(entry)
-                    resource_map[r["id"]] = {"status": status, "type": r["type"], "path": r["path"], "phase": entry["phase"]}
+                    resource_map[r["id"]] = {"status": r_status, "type": r["type"], "path": r["path"], "phase": entry["phase"]}
                 loaded = sum(1 for r in result if r["status"] == "loaded")
                 stale = sum(1 for r in result if r["status"] == "stale")
                 expired = sum(1 for r in result if r["status"] == "expired")
@@ -761,22 +944,42 @@ def register(mcp: FastMCP) -> None:
                     recent_transitions = list(_TRANSITION_HISTORY[-5:])
                 with _PHASE_TOKEN_USAGE_LOCK:
                     phase_token_snapshot = dict(_PHASE_TOKEN_USAGE)
-                return make_success_response({
+                current_phase_name = PHASE_NAMES.get(current_phase_idx, "skeleton")
+                current_features = PHASE_AVAILABLE_FEATURES.get(current_phase_name, {"available": [], "unavailable": []})
+                transition_check = _check_transition_conditions(current_phase_idx)
+                response_data: dict[str, Any] = {
                     "resources": result,
                     "resources_map": resource_map,
                     "total": len(result),
                     "loaded": loaded,
                     "stale": stale,
                     "expired": expired,
+                    "current_phase": current_phase_idx,
+                    "current_phase_name": current_phase_name,
                     "available_functions": disclosure["available_functions"],
                     "disclosure_note": disclosure["disclosure_note"],
                     "upgrade_hint": disclosure["upgrade_hint"],
                     "available_commands": disclosure["available_commands"],
+                    "available_features": current_features,
                     "token_budget": disclosure["token_budget"],
                     "token_usage": disclosure["token_usage"],
                     "phase_token_usage": phase_token_snapshot,
+                    "phase_metrics": dict(_phase_state.get("phase_metrics", {})),
+                    "transition_check": transition_check,
                     "transitions": recent_transitions,
-                })
+                }
+                if current_phase_idx == PHASE_SKELETON:
+                    skeleton_allowed = _PHASE_AVAILABLE_COMMANDS.get(PHASE_SKELETON, [])
+                    response_data["skeleton_info"] = {
+                        "phase": "skeleton",
+                        "phase_index": PHASE_SKELETON,
+                        "available_commands": skeleton_allowed,
+                        "command_execution": False,
+                        "skeleton_allowed_commands": skeleton_allowed,
+                        "disclosure_note": _DISCLOSURE_NOTES.get(PHASE_SKELETON, ""),
+                        "upgrade_hint": _UPGRADE_HINTS.get(PHASE_SKELETON, ""),
+                    }
+                return make_success_response(response_data)
             elif action == "preload":
                 if priority not in ("critical", "normal", "background"):
                     return make_error_response(ValueError(f"无效优先级: {priority}，支持: critical, normal, background"), error_code=ERR_VALIDATION)
@@ -953,10 +1156,8 @@ def register(mcp: FastMCP) -> None:
                         source_hash = _compute_path_hash(full_path)
                         content = None
                         if full_path.is_file():
-                            try:
+                            with contextlib.suppress(OSError):
                                 content = full_path.read_text(encoding="utf-8")
-                            except OSError:
-                                pass
                         elif full_path.is_dir():
                             parts: list[str] = []
                             try:
@@ -987,7 +1188,7 @@ def register(mcp: FastMCP) -> None:
                         with _cache_lock:
                             _LOADED_PROGRESS["loaded_resources"] += 1
                 _set_loaded_resources(current)
-                transition_result = advance_phase(actual_phase)
+                transition_result = advance_phase(actual_phase, force=True)
                 with _cache_lock:
                     _LOADED_PROGRESS["loading"] = False
                     _LOADED_PROGRESS["completed_at"] = datetime.now(timezone.utc).isoformat()
@@ -1055,8 +1256,8 @@ def register(mcp: FastMCP) -> None:
             elif action == "loading_progress":
                 with _cache_lock:
                     progress = dict(_LOADED_PROGRESS)
-                total = progress["total_resources"]
-                loaded = progress["loaded_resources"]
+                total = _safe_int(progress.get("total_resources"))
+                loaded = _safe_int(progress.get("loaded_resources"))
                 progress_percent = (loaded / total * 100) if total > 0 else 0
                 with _phase_lock:
                     current_phase_idx = _current_phase
@@ -1106,13 +1307,16 @@ def register(mcp: FastMCP) -> None:
                 with _TOKEN_METRICS_LOCK:
                     metrics_snapshot = {}
                     for tool_name, metrics in _TOKEN_METRICS.items():
+                        inp = _safe_int(metrics.get("total_input_tokens"))
+                        out = _safe_int(metrics.get("total_output_tokens"))
+                        cnt = _safe_int(metrics.get("call_count"), 1)
                         metrics_snapshot[tool_name] = {
-                            "total_input_tokens": metrics["total_input_tokens"],
-                            "total_output_tokens": metrics["total_output_tokens"],
-                            "total_tokens": metrics["total_input_tokens"] + metrics["total_output_tokens"],
-                            "call_count": metrics["call_count"],
-                            "avg_input_tokens": round(metrics["total_input_tokens"] / max(metrics["call_count"], 1), 1),
-                            "avg_output_tokens": round(metrics["total_output_tokens"] / max(metrics["call_count"], 1), 1),
+                            "total_input_tokens": inp,
+                            "total_output_tokens": out,
+                            "total_tokens": inp + out,
+                            "call_count": cnt,
+                            "avg_input_tokens": round(inp / max(cnt, 1), 1),
+                            "avg_output_tokens": round(out / max(cnt, 1), 1),
                         }
                 total_input = sum(m["total_input_tokens"] for m in metrics_snapshot.values())
                 total_output = sum(m["total_output_tokens"] for m in metrics_snapshot.values())
@@ -1174,8 +1378,67 @@ def register(mcp: FastMCP) -> None:
                     "can_advance": can_advance,
                     "disclosure_transition": disclosure.model_dump(),
                 })
+            elif action == "transition_check":
+                with _phase_lock:
+                    current_phase_idx = _current_phase
+                current_phase_name = PHASE_NAMES.get(current_phase_idx, "skeleton")
+                next_phase_idx = current_phase_idx + 1 if current_phase_idx < 3 else None
+                next_phase_name = PHASE_NAMES.get(next_phase_idx) if next_phase_idx is not None else None
+                transition_check = _check_transition_conditions(current_phase_idx)
+                return make_success_response({
+                    "action": "transition_check",
+                    "current_phase": current_phase_name,
+                    "current_phase_index": current_phase_idx,
+                    "next_phase": next_phase_name,
+                    "next_phase_index": next_phase_idx,
+                    "can_advance": transition_check["can_transition"],
+                    "conditions_met": transition_check["conditions_met"],
+                    "missing": transition_check["missing"],
+                    "description": transition_check.get("description", ""),
+                    "transition_key": transition_check.get("transition_key", ""),
+                    "current_tools_available": transition_check.get("current_tools_available", 0),
+                    "min_tools_available": transition_check.get("min_tools_available", 0),
+                    "current_resources_loaded": transition_check.get("current_resources_loaded", 0),
+                    "min_resources_loaded": transition_check.get("min_resources_loaded", 0),
+                })
+            elif action == "features":
+                with _phase_lock:
+                    current_phase_idx = _current_phase
+                current_phase_name = PHASE_NAMES.get(current_phase_idx, "skeleton")
+                features = PHASE_AVAILABLE_FEATURES.get(current_phase_name, {"available": [], "unavailable": []})
+                return make_success_response({
+                    "action": "features",
+                    "current_phase": current_phase_name,
+                    "current_phase_index": current_phase_idx,
+                    "available": features.get("available", []),
+                    "unavailable": features.get("unavailable", []),
+                    "all_phases": {k: v for k, v in PHASE_AVAILABLE_FEATURES.items()},
+                })
+            elif action == "metrics":
+                with _phase_lock:
+                    current_phase_idx = _current_phase
+                current_phase_name = PHASE_NAMES.get(current_phase_idx, "skeleton")
+                phase_metrics = dict(_phase_state.get("phase_metrics", {}))
+                total_tokens = sum(_safe_int(m.get("tokens_consumed")) for m in phase_metrics.values() if isinstance(m, dict))
+                total_duration = sum(_safe_int(m.get("load_duration_ms")) for m in phase_metrics.values() if isinstance(m, dict))
+                total_resources = sum(_safe_int(m.get("resources_loaded")) for m in phase_metrics.values() if isinstance(m, dict))
+                with _PHASE_TOKEN_USAGE_LOCK:
+                    phase_token_snapshot = dict(_PHASE_TOKEN_USAGE)
+                return make_success_response({
+                    "action": "metrics",
+                    "current_phase": current_phase_name,
+                    "current_phase_index": current_phase_idx,
+                    "phase_metrics": phase_metrics,
+                    "phase_transition_timestamps": dict(_phase_state.get("phase_transition_timestamps", {})),
+                    "total": {
+                        "tokens_consumed": total_tokens,
+                        "load_duration_ms": total_duration,
+                        "resources_loaded": total_resources,
+                    },
+                    "phase_token_usage": phase_token_snapshot,
+                })
             else:
-                return make_error_response(ValueError(f"未知操作: {action}，支持: status, preload, cache, clear_cache, loading_progress, token_report, disclosure_transition"), error_code=ERR_VALIDATION)
+                return make_error_response(ValueError(f"未知操作: {action}，支持: status, preload, cache, clear_cache, loading_progress, token_report, disclosure_transition, transition_check, features, metrics"), error_code=ERR_VALIDATION)
         except Exception as e:
             logger.error("resource_load_status error: %s", e)
             return make_error_response(e)

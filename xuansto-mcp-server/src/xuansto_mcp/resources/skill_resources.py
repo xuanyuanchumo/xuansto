@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import threading
 import time
@@ -8,7 +9,19 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from ..core.config import SKILL_ROOT, REFERENCES_DIR, TEMPLATES_DIR, SESSION_DIR, WORK_DIR, AGENTS_DIR, COMMANDS_DIR, HOOKS_PATH, KNOWLEDGE_DIR, KNOWLEDGE_DB_PATH, KNOWLEDGE_CHROMA_PATH, _resolve_skill_file
+from ..core.config import (
+    AGENTS_DIR,
+    COMMANDS_DIR,
+    HOOKS_PATH,
+    KNOWLEDGE_CHROMA_PATH,
+    KNOWLEDGE_DB_PATH,
+    KNOWLEDGE_DIR,
+    REFERENCES_DIR,
+    SESSION_DIR,
+    TEMPLATES_DIR,
+    WORK_DIR,
+    _resolve_skill_file,
+)
 from ..core.logging_config import get_logger
 from ..core.validator import validate_path_safety
 
@@ -152,6 +165,17 @@ def register(mcp: FastMCP) -> None:
         except Exception as e:
             return _degraded_resource(f"xuansto://sessions/{session_id}", str(e))
 
+    @mcp.resource("xuansto://agents/{name}")
+    def agent_by_name(name: str) -> str:
+        try:
+            if AGENTS_DIR.exists():
+                for agent_file in AGENTS_DIR.rglob(f"{name}.md"):
+                    if agent_file.is_file():
+                        return agent_file.read_text(encoding="utf-8")
+            return json.dumps({"status": "not_found", "name": name}, ensure_ascii=False, indent=2)
+        except Exception as e:
+            return _degraded_resource(f"xuansto://agents/{name}", str(e))
+
     @mcp.resource("xuansto://agents/{layer}/{name}")
     def agent_by_layer_name(layer: str, name: str) -> str:
         try:
@@ -260,6 +284,54 @@ def register(mcp: FastMCP) -> None:
                 current_phase, disclosure_notes["skeleton"]
             )
 
+            phase_transition_history: list[dict[str, Any]] = []
+            performance_metrics: dict[str, Any] = {
+                "total_tokens_consumed": 0,
+                "avg_phase_transition_ms": 0,
+                "resource_load_count": 0,
+            }
+            try:
+                from ..tools.resource_load_status import (  # noqa: I001
+                    _TRANSITION_HISTORY as _TRANS_HIST,
+                    _TOKEN_METRICS as _TOK_METRICS,
+                    _TOKEN_METRICS_LOCK as _TOK_LOCK,
+                    _cache_lock as _rsrc_cache_lock,
+                )
+                with _rsrc_cache_lock:
+                    phase_transition_history = list(_TRANS_HIST[-20:])
+                with _TOK_LOCK:
+                    total_tokens = sum(
+                        m.get("total_input_tokens", 0) + m.get("total_output_tokens", 0)
+                        for m in _TOK_METRICS.values()
+                    )
+                    resource_load_count = sum(
+                        m.get("call_count", 0) for m in _TOK_METRICS.values()
+                    )
+                transition_durations: list[float] = []
+                for t in phase_transition_history:
+                    started = t.get("started_at")
+                    completed = t.get("completed_at")
+                    if started and completed:
+                        try:
+                            from datetime import datetime as _dt
+                            s = _dt.fromisoformat(started).timestamp()
+                            c = _dt.fromisoformat(completed).timestamp()
+                            transition_durations.append((c - s) * 1000)
+                        except (ValueError, OSError):
+                            pass
+                avg_transition_ms = (
+                    sum(transition_durations) / len(transition_durations)
+                    if transition_durations
+                    else 0
+                )
+                performance_metrics = {
+                    "total_tokens_consumed": total_tokens,
+                    "avg_phase_transition_ms": round(avg_transition_ms, 2),
+                    "resource_load_count": resource_load_count,
+                }
+            except Exception:
+                pass
+
             status = {
                 "current_phase": current_phase,
                 "phase_index": phase_index,
@@ -270,6 +342,8 @@ def register(mcp: FastMCP) -> None:
                 "available_functions": available_functions,
                 "loading_progress": loading_progress,
                 "disclosure_note": disclosure_note,
+                "phase_transition_history": phase_transition_history,
+                "performance_metrics": performance_metrics,
                 "timestamp": time.time(),
             }
             return json.dumps(status, ensure_ascii=False, indent=2)
@@ -284,15 +358,11 @@ def register(mcp: FastMCP) -> None:
             tool_metrics: dict[str, Any] = {}
             degradation_stats: dict[str, int] = {}
             if metrics_path.exists():
-                try:
+                with contextlib.suppress(json.JSONDecodeError, OSError):
                     tool_metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
-                except (json.JSONDecodeError, OSError):
-                    pass
             if degr_path.exists():
-                try:
+                with contextlib.suppress(json.JSONDecodeError, OSError):
                     degradation_stats = json.loads(degr_path.read_text(encoding="utf-8"))
-                except (json.JSONDecodeError, OSError):
-                    pass
             total_calls = sum(m.get("call_count", 0) for m in tool_metrics.values())
             total_errors = sum(m.get("error_count", 0) for m in tool_metrics.values())
             summary = {
@@ -429,6 +499,39 @@ def register(mcp: FastMCP) -> None:
         except Exception as e:
             return _degraded_resource("xuansto://knowledge/status", str(e))
 
+    @mcp.resource("xuansto://knowledge/stats")
+    def knowledge_stats() -> str:
+        try:
+            stats: dict[str, Any] = {
+                "knowledge_dir_exists": KNOWLEDGE_DIR.exists(),
+                "db_exists": KNOWLEDGE_DB_PATH.exists(),
+                "chroma_exists": KNOWLEDGE_CHROMA_PATH.exists(),
+            }
+            if KNOWLEDGE_DB_PATH.exists():
+                try:
+                    import sqlite3
+                    conn = sqlite3.connect(str(KNOWLEDGE_DB_PATH))
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT COUNT(*) FROM knowledge_entries WHERE deleted_at IS NULL")
+                    stats["db_entry_count"] = cursor.fetchone()[0]
+                    cursor.execute("SELECT scope, COUNT(*) FROM knowledge_entries WHERE deleted_at IS NULL GROUP BY scope")
+                    stats["by_scope"] = dict(cursor.fetchall())
+                    conn.close()
+                except Exception:
+                    stats["db_entry_count"] = -1
+            if KNOWLEDGE_CHROMA_PATH.exists():
+                try:
+                    import chromadb
+                    client = chromadb.PersistentClient(path=str(KNOWLEDGE_CHROMA_PATH))
+                    collection = client.get_or_create_collection("knowledge")
+                    stats["chroma_entry_count"] = collection.count()
+                except Exception:
+                    stats["chroma_entry_count"] = -1
+            stats["timestamp"] = time.time()
+            return json.dumps(stats, ensure_ascii=False, indent=2)
+        except Exception as e:
+            return _degraded_resource("xuansto://knowledge/stats", str(e))
+
     @mcp.resource("xuansto://templates/index")
     def templates_index() -> str:
         try:
@@ -490,3 +593,13 @@ def register(mcp: FastMCP) -> None:
             return json.dumps(health, ensure_ascii=False, indent=2)
         except Exception as e:
             return _degraded_resource("xuansto://health/status", str(e))
+
+    @mcp.resource("xuansto://audit/log")
+    def audit_log() -> str:
+        try:
+            from ..core.audit_logger import get_audit_logger
+            logger = get_audit_logger()
+            entries = logger.query(limit=50)
+            return json.dumps({"entries": entries, "count": len(entries)}, ensure_ascii=False, indent=2)
+        except Exception as e:
+            return _degraded_resource("xuansto://audit/log", str(e))

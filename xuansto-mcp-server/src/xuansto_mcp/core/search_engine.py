@@ -10,9 +10,9 @@ from typing import Any, Protocol, runtime_checkable
 from .config import (
     KNOWLEDGE_CHROMA_PATH,
     KNOWLEDGE_DB_PATH,
+    KNOWLEDGE_EXPERIENCE_DIR,
     KNOWLEDGE_GENERAL_DIR,
     KNOWLEDGE_WORKSPACE_DIR,
-    KNOWLEDGE_EXPERIENCE_DIR,
     REFERENCES_DIR,
 )
 from .logging_config import get_logger
@@ -233,10 +233,7 @@ class SQLiteFTSSearchEngine:
                     rows = cursor.fetchall()
                 items: list[SearchResult] = []
                 for row in rows:
-                    if "bm25_score" in row:
-                        relevance = self._bm25_score_to_relevance(row["bm25_score"])
-                    else:
-                        relevance = 0.3
+                    relevance = self._bm25_score_to_relevance(row["bm25_score"]) if "bm25_score" in row else 0.3
                     if relevance < min_confidence:
                         continue
                     items.append(SearchResult(
@@ -341,10 +338,9 @@ def get_search_engine(name: str | None = None) -> SearchEngine:
     if engine_class is None:
         logger.warning("Search engine '%s' not found, falling back to simple", engine_name)
         return SimpleSearchEngine()
-    if engine_name in ("chromadb", "hybrid"):
-        if not _is_chromadb_available():
-            logger.warning("ChromaDB not available, falling back to SQLite FTS5 + BM25")
-            return SQLiteFTSSearchEngine()
+    if engine_name in ("chromadb", "hybrid") and not _is_chromadb_available():
+        logger.warning("ChromaDB not available, falling back to SQLite FTS5 + BM25")
+        return SQLiteFTSSearchEngine()
     return engine_class()
 
 

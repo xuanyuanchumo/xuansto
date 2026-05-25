@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import gzip
 import hashlib
 import json
@@ -15,9 +16,16 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from ..core.config import QUALITY_GATES_PHASE_MAP, SKILL_ROOT, WORK_DIR, WORKFLOWS_DIR, _resolve_skill_file
-from ..core.errors import XuanstoMCPError, make_error_response, make_success_response, ERR_VALIDATION, ERR_NOT_FOUND, ERR_INTERNAL
 from ..core import atomic_write
+from ..core.config import QUALITY_GATES_PHASE_MAP, WORK_DIR, WORKFLOWS_DIR, _resolve_skill_file
+from ..core.database import delete_workflow_state, load_workflow_states, save_workflow_state
+from ..core.errors import (
+    ERR_INTERNAL,
+    ERR_VALIDATION,
+    XuanstoMCPError,
+    make_error_response,
+    make_success_response,
+)
 from ..core.logging_config import get_logger
 from ..core.notifications import notify
 from ..core.validator import validate_input
@@ -170,6 +178,29 @@ def load_on_startup() -> None:
     )
     _persist_active_workflows()
 
+    restored_from_db = 0
+    try:
+        db_workflows = load_workflow_states(status="active")
+        with _workflows_lock:
+            for db_wf in db_workflows:
+                wid = db_wf.get("workflow_id", "")
+                if wid and wid not in _ACTIVE_WORKFLOWS:
+                    entry = {
+                        "workflow_id": wid,
+                        "workflow": db_wf.get("workflow_type", ""),
+                        "project_path": db_wf.get("project_path", "."),
+                        "status": "running",
+                        "current_phase": db_wf.get("current_phase", 0),
+                        "completed_phases": db_wf.get("completed_phases_json", []) or [],
+                    }
+                    _ACTIVE_WORKFLOWS[wid] = entry
+                    restored_from_db += 1
+        if restored_from_db > 0:
+            logger.info("Restored %d workflow instances from SQLite", restored_from_db)
+            _persist_active_workflows()
+    except Exception as exc:
+        logger.warning("Failed to restore workflow instances from SQLite: %s", exc)
+
 def _list_workflows() -> list[dict[str, Any]]:
     if not WORKFLOWS_DIR.exists():
         return []
@@ -210,6 +241,7 @@ def _start_workflow(workflow: str, project_path: str) -> dict[str, Any]:
         "current_phase": 0,
         "started_at": datetime.now(timezone.utc).isoformat(),
         "completed_phases": [],
+        "phase_definitions": [],
     }
     definition = _parse_workflow_definition(workflow)
     if definition and "phases" in definition:
@@ -218,6 +250,17 @@ def _start_workflow(workflow: str, project_path: str) -> dict[str, Any]:
         _ACTIVE_WORKFLOWS[workflow_id] = entry
     _persist_workflow(workflow_id, entry)
     _persist_active_workflows()
+    try:
+        save_workflow_state(
+            workflow_id=workflow_id,
+            workflow_type=workflow,
+            current_phase=0,
+            project_path=project_path,
+            completed_phases=[],
+            status="active",
+        )
+    except Exception:
+        logger.debug("Failed to persist workflow state to SQLite for %s", workflow_id)
     notify(f"Workflow {workflow} started: {workflow_id}", "info")
     return entry
 
@@ -244,6 +287,10 @@ def _abort_workflow(workflow_id: str) -> dict[str, Any]:
     entry["aborted_at"] = datetime.now(timezone.utc).isoformat()
     _persist_workflow(workflow_id, entry)
     _persist_active_workflows()
+    try:
+        delete_workflow_state(workflow_id)
+    except Exception:
+        logger.debug("Failed to delete workflow state from SQLite for %s", workflow_id)
     notify(f"Workflow aborted: {workflow_id}", "warning")
     return entry
 
@@ -257,7 +304,15 @@ def _advance_phase(workflow_id: str) -> dict[str, Any]:
         phase_defs = state.get("phase_definitions", [])
         phase_gates = []
         for p in phase_defs:
-            if p.get("id") == current_phase:
+            phase_id = p.get("id")
+            id_match = (
+                phase_id == current_phase
+                or (isinstance(phase_id, str) and isinstance(current_phase, int) and phase_id == f"phase-{current_phase}")
+                or (isinstance(phase_id, int) and isinstance(current_phase, str) and current_phase == f"phase-{phase_id}")
+                or (isinstance(phase_id, str) and phase_id.isdigit() and int(phase_id) == current_phase)
+                or (isinstance(current_phase, str) and current_phase.isdigit() and int(current_phase) == phase_id)
+            )
+            if id_match:
                 phase_gates = p.get("gates", [])
                 break
         gates = phase_gates if phase_gates else QUALITY_GATES_PHASE_MAP.get(str(current_phase), [])
@@ -330,6 +385,18 @@ def _advance_phase(workflow_id: str) -> dict[str, Any]:
             active_state = _ACTIVE_WORKFLOWS.get(workflow_id, state)
         _persist_active_workflows()
         _save_snapshot(workflow_id, active_state, project_path)
+        try:
+            wf_type = state.get("workflow", "")
+            save_workflow_state(
+                workflow_id=workflow_id,
+                workflow_type=wf_type,
+                current_phase=new_phase,
+                project_path=project_path,
+                completed_phases=completed,
+                status="active" if new_phase <= 8 else "completed",
+            )
+        except Exception:
+            logger.debug("Failed to update workflow state in SQLite for %s", workflow_id)
         if new_phase > 8:
             notify(f"Workflow completed: {workflow_id}", "info")
         else:
@@ -398,16 +465,12 @@ def _save_snapshot(workflow_id: str, state: dict[str, Any], project_path: str) -
             gz_path.unlink()
         os.replace(tmp_path, str(gz_path))
     except Exception:
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(tmp_path)
-        except OSError:
-            pass
         raise
     if snapshot_path.exists():
-        try:
+        with contextlib.suppress(OSError):
             snapshot_path.unlink()
-        except OSError:
-            pass
     _cleanup_snapshots(workflow_id, project_path)
     return gz_path
 

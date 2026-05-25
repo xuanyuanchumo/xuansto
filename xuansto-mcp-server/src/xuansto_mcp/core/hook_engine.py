@@ -3,9 +3,10 @@ from __future__ import annotations
 import asyncio
 import json
 import threading
+from collections.abc import Callable
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from .logging_config import get_logger
 
@@ -40,6 +41,8 @@ _AsyncPostHookType = Callable[[str, dict[str, Any], dict[str, Any]], Any]
 
 _HOOK_FAILURE_THRESHOLD = 5
 
+DEFAULT_HOOK_TIMEOUT_SECONDS = 30.0
+
 _hook_failure_counts: dict[str, int] = {}
 
 
@@ -68,7 +71,7 @@ def _resolve_hook_type(hook_type: str | HookType) -> HookType:
 
 
 class HookEngine:
-    def __init__(self) -> None:
+    def __init__(self, hook_timeout: float | None = None) -> None:
         self._pre_hooks: dict[str, list[_PreHookType | _AsyncPreHookType]] = {}
         self._post_hooks: dict[str, list[_PostHookType | _AsyncPostHookType]] = {}
         self._phase_enter_hooks: dict[str, list[Callable[..., Any]]] = {}
@@ -80,6 +83,7 @@ class HookEngine:
         self._global_pre_hooks: list[_PreHookType | _AsyncPreHookType] = []
         self._global_post_hooks: list[_PostHookType | _AsyncPostHookType] = []
         self._lock = threading.Lock()
+        self._hook_timeout = hook_timeout if hook_timeout is not None else DEFAULT_HOOK_TIMEOUT_SECONDS
 
     def register_hook(self, hook_type: str | HookType, handler: Callable[..., Any], tool_name: str | None = None) -> None:
         resolved = _resolve_hook_type(hook_type)
@@ -153,9 +157,9 @@ class HookEngine:
             handler_name = getattr(handler, "__name__", str(handler))
             try:
                 if asyncio.iscoroutinefunction(handler):
-                    result = await handler(tool_name, kwargs)
+                    result = await asyncio.wait_for(handler(tool_name, kwargs), timeout=self._hook_timeout)
                 else:
-                    result = await asyncio.to_thread(handler, tool_name, kwargs)
+                    result = await asyncio.wait_for(asyncio.to_thread(handler, tool_name, kwargs), timeout=self._hook_timeout)
 
                 if isinstance(result, tuple) and len(result) == 2:
                     hook_results, hook_errors = result
@@ -168,6 +172,9 @@ class HookEngine:
                 elif isinstance(result, list):
                     all_results.extend(result)
                 _reset_hook_failure_count(handler_name)
+            except asyncio.TimeoutError:
+                logger.warning("Hook %s timed out after %.1fs, skipping", handler_name, self._hook_timeout)
+                all_errors.append({"hook": handler_name, "error": f"timeout after {self._hook_timeout:.1f}s"})
             except Exception as e:
                 all_errors.append({"hook": handler_name, "error": str(e)})
                 logger.error("Pre-hook %s failed: %s", handler_name, e)
@@ -185,13 +192,16 @@ class HookEngine:
             handler_name = getattr(handler, "__name__", str(handler))
             try:
                 if asyncio.iscoroutinefunction(handler):
-                    hook_errors = await handler(tool_name, kwargs, result)
+                    hook_errors = await asyncio.wait_for(handler(tool_name, kwargs, result), timeout=self._hook_timeout)
                 else:
-                    hook_errors = await asyncio.to_thread(handler, tool_name, kwargs, result)
+                    hook_errors = await asyncio.wait_for(asyncio.to_thread(handler, tool_name, kwargs, result), timeout=self._hook_timeout)
 
                 if isinstance(hook_errors, list):
                     all_errors.extend(hook_errors)
                 _reset_hook_failure_count(handler_name)
+            except asyncio.TimeoutError:
+                logger.warning("Hook %s timed out after %.1fs, skipping", handler_name, self._hook_timeout)
+                all_errors.append({"hook": handler_name, "error": f"timeout after {self._hook_timeout:.1f}s"})
             except Exception as e:
                 all_errors.append({"hook": handler_name, "error": str(e)})
                 logger.error("Post-hook %s failed: %s", handler_name, e)
@@ -215,6 +225,14 @@ class HookEngine:
 
         if not isinstance(data, dict):
             return
+
+        timeout_val = data.get("hook_timeout_seconds")
+        if timeout_val is not None:
+            try:
+                self._hook_timeout = float(timeout_val)
+                logger.info("Hook timeout set to %.1fs from config", self._hook_timeout)
+            except (ValueError, TypeError):
+                logger.warning("Invalid hook_timeout_seconds value in config: %s", timeout_val)
 
         hooks = data.get("hooks", [])
         if not isinstance(hooks, list):

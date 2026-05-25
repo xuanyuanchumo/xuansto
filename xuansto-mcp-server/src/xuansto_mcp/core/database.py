@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import sqlite3
 import threading
+import time
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-from .config import WORK_DIR, KNOWLEDGE_DIR
+from .config import KNOWLEDGE_DIR, WORK_DIR
 from .logging_config import get_logger
 
 logger = get_logger("database")
@@ -116,6 +119,30 @@ CREATE TABLE IF NOT EXISTS experience_patterns (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS agent_states (
+    agent_id TEXT PRIMARY KEY,
+    agent_name TEXT NOT NULL,
+    agent_type TEXT NOT NULL,
+    phase INTEGER,
+    status TEXT DEFAULT 'active',
+    config_json TEXT,
+    created_at REAL,
+    updated_at REAL
+);
+
+CREATE TABLE IF NOT EXISTS workflow_states (
+    workflow_id TEXT PRIMARY KEY,
+    workflow_type TEXT NOT NULL,
+    current_phase INTEGER DEFAULT 0,
+    project_path TEXT,
+    completed_phases_json TEXT,
+    tasks_json TEXT,
+    decisions_json TEXT,
+    status TEXT DEFAULT 'active',
+    created_at REAL,
+    updated_at REAL
+);
 """
 
 _CREATE_INDEXES_SQL = """
@@ -136,6 +163,10 @@ CREATE INDEX IF NOT EXISTS idx_reconciliation_log_entry_id ON reconciliation_log
 CREATE INDEX IF NOT EXISTS idx_token_budget_states_session ON token_budget_states(session_id);
 CREATE INDEX IF NOT EXISTS idx_experience_patterns_error_type ON experience_patterns(error_type);
 CREATE INDEX IF NOT EXISTS idx_experience_patterns_status ON experience_patterns(status);
+CREATE INDEX IF NOT EXISTS idx_agent_states_status ON agent_states(status);
+CREATE INDEX IF NOT EXISTS idx_agent_states_agent_type ON agent_states(agent_type);
+CREATE INDEX IF NOT EXISTS idx_workflow_states_status ON workflow_states(status);
+CREATE INDEX IF NOT EXISTS idx_workflow_states_workflow_type ON workflow_states(workflow_type);
 """
 
 
@@ -156,10 +187,8 @@ def init_db() -> None:
         try:
             conn.executescript(_CREATE_TABLES_SQL)
             conn.executescript(_CREATE_INDEXES_SQL)
-            try:
+            with contextlib.suppress(Exception):
                 conn.execute("ALTER TABLE knowledge_entries ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'ready'")
-            except Exception:
-                pass
             conn.commit()
             logger.info("Database initialized at %s", DB_PATH)
         except Exception as exc:
@@ -238,7 +267,7 @@ def persist_state(table: str, data: dict[str, Any]) -> None:
                 placeholders = ", ".join(["?"] * len(columns))
                 col_str = ", ".join(columns)
                 values = [row_id] + list(all_fields.values())
-                update_sets = ", ".join(f"{col} = excluded.{col}" for col in all_fields.keys())
+                update_sets = ", ".join(f"{col} = excluded.{col}" for col in all_fields)
                 upsert_sql = f"INSERT INTO {table} ({col_str}) VALUES ({placeholders}) ON CONFLICT(id) DO UPDATE SET {update_sets}"
                 conn.execute(upsert_sql, values)
             conn.commit()
@@ -278,10 +307,8 @@ def load_state(table: str, query: dict[str, Any] | None = None) -> list[dict[str
             d = dict(row)
             for key in list(d.keys()):
                 if key.endswith("_json") and isinstance(d[key], str):
-                    try:
+                    with contextlib.suppress(json.JSONDecodeError, TypeError):
                         d[key] = json.loads(d[key])
-                    except (json.JSONDecodeError, TypeError):
-                        pass
             results.append(d)
         return results
     except Exception as exc:
@@ -443,3 +470,247 @@ def is_fts5_available() -> bool:
 
 def rollback_schema(version: str) -> dict[str, Any]:
     return {"status": "not_supported", "version": version, "message": "Schema rollback is not yet supported. Use backup/restore instead."}
+
+
+def cleanup_knowledge_versions(keep_last_n: int = 10, keep_marked: bool = True) -> dict[str, Any]:
+    with _db_lock:
+        conn = get_db()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM knowledge_entries WHERE deleted_at IS NULL")
+            total_active = cursor.fetchone()[0]
+            cursor.execute(
+                "SELECT scope, title, COUNT(*) as cnt "
+                "FROM knowledge_entries "
+                "WHERE deleted_at IS NULL "
+                "GROUP BY scope, title "
+                "HAVING cnt > ?",
+                (keep_last_n,),
+            )
+            groups_to_clean = cursor.fetchall()
+            total_deleted = 0
+            details: list[dict[str, Any]] = []
+            for row in groups_to_clean:
+                scope = row["scope"] if "scope" in row else row[0]
+                title = row["title"] if "title" in row else row[1]
+                count = row["cnt"] if "cnt" in row else row[2]
+                if keep_marked:
+                    cursor.execute(
+                        "SELECT id, metadata_json FROM knowledge_entries "
+                        "WHERE scope = ? AND title = ? AND deleted_at IS NULL "
+                        "ORDER BY updated_at DESC",
+                        (scope, title),
+                    )
+                    all_entries = cursor.fetchall()
+                    ids_to_delete = []
+                    for i, entry in enumerate(all_entries):
+                        if i < keep_last_n:
+                            continue
+                        metadata = {}
+                        raw_meta = entry["metadata_json"] if "metadata_json" in entry else entry[1]
+                        if isinstance(raw_meta, str):
+                            with contextlib.suppress(json.JSONDecodeError, TypeError):
+                                metadata = json.loads(raw_meta)
+                        elif isinstance(raw_meta, dict):
+                            metadata = raw_meta
+                        if metadata.get("important"):
+                            continue
+                        ids_to_delete.append(entry["id"] if "id" in entry else entry[0])
+                else:
+                    cursor.execute(
+                        "SELECT id FROM knowledge_entries "
+                        "WHERE scope = ? AND title = ? AND deleted_at IS NULL "
+                        "ORDER BY updated_at DESC "
+                        "LIMIT -1 OFFSET ?",
+                        (scope, title, keep_last_n),
+                    )
+                    ids_to_delete = [r["id"] if "id" in r else r[0] for r in cursor.fetchall()]
+                if ids_to_delete:
+                    placeholders = ", ".join(["?"] * len(ids_to_delete))
+                    now = datetime.now(timezone.utc).isoformat()
+                    cursor.execute(
+                        f"UPDATE knowledge_entries SET deleted_at = ? WHERE id IN ({placeholders})",
+                        [now] + ids_to_delete,
+                    )
+                    deleted_count = cursor.rowcount
+                    total_deleted += deleted_count
+                    details.append({
+                        "scope": scope,
+                        "title": title,
+                        "total_versions": count,
+                        "deleted": deleted_count,
+                        "kept": count - deleted_count,
+                    })
+            conn.commit()
+            logger.info("Knowledge version cleanup: deleted %d entries across %d groups", total_deleted, len(details))
+            return {
+                "total_active_before": total_active,
+                "total_deleted": total_deleted,
+                "groups_processed": len(details),
+                "keep_last_n": keep_last_n,
+                "keep_marked": keep_marked,
+                "details": details,
+            }
+        except Exception as exc:
+            logger.error("Knowledge version cleanup failed: %s", exc)
+            return {"error": True, "message": str(exc), "total_deleted": 0}
+        finally:
+            conn.close()
+
+
+def save_agent_state(
+    agent_id: str,
+    name: str,
+    agent_type: str,
+    phase: int | None = None,
+    status: str = "active",
+    config: dict[str, Any] | None = None,
+) -> None:
+    now = time.time()
+    config_json = json.dumps(config, ensure_ascii=False) if config else None
+    with _db_lock:
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT INTO agent_states (agent_id, agent_name, agent_type, phase, status, config_json, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(agent_id) DO UPDATE SET "
+                "agent_name=excluded.agent_name, agent_type=excluded.agent_type, "
+                "phase=excluded.phase, status=excluded.status, config_json=excluded.config_json, "
+                "updated_at=excluded.updated_at",
+                (agent_id, name, agent_type, phase, status, config_json, now, now),
+            )
+            conn.commit()
+            logger.debug("Saved agent state: %s", agent_id)
+        except Exception as exc:
+            logger.error("Failed to save agent state for %s: %s", agent_id, exc)
+        finally:
+            conn.close()
+
+
+def load_agent_states(status: str | None = "active") -> list[dict[str, Any]]:
+    try:
+        conn = get_db()
+        try:
+            if status is not None:
+                cursor = conn.execute(
+                    "SELECT agent_id, agent_name, agent_type, phase, status, config_json, created_at, updated_at "
+                    "FROM agent_states WHERE status = ?",
+                    (status,),
+                )
+            else:
+                cursor = conn.execute(
+                    "SELECT agent_id, agent_name, agent_type, phase, status, config_json, created_at, updated_at "
+                    "FROM agent_states",
+                )
+            rows = cursor.fetchall()
+            results: list[dict[str, Any]] = []
+            for row in rows:
+                d = dict(row)
+                if d.get("config_json") and isinstance(d["config_json"], str):
+                    with contextlib.suppress(json.JSONDecodeError, TypeError):
+                        d["config_json"] = json.loads(d["config_json"])
+                results.append(d)
+            return results
+        finally:
+            conn.close()
+    except Exception as exc:
+        logger.error("Failed to load agent states: %s", exc)
+        return []
+
+
+def delete_agent_state(agent_id: str) -> None:
+    with _db_lock:
+        conn = get_db()
+        try:
+            conn.execute("DELETE FROM agent_states WHERE agent_id = ?", (agent_id,))
+            conn.commit()
+            logger.debug("Deleted agent state: %s", agent_id)
+        except Exception as exc:
+            logger.error("Failed to delete agent state for %s: %s", agent_id, exc)
+        finally:
+            conn.close()
+
+
+def save_workflow_state(
+    workflow_id: str,
+    workflow_type: str,
+    current_phase: int = 0,
+    project_path: str | None = None,
+    completed_phases: list[int] | None = None,
+    tasks: dict[str, Any] | None = None,
+    decisions: dict[str, Any] | None = None,
+    status: str = "active",
+) -> None:
+    now = time.time()
+    completed_phases_json = json.dumps(completed_phases, ensure_ascii=False) if completed_phases is not None else None
+    tasks_json = json.dumps(tasks, ensure_ascii=False) if tasks is not None else None
+    decisions_json = json.dumps(decisions, ensure_ascii=False) if decisions is not None else None
+    with _db_lock:
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT INTO workflow_states (workflow_id, workflow_type, current_phase, project_path, "
+                "completed_phases_json, tasks_json, decisions_json, status, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(workflow_id) DO UPDATE SET "
+                "workflow_type=excluded.workflow_type, current_phase=excluded.current_phase, "
+                "project_path=excluded.project_path, completed_phases_json=excluded.completed_phases_json, "
+                "tasks_json=excluded.tasks_json, decisions_json=excluded.decisions_json, "
+                "status=excluded.status, updated_at=excluded.updated_at",
+                (workflow_id, workflow_type, current_phase, project_path,
+                 completed_phases_json, tasks_json, decisions_json, status, now, now),
+            )
+            conn.commit()
+            logger.debug("Saved workflow state: %s", workflow_id)
+        except Exception as exc:
+            logger.error("Failed to save workflow state for %s: %s", workflow_id, exc)
+        finally:
+            conn.close()
+
+
+def load_workflow_states(status: str | None = "active") -> list[dict[str, Any]]:
+    try:
+        conn = get_db()
+        try:
+            if status is not None:
+                cursor = conn.execute(
+                    "SELECT workflow_id, workflow_type, current_phase, project_path, "
+                    "completed_phases_json, tasks_json, decisions_json, status, created_at, updated_at "
+                    "FROM workflow_states WHERE status = ?",
+                    (status,),
+                )
+            else:
+                cursor = conn.execute(
+                    "SELECT workflow_id, workflow_type, current_phase, project_path, "
+                    "completed_phases_json, tasks_json, decisions_json, status, created_at, updated_at "
+                    "FROM workflow_states",
+                )
+            rows = cursor.fetchall()
+            results: list[dict[str, Any]] = []
+            for row in rows:
+                d = dict(row)
+                for key in ("completed_phases_json", "tasks_json", "decisions_json"):
+                    if d.get(key) and isinstance(d[key], str):
+                        with contextlib.suppress(json.JSONDecodeError, TypeError):
+                            d[key] = json.loads(d[key])
+                results.append(d)
+            return results
+        finally:
+            conn.close()
+    except Exception as exc:
+        logger.error("Failed to load workflow states: %s", exc)
+        return []
+
+
+def delete_workflow_state(workflow_id: str) -> None:
+    with _db_lock:
+        conn = get_db()
+        try:
+            conn.execute("DELETE FROM workflow_states WHERE workflow_id = ?", (workflow_id,))
+            conn.commit()
+            logger.debug("Deleted workflow state: %s", workflow_id)
+        except Exception as exc:
+            logger.error("Failed to delete workflow state for %s: %s", workflow_id, exc)
+        finally:
+            conn.close()

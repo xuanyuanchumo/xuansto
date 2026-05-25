@@ -162,7 +162,7 @@ def _ensure_knowledge_index() -> None:
 
 
 def _chromadb_search(query: str, top_k: int, scope: str | None, min_confidence: float) -> dict[str, Any] | None:
-    from ..tools.server_health import _DEGRADATION_COUNTS, _CHROMADB_DEGRADATION_KEY, _metrics_lock
+    from ..tools.server_health import _CHROMADB_DEGRADATION_KEY, _DEGRADATION_COUNTS, _metrics_lock
     with _metrics_lock:
         _degradation_count = _DEGRADATION_COUNTS.get(_CHROMADB_DEGRADATION_KEY, 0)
     if _degradation_count > 0:
@@ -289,6 +289,116 @@ def _keyword_fallback_search(query: str, top_k: int, scope: str | None) -> dict[
     return {"results": results, "total": len(results), "strategy": "keyword_tfidf"}
 
 
+_MAX_CHROMA_RETRY_ATTEMPTS = 3
+
+
+async def _retry_pending_chroma() -> dict[str, Any]:
+    from ..core.database import load_state, persist_state
+    pending_entries = load_state("knowledge_entries", {"sync_status": "pending"})
+    if not pending_entries:
+        return {"retried": 0, "succeeded": 0, "failed": 0}
+
+    retried = 0
+    succeeded = 0
+    failed = 0
+
+    for entry in pending_entries:
+        entry_id = entry.get("id", "")
+        if not entry_id:
+            continue
+        retried += 1
+        retry_count = 0
+        chroma_ok = False
+
+        while retry_count < _MAX_CHROMA_RETRY_ATTEMPTS and not chroma_ok:
+            retry_count += 1
+            try:
+                import chromadb
+                client = chromadb.PersistentClient(path=str(KNOWLEDGE_CHROMA_PATH))
+                collection = client.get_or_create_collection("knowledge")
+                content = entry.get("content", "")
+                title = entry.get("title", "")
+                metadata = {"title": title, "type": entry.get("scope", "general")}
+                collection.upsert(
+                    ids=[entry_id],
+                    documents=[content],
+                    metadatas=[metadata],
+                )
+                chroma_ok = True
+            except ImportError:
+                logger.warning("ChromaDB not available during retry for %s", entry_id)
+                break
+            except Exception as exc:
+                logger.debug("ChromaDB retry %d/%d for %s failed: %s", retry_count, _MAX_CHROMA_RETRY_ATTEMPTS, entry_id, exc)
+
+        if chroma_ok:
+            succeeded += 1
+            try:
+                entry["sync_status"] = "ready"
+                persist_state("knowledge_entries", entry)
+            except Exception:
+                logger.debug("Failed to update sync_status to ready for %s", entry_id)
+        else:
+            failed += 1
+            logger.warning(
+                "ChromaDB write failed after %d retries for entry %s, marking as failed",
+                _MAX_CHROMA_RETRY_ATTEMPTS, entry_id,
+            )
+            try:
+                entry["sync_status"] = "failed"
+                persist_state("knowledge_entries", entry)
+            except Exception:
+                logger.debug("Failed to update sync_status to failed for %s", entry_id)
+
+    return {"retried": retried, "succeeded": succeeded, "failed": failed}
+
+
+def _reconcile_chroma_sqlite() -> dict[str, Any]:
+    from ..core.database import load_state
+    all_entries = load_state("knowledge_entries")
+    if not all_entries:
+        return {"total": 0, "in_sync": 0, "pending": 0, "failed": 0, "missing_in_chroma": 0}
+
+    chroma_ids: set[str] = set()
+    try:
+        import chromadb
+        client = chromadb.PersistentClient(path=str(KNOWLEDGE_CHROMA_PATH))
+        collection = client.get_or_create_collection("knowledge")
+        chroma_results = collection.get(include=[])
+        chroma_ids = set(chroma_results.get("ids", []))
+    except ImportError:
+        logger.warning("ChromaDB not available for reconciliation")
+    except Exception as exc:
+        logger.warning("Failed to read ChromaDB during reconciliation: %s", exc)
+
+    in_sync = 0
+    pending = 0
+    failed = 0
+    missing_in_chroma = 0
+
+    for entry in all_entries:
+        entry_id = entry.get("id", "")
+        sync_status = entry.get("sync_status", "ready")
+        if sync_status == "ready":
+            in_sync += 1
+        elif sync_status == "pending":
+            pending += 1
+            if entry_id not in chroma_ids:
+                missing_in_chroma += 1
+        elif sync_status == "failed":
+            failed += 1
+            if entry_id not in chroma_ids:
+                missing_in_chroma += 1
+
+    return {
+        "total": len(all_entries),
+        "in_sync": in_sync,
+        "pending": pending,
+        "failed": failed,
+        "missing_in_chroma": missing_in_chroma,
+    }
+
+
 def register(mcp: FastMCP) -> None:
     @mcp.tool(
         annotations=ToolAnnotations(
@@ -305,8 +415,9 @@ def register(mcp: FastMCP) -> None:
         search_type: str = "hybrid",
         scope: str | None = None,
         min_confidence: float = 0.0,
+        keep_last_n: int = 10,
     ) -> dict[str, Any]:
-        """三层知识库（通用/工作区/经验）混合检索引擎。支持语义搜索(ChromaDB)、关键词搜索(SQLite FTS5)和混合模式，自动降级。仅支持retrieve操作，写入操作请使用knowledge_inject工具。"""
+        """三层知识库（通用/工作区/经验）混合检索引擎。支持语义搜索(ChromaDB)、关键词搜索(SQLite FTS5)和混合模式，自动降级。仅支持retrieve和cleanup_versions操作，写入操作请使用knowledge_inject工具。"""
         if action in ("inject", "precipitate"):
             return make_error_response(
                 ValueError(
@@ -323,11 +434,17 @@ def register(mcp: FastMCP) -> None:
             search_type=search_type,
             scope=scope,
             min_confidence=min_confidence,
+            keep_last_n=keep_last_n,
         )
         if err:
             return err
         logger.info("knowledge_search called: action=%s query=%s", action, query)
         try:
+            if action == "cleanup_versions":
+                from ..core.database import cleanup_knowledge_versions
+                result = cleanup_knowledge_versions(keep_last_n=keep_last_n, keep_marked=True)
+                return make_success_response(result)
+
             if not query:
                 return make_error_response(ValueError("retrieve action requires query parameter"), error_code=ERR_VALIDATION)
             _ensure_knowledge_index()

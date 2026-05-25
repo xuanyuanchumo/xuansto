@@ -158,7 +158,8 @@ disclosure:
   degradation_on_unavailable:
     command_execution:
       unavailable_in: "Phase 0"
-      behavior: "仅展示命令列表，不执行；提示用户执行任意命令以推进到Phase 1"
+      behavior: "仅展示命令列表，不执行；例外：/status和/help在Phase 0可用"
+      skeleton_allowed_commands: ["/status", "/help", "/budget"]
     workflow_details:
       unavailable_in: "Phase 0"
       behavior: "使用核心约束中的精简规则替代完整工作流定义"

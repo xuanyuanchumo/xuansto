@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import threading
 import time
@@ -8,9 +9,21 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from ..core.config import DATA_DIR, SKILL_ROOT, WORK_DIR, KNOWLEDGE_CHROMA_PATH, MCP_API_VERSION, MCP_MIN_SUPPORTED_VERSION, API_CHANGELOG, AGENTS_DIR, REFERENCES_DIR, COMMANDS_DIR, SKILL_MIN_VERSION
-from ..core.errors import make_success_response, make_error_response, ERR_VALIDATION
 from ..core import atomic_write
+from ..core.config import (
+    AGENTS_DIR,
+    API_CHANGELOG,
+    COMMANDS_DIR,
+    DATA_DIR,
+    KNOWLEDGE_CHROMA_PATH,
+    MCP_API_VERSION,
+    MCP_MIN_SUPPORTED_VERSION,
+    REFERENCES_DIR,
+    SKILL_MIN_VERSION,
+    SKILL_ROOT,
+    WORK_DIR,
+)
+from ..core.errors import ERR_VALIDATION, make_error_response, make_success_response
 from ..core.logging_config import get_logger
 from ..core.validator import validate_input
 from ..models.schemas import ServerHealthInput
@@ -75,9 +88,7 @@ def _should_persist() -> bool:
         return True
     if _last_metrics_persist_time == 0.0:
         return False
-    if (time.time() - _last_metrics_persist_time) >= _PERSIST_INTERVAL_SEC:
-        return True
-    return False
+    return time.time() - _last_metrics_persist_time >= _PERSIST_INTERVAL_SEC
 
 
 def _persist_metrics() -> None:
@@ -299,42 +310,48 @@ def register(mcp: FastMCP) -> None:
             openWorldHint=False,
         )
     )
-    async def server_health(action: str, client_version: str | None = None) -> dict[str, Any]:
-        """MCP Server 健康检查：返回服务器状态、版本、运行时间、配置路径和工具统计。支持API版本协商。"""
-        validated, val_err = validate_input(ServerHealthInput, action=action, client_version=client_version)
+    async def server_health(action: str, client_version: str | None = None, client_api_version: str | None = None) -> dict[str, Any]:
+        """MCP Server 健康检查：返回服务器状态、版本、运行时间、配置路径和工具统计。支持API版本协商。action=version时可通过client_api_version参数检查兼容性。"""
+        validated, val_err = validate_input(ServerHealthInput, action=action, client_version=client_version, client_api_version=client_api_version)
         if val_err:
             return val_err
         logger.info("server_health called: action=%s", action)
         try:
             from .. import __version__
-            from ..server import _REGISTERED_TOOL_NAMES, _REGISTERED_RESOURCE_NAMES
+            from ..server import _REGISTERED_RESOURCE_NAMES, _REGISTERED_TOOL_NAMES
 
             if action == "negotiate_version":
                 if not client_version:
                     return make_error_response(ValueError("negotiate_version操作需要client_version参数"), error_code=ERR_VALIDATION)
                 return make_success_response(_negotiate_api_version(client_version))
 
+            if action == "version":
+                effective_version = client_api_version or client_version
+                if effective_version:
+                    return make_success_response(_negotiate_api_version(effective_version))
+                return make_success_response({
+                    "server_version": MCP_API_VERSION,
+                    "min_supported_version": MCP_MIN_SUPPORTED_VERSION,
+                    "api_changelog": API_CHANGELOG,
+                })
+
             if action == "capabilities":
-                from ..server import _REGISTERED_TOOL_NAMES, _REGISTERED_RESOURCE_NAMES, _TOOL_REGISTRY
+                from ..server import _REGISTERED_RESOURCE_NAMES, _REGISTERED_TOOL_NAMES, _TOOL_REGISTRY
                 tool_capabilities = []
                 for tool_name in sorted(_REGISTERED_TOOL_NAMES):
                     tool_fn = _TOOL_REGISTRY.get(tool_name)
                     annotations = None
                     if tool_fn is not None:
-                        try:
+                        with contextlib.suppress(Exception):
                             annotations = getattr(tool_fn, "annotations", None)
-                        except Exception:
-                            pass
                     tool_entry: dict[str, Any] = {"name": tool_name, "available": True}
                     if annotations is not None:
-                        try:
+                        with contextlib.suppress(Exception):
                             tool_entry["annotations"] = {
                                 "read_only": getattr(annotations, "readOnlyHint", None),
                                 "destructive": getattr(annotations, "destructiveHint", None),
                                 "idempotent": getattr(annotations, "idempotentHint", None),
                             }
-                        except Exception:
-                            pass
                     tool_capabilities.append(tool_entry)
                 resource_capabilities = []
                 for res_name in sorted(_REGISTERED_RESOURCE_NAMES):
@@ -351,7 +368,7 @@ def register(mcp: FastMCP) -> None:
                     "api_version": MCP_API_VERSION,
                 })
 
-            from .workflow_dispatch import _load_all_workflows, _cleanup_all_snapshots
+            from .workflow_dispatch import _cleanup_all_snapshots, _load_all_workflows
 
             active_workflows = len(_load_all_workflows())
             global _last_snapshot_cleanup_time

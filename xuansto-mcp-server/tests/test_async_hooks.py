@@ -27,9 +27,9 @@ def test_async_hooks_use_to_thread():
 def test_server_wrapped_uses_async_hooks():
     server_path = Path(__file__).resolve().parent.parent / "src" / "xuansto_mcp" / "server.py"
     source = server_path.read_text(encoding="utf-8")
-    assert "async_execute_pre_hooks" in source
-    assert "async_execute_post_hooks" in source
+    assert "execute_pre_hooks" in source
+    assert "execute_post_hooks" in source
 
 
 def test_version_is_350():
-    assert __version__ == "3.5.0"
+    assert __version__ == "8.0.0"

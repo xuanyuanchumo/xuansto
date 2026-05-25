@@ -21,7 +21,7 @@ def test_server_starts():
 def test_tool_count():
     from xuansto_mcp.server import _REGISTERED_TOOL_NAMES
 
-    assert len(_REGISTERED_TOOL_NAMES) == 19
+    assert len(_REGISTERED_TOOL_NAMES) == 20
 
 
 def test_resource_count():
@@ -38,9 +38,7 @@ async def test_skill_analyze_tool(fresh_mcp, mock_config_paths, tmp_path):
     (test_skill_root / "scripts").mkdir(parents=True, exist_ok=True)
     (test_skill_root / "agents").mkdir(parents=True, exist_ok=True)
 
-    with patch("xuansto_mcp.tools.skill_analyze.SKILL_ROOT", test_skill_root), \
-         patch("xuansto_mcp.tools.skill_analyze.SCRIPTS_DIR", test_skill_root / "scripts"), \
-         patch("xuansto_mcp.tools.skill_analyze.AGENTS_DIR", test_skill_root / "agents"), \
+    with patch("xuansto_mcp.tools.skill_analyze.SCRIPTS_DIR", test_skill_root / "scripts"), \
          patch("xuansto_mcp.tools.skill_analyze.REFERENCES_DIR", test_skill_root / "references"):
         skill_analyze.register(fresh_mcp)
 
@@ -67,7 +65,7 @@ async def test_knowledge_search_retrieve(fresh_mcp, mock_config_paths, tmp_path)
          patch("xuansto_mcp.tools.knowledge_search.KNOWLEDGE_WORKSPACE_DIR", knowledge_dir / "workspace"), \
          patch("xuansto_mcp.tools.knowledge_search.KNOWLEDGE_EXPERIENCE_DIR", knowledge_dir / "experience"), \
          patch("xuansto_mcp.tools.knowledge_search.REFERENCES_DIR", mock_config_paths["references_dir"]), \
-         patch("xuansto_mcp.tools.knowledge_search.KNOWLEDGE_DIR", knowledge_dir):
+         patch("xuansto_mcp.core.config.KNOWLEDGE_DIR", knowledge_dir):
         knowledge_search.register(fresh_mcp)
 
     tools = fresh_mcp._tool_manager._tools
@@ -93,7 +91,7 @@ async def test_knowledge_search_rejects_inject(fresh_mcp, mock_config_paths, tmp
          patch("xuansto_mcp.tools.knowledge_search.KNOWLEDGE_WORKSPACE_DIR", knowledge_dir / "workspace"), \
          patch("xuansto_mcp.tools.knowledge_search.KNOWLEDGE_EXPERIENCE_DIR", knowledge_dir / "experience"), \
          patch("xuansto_mcp.tools.knowledge_search.REFERENCES_DIR", mock_config_paths["references_dir"]), \
-         patch("xuansto_mcp.tools.knowledge_search.KNOWLEDGE_DIR", knowledge_dir):
+         patch("xuansto_mcp.core.config.KNOWLEDGE_DIR", knowledge_dir):
         knowledge_search.register(fresh_mcp)
 
     tools = fresh_mcp._tool_manager._tools

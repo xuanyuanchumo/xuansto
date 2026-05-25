@@ -26,6 +26,7 @@ async def test_server_has_all_tools(mcp_server):
     expected_tools = [
         "skill_analyze",
         "knowledge_search",
+        "knowledge_inject",
         "quality_gate_check",
         "spec_drift_detect",
         "security_scan",
@@ -33,10 +34,16 @@ async def test_server_has_all_tools(mcp_server):
         "session_manage",
         "workflow_dispatch",
         "agent_status",
+        "agent_manage",
         "hook_manage",
         "resource_load_status",
         "context_compress",
         "server_health",
+        "decision_log",
+        "token_budget",
+        "project_init",
+        "metrics_report",
+        "config_manage",
     ]
     for tool_name in expected_tools:
         assert tool_name in tool_names, f"Missing tool: {tool_name}"
@@ -58,6 +65,7 @@ def test_all_tool_modules_register():
     from xuansto_mcp.tools import (
         skill_analyze,
         knowledge_search,
+        knowledge_inject,
         quality_gate_check,
         spec_drift_detect,
         security_scan,
@@ -65,15 +73,22 @@ def test_all_tool_modules_register():
         session_manage,
         workflow_dispatch,
         agent_status,
+        agent_manage,
         hook_manage,
         resource_load_status,
         context_compress,
         server_health,
+        decision_log,
+        token_budget,
+        project_init,
+        metrics_report,
+        config_manage,
     )
     test_mcp = FastMCP("test-registration")
     for module in [
         skill_analyze,
         knowledge_search,
+        knowledge_inject,
         quality_gate_check,
         spec_drift_detect,
         security_scan,
@@ -81,14 +96,20 @@ def test_all_tool_modules_register():
         session_manage,
         workflow_dispatch,
         agent_status,
+        agent_manage,
         hook_manage,
         resource_load_status,
         context_compress,
         server_health,
+        decision_log,
+        token_budget,
+        project_init,
+        metrics_report,
+        config_manage,
     ]:
         module.register(test_mcp)
     registered_tools = list(test_mcp._tool_manager._tools.keys())
-    assert len(registered_tools) == 13
+    assert len(registered_tools) == 20
 
 
 def test_pydantic_models_valid():
@@ -110,7 +131,7 @@ def test_pydantic_models_valid():
     assert sa.depth == "basic"
     assert sa.include_scripts is True
 
-    ks = KnowledgeSearchInput(query="test query")
+    ks = KnowledgeSearchInput(action="retrieve", query="test query")
     assert ks.top_k == 5
     assert ks.search_type == "hybrid"
 
@@ -162,7 +183,7 @@ def test_error_response_format():
     err = PathNotFoundError("/bad/path")
     resp = make_error_response(err)
     assert resp["error"] is True
-    assert resp["code"] == "PATH_NOT_FOUND"
+    assert resp["code"] == "ERR_NOT_FOUND"
     assert "/bad/path" in resp["message"]
 
     resp = make_success_response(data={"key": "value"})

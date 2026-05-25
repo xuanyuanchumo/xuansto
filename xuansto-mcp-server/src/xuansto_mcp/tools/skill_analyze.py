@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import re
 from pathlib import Path
 from typing import Any
@@ -7,8 +8,8 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from ..core.config import SKILL_ROOT, SCRIPTS_DIR, AGENTS_DIR, REFERENCES_DIR
-from ..core.errors import make_error_response, make_success_response, PathNotFoundError, ERR_NOT_FOUND, ERR_VALIDATION
+from ..core.config import REFERENCES_DIR, SCRIPTS_DIR
+from ..core.errors import ERR_NOT_FOUND, ERR_VALIDATION, PathNotFoundError, make_error_response, make_success_response
 from ..core.logging_config import get_logger
 from ..core.validator import validate_input, validate_path_safety
 from ..models.schemas import SkillAnalyzeInput
@@ -48,10 +49,8 @@ def _assess_project_scale(project_path: str) -> dict[str, Any]:
             continue
         if item.suffix.lower() in _SOURCE_EXTENSIONS:
             file_count += 1
-            try:
+            with contextlib.suppress(Exception):
                 loc_count += sum(1 for _ in item.open(encoding="utf-8", errors="ignore"))
-            except Exception:
-                pass
 
     scale_by_files = "small" if file_count < 20 else ("medium" if file_count <= 100 else "large")
     scale_by_loc = "small" if loc_count < 2000 else ("medium" if loc_count <= 20000 else "large")
@@ -96,7 +95,11 @@ _DEPTH_MAP = {
 }
 
 
-def _normalize_depth(depth: str) -> int:
+def _normalize_depth(depth: str | int) -> int:
+    if isinstance(depth, int):
+        return min(max(depth, 1), 3)
+    if isinstance(depth, str) and depth.isdigit():
+        return min(max(int(depth), 1), 3)
     return _DEPTH_MAP.get(depth, 1)
 
 

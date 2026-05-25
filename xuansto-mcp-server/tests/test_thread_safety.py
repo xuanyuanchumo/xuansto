@@ -15,7 +15,7 @@ from xuansto_mcp.tools.workflow_dispatch import (
     _ACTIVE_WORKFLOWS,
     _workflows_lock,
 )
-from xuansto_mcp.tools.agent_status import (
+from xuansto_mcp.tools.agent_manage import (
     _AGENT_INSTANCES,
     _agents_lock,
     _AgentInstance,

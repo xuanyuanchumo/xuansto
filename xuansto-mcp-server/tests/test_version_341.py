@@ -8,11 +8,11 @@ from xuansto_mcp.server import mcp
 
 
 def test_version_is_350():
-    assert __version__ == "5.0.0"
+    assert __version__ == "8.0.0"
 
 
 def test_server_instructions_version():
-    assert "v5.0.0" in mcp.instructions
+    assert "v8.0.0" in mcp.instructions
 
 
 def test_pyproject_version():
@@ -20,4 +20,4 @@ def test_pyproject_version():
     content = pyproject_path.read_text(encoding="utf-8")
     match = re.search(r'^version\s*=\s*"([^"]+)"', content, re.MULTILINE)
     assert match is not None
-    assert match.group(1) == "5.0.0"
+    assert match.group(1) == "8.0.0"

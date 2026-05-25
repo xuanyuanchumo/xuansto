@@ -51,4 +51,4 @@ def test_config_reload_thread_safe():
 
 
 def test_version_is_341():
-    assert __version__ == "5.0.0"
+    assert __version__ == "8.0.0"

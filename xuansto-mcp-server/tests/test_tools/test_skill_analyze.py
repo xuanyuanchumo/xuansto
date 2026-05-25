@@ -53,7 +53,7 @@ def test_scan_directory_basic(tmp_path):
     sub = tmp_path / "subdir"
     sub.mkdir()
     (sub / "file2.py").write_text("pass", encoding="utf-8")
-    result = _scan_directory(tmp_path, "basic")
+    result = _scan_directory(tmp_path, 1)
     assert result["exists"] is True
     assert result["files_count"] >= 1
     assert len(result["directories"]) >= 1
@@ -68,7 +68,7 @@ def test_scan_directory_full_depth(tmp_path):
     sub = tmp_path / "deep"
     sub.mkdir()
     (sub / "a.py").write_text("pass", encoding="utf-8")
-    result = _scan_directory(tmp_path, "full")
+    result = _scan_directory(tmp_path, 3)
     assert result["exists"] is True
     for d in result["directories"]:
         assert "files_count" in d

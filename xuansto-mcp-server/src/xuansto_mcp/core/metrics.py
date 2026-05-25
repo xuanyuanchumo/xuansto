@@ -4,7 +4,6 @@ import json
 import threading
 import time
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 from . import atomic_write
@@ -334,9 +333,7 @@ class MetricsCollector:
             return True
         if self._last_persist_time == 0.0:
             return False
-        if (time.time() - self._last_persist_time) >= self._persist_interval:
-            return True
-        return False
+        return time.time() - self._last_persist_time >= self._persist_interval
 
     def _auto_persist_loop(self) -> None:
         while not self._auto_persist_stop.is_set():

@@ -9,9 +9,10 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
+from ..core import atomic_write
 from ..core.config import WORK_DIR
-from ..core.database import persist_state, is_fts5_available
-from ..core.errors import make_error_response, make_success_response, ERR_VALIDATION, ERR_NOT_FOUND
+from ..core.database import is_fts5_available, persist_state
+from ..core.errors import ERR_NOT_FOUND, ERR_VALIDATION, make_error_response, make_success_response
 from ..core.logging_config import get_logger
 from ..core.notifications import notify
 from ..core.validator import validate_input
@@ -83,6 +84,20 @@ def _get_connection() -> sqlite3.Connection:
     conn.execute("PRAGMA busy_timeout=5000")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
+
+
+def _write_decision_file(entry: dict[str, Any]) -> None:
+    WORK_DIR.mkdir(parents=True, exist_ok=True)
+    existing: list[dict[str, Any]] = []
+    if DECISIONS_JSON_FILE.exists():
+        try:
+            existing = json.loads(DECISIONS_JSON_FILE.read_text(encoding="utf-8"))
+            if not isinstance(existing, list):
+                existing = []
+        except (json.JSONDecodeError, OSError):
+            existing = []
+    existing.append(entry)
+    atomic_write(DECISIONS_JSON_FILE, json.dumps(existing, ensure_ascii=False, indent=2))
 
 
 def _ensure_db() -> None:
@@ -171,6 +186,25 @@ def _log_decision(
     status: str | None = None,
 ) -> dict[str, Any]:
     now = datetime.now()
+    entry_id = ""
+    now_iso = now.isoformat()
+    valid_status = status if status in ("proposed", "accepted", "deprecated", "superseded") else "proposed"
+    alts_json = json.dumps(alternatives or [], ensure_ascii=False)
+    entry: dict[str, Any] = {
+        "id": "",
+        "title": title or "",
+        "description": description or "",
+        "context": context or "",
+        "alternatives": alternatives or [],
+        "decision": decision or "",
+        "rationale": rationale or "",
+        "impact": impact or "",
+        "decided_by": decided_by or "",
+        "status": valid_status,
+        "created_at": now_iso,
+        "updated_at": now_iso,
+    }
+
     with _db_lock:
         conn = _get_connection()
         try:
@@ -178,32 +212,31 @@ def _log_decision(
             cursor.execute("SELECT COUNT(*) FROM decisions WHERE created_at LIKE ?", (now.strftime("%Y-%m-%d") + "%",))
             day_count = cursor.fetchone()[0]
             entry_id = f"ADR-{now.strftime('%Y%m%d')}-{day_count + 1:03d}"
-            now_iso = now.isoformat()
-            valid_status = status if status in ("proposed", "accepted", "deprecated", "superseded") else "proposed"
-            alts_json = json.dumps(alternatives or [], ensure_ascii=False)
+            entry["id"] = entry_id
             cursor.execute(
                 "INSERT INTO decisions (id, title, context, decision, rationale, alternatives, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (entry_id, title or "", context or "", decision or "", rationale or "", alts_json, valid_status, now_iso, now_iso),
             )
             conn.commit()
-            entry: dict[str, Any] = {
-                "id": entry_id,
-                "title": title or "",
-                "description": description or "",
-                "context": context or "",
-                "alternatives": alternatives or [],
-                "decision": decision or "",
-                "rationale": rationale or "",
-                "impact": impact or "",
-                "decided_by": decided_by or "",
-                "status": valid_status,
-                "created_at": now_iso,
-                "updated_at": now_iso,
-            }
+
+            try:
+                _write_decision_file(entry)
+            except Exception as file_exc:
+                logger.warning("Decision file write failed for %s, rolling back SQLite: %s", entry_id, file_exc)
+                try:
+                    cursor.execute("DELETE FROM decisions WHERE id = ?", (entry_id,))
+                    conn.commit()
+                except Exception as rollback_exc:
+                    logger.error("Failed to rollback SQLite decision for %s: %s", entry_id, rollback_exc)
+                raise
+
             with _cache_lock:
                 _cache[entry_id] = entry
+        except Exception:
+            raise
         finally:
             conn.close()
+
     notify(f"Decision logged: {entry_id} - {title or 'untitled'}", "info")
     try:
         persist_state("decision_records", {

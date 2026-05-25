@@ -9,7 +9,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core.config import SCRIPTS_DIR
-from ..core.errors import make_success_response, make_error_response, ERR_VALIDATION
+from ..core.errors import ERR_VALIDATION, make_error_response, make_success_response
 from ..core.logging_config import get_logger
 from ..core.subprocess_utils import run_script
 from ..core.validator import validate_input, validate_path_safety
@@ -30,7 +30,7 @@ def _parse_python_ast(src_dir: str) -> list[dict[str, Any]]:
             continue
         rel = str(py_file.relative_to(src_path)) if src_path.is_dir() else py_file.name
         for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) or isinstance(node, ast.AsyncFunctionDef):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 symbols.append({"name": node.name.lower(), "type": "function", "file": rel, "line": node.lineno})
             elif isinstance(node, ast.ClassDef):
                 symbols.append({"name": node.name.lower(), "type": "class", "file": rel, "line": node.lineno})

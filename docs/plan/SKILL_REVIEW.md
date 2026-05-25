@@ -1,487 +1,645 @@
-# Xuansto Skill v2 — 全面评审文档
+# Xuansto Skill v2 综合分析文档
 
-> 版本: 8.0.0 | 评审日期: 2026-05-25 | Skill目录: `.trae/skills/xuansto-skill-v2/`
+> 版本：8.0.0 | 分析日期：2026-05-25
+> 分析范围：SKILL.md、57个Agent、31个命令、20个MCP工具、降级脚本、渐进式加载、模块化重构
 
 ---
 
-## 1. Skill定义文件全文解析
+## 1. SKILL.md 全文解析
 
-### 1.1 SKILL.md YAML Frontmatter
+### 1.1 YAML Frontmatter
 
-| 字段 | 值 |
-|------|-----|
-| `name` | `xuansto-skill-v2` |
-| `version` | `8.0.0` |
-| `agents_summary` | `"13 layers / 57 agents (via MCP v2)"` |
-| `compatible_mcp_server` | `">=4.0.0"` |
-| `mcp_server_min_version` | `"4.0.0"` |
-| `min_version` | `1.0.0` |
-| `v1_archived` | `true` |
-| `license` | `MIT` |
-| `author` | `skiller-team` |
+| 字段 | 值 | 说明 |
+|------|-----|------|
+| `name` | `xuansto-skill-v2` | 技能唯一标识 |
+| `version` | `8.0.0` | 当前版本号 |
+| `description` | 多Agent自主开发编排引擎 | 核心定位：通过20个MCP原子工具驱动9阶段全生命周期开发流程 |
+| `agents_summary` | 13 layers / 57 agents (via MCP v2) | Agent编排规模 |
+| `compatible_mcp_server` | `>=4.0.0` | 最低兼容MCP Server版本 |
+| `mcp_server_min_version` | `4.0.0` | MCP Server最低版本硬约束 |
+| `min_version` | `1.0.0` | Skill运行时最低版本 |
+| `v1_archived` | `true` | v1已归档 |
+| `license` | MIT | 开源协议 |
+| `author` | skiller-team | 维护团队 |
 
-**triggers 结构：**
+**触发条件三维度**：
 
-| 类型 | 数量 | 示例 |
+| 维度 | 数量 | 示例 |
 |------|------|------|
-| `phrases` | 72 | `"build this properly"`, `"帮我搭建项目"`, `"TDD开发"`, `"桌面打包"` |
-| `keywords` | 92 | `xuansto`, `SDD`, `TDD`, `spec-driven`, `9-phase-workflow`, `54-quality-gates` |
-| `commands` | 31 | `/sprint`, `/implement`, `/audit`, `/build-desktop` 等 |
-| `not_for` | 12 | `"simple single-file edits"`, `"documentation-only tasks"`, `"quick hotfixes under 5 lines"` |
+| `phrases` | 62条 | "build this properly", "帮我搭建项目", "全流程开发" |
+| `keywords` | 96条 | xuansto, SDD, TDD, 9-phase-workflow, 桌面打包 |
+| `commands` | 31条 | /init, /plan, /implement, /loop 等 |
 
-### 1.2 PHASE标记渐进式加载
+**排除场景（not_for）**：12类，包括简单单文件编辑、纯DevOps、纯文档任务、简单Q&A、5行以下热修复等。
 
-SKILL.md 通过 HTML 注释标记实现4阶段渐进式加载：
+### 1.2 PHASE_0（骨架）
 
-| Phase | 标记范围 | 内容 | Token预算 |
-|-------|----------|------|-----------|
-| Phase 0: 骨架 | `PHASE_0_START → PHASE_0_END` | YAML frontmatter + 命令列表 + MCP依赖 + 核心约束5条 | ≤2K |
-| Phase 1: 功能 | `PHASE_0_START → PHASE_1_END` | +执行入口 + 工作流Phase概览 + 命令路由表(精简) + 核心Agent索引(13个) | ≤5K |
-| Phase 2: 增强 | `PHASE_0_START → PHASE_2_END` | +完整命令路由表 + 完整Agent注册表(57个) + 外部参考文件 + MCP工具摘要 | ≤10K |
-| Phase 3: 完整 | `PHASE_0_START → PHASE_3_END` | +Hook系统说明 + 模型路由说明 + 关键规则 | ≤20K |
+**代码位置**：[SKILL.md](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/SKILL.md#L21-L44) `<!-- PHASE_0_START -->` ~ `<!-- PHASE_0_END -->`
 
-**资源优先级映射：**
+**命令列表**（31个）：
 
-| 优先级 | 加载阶段 | 内容 |
-|--------|----------|------|
-| P0_must | Phase 0 | YAML frontmatter、命令列表、MCP依赖、核心约束 |
-| P1_important | Phase 1 | 执行入口、工作流概览、精简路由表、核心Agent索引 |
-| P2_enhanced | Phase 2 | 完整路由表、完整Agent注册表、参考文档、MCP工具摘要 |
-| P3_optional | Phase 3 | Hook系统、模型路由、关键规则 |
+```
+/sprint /clarify /plan /spec /design /implement /test /review /fix /accept
+/deploy /build-desktop /release-desktop /refactor /audit /agent-status /learn
+/brainstorm /execute-plan /design-system /simplify /loop /cancel-loop /build
+/init /status /rollback /sdd-tdd-medium /sdd-tdd-fast /decision /budget
+```
 
-### 1.3 核心约束5条
+**MCP依赖**：
 
-| # | ID | 规则 |
-|---|-----|------|
-| 1 | `spec-first` | **Spec > Test > Code**：先规格再测试最后代码，覆盖率≥80% |
-| 2 | `karpathy` | **Karpathy准则**：Think Before Coding \| Simplicity First \| Surgical Changes |
-| 3 | `incremental` | **增量约束**：分解→实现→测试→重复；3-Strike Protocol: 自动修复→换策略→升级处理 |
-| 4 | `script-standard` | **脚本规范**：Python优先 \| UTF-8无BOM+无U+FFFD \| 验证后删除临时脚本 |
-| 5 | `cross-platform` | **跨平台**：Web+Desktop(Electron/Tauri/Flutter)，桌面端需IPC安全+代码签名 |
+- 最低兼容：xuansto-mcp-server >= 4.0.0
+- API版本：3.0.0
+- 不可用时自动降级到 `scripts/` 目录Python脚本，详见 `constraints.yaml`
 
-### 1.4 命令路由表（精简版31个命令→MCP工具链→Phase映射）
+**核心约束（5条）**：
 
-| 意图 | 命令 | MCP工具链 | Phase |
-|------|------|-----------|-------|
-| 从零开始新项目 | `/init` | skill_analyze, knowledge_search, workflow_dispatch, project_init, decision_log | 0 |
-| 头脑风暴/需求探索 | `/brainstorm` | knowledge_search, workflow_dispatch | 1 |
-| 澄清需求 | `/clarify` | knowledge_search, workflow_dispatch, quality_gate_check | 1 |
-| 规划架构 | `/plan` | skill_analyze, knowledge_search, agent_status, workflow_dispatch, decision_log, token_budget | 2 |
-| 写规格文档 | `/spec` | workflow_dispatch, quality_gate_check, spec_drift_detect | 2 |
-| 设计 | `/design` | quality_gate_check, knowledge_search, workflow_dispatch | 2 |
-| 设计系统 | `/design-system` | quality_gate_check, knowledge_search, workflow_dispatch | 2 |
-| 写代码 | `/implement` | workflow_dispatch, quality_gate_check, hook_manage | 4 |
-| 跑测试 | `/test` | quality_gate_check, workflow_dispatch | 5 |
-| 代码审查 | `/review` | quality_gate_check, security_scan, code_simplify | 5 |
-| 安全审计 | `/audit` | security_scan, quality_gate_check, spec_drift_detect | 5 |
-| 修复Bug | `/fix` | session_manage, quality_gate_check, hook_manage | 4 |
-| 验收确认 | `/accept` | quality_gate_check, workflow_dispatch | 6 |
-| 代码简化 | `/simplify` | code_simplify, quality_gate_check, context_compress | 7 |
-| 代码重构 | `/refactor` | code_simplify, quality_gate_check, context_compress | 7 |
-| 部署交付 | `/deploy` | quality_gate_check, server_health, workflow_dispatch | 8 |
-| 构建项目 | `/build` | skill_analyze, quality_gate_check, server_health | 8 |
-| 桌面构建 | `/build-desktop` | quality_gate_check, skill_analyze, workflow_dispatch | 8 |
-| 桌面发布 | `/release-desktop` | quality_gate_check, workflow_dispatch | 8 |
-| 冲刺 | `/sprint` | workflow_dispatch, session_manage, resource_load_status, token_budget, project_init | 0 |
-| 知识学习 | `/learn` | knowledge_search, knowledge_inject, session_manage | — |
-| 执行计划 | `/execute-plan` | workflow_dispatch, session_manage | — |
-| 自主循环 | `/loop` | workflow_dispatch, session_manage, resource_load_status, token_budget, decision_log | — |
-| 取消循环 | `/cancel-loop` | workflow_dispatch, session_manage | — |
-| 查询Agent | `/agent-status` | agent_status | — |
-| 查询进度 | `/status` | workflow_dispatch, session_manage, server_health | — |
-| 回滚 | `/rollback` | session_manage, workflow_dispatch | — |
-| 中等SDD+TDD | `/sdd-tdd-medium` | skill_analyze, workflow_dispatch, resource_load_status | 0 |
-| 快速SDD+TDD | `/sdd-tdd-fast` | workflow_dispatch, resource_load_status | 1 |
-| 决策记录 | `/decision` | decision_log | — |
-| Token预算 | `/budget` | token_budget, resource_load_status | — |
+| 编号 | 约束ID | 规则 |
+|------|--------|------|
+| 1 | `spec-first` | Spec > Test > Code：先规格再测试最后代码，覆盖率≥80% |
+| 2 | `karpathy` | Think Before Coding \| Simplicity First \| Surgical Changes |
+| 3 | `incremental` | 分解→实现→测试→重复；3-Strike Protocol |
+| 4 | `script-standard` | Python优先 \| UTF-8无BOM+无U+FFFD \| 验证后删除临时脚本 |
+| 5 | `cross-platform` | Web+Desktop(Electron/Tauri/Flutter)，桌面端需IPC安全+代码签名 |
 
-### 1.5 Agent索引表（编排3+产品4+工程6=13个核心Agent）
+### 1.3 PHASE_1（功能）
+
+**代码位置**：[SKILL.md](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/SKILL.md#L46-L124) `<!-- PHASE_1_START -->` ~ `<!-- PHASE_1_END -->`
+
+**执行入口**（5步）：
+
+1. 平台检测 → 检查项目依赖和结构
+2. 规模评估 → 统计文件数判断规模
+3. 工作流选择 → full/medium/fast
+4. MCP+知识检索 → skill_analyze → knowledge_search → 注入Agent上下文
+5. 执行Phase 0 → 按Phase顺序推进
+
+**工作流Phase概览表**（9阶段）：
+
+| Phase | 名称 | MCP工具 | 关键门禁 |
+|-------|------|---------|----------|
+| 0 | 初始化 | skill_analyze, workflow_dispatch, agent_status, resource_load_status | DESIGN-SYSTEM-COMPLETE, ANTI-PATTERN-CHECK |
+| 1 | 需求分析 | knowledge_search, resource_load_status | BRAINSTORM-COMPLETE, GATE-001~002 |
+| 2 | 架构设计 | knowledge_search, resource_load_status | PLAN-ATOMIC, GATE-003~004 |
+| 3 | 测试先行 | — | TEST-FIRST |
+| 4 | 代码实现 | quality_gate_check, agent_status | GATE-007, TEST-PASS, FILE-ENCODING |
+| 5 | 测试验证 | security_scan, spec_drift_detect, agent_status | AI-PENTEST, SPEC-CONSISTENCY |
+| 6 | 验收确认 | quality_gate_check | GATE-013~014, UX-ACCEPTANCE |
+| 7 | 持续重构 | code_simplify, context_compress | SIMPLIFICATION-BEHAVIOR, GATE-015 |
+| 8 | 部署交付 | — | DESKTOP-BUILD/SIGN/UPDATE/CROSS |
+
+**命令路由表（精简）**：31个命令按意图→命令→MCP工具链→Phase映射，详见 [SKILL.md#L70-L104](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/SKILL.md#L70-L104)。
+
+**核心Agent索引（13个）**：
 
 | 层级 | Agent | Phase | 模型路由 |
 |------|-------|-------|----------|
-| 编排 | Orchestrator | 0, 1, 2 | deep |
-| 编排 | Subagent Dispatcher | 0, 4, 5 | standard |
-| 编排 | Task Coordinator | 0, 4, 5 | standard |
-| 产品 | Product Manager | 1, 6 | standard |
+| 编排 | Orchestrator | 0,1,2 | deep |
+| 编排 | Subagent Dispatcher | 0,4,5 | standard |
+| 编排 | Task Coordinator | 0,4,5 | standard |
+| 产品 | Product Manager | 1,6 | standard |
 | 产品 | Brainstorming Facilitator | 1 | standard |
 | 产品 | System Architect | 2 | deep |
-| 产品 | Technical Writer | 1, 6 | standard |
+| 产品 | Technical Writer | 1,6 | standard |
 | 工程 | Backend Developer | 4 | standard |
 | 工程 | Database Engineer | 4 | standard |
-| 工程 | DevOps Engineer | 4, 8 | standard |
+| 工程 | DevOps Engineer | 4,8 | standard |
 | 工程 | Frontend Developer | 4 | standard |
 | 工程 | Fullstack Engineer | 4 | standard |
 | 工程 | Mobile Developer | 4 | standard |
 
-> 完整Agent注册表含13层57个Agent，详见 `agents/registry.yaml`。
+### 1.4 PHASE_2（增强）
 
-### 1.6 MCP工具摘要表（20个工具名称+功能+关键参数）
+**代码位置**：[SKILL.md](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/SKILL.md#L126-L220) `<!-- PHASE_2_START -->` ~ `<!-- PHASE_2_END -->`
+
+**完整命令路由表**：通过 `{{include:commands/routes.yaml}}` 内联加载，31条路由含降级策略（fallback字段）。每条路由包含：intent、command、mcp_tools、fallback、phase、detail。
+
+路由优先级规则：`精确匹配 > 语义匹配 > 更具体命令优先 > 默认/sprint兜底`
+
+**完整Agent注册表**：通过 `{{include:agents/registry.yaml}}` 内联加载，13层57个Agent完整定义。
+
+**外部参考文件表**：
+
+配置文件（`{{include:}}` 内联加载）：
+
+| 文件 | 内容 |
+|------|------|
+| `triggers.yaml` | 触发条件完整定义 |
+| `constraints.yaml` | 核心约束与降级规则 |
+| `commands/routes.yaml` | 完整命令路由表(含降级策略) |
+| `agents/registry.yaml` | 完整Agent角色索引(13层57个) |
+
+核心参考文档索引（5个P0级）：
+
+| 文档 | 路径 | 内容摘要 |
+|------|------|----------|
+| 质量门禁 | references/quality-gates.md | 54项质量门禁详细定义与判定标准 |
+| Agent注册表 | references/agent-registry.md | 完整Agent注册表(57个Agent/13层)与角色详情 |
+| MCP工具 | references/mcp-tools.md | 20个MCP工具完整参数与返回值 |
+| 工作流 | references/workflows.md | 9阶段工作流目标、步骤、门禁和命令路由详情 |
+| 约束规则 | constraints.yaml | 核心约束与降级规则 |
+
+集成与基础设施参考（P1级，11个）：
+
+| 文件 | 内容 |
+|------|------|
+| references/mcp-integration-strategy.md | MCP集成策略 |
+| references/session-persistence.md | 会话持久化 |
+| references/token-optimization.md | Token优化策略 |
+| references/hook-system.md | Hook系统完整定义 |
+| references/model-routing.md | 模型路由规则 |
+| references/workflow-checkpoints.md | 工作流检查点 |
+| references/spec-drift-handling.md | 规格偏差检测 |
+| references/agent-lifecycle.md | Agent生命周期管理 |
+| references/knowledge-workflow-details.md | 知识工作流 |
+| references/collaboration-modes.md | 协作模式定义 |
+| references/iteration-scheduling.md | 智能迭代调度 |
+
+并行与优化参考（P2级，2个）：
+
+| 文件 | 内容 |
+|------|------|
+| references/parallelization-strategy.md | 并行化策略 |
+| references/concurrency-standards.md | 并发编码标准 |
+
+**MCP工具摘要表**（20个）：
 
 | 工具 | 功能 | 关键参数 |
 |------|------|----------|
-| `skill_analyze` | 项目结构分析 | skill_path, depth(basic/full), include_scripts, include_agents |
-| `knowledge_search` | 三层知识库检索 | query, top_k(1-50), search_type(hybrid/semantic_only/keyword_only), filters |
-| `knowledge_inject` | 知识注入到上下文 | action, content, scope |
-| `quality_gate_check` | 54项质量门禁 | gate_ids, phase(0-8), project_path, severity_filter(all/BLOCK/WARN), force_refresh |
-| `spec_drift_detect` | 规格偏差检测 | spec_dir, src_dir |
-| `security_scan` | OWASP+依赖扫描 | target, severity_threshold(critical/high/medium/low), include_agentic, include_dependency |
-| `code_simplify` | 代码简化分析 | target, scope, include_dedup |
-| `session_manage` | 会话状态管理 | action(init/catchup/persist), completed_tasks, decisions |
-| `workflow_dispatch` | 工作流调度 | action(start/advance/status), workflow, project_path, phase |
-| `agent_status` | Agent状态查询 | action, phase, agent_name |
-| `agent_manage` | Agent实例管理 | action, agent_type, agent_id |
-| `hook_manage` | Hook管理 | action(list/execute), profile(minimal/standard/strict), hook_name |
-| `resource_load_status` | 渐进式加载状态 | action(status/preload/cache/clear_cache/loading_progress), target_phase(skeleton/functional/enhanced/full), resource_ids |
-| `context_compress` | 上下文压缩 | content, strategy, target_tokens |
-| `server_health` | 服务器健康检查 | action, include_details |
-| `decision_log` | 决策日志管理 | action, title, decision |
-| `token_budget` | Token预算管理 | action, total_budget |
-| `project_init` | 项目初始化 | action, name, stack |
-| `metrics_report` | 指标报告 | action, tool_name, time_range |
-| `config_manage` | 配置管理 | action, config_key, config_value |
+| skill_analyze | 项目结构分析 | skill_path, depth |
+| knowledge_search | 三层知识库检索 | action, query, top_k, search_type |
+| knowledge_inject | 知识注入到上下文 | action, content, scope |
+| quality_gate_check | 54项质量门禁 | gate_ids, phase, project_path |
+| spec_drift_detect | 规格偏差检测 | spec_dir, src_dir |
+| security_scan | OWASP+依赖扫描 | target, severity_threshold |
+| code_simplify | 代码简化分析 | target, scope, include_dedup |
+| session_manage | 会话状态管理 | action, completed_tasks, decisions |
+| workflow_dispatch | 工作流调度 | action, workflow, project_path |
+| agent_status | Agent状态查询 | action, phase, agent_name |
+| agent_manage | Agent实例管理 | action, agent_type, agent_id |
+| hook_manage | Hook管理 | action, profile, hook_name |
+| resource_load_status | 渐进式加载状态 | action, phase, resource_ids |
+| context_compress | 上下文压缩 | content, strategy, target_tokens |
+| server_health | 服务器健康检查 | action, include_details |
+| decision_log | 决策日志管理 | action, title, decision |
+| token_budget | Token预算管理 | action, total_budget |
+| project_init | 项目初始化 | action, name, stack |
+| metrics_report | 指标报告 | action, tool_name, time_range |
+| config_manage | 配置管理 | action, config_key, config_value |
 
-### 1.7 Hook系统说明（三级配置：minimal/standard/strict）
+### 1.5 PHASE_3（完整）
 
-| 配置级别 | PreToolUse | PostToolUse | SessionStart | Stop | PreCompact |
-|----------|------------|-------------|--------------|------|------------|
-| **minimal** | security-block | — | — | session-save | — |
-| **standard** | security-block, token-budget-check | auto-format, encoding-check | load-context, kb-health-check | session-save, git-status-check, experience-precipitate | save-state |
-| **strict** | security-block, token-budget-check, dangerous-cmd-confirm | auto-format, encoding-check, console-log-detect, type-check | load-context, kb-health-check, platform-detect | session-save, git-status-check, experience-precipitate, pattern-detect | save-state, decision-log-persist |
+**代码位置**：[SKILL.md](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/SKILL.md#L222-L249) `<!-- PHASE_3_START -->` ~ `<!-- PHASE_3_END -->`
 
-**关键Hook定义：**
+**Hook系统说明**：
 
-| Hook名称 | 类型 | 动作 | 说明 |
-|----------|------|------|------|
-| `security-block` | PreToolUse | block | 拦截危险操作(rm -rf, git push --force, DROP TABLE等) |
-| `token-budget-check` | PreToolUse | warn/block | 80%警告, 95%阻断 |
-| `dangerous-cmd-confirm` | PreToolUse | confirm | sudo/chmod等需确认 |
-| `auto-format` | PostToolUse | format | 按文件类型自动格式化(prettier/black/gofmt/rustfmt) |
-| `encoding-check` | PostToolUse | validate | UTF-8无BOM+无U+FFFD |
-| `session-save` | Stop | save | 保存会话到.skill-logs/ |
-| `experience-precipitate` | Stop | trigger | 触发知识沉淀 |
+三级配置：
 
-### 1.8 模型路由说明
+| Profile | PreToolUse | PostToolUse | SessionStart | Stop | PreCompact |
+|---------|-----------|-------------|-------------|------|-----------|
+| minimal | security-block | — | — | session-save | — |
+| standard | security-block, token-budget-check | auto-format, encoding-check | load-context, kb-health-check | session-save, git-status-check, experience-precipitate | save-state |
+| strict | security-block, token-budget-check, dangerous-cmd-confirm | auto-format, encoding-check, console-log-detect, type-check | load-context, kb-health-check, platform-detect | session-save, git-status-check, experience-precipitate, pattern-detect | save-state, decision-log-persist |
 
-| 路由 | 模型 | 适用场景 | Agent分配 |
-|------|------|----------|-----------|
-| `fast` | 轻量模型 | 搜索/简单编辑 | Data Seeder, Unit Tester, Bug Scanner, Comment Verifier, Doc Reviewer, Monitor Specialist, Token Optimizer, Quality Monitor, Progress Tracker, Decision Logger |
-| `standard` | 标准模型 | 多文件实现/常规开发 | 大部分Agent(编排/产品/工程/测试/DevOps等) |
-| `deep` | 深度模型 | 架构设计/安全分析 | Orchestrator, System Architect, Design System Generator, Native Module Developer, IPC Specialist, AI Penetration Tester, Security Tester, Security Auditor, Penetration Tester, Test Architect |
+关键Hook：
 
-**路由规则：** Orchestrator/System Architect → deep；编排/产品层核心 → standard；简单查询 → fast
+| Hook | 触发时机 | 动作 |
+|------|----------|------|
+| PhaseEnter | Phase转换时 | 执行门禁预检 |
+| PreCommit | Git提交前 | 执行编码检查和格式验证 |
+| PostTest | 测试完成后 | 执行覆盖率检查和规格偏差检测 |
+| SecurityBlock | 安全阻断 | 检测敏感信息和危险操作 |
+
+**模型路由说明**：
+
+| 路由 | 模型 | 适用场景 |
+|------|------|----------|
+| fast | 轻量模型 | 简单查询、格式化、快速响应 |
+| standard | 标准模型 | 常规开发任务、代码生成、测试编写 |
+| deep | 深度模型 | 架构设计、复杂分析、安全审计、决策仲裁 |
+
+路由规则：Orchestrator/System Architect → deep；编排/产品层核心 → standard；简单查询 → fast
+
+**关键规则**：
+
+- 2-Action Research | 3-Strike Error | Chesterton's Fence | Loop Enforcement
+- Confidence≥80 | 三级仲裁(L1技术→L2策略ADR→L3安全人工)
+- UTF-8无BOM+LF | Python优先 | 业务注释中文
+- Git:`<类型>(<范围>): <中文描述>` | 禁止Shell(.sh) | 五步闭环
 
 ---
 
 ## 2. 功能逻辑分步拆解
 
-### 2.1 执行入口
+从参数解析到最终输出的完整执行流程：
 
-```
-1. 平台检测 → 检查项目依赖和结构(package.json/Cargo.toml/go.mod/pyproject.toml/pubspec.yaml)
-2. 规模评估 → 统计文件数判断规模(small/medium/large)，决定是否启用lean_mode
-3. 工作流选择 → full/medium/fast（/sprint=full, /sdd-tdd-medium=medium, /sdd-tdd-fast=fast）
-4. MCP+知识检索 → skill_analyze → knowledge_search → 注入Agent上下文
-5. 执行Phase 0 → 按Phase顺序推进，每阶段过门禁
-```
+### Step 1: 平台检测 → 检查项目依赖和结构
 
-**平台检测优先级：** 显式声明 > 依赖分析 > 结构分析 > 默认Web
+**代码位置**：[default.yaml#L174-L192](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/configs/default.yaml#L174-L192)（平台检测配置）
 
-**规模评估与Agent合并：** 当 `project_scale < medium` 时自动合并Agent（如 security-tester + ai-penetration-tester、integration-tester + e2e-tester 等9条合并规则）
+**执行逻辑**：
 
-### 2.2 工作流9阶段
+1. 读取 `configs/default.yaml` 中 `platform_detection` 配置
+2. 按优先级检测：显式声明 > 依赖分析 > 结构分析 > 默认Web
+3. Web指示器：package.json with react/vue/angular、next.config.js、vite.config.ts
+4. Desktop指示器：package.json with electron、src-tauri目录、electron-builder.yml
+5. 无法检测时默认 `web`
 
-| Phase | 名称 | 目标 | MCP工具链 | 关键门禁 |
-|-------|------|------|-----------|----------|
-| **0** | 初始化 | 项目结构分析、平台检测、规模评估 | skill_analyze, workflow_dispatch, agent_status, resource_load_status | DESIGN-SYSTEM-COMPLETE, ANTI-PATTERN-CHECK |
-| **1** | 需求分析 | 头脑风暴、需求澄清、用户故事 | knowledge_search, resource_load_status | BRAINSTORM-COMPLETE, GATE-001~002(SPEC-COMPLETE, REQUIREMENT-TRACEABLE) |
-| **2** | 架构设计 | 技术选型、架构规划、规格编写 | knowledge_search, resource_load_status | PLAN-ATOMIC, GATE-003~004(ARCH-REVIEW, API-CONTRACT) |
-| **3** | 测试先行 | 编写测试用例(TDD) | — | TEST-FIRST |
-| **4** | 代码实现 | 增量编码、门禁检查 | quality_gate_check, agent_status | GATE-007, TEST-PASS, FILE-ENCODING |
-| **5** | 测试验证 | 安全扫描、规格偏差检测 | security_scan, spec_drift_detect, agent_status | AI-PENTEST, SPEC-CONSISTENCY |
-| **6** | 验收确认 | 产品验收、文档完善 | quality_gate_check | GATE-013~014, UX-ACCEPTANCE |
-| **7** | 持续重构 | 代码简化、行为等价验证 | code_simplify, context_compress | SIMPLIFICATION-BEHAVIOR, GATE-015 |
-| **8** | 部署交付 | 构建、签名、发布 | — | DESKTOP-BUILD/SIGN/UPDATE/CROSS |
+**输出**：`platform = "web" | "desktop"`，决定后续Agent选择（桌面端激活Desktop Developer、IPC Specialist等）
 
-### 2.3 每个Phase的关键门禁和MCP工具链
+### Step 2: 规模评估 → 统计文件数判断规模
 
-**Phase 0 — 初始化：**
-- 门禁：DESIGN-SYSTEM-COMPLETE(BLOCK), ANTI-PATTERN-CHECK(WARN)
-- 工具：skill_analyze → workflow_dispatch(start) → agent_status → resource_load_status
+**代码位置**：[default.yaml#L18-L20](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/configs/default.yaml#L18-L20)（精简模式阈值）
 
-**Phase 1 — 需求分析：**
-- 门禁：SPEC-COMPLETE(BLOCK), REQUIREMENT-TRACEABLE(WARN)
-- 工具：knowledge_search(hybrid) → workflow_dispatch(advance) → quality_gate_check
+**执行逻辑**：
 
-**Phase 2 — 架构设计：**
-- 门禁：ARCH-REVIEW(BLOCK), API-CONTRACT(WARN)
-- 工具：knowledge_search → spec_drift_detect → quality_gate_check → decision_log
+1. 调用 `skill_analyze(depth="full")` 扫描项目
+2. 统计文件数和模块数
+3. 判断规模：`max_files <= 50 && max_modules <= 10` → small；否则 medium/large
+4. 小型项目触发 `lean_mode`，启用Agent合并策略
 
-**Phase 3 — 测试先行：**
-- 门禁：TEST-FIRST(BLOCK)
-- 工具：无MCP工具依赖，内联TDD流程
+**Agent合并规则**（9条）：
 
-**Phase 4 — 代码实现：**
-- 门禁：GATE-007(BLOCK), TEST-PASS(BLOCK), FILE-ENCODING(WARN)
-- 工具：workflow_dispatch → quality_gate_check → hook_manage(encoding-check)
+| 合并组 | 条件 |
+|--------|------|
+| security-tester + ai-penetration-tester | project_scale < medium |
+| integration-tester + e2e-tester | project_scale < medium |
+| documentation-engineer + specification-keeper | project_scale < medium |
+| cicd-specialist + devops-engineer | project_scale < small |
+| desktop-developer + frontend-developer | desktop_framework == electron |
+| desktop-tester + e2e-tester | desktop_test_complexity < medium |
+| build-release-engineer + cicd-specialist | project_scale < small |
+| knowledge-manager + learning-specialist | project_scale < medium |
+| quality-monitor + progress-tracker | project_scale < medium |
 
-**Phase 5 — 测试验证：**
-- 门禁：AI-PENTEST(BLOCK), SPEC-CONSISTENCY(BLOCK)
-- 工具：security_scan → spec_drift_detect → quality_gate_check
+### Step 3: 工作流选择 → full/medium/fast
 
-**Phase 6 — 验收确认：**
-- 门禁：GATE-013~014(BLOCK), UX-ACCEPTANCE(WARN)
-- 工具：quality_gate_check → workflow_dispatch
+**代码位置**：[SKILL.md#L48-L54](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/SKILL.md#L48-L54)（执行入口）
 
-**Phase 7 — 持续重构：**
-- 门禁：SIMPLIFICATION-BEHAVIOR(BLOCK), GATE-015(WARN)
-- 工具：code_simplify → context_compress → quality_gate_check
+**执行逻辑**：
 
-**Phase 8 — 部署交付：**
-- 门禁：DESKTOP-BUILD/SIGN/UPDATE/CROSS(BLOCK)
-- 工具：server_health → quality_gate_check → workflow_dispatch
+| 工作流 | 触发条件 | Phase覆盖 | 命令 |
+|--------|----------|-----------|------|
+| full | 大型项目/完整SDD+TDD | Phase 0→8 全部 | /init, /sprint |
+| medium | 中等规模SDD+TDD | Phase 0→8 精简 | /sdd-tdd-medium |
+| fast | 快速SDD+TDD | Phase 1→8 跳过初始化 | /sdd-tdd-fast |
+
+### Step 4: MCP+知识检索 → skill_analyze → knowledge_search → 注入Agent上下文
+
+**代码位置**：
+- [skill_tools.py#L60-L78](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/scripts/knowledge_server/skill_tools.py#L60-L78)（handle方法）
+- [tools/skill_analyze.py](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/scripts/knowledge_server/tools/skill_analyze.py)
+- [tools/knowledge_inject.py](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/scripts/knowledge_server/tools/knowledge_inject.py)
+
+**执行逻辑**：
+
+1. `skill_analyze(skill_path, depth)` → 分析项目结构，返回技术栈、文件统计
+2. `knowledge_search(query, top_k=5, search_type="hybrid")` → 三层知识库检索
+   - hybrid：语义+关键词混合（默认）
+   - semantic_only：纯语义搜索（需embedding）
+   - keyword_only：纯关键词搜索（FTS5）
+3. `knowledge_inject(content, scope)` → 将检索结果注入Agent上下文
+4. 知识检索降级链：ChromaDB → SQLite FTS → 关键词匹配
+
+### Step 5: 执行Phase 0 → 按Phase顺序推进
+
+**代码位置**：
+- [progressive_loader.py#L113-L129](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/scripts/knowledge_server/progressive_loader.py#L113-L129)（COMMAND_PHASE_MAP + PHASE_SKILL_MAP）
+- [skill_tools.py#L80-L92](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/scripts/knowledge_server/skill_tools.py#L80-L92)（_try_advance_phase）
+
+**执行逻辑**：
+
+1. 工具执行成功后，`SkillToolHandler.handle()` 调用 `_try_advance_phase(tool_name)`
+2. 通过 `TOOL_COMMAND_MAP` 映射工具→命令
+3. 通过 `COMMAND_PHASE_MAP` 映射命令→目标加载阶段
+4. 如果目标阶段 > 当前阶段，调用 `ProgressiveLoader.advance_phase()` 推进
+5. 推进时自动加载新阶段的资源列表
+
+**命令→阶段推进映射**：
+
+| 命令 | 推进到 |
+|------|--------|
+| /init, /sprint, /implement | FUNCTIONAL |
+| /audit, /refactor, /loop | ENHANCED |
+| /build-desktop, /deploy | FULL |
 
 ---
 
 ## 3. 交互模式分析
 
-### 3.1 单轮交互
+### 3.1 单轮命令（Single-turn）
 
-以下命令执行后立即返回结果，无需多轮对话：
+无需多步交互，立即返回结果：
 
-| 命令 | 功能 | 输入 | 输出 |
-|------|------|------|------|
-| `/agent-status` | 查询Agent状态 | agent_name(可选) | Agent列表+状态JSON |
-| `/budget` | Token预算查询 | — | 当前预算/已用/剩余JSON |
-| `/decision` | 决策记录 | title, decision | 决策ID+时间戳JSON |
-| `/status` | 进度查询 | — | 当前Phase/任务/健康状态JSON |
-| `/cancel-loop` | 取消循环 | — | 循环终止确认JSON |
-| `/rollback` | 回滚 | — | 恢复点信息JSON |
-| `/learn` | 知识学习 | query | 知识检索结果JSON |
+| 命令 | 功能 | MCP工具 | Phase |
+|------|------|---------|-------|
+| /status | 查询进度 | workflow_dispatch, session_manage, server_health | — |
+| /agent-status | 查询Agent | agent_status | — |
+| /budget | Token预算 | token_budget, resource_load_status | — |
+| /decision | 决策记录 | decision_log | — |
 
-### 3.2 多轮交互
+### 3.2 多轮命令（Multi-turn）
 
-以下命令需要跨多个Phase持续执行，涉及多轮对话：
+需要跨Phase交互，逐步推进工作流：
 
-| 命令 | 跨越Phase | 交互模式 |
+| 命令 | 功能 | MCP工具链 | Phase |
+|------|------|-----------|-------|
+| /init | 从零开始新项目 | skill_analyze, knowledge_search, workflow_dispatch, project_init, decision_log | 0 |
+| /plan | 规划架构 | skill_analyze, knowledge_search, agent_status, workflow_dispatch, decision_log, token_budget | 2 |
+| /implement | 写代码 | workflow_dispatch, quality_gate_check, hook_manage | 4 |
+| /test | 跑测试 | quality_gate_check, workflow_dispatch | 5 |
+| /review | 代码审查 | quality_gate_check, security_scan, code_simplify | 5 |
+| /fix | 修复Bug | session_manage, quality_gate_check, hook_manage | 4 |
+| /brainstorm | 头脑风暴 | knowledge_search, workflow_dispatch | 1 |
+| /clarify | 澄清需求 | knowledge_search, workflow_dispatch, quality_gate_check | 1 |
+| /spec | 写规格文档 | workflow_dispatch, quality_gate_check, spec_drift_detect | 2 |
+| /design | 设计 | quality_gate_check, knowledge_search, workflow_dispatch | 2 |
+| /design-system | 设计系统 | quality_gate_check, knowledge_search, workflow_dispatch | 2 |
+| /accept | 验收确认 | quality_gate_check, workflow_dispatch | 6 |
+| /deploy | 部署交付 | quality_gate_check, server_health, workflow_dispatch | 8 |
+| /build | 构建项目 | skill_analyze, quality_gate_check, server_health | 8 |
+| /build-desktop | 桌面构建 | quality_gate_check, skill_analyze, workflow_dispatch | 8 |
+| /release-desktop | 桌面发布 | quality_gate_check, workflow_dispatch | 8 |
+| /refactor | 代码重构 | code_simplify, quality_gate_check, context_compress | 7 |
+| /simplify | 代码简化 | code_simplify, quality_gate_check, context_compress | 7 |
+| /audit | 安全审计 | security_scan, quality_gate_check, spec_drift_detect | 5 |
+| /learn | 知识学习 | knowledge_search, knowledge_inject, session_manage | — |
+| /sprint | 冲刺 | workflow_dispatch, session_manage, resource_load_status, token_budget, project_init | 0 |
+| /sdd-tdd-medium | 中等SDD+TDD | skill_analyze, workflow_dispatch, resource_load_status | 0 |
+| /sdd-tdd-fast | 快速SDD+TDD | workflow_dispatch, resource_load_status | 1 |
+| /execute-plan | 执行计划 | workflow_dispatch, session_manage | — |
+| /rollback | 回滚 | session_manage, workflow_dispatch | — |
+
+### 3.3 循环模式（Loop mode）
+
+| 命令 | 功能 | MCP工具链 | 说明 |
+|------|------|-----------|------|
+| /loop | 自主循环 | workflow_dispatch, session_manage, resource_load_status, token_budget, decision_log | 最大50次迭代，停滞阈值3次 |
+| /cancel-loop | 取消循环 | workflow_dispatch, session_manage | 中止循环并持久化状态 |
+
+### 3.4 命令→9阶段映射
+
+| 工作流Phase | 可用命令 |
+|-------------|----------|
+| Phase 0（初始化） | /init, /sprint, /sdd-tdd-medium |
+| Phase 1（需求分析） | /brainstorm, /clarify, /sdd-tdd-fast |
+| Phase 2（架构设计） | /plan, /spec, /design, /design-system |
+| Phase 3（测试先行） | （由Phase 2自动推进，无独立命令） |
+| Phase 4（代码实现） | /implement, /fix |
+| Phase 5（测试验证） | /test, /review, /audit |
+| Phase 6（验收确认） | /accept |
+| Phase 7（持续重构） | /simplify, /refactor |
+| Phase 8（部署交付） | /deploy, /build, /build-desktop, /release-desktop |
+| 跨Phase | /learn, /execute-plan, /loop, /cancel-loop, /agent-status, /status, /rollback, /decision, /budget |
+
+---
+
+## 4. 渐进式加载逻辑分析
+
+### 4.1 四阶段Token预算
+
+**代码位置**：[constraints.yaml#L15-L35](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/constraints.yaml#L15-L35) + [progressive_loader.py#L20-L25](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/scripts/knowledge_server/progressive_loader.py#L20-L25)
+
+| 加载阶段 | 触发条件 | 加载内容 | Token预算 | 累计预算 |
+|----------|----------|----------|-----------|----------|
+| Phase 0: 骨架 | Skill触发时 | 核心元数据：技能名称、版本、可用命令列表(无详情) | ≤2K | 2K |
+| Phase 1: 功能 | 用户执行命令时 | 命令描述+MCP工具可用性+核心约束+核心Agent | ≤5K | 7K |
+| Phase 2: 增强 | 需要参考文档时 | Agent注册表+工作流定义+质量门禁摘要+参考文档URI+知识检索 | ≤10K | 17K |
+| Phase 3: 完整 | 深度分析时 | 完整参考+模板+知识库访问+全部Agent定义+所有详情 | ≤20K | 37K |
+
+### 4.2 资源优先级
+
+**代码位置**：[constraints.yaml#L37-L53](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/constraints.yaml#L37-L53)
+
+| 优先级 | 名称 | 包含内容 | 加载阶段 |
+|--------|------|----------|----------|
+| P0_must | 必须加载 | SKILL.md核心约束、命令路由表、Agent索引表 | Phase 0 |
+| P1_important | 重要加载 | 命令详细步骤、工作流Phase定义、MCP工具参数 | Phase 1 |
+| P2_enhanced | 增强加载 | 参考文档、模板文件、知识库 | Phase 2 |
+| P3_optional | 可选加载 | 示例文档、评估配置、披露资源 | Phase 3 |
+
+### 4.3 披露机制
+
+**代码位置**：[constraints.yaml#L83-L101](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/constraints.yaml#L83-L101) + [SKILL.md](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/SKILL.md) PHASE标记
+
+SKILL.md通过HTML注释标记实现分段加载：
+
+| PHASE标记 | 范围 | 内容 |
+|-----------|------|------|
+| `<!-- PHASE_0_START -->` ~ `<!-- PHASE_0_END -->` | L21-L44 | YAML frontmatter + 命令列表 + MCP依赖 + 核心约束(5条) |
+| `<!-- PHASE_1_START -->` ~ `<!-- PHASE_1_END -->` | L46-L124 | 执行入口 + 工作流Phase概览表 + 命令路由表(精简) + 核心Agent索引 |
+| `<!-- PHASE_2_START -->` ~ `<!-- PHASE_2_END -->` | L126-L220 | 完整命令路由表 + 完整Agent注册表 + 外部参考文件表 + MCP工具摘要表 |
+| `<!-- PHASE_3_START -->` ~ `<!-- PHASE_3_END -->` | L222-L249 | Hook系统说明 + 模型路由说明 + 关键规则 |
+
+**披露通知机制**（代码位置：[progressive_loader.py#L92-L104](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/scripts/knowledge_server/progressive_loader.py#L92-L104)）：
+
+| 阶段 | 披露通知 | 升级提示 |
+|------|----------|----------|
+| SKELETON | 仅核心元数据可用，命令步骤/工作流/Agent/参考文档不可用 | 执行任意命令推进到功能阶段 |
+| FUNCTIONAL | 命令执行和工作流概览可用，完整路由/Agent注册表/参考文档不可用 | resource_load_status(preload) 推进到增强阶段 |
+| ENHANCED | 完整路由/Agent/参考文档/知识检索可用，Hook/模型路由不可用 | 深度分析推进到完整阶段 |
+| FULL | 全部功能可用 | — |
+
+### 4.4 降级规则
+
+**代码位置**：[constraints.yaml#L154-L182](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/constraints.yaml#L154-L182) + [progressive_loader.py#L262-L289](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/scripts/knowledge_server/progressive_loader.py#L262-L289)
+
+| 功能 | 不可用阶段 | 降级行为 |
 |------|-----------|----------|
-| `/sprint` | 0→8 | 全流程自主循环，关键点暂停 |
-| `/loop` | 动态 | 自主循环模式(autonomous/supervised/manual) |
-| `/implement` | 4→5 | 编码→测试验证循环 |
-| `/sdd-tdd-medium` | 0→8 | 中等规模SDD+TDD全流程 |
-| `/sdd-tdd-fast` | 1→5 | 快速SDD+TDD精简流程 |
-| `/execute-plan` | 动态 | 按计划逐步推进 |
+| 命令执行 | Phase 0 | 仅展示命令列表，不执行；提示用户执行命令推进到Phase 1 |
+| 工作流详情 | Phase 0 | 使用核心约束中的精简规则替代完整工作流定义 |
+| 完整命令路由 | Phase 0, 1 | 使用精简路由表(无降级策略列)；Phase 2加载完整路由 |
+| 完整Agent注册表 | Phase 0, 1 | Phase 0无Agent信息；Phase 1使用核心Agent索引(13个)；Phase 2加载完整57个 |
+| 知识检索 | Phase 0, 1 | 跳过知识检索步骤，使用内嵌模板和默认知识；Phase 2起可用 |
+| 参考文档 | Phase 0, 1 | 使用SKILL.md内嵌摘要替代；Phase 2起通过{{include:}}按需加载 |
+| Hook系统 | Phase 0, 1, 2 | 使用minimal配置(security-block仅)；Phase 3加载完整Hook系统 |
+| 模型路由 | Phase 0, 1, 2 | 默认使用standard路由；Phase 3加载完整模型路由说明 |
 
-### 3.3 输入输出格式
+**MCP工具降级链**（代码位置：[degradation.py#L172-L500](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/scripts/knowledge_server/degradation.py#L172-L500)）：
 
-**输入格式：** 命令参数 → MCP工具JSON
-
-```json
-// 示例: /implement 命令调用 workflow_dispatch
-{
-  "action": "advance",
-  "workflow": "sdd-tdd",
-  "project_path": "/path/to/project",
-  "phase": 4
-}
+```
+MCP工具调用 → 脚本降级(scripts/xxx.py --format json) → 内联降级(_inline_xxx) → 错误响应
 ```
 
-**输出格式：** MCP工具JSON → 结果JSON
+14个MCP工具的降级映射：
 
-```json
-// 示例: quality_gate_check 返回
-{
-  "status": "ok",
-  "data": {
-    "gates_checked": 54,
-    "gates_passed": 52,
-    "gates_failed": 2,
-    "can_proceed": false,
-    "results": [
-      {
-        "gate_id": "TEST-PASS",
-        "status": "FAIL",
-        "severity": "BLOCK",
-        "message": "单元测试覆盖率 72% 低于阈值 80%",
-        "details": { "coverage": 72, "threshold": 80 }
-      }
-    ]
-  }
-}
-```
+| MCP工具 | 降级脚本 | 内联降级 |
+|---------|----------|----------|
+| skill_analyze | scripts/skill-test.py | — |
+| quality_gate_check | scripts/skill-test.py | — |
+| knowledge_search | scripts/knowledge-server.py | — |
+| knowledge_inject | scripts/knowledge_server/main.py | — |
+| spec_drift_detect | scripts/spec-drift-detector.py | _inline_spec_drift_detect |
+| security_scan | scripts/agentic-security-scanner.py | _inline_security_scan |
+| code_simplify | scripts/code-simplifier.py | _inline_code_simplify |
+| session_manage | scripts/init-session.py等 | — |
+| workflow_dispatch | scripts/project-initializer.py | _inline_workflow_dispatch |
+| agent_status | scripts/skill-test.py | _inline_agent_status |
+| hook_manage | scripts/check-encoding.py等 | _inline_hook_manage |
+| resource_load_status | — | _inline_resource_load_status |
+| context_compress | scripts/context-compressor.py | — |
+| server_health | scripts/health-checker.py | _inline_server_health |
 
-**降级模式输出：** 脚本降级时包装为相同JSON结构，附加 `"degraded": true` 标记。
+**知识检索降级链**：ChromaDB(hybrid) → SQLite FTS(keyword_only) → 文件搜索(file_search)
 
 ---
 
-## 4. 特效逻辑分析
-
-### 4.1 渐进式加载实现
-
-**Skill层（SKILL.md PHASE标记）：**
-
-SKILL.md 通过 HTML 注释 `<!-- PHASE_N_START -->` / `<!-- PHASE_N_END -->` 将内容分为4段。Skill运行时按需加载对应段落的Markdown内容到LLM上下文中。
-
-| 段落 | 标记 | 内容概要 |
-|------|------|----------|
-| Phase 0 | `PHASE_0_START → PHASE_0_END` | 核心元数据、命令列表、MCP依赖、5条约束 |
-| Phase 1 | `PHASE_1_START → PHASE_1_END` | 执行入口、工作流概览、精简路由表、核心Agent索引 |
-| Phase 2 | `PHASE_2_START → PHASE_2_END` | 完整路由表、完整Agent注册表、参考文档、MCP工具摘要 |
-| Phase 3 | `PHASE_3_START → PHASE_3_END` | Hook系统、模型路由、关键规则 |
-
-**MCP层（progressive_loader.py LoadPhase枚举）：**
-
-```python
-class LoadPhase(str, Enum):
-    SKELETON = "skeleton"    # 对应 Phase 0
-    FUNCTIONAL = "functional" # 对应 Phase 1
-    ENHANCED = "enhanced"    # 对应 Phase 2
-    FULL = "full"           # 对应 Phase 3
-```
-
-`ProgressiveLoader` 类维护 `LoadingState` 状态机，提供：
-- `advance_phase(target_phase)`: 推进到目标阶段，加载对应资源
-- `degrade_phase()`: 降级到上一阶段（FULL→ENHANCED→FUNCTIONAL→SKELETON）
-- `can_access(resource_priority)`: 检查当前阶段是否可访问指定优先级资源
-- `check_token_budget(usage, budget)`: Token预算超80%/95%时触发降级
-- `get_available_commands()`: 获取当前阶段可用命令列表
-
-**MCP层 resource_load_status 工具：** 通过 `action=status/preload/cache/clear_cache/loading_progress` 控制渐进式加载状态，返回当前阶段、已加载资源、可用命令、披露说明等。
-
-### 4.2 当前实现方式
-
-- **Skill层**：通过PHASE标记分段，Skill运行时按需将对应段落注入LLM上下文
-- **MCP层**：`resource_load_status` 工具控制 `ProgressiveLoader` 状态机，管理资源加载和降级
-- **两层协同**：Skill层读取SKILL.md段落 → MCP层通过 `resource_load_status(preload)` 推进加载阶段
-
-### 4.3 与渐进式目标的差距
-
-| 差距项 | 现状 | 目标 |
-|--------|------|------|
-| **双向同步缺失** | Skill层与MCP层缺乏双向同步机制。Skill层推进加载时不会通知MCP层，MCP层降级时Skill层不感知 | 两层应共享加载状态，变更时互相通知 |
-| **降级不感知** | MCP层 `degrade_phase()` 触发降级后，Skill层上下文中已加载的PHASE段落不会自动移除 | Skill层应根据MCP层降级信号裁剪上下文 |
-| **Token预算不同步** | Skill层Token预算由LLM上下文窗口控制，MCP层由 `check_token_budget()` 控制，两者独立计算 | 应统一Token预算管理，MCP层预算变更时同步到Skill层 |
-| **资源ID不对应** | Skill层PHASE标记是Markdown段落，MCP层资源ID是字符串(如"command-route-full")，两者无显式映射 | 应建立PHASE标记到资源ID的映射表 |
-| **SKELETON阶段命令空** | `_PHASE_COMMANDS[LoadPhase.SKELETON]` 为空列表，但SKILL.md Phase 0已展示命令名称 | SKELETON阶段应至少支持命令列表展示 |
-
----
-
-## 5. 可复用模块清单/需废弃或重写部分
+## 5. 可复用模块清单 / 需废弃或重写部分
 
 ### 5.1 可复用模块
 
-| 模块 | 路径 | 核心能力 | 复用价值 |
-|------|------|----------|----------|
-| **knowledge_server核心** | `scripts/knowledge_server/` | SQLite存储 + ChromaDB向量检索 + 混合搜索引擎 + 嵌入管理 | ⭐⭐⭐ 高：独立知识库服务，可被其他Skill复用 |
-| **progressive_loader** | `scripts/knowledge_server/progressive_loader.py` | LoadPhase枚举 + LoadingState状态机 + 阶段推进/降级/资源管理 | ⭐⭐⭐ 高：通用渐进式加载框架 |
-| **degradation降级链** | `scripts/knowledge_server/degradation.py` | DegradationManager(4级降级) + MCPToolFallback(脚本降级) | ⭐⭐⭐ 高：通用MCP降级框架 |
-| **hybrid_search** | `scripts/knowledge_server/hybrid_search.py` | 语义+关键词混合检索引擎 | ⭐⭐ 中：依赖ChromaDB |
-| **dedup** | `scripts/knowledge_server/dedup.py` | 知识条目去重引擎 | ⭐⭐ 中：知识库专用 |
-| **security** | `scripts/knowledge_server/security.py` | InputValidator + SensitiveContentFilter + RateLimiter | ⭐⭐ 中：通用安全组件 |
-| **Hook系统** | `hooks/hooks.json` | 三级配置(minimal/standard/strict) + 事件触发 | ⭐⭐ 中：通用Hook框架 |
-| **Agent注册表** | `agents/registry.yaml` | 13层57个Agent定义 + 模型路由 + Phase映射 | ⭐⭐ 中：Agent编排基础 |
-
-### 5.2 需重构模块
-
-| 模块 | 路径 | 问题 | 重构建议 |
+| 模块 | 路径 | 说明 | 复用价值 |
 |------|------|------|----------|
-| **skill_tools.py** | `scripts/knowledge_server/skill_tools.py` | 2300+行单文件，包含15个MCP工具定义+SkillToolHandler处理逻辑，职责过重 | 拆分为：`tool_definitions/`(工具定义)、`tool_handlers/`(处理逻辑)、`quality_gates.py`(门禁逻辑) |
-| **mcp_server.py** | `scripts/knowledge_server/mcp_server.py` | 工具注册(`register_mcp_tools`)与处理逻辑(`call_tool`)耦合在同一函数中，1200+行 | 拆分为：`tool_registry.py`(注册)、`tool_router.py`(路由)、各工具独立handler |
-| **constraints.yaml** | 根目录 | 降级映射(`tool_fallbacks`)硬编码在YAML中，与`degradation.py`中`TOOL_SCRIPT_MAP`重复 | 统一降级配置源，`degradation.py`从YAML读取而非硬编码 |
-| **SKILL.md** | 根目录 | PHASE标记与MCP层LoadPhase枚举命名不一致(Phase 0 vs SKELETON) | 统一命名，建立显式映射 |
+| constraints.yaml | `.trae/skills/xuansto-skill-v2/constraints.yaml` | 核心约束+Token预算+降级规则+披露机制 | ⭐⭐⭐ 单一权威源 |
+| routes.yaml | `.trae/skills/xuansto-skill-v2/commands/routes.yaml` | 31条命令路由含降级策略 | ⭐⭐⭐ 命令路由核心 |
+| registry.yaml | `.trae/skills/xuansto-skill-v2/agents/registry.yaml` | 13层57个Agent完整注册表 | ⭐⭐⭐ Agent发现核心 |
+| hooks.json | `.trae/skills/xuansto-skill-v2/hooks/hooks.json` | 三级Hook配置+15个Hook定义 | ⭐⭐⭐ Hook系统核心 |
+| default.yaml | `.trae/skills/xuansto-skill-v2/configs/default.yaml` | 编排器/质量门禁/安全/桌面等全量默认配置 | ⭐⭐⭐ 配置权威源 |
+| references/ | `.trae/skills/xuansto-skill-v2/references/` | 79+参考文档（含agent-details/57个Agent详情） | ⭐⭐ 知识库核心 |
+| .skill-config.yaml | `.trae/skills/xuansto-skill-v2/.skill-config.yaml` | 运行时配置（循环/规划/按需加载/知识服务） | ⭐⭐ 运行时核心 |
+| progressive_loader.py | `scripts/knowledge_server/progressive_loader.py` | 渐进式加载引擎 | ⭐⭐ 加载核心 |
+| degradation.py | `scripts/knowledge_server/degradation.py` | MCPToolFallback + DegradationManager | ⭐⭐ 降级核心 |
+| tools/ 子包 | `scripts/knowledge_server/tools/` | 15个独立工具模块 + __init__.py + _shared.py | ⭐⭐ 工具核心 |
+
+### 5.2 需重写部分
+
+| 模块 | 当前状态 | 重写方向 |
+|------|----------|----------|
+| skill_tools.py | 已从2300+行拆分为74行委托模式，委托给 tools/ 子包 | ✅ 已完成拆分，当前为薄委托层 |
+| 降级映射 | MCPToolFallback原硬编码14个工具映射 | ✅ 已改为从constraints.yaml读取，失败回退硬编码 |
+| LoadingState | 已扩展degraded/degraded_from字段 | ✅ 已完成，支持降级感知 |
+| 错误处理 | 部分工具返回字符串而非JSON（ARCH-11） | 🔄 计划v8.3.0统一为JSON格式 |
+| API Schema | HTTP API与MCP stdio两套接口无统一Schema（API-01） | 🔄 计划v8.3.0统一 |
 
 ### 5.3 需废弃部分
 
-| 废弃项 | 位置 | 原因 | 替代方案 |
-|--------|------|------|----------|
-| **硬编码降级映射** | `degradation.py` `MCPToolFallback.TOOL_SCRIPT_MAP` | 与`constraints.yaml`中`tool_fallbacks`重复定义，维护两处 | 从YAML配置读取降级映射，`MCPToolFallback`初始化时加载 |
-| **_PHASE_COMMANDS空列表** | `progressive_loader.py` `LoadPhase.SKELETON` | SKELETON阶段命令列表为空，但SKILL.md Phase 0已展示命令名称 | SKELETON阶段应包含命令列表展示(只读) |
-| **重复的门禁定义** | `skill_tools.py` `_QUALITY_GATES` | 与`references/quality-gates.md`定义重复 | 门禁定义统一从YAML/JSON加载 |
+| 模块 | 说明 | 废弃计划 |
+|------|------|----------|
+| v1 Skill文件 | agents/、commands/、workflows/等目录在v1和v2中同时存在（P3-01） | v8.5.0标记v1为archived |
+| 旧skill_tools.py单文件 | 已拆分为tools/子包，原文件仅保留委托 | 随v2稳定后移除 |
+| 旧resource_state.json v2格式 | 已升级到v3格式（新增phase字段） | 迁移完成后移除v2兼容 |
 
 ---
 
 ## 6. 依赖图
 
 ```mermaid
-graph TD
-    SKILL["SKILL.md<br/>(YAML frontmatter + PHASE标记)"]
-    CONSTRAINTS["constraints.yaml<br/>(核心约束 + 降级规则 + Token预算)"]
-    ROUTES["commands/routes.yaml<br/>(命令路由表)"]
-    REGISTRY["agents/registry.yaml<br/>(Agent注册表 13层57个)"]
-    HOOKS["hooks/hooks.json<br/>(Hook系统三级配置)"]
-    DEFAULT["configs/default.yaml<br/>(默认配置)"]
+graph TB
+    subgraph "Skill层"
+        SKILL["SKILL.md<br/>(v8.0.0)"]
+        CONSTRAINTS["constraints.yaml<br/>核心约束+降级规则"]
+        ROUTES["commands/routes.yaml<br/>31条命令路由"]
+        REGISTRY["agents/registry.yaml<br/>13层57个Agent"]
+        TRIGGERS["triggers.yaml<br/>触发条件"]
+        DEFAULT["configs/default.yaml<br/>默认配置"]
+        HOOKS["hooks/hooks.json<br/>Hook系统"]
+        SKILL_CONFIG[".skill-config.yaml<br/>运行时配置"]
+        REFS["references/<br/>79+参考文档"]
+        AGENT_DETAILS["references/agent-details/<br/>57个Agent详情"]
+        COMMANDS_MD["commands/*.md<br/>31个命令详情"]
+        AGENTS_MD["agents/*/*.md<br/>57个Agent定义"]
+    end
 
-    MCP_SERVER["scripts/knowledge_server/<br/>mcp_server.py<br/>(MCP工具注册+路由)"]
-    SKILL_TOOLS["scripts/knowledge_server/<br/>skill_tools.py<br/>(15个Skill工具定义+处理)"]
-    PROGRESSIVE["scripts/knowledge_server/<br/>progressive_loader.py<br/>(LoadPhase状态机)"]
-    DEGRADATION["scripts/knowledge_server/<br/>degradation.py<br/>(DegradationManager + MCPToolFallback)"]
+    subgraph "MCP Server层"
+        MCP_SERVER["mcp_server.py<br/>MCP协议入口"]
+        SKILL_TOOLS["skill_tools.py<br/>SkillToolHandler<br/>(74行委托层)"]
+        TOOLS["tools/ 子包<br/>15个独立工具模块"]
+        SHARED["tools/_shared.py<br/>共享常量"]
+        TOOLS_INIT["tools/__init__.py<br/>TOOL_REGISTRY"]
+        PROGRESSIVE["progressive_loader.py<br/>渐进式加载引擎"]
+        DEGRADATION["degradation.py<br/>MCPToolFallback<br/>DegradationManager"]
+        CONFIG["config.py<br/>make_response等"]
+        DB_ENGINE["db_engine.py<br/>SQLite引擎"]
+        VECTOR["vector_engine.py<br/>ChromaDB引擎"]
+        EMBEDDING["embedding.py<br/>Embedding管理"]
+        HYBRID["hybrid_search.py<br/>混合搜索"]
+        SECURITY["security.py<br/>InputValidator"]
+        KB_CLIENT["kb_client.py<br/>知识库客户端"]
+    end
 
-    DB_ENGINE["scripts/knowledge_server/<br/>db_engine.py<br/>(SQLiteEngine)"]
-    EMBEDDING["scripts/knowledge_server/<br/>embedding.py<br/>(EmbeddingManager)"]
-    HYBRID_SEARCH["scripts/knowledge_server/<br/>hybrid_search.py<br/>(HybridRetrievalEngine)"]
-    DEDUP["scripts/knowledge_server/<br/>dedup.py<br/>(DedupEngine)"]
-    SECURITY["scripts/knowledge_server/<br/>security.py<br/>(InputValidator + SensitiveContentFilter)"]
-    CONFIG["scripts/knowledge_server/<br/>config.py<br/>(KnowledgeConfig + 工具函数)"]
+    subgraph "降级脚本层"
+        SCRIPTS["scripts/*.py<br/>50+降级脚本"]
+        SCRIPT_KB["scripts/knowledge_server/<br/>MCP Server主程序"]
+    end
 
-    SCRIPTS["scripts/<br/>(降级脚本集)"]
-    AGENTS["agents/<br/>(57个Agent Markdown)"]
-    COMMANDS["commands/<br/>(31个命令 Markdown)"]
-    REFERENCES["references/<br/>(参考文档集)"]
+    SKILL --> CONSTRAINTS
+    SKILL --> ROUTES
+    SKILL --> REGISTRY
+    SKILL --> TRIGGERS
+    SKILL --> REFS
+    SKILL --> DEFAULT
+    SKILL --> HOOKS
+    SKILL --> SKILL_CONFIG
 
-    SKILL -->|"{{include:}}"| CONSTRAINTS
-    SKILL -->|"{{include:}}"| ROUTES
-    SKILL -->|"{{include:}}"| REGISTRY
-    SKILL -->|"PHASE标记分段加载"| PROGRESSIVE
+    REFS --> AGENT_DETAILS
+    ROUTES --> COMMANDS_MD
+    REGISTRY --> AGENTS_MD
 
-    CONSTRAINTS -->|"降级规则"| DEGRADATION
-    CONSTRAINTS -->|"Token预算"| PROGRESSIVE
+    MCP_SERVER --> SKILL_TOOLS
+    MCP_SERVER --> PROGRESSIVE
+    MCP_SERVER --> SECURITY
+    SKILL_TOOLS --> TOOLS
+    SKILL_TOOLS --> DEGRADATION
+    TOOLS --> TOOLS_INIT
+    TOOLS --> SHARED
+    TOOLS_INIT --> SKILL_TOOLS
 
-    MCP_SERVER -->|"导入"| SKILL_TOOLS
-    MCP_SERVER -->|"导入"| PROGRESSIVE
-    MCP_SERVER -->|"导入"| DEGRADATION
-    MCP_SERVER -->|"导入"| CONFIG
-    MCP_SERVER -->|"导入"| SECURITY
+    DEGRADATION --> CONSTRAINTS
+    DEGRADATION --> CONFIG
+    DEGRADATION --> EMBEDDING
+    DEGRADATION --> SCRIPTS
 
-    SKILL_TOOLS -->|"导入"| DEGRADATION
-    SKILL_TOOLS -->|"导入"| CONFIG
-    SKILL_TOOLS -->|"导入"| EMBEDDING
+    PROGRESSIVE --> CONFIG
+    SKILL_TOOLS --> PROGRESSIVE
 
-    DEGRADATION -->|"TOOL_SCRIPT_MAP"| SCRIPTS
-    DEGRADATION -->|"导入"| EMBEDDING
-    DEGRADATION -->|"导入"| CONFIG
+    SCRIPT_KB --> DB_ENGINE
+    SCRIPT_KB --> VECTOR
+    SCRIPT_KB --> HYBRID
+    SCRIPT_KB --> EMBEDDING
+    SCRIPT_KB --> KB_CLIENT
+    SCRIPT_KB --> SECURITY
 
-    PROGRESSIVE -->|"LoadPhase枚举"| MCP_SERVER
-
-    HOOKS -->|"Hook配置"| SKILL_TOOLS
-    DEFAULT -->|"运行时配置"| MCP_SERVER
-
-    MCP_SERVER -->|"知识检索"| DB_ENGINE
-    MCP_SERVER -->|"向量检索"| HYBRID_SEARCH
-    MCP_SERVER -->|"去重"| DEDUP
-
-    HYBRID_SEARCH -->|"嵌入"| EMBEDDING
-    DB_ENGINE -->|"存储"| CONFIG
-
-    AGENTS -->|"Agent定义"| REGISTRY
-    COMMANDS -->|"命令详情"| ROUTES
-    REFERENCES -->|"参考文档"| SKILL
+    SKILL -.->|"MCP工具调用"| MCP_SERVER
+    SKILL -.->|"脚本降级"| SCRIPTS
+    MCP_SERVER -.->|"Resource暴露<br/>(计划v8.2.0)"| SKILL
 
     style SKILL fill:#e1f5fe,stroke:#0288d1,stroke-width:2px
-    style MCP_SERVER fill:#fff3e0,stroke:#f57c00,stroke-width:2px
-    style SKILL_TOOLS fill:#fff3e0,stroke:#f57c00,stroke-width:2px
-    style PROGRESSIVE fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
-    style DEGRADATION fill:#fce4ec,stroke:#c62828,stroke-width:2px
-    style CONSTRAINTS fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style MCP_SERVER fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style DEGRADATION fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+    style PROGRESSIVE fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style TOOLS fill:#fce4ec,stroke:#c62828,stroke-width:2px
+    style SCRIPTS fill:#f5f5f5,stroke:#616161,stroke-width:1px
 ```
 
-**依赖链说明：**
+**依赖关系说明**：
 
-1. **SKILL.md** 是入口文件，通过 `{{include:}}` 指令内联加载 `constraints.yaml`、`routes.yaml`、`registry.yaml`
-2. **mcp_server.py** 是MCP服务核心，注册所有工具并路由调用，依赖 `skill_tools.py`（Skill工具）、`progressive_loader.py`（加载状态）、`degradation.py`（降级管理）
-3. **skill_tools.py** 定义15个Skill专用MCP工具（skill_analyze, quality_gate_check等），依赖 `degradation.py` 进行脚本降级
-4. **progressive_loader.py** 实现4阶段状态机（SKELETON→FUNCTIONAL→ENHANCED→FULL），被 `mcp_server.py` 的 `resource_load_status` 工具调用
-5. **degradation.py** 包含两层降级：`DegradationManager`（知识检索降级链 normal→local_semantic→bm25_only→file_search）和 `MCPToolFallback`（MCP工具脚本降级），通过 `TOOL_SCRIPT_MAP` 映射到 `scripts/` 目录下的降级脚本
-6. **constraints.yaml** 定义核心约束、Token预算、降级规则，与 `degradation.py` 存在配置重复
+1. **SKILL.md → 配置文件**：SKILL.md通过`{{include:}}`指令内联加载constraints.yaml、routes.yaml、registry.yaml、triggers.yaml
+2. **SKILL.md → references/**：79+参考文档通过外部引用按需加载，按P0/P1/P2优先级分组
+3. **MCP Server → tools/**：15个Skill工具模块通过TOOL_REGISTRY动态注册，skill_tools.py作为薄委托层
+4. **MCP Server → core模块**：config.py提供响应构造，security.py提供输入验证，progressive_loader.py管理加载阶段
+5. **MCP Server → degradation.py**：MCPToolFallback从constraints.yaml读取降级映射，失败回退硬编码；DegradationManager管理知识检索降级链
+6. **Skill → MCP Server**：Skill层通过MCP协议调用工具，工具执行后自动推进加载阶段
+7. **Skill → scripts/**：MCP不可用时降级到scripts/目录Python脚本，脚本返回JSON格式结果
 
 ---
 
-*文档生成时间: 2026-05-25 | 基于 xuansto-skill-v2 v8.0.0 源码分析*
+## 附录：问题追踪摘要
+
+| 优先级 | 总数 | 已修复 | 未修复 |
+|--------|------|--------|--------|
+| P0 | 2 | 2 | 0 |
+| P1 | 6 | 6 | 0 |
+| P2 | 2 | 2 | 0 |
+| P3 | 2 | 0 | 2 |
+| ARCH | 8 | 0 | 8 |
+| DB | 3 | 0 | 3 |
+| MCP | 2 | 0 | 2 |
+| SKILL | 3 | 2 | 1 |
+| API | 2 | 1 | 1 |
+| **总计** | **30** | **13** | **17** |
+
+关键未修复问题：
+- ARCH-05: MCP Server未暴露Resource（计划v8.2.0）
+- ARCH-11: 错误处理不统一（计划v8.3.0）
+- DB-01/02: 双写一致性风险（计划v8.3.0）
+- SKILL-02: SKELETON阶段无可用命令（计划v8.2.0）
+- API-01: HTTP API与MCP stdio无统一Schema（计划v8.3.0）

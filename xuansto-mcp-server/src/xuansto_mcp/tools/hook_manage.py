@@ -11,17 +11,19 @@ hook_manage.py: 运行时接口，提供INLINE_HOOK_LOGIC内嵌执行逻辑和MC
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import re
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from ..core.config import SKILL_ROOT, SCRIPTS_DIR, HOOK_SCRIPTS_MAP
-from ..core.errors import make_error_response, make_success_response, ERR_VALIDATION, ERR_INTERNAL
+from ..core.config import HOOK_SCRIPTS_MAP, SCRIPTS_DIR
+from ..core.errors import ERR_INTERNAL, ERR_VALIDATION, make_error_response, make_success_response
 from ..core.logging_config import get_logger
 from ..core.subprocess_utils import run_script
 from ..core.validator import validate_input
@@ -83,10 +85,7 @@ def _is_test_file(filepath: Path) -> bool:
         if pat.search(name):
             return True
     parts = filepath.parts
-    for part in parts:
-        if part.lower() in _TEST_DIR_NAMES:
-            return True
-    return False
+    return any(part.lower() in _TEST_DIR_NAMES for part in parts)
 
 
 def _security_block_logic(project_path: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -262,11 +261,11 @@ def _git_status_check_logic(project_path: str, context: dict[str, Any] | None = 
         )
         if result.returncode != 0:
             return {"status": "pass", "message": "非Git仓库或git不可用", "details": {}}
-        lines = [l for l in result.stdout.strip().splitlines() if l.strip()]
+        lines = [ln for ln in result.stdout.strip().splitlines() if ln.strip()]
         if lines:
-            staged = [l for l in lines if l[0] in "MADRC"]
-            unstaged = [l for l in lines if l[1] in "MADRC"]
-            untracked = [l for l in lines if l.startswith("??")]
+            staged = [ln for ln in lines if ln[0] in "MADRC"]
+            unstaged = [ln for ln in lines if ln[1] in "MADRC"]
+            untracked = [ln for ln in lines if ln.startswith("??")]
             return {
                 "status": "warn",
                 "message": f"存在未提交的变更: {len(lines)} 个文件",
@@ -275,7 +274,7 @@ def _git_status_check_logic(project_path: str, context: dict[str, Any] | None = 
                     "staged": len(staged),
                     "unstaged": len(unstaged),
                     "untracked": len(untracked),
-                    "files": [l.strip() for l in lines[:20]],
+                    "files": [ln.strip() for ln in lines[:20]],
                 },
             }
         return {"status": "pass", "message": "工作区干净", "details": {}}
@@ -360,10 +359,8 @@ def _load_context_logic(project_path: str, context: dict[str, Any] | None = None
     root = Path(project_path)
     logs_dir = root / ".skill-logs"
     if not logs_dir.exists():
-        try:
+        with contextlib.suppress(OSError):
             logs_dir.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            pass
         return {"status": "pass", "message": "无历史会话日志，首次会话", "details": {"sessions_found": 0}}
     sessions = sorted(logs_dir.glob("session-*.md"), reverse=True)
     if sessions:
@@ -448,10 +445,8 @@ def _pattern_detect_logic(project_path: str, context: dict[str, Any] | None = No
         errors = context.get("session_errors", [])
         error_count = len(errors) if isinstance(errors, list) else 0
     if error_count >= 2:
-        try:
+        with contextlib.suppress(OSError):
             patterns_dir.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            pass
         return {"status": "warn", "message": f"检测到{error_count}个会话错误，建议分析模式", "details": {"error_count": error_count, "threshold": 2, "output": str(patterns_dir)}}
     return {"status": "pass", "message": f"会话错误数({error_count})低于阈值", "details": {"error_count": error_count}}
 

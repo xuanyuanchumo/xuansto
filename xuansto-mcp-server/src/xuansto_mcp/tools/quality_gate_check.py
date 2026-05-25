@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import re
@@ -7,15 +8,16 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core import atomic_write
-from ..core.config import SCRIPTS_DIR, GATE_SCRIPTS_MAP, QUALITY_GATES_PHASE_MAP, WORK_DIR
-from ..core.errors import make_error_response, make_success_response, ERR_VALIDATION
+from ..core.config import GATE_SCRIPTS_MAP, QUALITY_GATES_PHASE_MAP, SCRIPTS_DIR, WORK_DIR
+from ..core.errors import ERR_VALIDATION, make_error_response, make_success_response
 from ..core.logging_config import get_logger
 from ..core.notifications import notify
 from ..core.validator import validate_input, validate_path_safety
@@ -68,10 +70,7 @@ def _resolve_gates(gate_ids: list[str] | None, phase: str | None) -> list[str]:
 
 
 def _parse_gate_result(gate_id: str, result: subprocess.CompletedProcess[str]) -> dict[str, Any]:
-    if result.returncode == 0:
-        status = "PASS"
-    else:
-        status = "FAIL"
+    status = "PASS" if result.returncode == 0 else "FAIL"
     output = result.stdout.strip() if result.stdout else ""
     try:
         parsed = json.loads(output)
@@ -122,7 +121,7 @@ def _check_test_pass(project_path: str) -> dict[str, Any]:
             capture_output=True, text=True, timeout=30, cwd=str(project),
         )
         if result.returncode == 0:
-            test_count = len([l for l in result.stdout.strip().split("\n") if l.strip() and not l.startswith("=")])
+            test_count = len([ln for ln in result.stdout.strip().split("\n") if ln.strip() and not ln.startswith("=")])
             return {"status": "PASS", "gate_id": "TEST-PASS", "message": f"Tests collectible: {test_count} tests found"}
         else:
             return {"status": "FAIL", "gate_id": "TEST-PASS", "message": f"pytest collection failed: {result.stderr[:200]}", "suggestion": "Fix test collection errors before proceeding"}
@@ -982,10 +981,8 @@ def _save_persistent_hash_cache() -> None:
                     "mtime": mtimes.get(rel, 0.0),
                 }
             merged[proj] = entries
-    try:
+    with contextlib.suppress(OSError):
         atomic_write(_HASH_CACHE_PATH, json.dumps(merged, ensure_ascii=False, indent=2))
-    except OSError:
-        pass
 
 
 def _compute_file_hashes(project_path: str, force_refresh: bool = False) -> dict[str, str]:

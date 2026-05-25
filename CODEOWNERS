@@ -1,0 +1,24 @@
+# CODEOWNERS - Define code ownership for key directories
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything
+* @xuanyuanchumo
+
+# MCP Server core
+/xuansto-mcp-server/ @xuanyuanchumo
+
+# Skill definitions and agents
+/.trae/skills/xuansto-skill-v2/agents/ @xuanyuanchumo
+/.trae/skills/xuansto-skill-v2/commands/ @xuanyuanchumo
+/.trae/skills/xuansto-skill-v2/configs/ @xuanyuanchumo
+/.trae/skills/xuansto-skill-v2/scripts/ @xuanyuanchumo
+/.trae/skills/xuansto-skill-v2/references/ @xuanyuanchumo
+
+# CI/CD and GitHub configuration
+/.github/ @xuanyuanchumo
+
+# Documentation
+/docs/ @xuanyuanchumo
+
+# Build and packaging
+/xuansto-mcp-server/pyproject.toml @xuanyuanchumo

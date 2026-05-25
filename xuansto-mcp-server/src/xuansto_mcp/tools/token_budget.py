@@ -8,13 +8,20 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core.config import WORK_DIR
-from ..core.errors import make_error_response, make_success_response, ERR_VALIDATION
+from ..core.errors import ERR_VALIDATION, make_error_response, make_success_response
 from ..core.logging_config import get_logger
 from ..core.notifications import notify
 from ..core.validator import validate_input
 from ..models.schemas import TokenBudgetInput
 
 logger = get_logger("token_budget")
+
+PHASE_TOKEN_BUDGET_MAP: dict[str, int] = {
+    "skeleton": 2000,
+    "functional": 5000,
+    "enhanced": 10000,
+    "full": 20000,
+}
 
 BUDGET_FILE = WORK_DIR / "token_budget.json"
 
@@ -147,6 +154,19 @@ def _set_budget(
     }
 
 
+def _set_budget_from_phase(phase: str) -> dict[str, Any]:
+    budget_value = PHASE_TOKEN_BUDGET_MAP.get(phase)
+    if budget_value is None:
+        valid_phases = ", ".join(sorted(PHASE_TOKEN_BUDGET_MAP.keys()))
+        return {"error": True, "message": f"Unknown phase: {phase}. Valid phases: {valid_phases}"}
+    result = _set_budget(total_budget=budget_value)
+    result["phase"] = phase
+    result["budget_source"] = "phase_mapping"
+    logger.info("Token budget set from phase '%s': %d", phase, budget_value)
+    notify(f"Token budget set from phase '{phase}': {budget_value}", "info")
+    return result
+
+
 def _recommend(
     project_size: str | None = None,
     complexity: str | None = None,
@@ -210,6 +230,11 @@ def _inline_token_budget(action: str, **kwargs: Any) -> dict[str, Any]:
         return _get_status()
     elif action == "set_budget":
         return _set_budget(**{k: v for k, v in kwargs.items() if k in ("total_budget", "phase_allocations")})
+    elif action == "set_from_phase":
+        phase = kwargs.get("phase")
+        if not phase:
+            return {"error": True, "message": "set_from_phase requires 'phase' parameter"}
+        return _set_budget_from_phase(phase)
     elif action == "recommend":
         return _recommend(**{k: v for k, v in kwargs.items() if k in ("project_size", "complexity", "team_size")})
     elif action == "report":
@@ -234,9 +259,10 @@ def register(mcp: FastMCP) -> None:
         complexity: str | None = None,
         team_size: int | None = None,
         period: str = "session",
+        phase: str | None = None,
     ) -> dict[str, Any]:
-        """Token预算管理：查询预算状态、设置预算、获取推荐、生成使用报告、运行时强制执行。status操作获取当前Token预算状态(总预算/已用/剩余/阶段分配)，set_budget操作设置Token总预算和阶段分配，recommend操作根据项目规模/复杂度/团队人数获取预算推荐，report操作生成Token使用报告，enforce操作检查Token使用率并触发强制措施(80%触发context_compress，95%触发degrade_phase)。"""
-        validated, err = validate_input(TokenBudgetInput, action=action, total_budget=total_budget, phase_allocations=phase_allocations, project_size=project_size, complexity=complexity, team_size=team_size, period=period)
+        """Token预算管理：查询预算状态、设置预算、获取推荐、生成使用报告、运行时强制执行、基于阶段设置预算。status操作获取当前Token预算状态(总预算/已用/剩余/阶段分配)，set_budget操作设置Token总预算和阶段分配，set_from_phase操作根据阶段名称(skeleton/functional/enhanced/full)自动设置预算，recommend操作根据项目规模/复杂度/团队人数获取预算推荐，report操作生成Token使用报告，enforce操作检查Token使用率并触发强制措施(80%触发context_compress，95%触发degrade_phase)。"""
+        validated, err = validate_input(TokenBudgetInput, action=action, total_budget=total_budget, phase_allocations=phase_allocations, project_size=project_size, complexity=complexity, team_size=team_size, period=period, phase=phase)
         if err:
             return err
         logger.info("token_budget called: action=%s", action)
@@ -247,6 +273,13 @@ def register(mcp: FastMCP) -> None:
                 if total_budget is None and phase_allocations is None:
                     return make_error_response(ValueError("set_budget操作需要total_budget或phase_allocations参数"), error_code=ERR_VALIDATION)
                 return make_success_response(_set_budget(total_budget, phase_allocations))
+            elif action == "set_from_phase":
+                if not phase:
+                    return make_error_response(ValueError("set_from_phase操作需要phase参数(skeleton/functional/enhanced/full)"), error_code=ERR_VALIDATION)
+                result = _set_budget_from_phase(phase)
+                if result.get("error"):
+                    return make_error_response(ValueError(result.get("message", "Unknown phase")), error_code=ERR_VALIDATION)
+                return make_success_response(result)
             elif action == "recommend":
                 return make_success_response(_recommend(project_size, complexity, team_size))
             elif action == "report":
@@ -265,7 +298,7 @@ def register(mcp: FastMCP) -> None:
                     "status": status,
                 })
             else:
-                return make_error_response(ValueError(f"未知操作: {action}，支持: status, set_budget, recommend, report, enforce"), error_code=ERR_VALIDATION)
+                return make_error_response(ValueError(f"未知操作: {action}，支持: status, set_budget, set_from_phase, recommend, report, enforce"), error_code=ERR_VALIDATION)
         except Exception as e:
             logger.error("token_budget error: %s", e)
             return make_error_response(e)

@@ -7,7 +7,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from .core.errors import make_success_response, retry_tool_call
+from .core.errors import ErrorCodes, make_response, retry_tool_call
 from .core.hook_engine import get_hook_engine
 from .core.logging_config import setup_logging
 from .core.notifications import notify
@@ -24,38 +24,42 @@ mcp = FastMCP(
 )
 
 from .tools import (
-    skill_analyze,
-    knowledge_search,
-    knowledge_inject,
-    quality_gate_check,
-    spec_drift_detect,
-    security_scan,
-    code_simplify,
-    session_manage,
-    workflow_dispatch,
-    agent_status,
     agent_manage,
-    hook_manage,
-    resource_load_status,
-    context_compress,
-    server_health,
-    decision_log,
-    token_budget,
-    project_init,
-    metrics_report,
+    agent_status,
+    code_simplify,
     config_manage,
+    context_compress,
+    decision_log,
+    hook_manage,
+    knowledge_inject,
+    knowledge_search,
+    metrics_report,
+    project_init,
+    quality_gate_check,
+    resource_load_status,
+    security_scan,
+    server_health,
+    session_manage,
+    skill_analyze,
+    spec_drift_detect,
+    token_budget,
+    workflow_dispatch,
 )
+
 
 def _with_hook_interception(tool_name: str, tool_fn: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(tool_fn)
     async def wrapped(**kwargs: Any) -> dict[str, Any]:
-        import time
         import json as _json
-        from .tools.server_health import record_tool_call
+        import time
+
+        from .core.audit_logger import get_audit_logger
         from .tools.resource_load_status import record_token_usage
+        from .tools.server_health import record_tool_call
 
         start = time.time()
         hook_errors: list[dict[str, str]] = []
+        audit = get_audit_logger()
 
         engine = get_hook_engine()
         pre_results, pre_errors = await engine.execute_pre_hooks(tool_name, kwargs)
@@ -73,28 +77,34 @@ def _with_hook_interception(tool_name: str, tool_fn: Callable[..., Any]) -> Call
                 latency = (time.time() - start) * 1000
                 record_tool_call(tool_name, latency, False)
                 notify(f"Tool {tool_name} blocked by pre-hook: {pr.get('reason', '')}", "warning")
-                result = make_success_response({
-                    "action": "blocked",
-                    "tool": tool_name,
-                    "block_reason": pr.get("reason", "Pre-hook blocked execution"),
-                    "hook": pr.get("hook", ""),
-                })
+                result = make_response(
+                    error=True,
+                    error_code=ErrorCodes.BLOCKED_BY_HOOK,
+                    message=pr.get("reason", "Pre-hook blocked execution"),
+                )
+                result["tool"] = tool_name
+                result["action"] = "blocked"
+                result["hook"] = pr.get("hook", "")
                 if hook_errors:
                     result["hook_errors"] = hook_errors
+                audit.log(tool_name, kwargs, result, latency, False)
                 return result
 
         if security_hook_failed:
             latency = (time.time() - start) * 1000
             record_tool_call(tool_name, latency, False)
             notify(f"Tool {tool_name} blocked: security hook failed", "warning")
-            result = make_success_response({
-                "action": "blocked",
-                "tool": tool_name,
-                "block_reason": "Security hook execution failed - blocking by default",
-                "hook": "security",
-            })
+            result = make_response(
+                error=True,
+                error_code=ErrorCodes.SECURITY_VIOLATION,
+                message="Security hook execution failed - blocking by default",
+            )
+            result["tool"] = tool_name
+            result["action"] = "blocked"
+            result["hook"] = "security"
             if hook_errors:
                 result["hook_errors"] = hook_errors
+            audit.log(tool_name, kwargs, result, latency, False)
             return result
 
         rate_allowed, rate_info = check_rate_limit(tool_name)
@@ -102,20 +112,24 @@ def _with_hook_interception(tool_name: str, tool_fn: Callable[..., Any]) -> Call
             latency = (time.time() - start) * 1000
             record_tool_call(tool_name, latency, False)
             notify(f"Tool {tool_name} rate limited", "warning")
-            return {
-                "error": True,
-                "error_code": rate_info.get("error_code", "ERR_RATE_LIMITED"),
-                "message": rate_info.get("message", "Rate limit exceeded"),
-                "details": rate_info,
-            }
+            result = make_response(
+                error=True,
+                error_code=ErrorCodes.RATE_LIMITED,
+                message=rate_info.get("message", "Rate limit exceeded"),
+            )
+            result["details"] = rate_info
+            audit.log(tool_name, kwargs, result, latency, False)
+            return result
 
         try:
             result = await retry_tool_call(tool_name, tool_fn, kwargs)
             latency = (time.time() - start) * 1000
             record_tool_call(tool_name, latency, True)
+            audit.log(tool_name, kwargs, result if isinstance(result, dict) else {"data": result}, latency, True)
         except Exception as e:
             latency = (time.time() - start) * 1000
             record_tool_call(tool_name, latency, False)
+            audit.log(tool_name, kwargs, {"error": True, "exception": str(e)}, latency, False)
             notify(f"Tool {tool_name} failed: {e}", "error")
             raise
 
@@ -127,12 +141,14 @@ def _with_hook_interception(tool_name: str, tool_fn: Callable[..., Any]) -> Call
             pass
 
         if isinstance(result, dict):
+            if "error" not in result:
+                result = make_response(data=result)
             post_errors = await engine.execute_post_hooks(tool_name, kwargs, result)
             hook_errors.extend(post_errors)
             if hook_errors:
                 result["hook_errors"] = hook_errors
             return result
-        return {"error": False, "data": result}
+        return make_response(data=result)
 
     wrapped.__signature__ = inspect.signature(tool_fn)
     return wrapped
@@ -182,11 +198,13 @@ _REGISTERED_TOOL_NAMES = list(_TOOL_FUNCTIONS.keys())
 _TOOL_REGISTRY = dict(_TOOL_FUNCTIONS)
 
 _hook_engine = get_hook_engine()
-from .tools.hook_manage import execute_pre_hooks, execute_post_hooks
+from .tools.hook_manage import execute_post_hooks, execute_pre_hooks
+
 _hook_engine.register_hook("pre", execute_pre_hooks)
 _hook_engine.register_hook("post", execute_post_hooks)
 
 from .core.config import HOOKS_PATH
+
 _hook_engine.load_hooks_from_config(HOOKS_PATH)
 
 from .resources import skill_resources
@@ -222,7 +240,7 @@ def main() -> None:
     agent_load_on_startup()
     from .tools.server_health import load_on_startup as health_load_on_startup
     health_load_on_startup()
-    from .tools.server_health import metrics_load_on_startup, degradation_load_on_startup
+    from .tools.server_health import degradation_load_on_startup, metrics_load_on_startup
     metrics_load_on_startup()
     degradation_load_on_startup()
     from .core.degradation import start_fallback_watcher

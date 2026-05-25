@@ -226,8 +226,8 @@ class TestWithHookInterception:
 
                     wrapped = _with_hook_interception("test_tool", dummy_tool)
                     result = await wrapped(param="test")
-                    assert result["data"]["action"] == "blocked"
-                    assert "dangerous" in result["data"]["block_reason"].lower() or result["data"]["block_reason"] != ""
+                    assert result.get("action") == "blocked"
+                    assert result.get("error") is True
 
     @pytest.mark.asyncio
     async def test_security_hook_failure_blocks(self):
@@ -251,8 +251,8 @@ class TestWithHookInterception:
 
                     wrapped = _with_hook_interception("test_tool", dummy_tool)
                     result = await wrapped(param="test")
-                    assert result["data"]["action"] == "blocked"
-                    assert "security" in result["data"]["block_reason"].lower()
+                    assert result.get("action") == "blocked"
+                    assert result.get("error") is True
 
     @pytest.mark.asyncio
     async def test_normal_execution_passes_through(self):

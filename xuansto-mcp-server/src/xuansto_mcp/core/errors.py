@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Callable
-
+from collections.abc import Callable
+from typing import Any
 
 ERR_VALIDATION = "ERR_VALIDATION"
 ERR_NOT_FOUND = "ERR_NOT_FOUND"
@@ -12,6 +12,25 @@ ERR_CONFIG = "ERR_CONFIG"
 ERR_INTERNAL = "ERR_INTERNAL"
 ERR_RATE_LIMIT = "ERR_RATE_LIMIT"
 ERR_PERMISSION = "ERR_PERMISSION"
+
+
+class ErrorCodes:
+    TOOL_NOT_FOUND = "TOOL_NOT_FOUND"
+    INVALID_PARAMS = "INVALID_PARAMS"
+    EXECUTION_FAILED = "EXECUTION_FAILED"
+    RATE_LIMITED = "RATE_LIMITED"
+    BLOCKED_BY_HOOK = "BLOCKED_BY_HOOK"
+    SECURITY_VIOLATION = "SECURITY_VIOLATION"
+    DEGRADED = "DEGRADED"
+    TIMEOUT = "TIMEOUT"
+    NOT_FOUND = "NOT_FOUND"
+    INTERNAL_ERROR = "INTERNAL_ERROR"
+
+
+def make_response(data: Any = None, error: bool = False, error_code: str = "", message: str = "") -> dict[str, Any]:
+    if error:
+        return {"error": True, "error_code": error_code, "message": message, "data": None}
+    return {"error": False, "data": data}
 
 ERROR_CODE_TO_HTTP_STATUS: dict[str, int] = {
     ERR_VALIDATION: 400,
@@ -232,7 +251,7 @@ def make_error_response(error: Exception, error_code: str | None = None, languag
     try:
         from pydantic import ValidationError as PydanticValidationError
         if isinstance(error, PydanticValidationError):
-            details = [{"field": ".".join(str(l) for l in e["loc"]), "message": e["msg"]} for e in error.errors()]
+            details = [{"field": ".".join(str(loc) for loc in e["loc"]), "message": e["msg"]} for e in error.errors()]
             result = {
                 "error": True,
                 "error_code": resolved_code or ERR_VALIDATION,

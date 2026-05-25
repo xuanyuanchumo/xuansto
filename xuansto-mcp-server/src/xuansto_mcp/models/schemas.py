@@ -31,12 +31,13 @@ class SkillAnalyzeInput(BaseModel):
 
 class KnowledgeSearchInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["retrieve"] = Field(description="操作类型: retrieve")
+    action: Literal["retrieve", "cleanup_versions"] = Field(description="操作类型: retrieve, cleanup_versions")
     query: str | None = Field(default=None, description="搜索查询文本")
     top_k: int = Field(default=5, ge=1, le=50, description="返回结果数量上限")
     search_type: Literal["hybrid", "semantic_only", "keyword_only"] = Field(default="hybrid", description="搜索策略: hybrid, semantic_only, keyword_only")
     scope: Literal["general", "workspace", "experience"] | None = Field(default=None, description="限定搜索范围: general, workspace, experience")
     min_confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="最低置信度阈值")
+    keep_last_n: int = Field(default=10, ge=1, le=100, description="版本清理保留数量(cleanup_versions时使用)")
 
 
 class QualityGateCheckInput(BaseModel):
@@ -121,7 +122,7 @@ class HookManageInput(BaseModel):
 
 class ResourceLoadStatusInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["status", "preload", "cache", "clear_cache", "loading_progress", "token_report", "disclosure_transition"] = Field(description="操作类型: status, preload, cache, clear_cache, loading_progress, token_report, disclosure_transition")
+    action: Literal["status", "preload", "cache", "clear_cache", "loading_progress", "token_report", "disclosure_transition", "transition_check", "features", "metrics"] = Field(description="操作类型: status, preload, cache, clear_cache, loading_progress, token_report, disclosure_transition, transition_check, features, metrics")
     phase: int | None = Field(default=None, ge=0, le=3, description="目标加载阶段(0-3): 0=骨架, 1=功能, 2=增强, 3=完整")
     resource_ids: list[str] | None = Field(default=None, description="指定资源ID列表")
     resource_uris: list[str] | None = Field(default=None, description="资源URI列表(preload时使用)")
@@ -133,8 +134,9 @@ class ResourceLoadStatusInput(BaseModel):
 
 class ServerHealthInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["check", "negotiate_version", "capabilities"] = Field(description="操作类型: check, negotiate_version, capabilities")
-    client_version: str | None = Field(default=None, description="客户端API版本(negotiate_version时使用)")
+    action: Literal["check", "negotiate_version", "capabilities", "version"] = Field(description="操作类型: check, negotiate_version, capabilities, version")
+    client_version: str | None = Field(default=None, description="客户端API版本(negotiate_version/version时使用)")
+    client_api_version: str | None = Field(default=None, description="客户端API版本(version时使用，与client_version等效)")
 
 
 class ContextCompressInput(BaseModel):
@@ -169,13 +171,14 @@ class DecisionLogInput(BaseModel):
 
 class TokenBudgetInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["status", "set_budget", "recommend", "report", "enforce"] = Field(description="操作类型: status, set_budget, recommend, report, enforce")
+    action: Literal["status", "set_budget", "recommend", "report", "enforce", "set_from_phase"] = Field(description="操作类型: status, set_budget, recommend, report, enforce, set_from_phase")
     total_budget: int | None = Field(default=None, ge=1000, description="总Token预算(set_budget时使用)")
     phase_allocations: dict[str, int] | None = Field(default=None, description="阶段分配(set_budget时使用)")
     project_size: Literal["small", "medium", "large"] | None = Field(default=None, description="项目规模(recommend时使用): small, medium, large")
     complexity: Literal["low", "medium", "high"] | None = Field(default=None, description="复杂度(recommend时使用): low, medium, high")
     team_size: int | None = Field(default=None, ge=1, le=50, description="团队人数(recommend时使用)")
     period: Literal["daily", "weekly", "session"] = Field(default="session", description="报告周期(report时使用): daily, weekly, session")
+    phase: str | None = Field(default=None, description="阶段名称(set_from_phase时使用): skeleton, functional, enhanced, full")
 
 
 class ProjectInitInput(BaseModel):

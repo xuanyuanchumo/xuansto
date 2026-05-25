@@ -6,17 +6,17 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core.config import (
+    _CONFIG_VALIDATION_RESULTS,
     GATE_SCRIPTS_MAP,
-    QUALITY_GATES_PHASE_MAP,
     HOOK_SCRIPTS_MAP,
+    QUALITY_GATES_PHASE_MAP,
     SKILL_ROOT,
     WORK_DIR,
-    _CONFIG_VALIDATION_RESULTS,
-    _validate_config,
     _resolve_skill_file,
+    _validate_config,
     reload_config,
 )
-from ..core.errors import make_error_response, make_success_response, ERR_VALIDATION
+from ..core.errors import ERR_VALIDATION, make_error_response, make_success_response
 from ..core.logging_config import get_logger
 from ..core.validator import validate_input
 from ..models.schemas import ConfigManageInput
@@ -27,7 +27,7 @@ logger = get_logger("config_manage")
 def _validate_all_configs() -> dict[str, Any]:
     results: dict[str, Any] = {}
     try:
-        from ..models.config_models import SkillConfigModel, FallbackConfigModel, ConstraintsModel
+        from ..models.config_models import ConstraintsModel, FallbackConfigModel, SkillConfigModel
     except ImportError:
         return {"error": True, "message": "config_models not available"}
 

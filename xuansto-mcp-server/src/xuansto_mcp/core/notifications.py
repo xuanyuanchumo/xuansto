@@ -36,16 +36,14 @@ _NOTIFICATION_EVENTS = frozenset({
     "phase_degradation",
     "token_budget_exceeded",
     "gate_failed",
+    "config_change",
 })
 
 
 def set_notification_callback(callback: NotificationCallback | None) -> None:
     global _notification_callback
     with _notification_lock:
-        if callback is None:
-            _notification_callback = _NullNotificationCallback()
-        else:
-            _notification_callback = callback
+        _notification_callback = _NullNotificationCallback() if callback is None else callback
 
 
 def get_notification_callback() -> NotificationCallback:
@@ -55,10 +53,7 @@ def get_notification_callback() -> NotificationCallback:
 def set_mcp_notification_callback(callback: MCPNotificationCallback | None) -> None:
     global _mcp_notification_callback
     with _mcp_notification_lock:
-        if callback is None:
-            _mcp_notification_callback = _NullMCPNotificationCallback()
-        else:
-            _mcp_notification_callback = callback
+        _mcp_notification_callback = _NullMCPNotificationCallback() if callback is None else callback
 
 
 def get_mcp_notification_callback() -> MCPNotificationCallback:

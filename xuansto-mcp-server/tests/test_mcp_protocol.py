@@ -24,7 +24,7 @@ async def _run_with_session(test_fn):
 
 
 @pytest.mark.asyncio
-async def test_list_tools_returns_17_tools():
+async def test_list_tools_returns_20_tools():
     async def check(session):
         tools_result = await session.list_tools()
         tool_names = [t.name for t in tools_result.tools]
@@ -39,6 +39,7 @@ async def test_list_tools_returns_17_tools():
             "session_manage",
             "workflow_dispatch",
             "agent_status",
+            "agent_manage",
             "hook_manage",
             "resource_load_status",
             "context_compress",
@@ -46,6 +47,8 @@ async def test_list_tools_returns_17_tools():
             "decision_log",
             "token_budget",
             "project_init",
+            "metrics_report",
+            "config_manage",
         ]
         for tool_name in expected_tools:
             assert tool_name in tool_names, f"Missing tool: {tool_name}"
@@ -59,7 +62,7 @@ async def test_list_tools_returns_17_tools():
 @pytest.mark.asyncio
 async def test_call_server_health():
     async def check(session):
-        result = await session.call_tool("server_health", {})
+        result = await session.call_tool("server_health", {"action": "check"})
         assert not result.isError
         text = result.content[0].text if result.content else ""
         data = json.loads(text)

@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-
 TOOL_CALL_TIMEOUT_SECONDS = 30
 CHAIN_TIMEOUT_SECONDS = 120
 MAX_CHAIN_RETRIES = 2

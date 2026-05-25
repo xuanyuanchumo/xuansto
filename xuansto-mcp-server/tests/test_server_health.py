@@ -25,7 +25,7 @@ async def test_server_health_returns_healthy_status():
             break
 
     assert tool_fn is not None
-    result = await tool_fn.fn()
+    result = await tool_fn.fn(action="check")
 
     assert result["error"] is False
     data = result["data"]
@@ -43,10 +43,10 @@ async def test_server_health_returns_version():
             tool_fn = fn
             break
 
-    result = await tool_fn.fn()
+    result = await tool_fn.fn(action="check")
     data = result["data"]
     assert "version" in data
-    assert data["version"] == "5.0.0"
+    assert data["version"] == "8.0.0"
 
 
 @pytest.mark.asyncio
@@ -60,7 +60,7 @@ async def test_server_health_returns_config_paths():
             tool_fn = fn
             break
 
-    result = await tool_fn.fn()
+    result = await tool_fn.fn(action="check")
     data = result["data"]
     assert "config" in data
     config = data["config"]
@@ -84,7 +84,7 @@ async def test_server_health_returns_uptime():
             tool_fn = fn
             break
 
-    result = await tool_fn.fn()
+    result = await tool_fn.fn(action="check")
     data = result["data"]
     assert "uptime_seconds" in data
     assert data["uptime_seconds"] >= 0

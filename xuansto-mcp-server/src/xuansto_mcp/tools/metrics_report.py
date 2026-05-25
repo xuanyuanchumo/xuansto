@@ -8,7 +8,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core.config import WORK_DIR
-from ..core.errors import make_error_response, make_success_response, ERR_VALIDATION
+from ..core.errors import ERR_VALIDATION, make_error_response, make_success_response
 from ..core.logging_config import get_logger
 from ..core.validator import validate_input
 from ..models.schemas import MetricsReportInput
@@ -60,7 +60,8 @@ _TIME_RANGE_SECONDS: dict[str, float] = {
 
 def _query_metrics(tool_name: str | None, time_range: str, metric_type: str) -> dict[str, Any]:
     try:
-        from .server_health import _TOOL_METRICS, _metrics_lock as health_lock
+        from .server_health import _TOOL_METRICS
+        from .server_health import _metrics_lock as health_lock
         with health_lock:
             metrics_snapshot = {
                 name: {
@@ -106,7 +107,8 @@ def _query_metrics(tool_name: str | None, time_range: str, metric_type: str) -> 
 
 def _summary_metrics(time_range: str) -> dict[str, Any]:
     try:
-        from .server_health import _TOOL_METRICS, _DEGRADATION_COUNTS, _metrics_lock as health_lock
+        from .server_health import _DEGRADATION_COUNTS, _TOOL_METRICS
+        from .server_health import _metrics_lock as health_lock
         with health_lock:
             metrics_snapshot = dict(_TOOL_METRICS)
             degradation_snapshot = dict(_DEGRADATION_COUNTS)
@@ -181,7 +183,8 @@ def _inline_metrics_report(action: str, **kwargs: Any) -> dict[str, Any]:
 
 def _evaluate_metrics(criterion: str = "all") -> dict[str, Any]:
     try:
-        from .server_health import _TOOL_METRICS, _DEGRADATION_COUNTS, _metrics_lock as health_lock
+        from .server_health import _DEGRADATION_COUNTS, _TOOL_METRICS
+        from .server_health import _metrics_lock as health_lock
         with health_lock:
             metrics_snapshot = dict(_TOOL_METRICS)
             degradation_snapshot = dict(_DEGRADATION_COUNTS)

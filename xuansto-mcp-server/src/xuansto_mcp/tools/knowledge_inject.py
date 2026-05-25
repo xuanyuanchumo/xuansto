@@ -17,6 +17,7 @@ from ..core.config import (
     KNOWLEDGE_GENERAL_DIR,
     KNOWLEDGE_WORKSPACE_DIR,
 )
+from ..core.database import persist_state
 from ..core.errors import ERR_VALIDATION, make_error_response, make_success_response
 from ..core.logging_config import get_logger
 from ..core.search_engine import get_search_engine
@@ -255,8 +256,30 @@ def _action_add(
             chroma_indexed = True
         except ImportError:
             logger.warning("ChromaDB not available, skipping vector index for added knowledge")
+            try:
+                persist_state("knowledge_entries", {
+                    "id": filename,
+                    "title": title,
+                    "content": content,
+                    "scope": scope,
+                    "tags_json": tags or [],
+                    "sync_status": "pending",
+                })
+            except Exception:
+                logger.debug("Failed to mark knowledge entry %s as pending in main DB", filename)
         except Exception as exc:
             logger.warning("Failed to index added knowledge in ChromaDB: %s", exc)
+            try:
+                persist_state("knowledge_entries", {
+                    "id": filename,
+                    "title": title,
+                    "content": content,
+                    "scope": scope,
+                    "tags_json": tags or [],
+                    "sync_status": "pending",
+                })
+            except Exception:
+                logger.debug("Failed to mark knowledge entry %s as pending in main DB", filename)
 
     return {
         "added_id": filename,
@@ -326,8 +349,22 @@ def _action_update(
             chroma_updated = True
         except ImportError:
             logger.warning("ChromaDB not available, skipping vector index update")
+            try:
+                persist_state("knowledge_entries", {
+                    "id": entry_id,
+                    "sync_status": "pending",
+                })
+            except Exception:
+                logger.debug("Failed to mark knowledge entry %s as pending in main DB", entry_id)
         except Exception as exc:
             logger.warning("Failed to update knowledge entry in ChromaDB: %s", exc)
+            try:
+                persist_state("knowledge_entries", {
+                    "id": entry_id,
+                    "sync_status": "pending",
+                })
+            except Exception:
+                logger.debug("Failed to mark knowledge entry %s as pending in main DB", entry_id)
 
     return {
         "entry_id": entry_id,

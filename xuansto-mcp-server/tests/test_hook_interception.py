@@ -43,7 +43,7 @@ def test_get_pre_hooks():
     assert "decision-log-persist" in hooks
 
     hooks = get_pre_hooks("skill_analyze")
-    assert hooks == []
+    assert "platform-detect" in hooks
 
 
 def test_get_post_hooks():
@@ -106,7 +106,7 @@ def test_execute_pre_hooks_no_hooks_for_unknown_tool():
         "project_path": ".",
         "command": "rm -rf /",
     }
-    results, errors = execute_pre_hooks("skill_analyze", kwargs)
+    results, errors = execute_pre_hooks("nonexistent_tool_xyz", kwargs)
     assert results == []
     assert errors == []
 
@@ -129,15 +129,21 @@ def test_execute_post_hooks_no_hook_for_tool():
 
 def test_with_hook_interception_blocks():
     from xuansto_mcp.server import _with_hook_interception
+    from xuansto_mcp.core.hook_engine import get_hook_engine
+    from xuansto_mcp.tools.hook_manage import execute_pre_hooks as hook_manage_pre
+
+    engine = get_hook_engine()
+    if not engine._pre_hooks.get("code_simplify") and not engine._global_pre_hooks:
+        engine.register_hook("pre", hook_manage_pre)
 
     async def fake_tool(**kwargs):
         return make_success_response({"status": "ok"})
 
     wrapped = _with_hook_interception("code_simplify", fake_tool)
     result = asyncio.run(wrapped(project_path=".", command="rm -rf /"))
-    assert result["data"]["action"] == "blocked"
-    assert result["data"]["hook"] == "security-block"
-    assert result["data"]["tool"] == "code_simplify"
+    assert result["action"] == "blocked"
+    assert result["hook"] == "security-block"
+    assert result["tool"] == "code_simplify"
 
 
 def test_with_hook_interception_passes():
@@ -168,7 +174,7 @@ def test_with_hook_interception_records_metrics_on_block():
     engine = get_hook_engine()
     with patch.object(engine, "execute_pre_hooks", side_effect=mock_pre):
         result = asyncio.run(wrapped(project_path="."))
-        assert result["data"]["action"] == "blocked"
+        assert result["action"] == "blocked"
 
     metrics = _TOOL_METRICS.get("__test_hook_block__")
     assert metrics is not None

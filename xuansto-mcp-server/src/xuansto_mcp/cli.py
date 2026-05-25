@@ -53,7 +53,7 @@ def _health_check() -> dict[str, Any]:
 
     tool_fn = _TOOL_FUNCTIONS["server_health"]
     try:
-        result = _run_async(tool_fn())
+        result = _run_async(tool_fn(action="check"))
         if isinstance(result, dict):
             return result
         return {"error": False, "data": result}
@@ -65,7 +65,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="xuansto-cli", description="xuansto-mcp-server 命令行工具")
     subparsers = parser.add_subparsers(dest="command", help="可用命令")
 
-    health_parser = subparsers.add_parser("health", help="检查 MCP Server 健康状态")
+    subparsers.add_parser("health", help="检查 MCP Server 健康状态")
     invoke_parser = subparsers.add_parser("invoke", help="调用 MCP 工具")
     invoke_parser.add_argument("tool", help="工具名称")
     invoke_parser.add_argument("--params", default="{}", help="工具参数 (JSON 格式)")
@@ -74,11 +74,11 @@ def main() -> None:
     gate_parser.add_argument("gate_id", help="门禁ID (如 GATE-007)")
     gate_parser.add_argument("--project-path", default=".", help="项目路径")
 
-    version_parser = subparsers.add_parser("version", help="显示版本号")
+    subparsers.add_parser("version", help="显示版本号")
 
-    config_parser = subparsers.add_parser("config", help="显示当前配置")
+    subparsers.add_parser("config", help="显示当前配置")
 
-    reload_parser = subparsers.add_parser("reload", help="重载配置")
+    subparsers.add_parser("reload", help="重载配置")
 
     workflow_parser = subparsers.add_parser("workflow", help="工作流管理")
     workflow_sub = workflow_parser.add_subparsers(dest="workflow_action")
@@ -105,12 +105,12 @@ def main() -> None:
     session_load = session_sub.add_parser("load", help="加载会话状态")
     session_load.add_argument("--session-id", default="", help="会话ID")
 
-    session_list = session_sub.add_parser("list", help="列出会话")
+    session_sub.add_parser("list", help="列出会话")
 
     agent_parser = subparsers.add_parser("agent", help="Agent管理")
     agent_sub = agent_parser.add_subparsers(dest="agent_action")
 
-    agent_list = agent_sub.add_parser("list", help="列出Agent")
+    agent_sub.add_parser("list", help="列出Agent")
 
     agent_create = agent_sub.add_parser("create", help="创建Agent")
     agent_create.add_argument("--type", dest="agent_type", required=True, help="Agent类型")
