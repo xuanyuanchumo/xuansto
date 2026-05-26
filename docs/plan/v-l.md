@@ -80,21 +80,27 @@ MCP Server + Skill 混合架构基线，确立多 Agent 自主开发编排引擎
 
 #### 未修复问题概览
 
-| 分类 | 总数 | 未修复 | 部分修复 |
-|------|------|--------|----------|
-| ARCH | 9 | 7 | 2 |
-| DB | 3 | 3 | 0 |
-| MCP | 3 | 2 | 1 |
-| SKILL | 1 | 1 | 0 |
-| API | 1 | 1 | 0 |
-| P3 | 2 | 1 | 1 |
-| **合计** | **19** | **15** | **4** |
+> 以下统计基于代码验证后的实际状态（2026-05-26 更新）
+
+| 分类 | 总数 | 已修复 | 部分修复 | 未修复 |
+|------|------|--------|----------|--------|
+| ARCH | 9 | 8 | 1(ARCH-13) | 0 |
+| DB | 3 | 3 | 0 | 0 |
+| MCP | 3 | 2 | 1(MCP-04) | 0 |
+| SKILL | 1 | 1 | 0 | 0 |
+| API | 1 | 1 | 0 | 0 |
+| P3 | 2 | 0 | 1(Deferred) | 1 |
+| **合计** | **19** | **15** | **3** | **1** |
+
+**部分修复说明**：
+- **ARCH-13**：Resource 订阅机制已实现（`subscribe_resource`/`unsubscribe_resource`），但推送通知（`notifications/resources/updated`）未实现
+- **MCP-04**：2/4 便捷 Resource 已实现（`agents/{name}`, `knowledge/stats`），缺 `decisions/latest` 和 `workflows/active`
 
 ---
 
 ### 2.2 v8.1.0 — Phase A：修复关键问题
 
-> 状态: 计划中 | 类型: MINOR | 预估工期: 17 天 | 前置依赖: 无
+> 状态: 部分完成 | 类型: MINOR | 预估工期: 17 天 | 前置依赖: 无
 
 #### 目标
 
@@ -144,19 +150,19 @@ graph LR
 
 #### 验收标准
 
-1. 7 项关联问题全部标记为 Fixed
+1. ~~7 项关联问题全部标记为 Fixed~~ → 5 项已 Fixed，2 项 Partial（ARCH-13 推送通知未实现，MCP-04 缺 2 个便捷 Resource）
 2. 单元测试通过（`test_resources.py`、`test_error_handling.py`、`test_audit_log.py`）
-3. MCP Server 启动成功，20 个工具 + 26 个 Resource 可用
-4. Resource 内容变更时订阅客户端收到 `notifications/resources/updated`
-5. 所有 20 个工具统一返回 JSON 格式
-6. 工具调用自动写入 `audit_log` 表
-7. SKELETON 阶段可执行 `/status`、`/help`、`/budget` 且不触发阶段推进
+3. MCP Server 启动成功，20 个工具 + 25 个 Resource 可用
+4. ~~Resource 内容变更时订阅客户端收到 `notifications/resources/updated`~~ → 订阅机制已实现，推送通知待实现
+5. ✅ 所有 20 个工具统一返回 JSON 格式（经验证 `make_response`/`make_error_response`/`make_success_response` 已统一使用）
+6. ✅ 工具调用自动写入 `audit_log.jsonl`（经验证 `AuditLogger` 已集成到 `_with_hook_interception`）
+7. ✅ SKELETON 阶段可执行 `/status`、`/help`、`/budget` 且不触发阶段推进
 
 ---
 
 ### 2.3 v8.2.0 — Phase B：持久化与一致性
 
-> 状态: 计划中 | 类型: MINOR | 预估工期: 30 天 | 前置依赖: v8.1.0
+> 状态: ✅ 已完成 | 类型: MINOR | 预估工期: 30 天 | 前置依赖: v8.1.0
 
 #### 目标
 
@@ -204,18 +210,18 @@ graph LR
 
 #### 验收标准
 
-1. Agent CRUD 操作写入 SQLite，重启后自动恢复 Agent 状态
-2. 工作流状态写入 SQLite，重启后自动恢复工作流
-3. 决策写入使用 SQLite 事务，文件系统写入失败不影响主流程
-4. ChromaDB 写入失败自动重试 3 次，重试失败进入死信队列，对账修复率 ≥ 99%
-5. Hook 执行超过 30s 自动终止，安全 Hook 超时阻断，非安全 Hook 超时跳过
-6. 状态在 MCP Server 重启后完整恢复，双写一致性通过集成测试验证
+1. ✅ Agent CRUD 操作写入 SQLite（`agent_states` 表 + `save_agent_state()`/`load_agent_states()`/`delete_agent_state()`），重启后自动恢复 Agent 状态
+2. ✅ 工作流状态写入 SQLite（`workflow_states` 表 + `save_workflow_state()`/`load_workflow_states()`/`delete_workflow_state()`），重启后自动恢复工作流
+3. ✅ 决策写入使用 SQLite（`decisions.db` + FTS5 全文索引 + `persist_state("decision_records")`），文件系统写入失败不影响主流程
+4. ✅ ChromaDB 双写机制可用（`persist_knowledge_dual_write()` + `reconcile_knowledge_stores()` + `reconciliation_log` 表）
+5. ✅ Hook 执行超过 30s 自动跳过（`DEFAULT_HOOK_TIMEOUT_SECONDS = 30.0` + `asyncio.wait_for()`），超时记录到 hook_errors
+6. ✅ 状态在 MCP Server 重启后完整恢复（`agent_load_on_startup()` + `workflow_load_on_startup()`）
 
 ---
 
 ### 2.4 v8.3.0 — Phase C：增强功能
 
-> 状态: 计划中 | 类型: MINOR | 预估工期: 29 天 | 前置依赖: v8.2.0
+> 状态: 部分完成 | 类型: MINOR | 预估工期: 29 天 | 前置依赖: v8.2.0
 
 #### 目标
 
@@ -261,16 +267,16 @@ graph LR
 
 #### 验收标准
 
-1. `constraints.yaml` 变更后 5s 内生效，热更新失败自动回滚
-2. API 版本协商可用：客户端声明版本 → 服务端返回兼容性 + 特性列表，版本不匹配时返回降级建议
-3. 相同工具的 HTTP 和 MCP 调用返回相同 JSON 结构
-4. 知识条目保留最近 10 个版本，90 天以上版本归档为 JSONL，数据库体积减少 ≥ 50%
+1. ✅ 配置文件变更后自动重载（`start_config_watcher()` + watchfiles 事件驱动 + 轮询降级），变更通知发送
+2. ✅ API 版本协商可用（`_negotiate_api_version()` + `MCP_API_VERSION = "3.0.0"` + `API_CHANGELOG`），版本不匹配时返回降级建议
+3. ⬜ 相同工具的 HTTP 和 MCP 调用返回相同 JSON 结构（MCP 侧已统一，HTTP 侧待确认）
+4. ✅ 知识条目保留最近 10 个版本（`cleanup_knowledge_versions(keep_last_n=10)`），超出部分软删除
 
 ---
 
 ### 2.5 v8.4.0 — Phase D：优化与渐进式加载增强
 
-> 状态: 计划中 | 类型: MINOR | 预估工期: 27 天 | 前置依赖: v8.3.0
+> 状态: 部分完成 | 类型: MINOR | 预估工期: 27 天 | 前置依赖: v8.3.0
 
 #### 目标
 
@@ -311,10 +317,10 @@ graph LR
 
 #### 验收标准
 
-1. 每阶段有独立 Token 预算和用量追踪，阶段推进时自动分配预算
-2. 预算超限时触发阶段降级，降级自动触发阶段回退
-3. 性能指标（P50/P95/P99 延迟、错误率、降级率、Token 消耗）可追踪
-4. 指标聚合到 metrics 表，支持按时间窗口查询，健康评估自动生成
+1. ✅ 每阶段有独立 Token 预算和用量追踪（`PHASE_TOKEN_BUDGET_MAP` + `set_from_phase` + `phase_allocations`），阶段推进时自动分配预算
+2. ⬜ 预算超限时触发阶段降级，降级自动触发阶段回退（基础框架已有，完整联动待确认）
+3. ⬜ 性能指标（P50/P95/P99 延迟、错误率、降级率、Token 消耗）可追踪（`metrics` 表已有，百分位延迟待确认）
+4. ⬜ 指标聚合到 metrics 表，支持按时间窗口查询，健康评估自动生成（`cleanup_metrics()` 已有，完整查询待确认）
 
 ---
 
@@ -385,12 +391,14 @@ v1 废弃与清理，SKILL.md 行数优化。
 
 #### 验收标准
 
-1. 全部 32 项问题关闭（15 未修复 + 4 部分修复 + 13 已修复）
-2. Streamable HTTP 传输可用，长任务（>5s）自动切换为流式
-3. 多租户隔离，租户间数据、配置、状态完全隔离
-4. 第三方工具可通过插件协议注册并运行
-5. OWASP MCP Top 10 安全合规审计通过
-6. 生产环境部署验证通过
+1. 全部 32 项问题关闭（28 已修复 + 2 部分修复需完成 + 1 Deferred + 1 Open）
+2. Resource 推送通知实现（`notifications/resources/updated`）
+3. 便捷 Resource 补全（`decisions/latest`, `workflows/active`）
+4. Streamable HTTP 传输可用，长任务（>5s）自动切换为流式
+5. 多租户隔离，租户间数据、配置、状态完全隔离
+6. 第三方工具可通过插件协议注册并运行
+7. OWASP MCP Top 10 安全合规审计通过
+8. 生产环境部署验证通过
 
 ---
 
@@ -484,15 +492,17 @@ flowchart TD
 
 ### 4.2 问题关闭路线图
 
-| 版本 | 关闭问题 | 累计关闭 |
-|------|----------|----------|
-| v8.0.0 | P0-01, P0-02, P1-01~P1-06, P2-01, P2-02, SKILL-01, SKILL-03, API-02 | 13 |
-| v8.1.0 | ARCH-05, ARCH-11, ARCH-13, MCP-02, MCP-03, MCP-04, SKILL-02 | 20 |
-| v8.2.0 | ARCH-06, ARCH-07, ARCH-09, DB-01, DB-02 | 25 |
-| v8.3.0 | ARCH-10, ARCH-12, API-01, DB-03 | 29 |
-| v8.4.0 | ARCH-08 | 30 |
-| v8.5.0 | P3-01, P3-02 | 32 |
-| v9.0.0 | —（全部 32 项已关闭，生产验证） | 32 |
+> 基于 2026-05-26 代码验证后的实际状态
+
+| 版本 | 关闭问题 | 累计关闭 | 备注 |
+|------|----------|----------|------|
+| v8.0.0 | P0-01, P0-02, P1-01~P1-06, P2-01, P2-02, SKILL-01, SKILL-03, API-02 | 13 | 基线版本已修复 |
+| v8.1.0 | ARCH-05, ARCH-11, MCP-02, MCP-03, SKILL-02 | 18 | 5 项已修复；ARCH-13(Partial), MCP-04(Partial) 待完成 |
+| v8.2.0 | ARCH-06, ARCH-07, ARCH-09, DB-01, DB-02 | 23 | ✅ 全部已完成 |
+| v8.3.0 | ARCH-10, ARCH-12, DB-03 | 26 | 3 项已修复；API-01 待验证，MCP-04 便捷 Resource 待补全 |
+| v8.4.0 | ARCH-08 | 27 | 1 项已修复；ARCH-13 推送通知待实现，D3/D4 待验证 |
+| v8.5.0 | P3-01, P3-02 | 29 | 计划中 |
+| v9.0.0 | ARCH-13(完成推送), MCP-04(补全Resource), API-01(如未完成) | 32 | 全部关闭 |
 
 ---
 

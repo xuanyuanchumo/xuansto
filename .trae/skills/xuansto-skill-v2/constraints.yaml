@@ -1,4 +1,4 @@
-version: "8.0.0"
+version: "8.4.0"
 
 core:
   - id: spec-first
@@ -158,7 +158,7 @@ disclosure:
   degradation_on_unavailable:
     command_execution:
       unavailable_in: "Phase 0"
-      behavior: "仅展示命令列表，不执行；例外：/status和/help在Phase 0可用"
+      behavior: "仅展示命令列表，不执行；例外：/status、/help和/budget在Phase 0可用"
       skeleton_allowed_commands: ["/status", "/help", "/budget"]
     workflow_details:
       unavailable_in: "Phase 0"

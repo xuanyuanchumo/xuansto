@@ -543,6 +543,100 @@ def _stats_decisions(
         conn.close()
 
 
+def _reconcile_decisions() -> dict[str, Any]:
+    sqlite_ids: set[str] = set()
+    with _db_lock:
+        conn = _get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM decisions")
+            sqlite_ids = {row[0] for row in cursor.fetchall()}
+        finally:
+            conn.close()
+
+    file_ids: set[str] = set()
+    file_entries: dict[str, dict[str, Any]] = {}
+    if DECISIONS_JSON_FILE.exists():
+        try:
+            data = json.loads(DECISIONS_JSON_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, list):
+                for entry in data:
+                    eid = entry.get("id", "")
+                    if eid:
+                        file_ids.add(eid)
+                        file_entries[eid] = entry
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    only_in_sqlite = sqlite_ids - file_ids
+    only_in_file = file_ids - sqlite_ids
+    repaired = 0
+    failed = 0
+
+    for entry_id in only_in_sqlite:
+        with _db_lock:
+            conn = _get_connection()
+            try:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM decisions WHERE id = ?", (entry_id,))
+                row = cursor.fetchone()
+                if row:
+                    entry = _row_to_dict(row)
+                    try:
+                        _write_decision_file(entry)
+                        repaired += 1
+                    except Exception as exc:
+                        logger.warning("Reconcile: failed to write file for %s: %s", entry_id, exc)
+                        failed += 1
+            finally:
+                conn.close()
+
+    for entry_id in only_in_file:
+        entry = file_entries.get(entry_id)
+        if not entry:
+            failed += 1
+            continue
+        with _db_lock:
+            conn = _get_connection()
+            try:
+                cursor = conn.cursor()
+                cursor.execute("SELECT id FROM decisions WHERE id = ?", (entry_id,))
+                if cursor.fetchone() is None:
+                    alts_json = json.dumps(entry.get("alternatives", []), ensure_ascii=False)
+                    cursor.execute(
+                        "INSERT OR IGNORE INTO decisions (id, title, context, decision, rationale, alternatives, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            entry_id,
+                            entry.get("title", ""),
+                            entry.get("context", ""),
+                            entry.get("decision", ""),
+                            entry.get("rationale", ""),
+                            alts_json,
+                            entry.get("status", "proposed"),
+                            entry.get("created_at", ""),
+                            entry.get("updated_at", entry.get("created_at", "")),
+                        ),
+                    )
+                    conn.commit()
+                    repaired += 1
+            except Exception as exc:
+                logger.warning("Reconcile: failed to insert SQLite for %s: %s", entry_id, exc)
+                failed += 1
+            finally:
+                conn.close()
+
+    total_inconsistencies = len(only_in_sqlite) + len(only_in_file)
+    return {
+        "total_inconsistencies": total_inconsistencies,
+        "only_in_sqlite": len(only_in_sqlite),
+        "only_in_file": len(only_in_file),
+        "repaired": repaired,
+        "failed": failed,
+        "success_rate": (repaired / total_inconsistencies * 100) if total_inconsistencies > 0 else 100.0,
+    }
+
+
 def register(mcp: FastMCP) -> None:
     @mcp.tool(
         annotations=ToolAnnotations(
@@ -597,8 +691,10 @@ def register(mcp: FastMCP) -> None:
                 return make_success_response(_export_decisions(export_format, date_from, date_to))
             elif action == "stats":
                 return make_success_response(_stats_decisions(date_from, date_to))
+            elif action == "reconcile":
+                return make_success_response(_reconcile_decisions())
             else:
-                return make_error_response(ValueError(f"未知操作: {action}，支持: log, list, query, update, export, stats"), error_code=ERR_VALIDATION)
+                return make_error_response(ValueError(f"未知操作: {action}，支持: log, list, query, update, export, stats, reconcile"), error_code=ERR_VALIDATION)
         except Exception as e:
             logger.error("decision_log error: %s", e)
             return make_error_response(e)

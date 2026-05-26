@@ -149,7 +149,7 @@ class ContextCompressInput(BaseModel):
 
 class DecisionLogInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["log", "list", "query", "update", "export", "stats"] = Field(description="操作类型: log, list, query, update, export, stats")
+    action: Literal["log", "list", "query", "update", "export", "stats", "reconcile"] = Field(description="操作类型: log, list, query, update, export, stats, reconcile")
     title: str | None = Field(default=None, description="决策标题(log时使用)")
     description: str | None = Field(default=None, description="决策描述(log时使用)")
     context: str | None = Field(default=None, description="决策上下文(log/query时使用)")

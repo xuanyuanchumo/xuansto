@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import sqlite3
 import threading
 import time
 from pathlib import Path
@@ -603,3 +604,82 @@ def register(mcp: FastMCP) -> None:
             return json.dumps({"entries": entries, "count": len(entries)}, ensure_ascii=False, indent=2)
         except Exception as e:
             return _degraded_resource("xuansto://audit/log", str(e))
+
+    @mcp.resource("xuansto://decisions/latest")
+    def decisions_latest() -> str:
+        try:
+            from ..tools.decision_log import _get_connection, _row_to_dict
+            conn = _get_connection()
+            try:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT * FROM decisions ORDER BY created_at DESC LIMIT 10"
+                )
+                rows = cursor.fetchall()
+                if not rows:
+                    return "# 无决策记录"
+                lines = ["# 最近决策记录\n"]
+                for row in rows:
+                    d = _row_to_dict(row)
+                    lines.append(f"## {d.get('id', '')}: {d.get('title', '')}\n")
+                    lines.append(f"- **状态**: {d.get('status', 'proposed')}")
+                    lines.append(f"- **上下文**: {d.get('context', '')}")
+                    lines.append(f"- **决策**: {d.get('decision', '')}")
+                    lines.append(f"- **理由**: {d.get('rationale', '')}")
+                    alts = d.get("alternatives", [])
+                    if alts:
+                        lines.append("- **备选方案**:")
+                        for alt in alts:
+                            lines.append(f"  - {alt}")
+                    lines.append(f"- **创建时间**: {d.get('created_at', '')}")
+                    lines.append(f"- **更新时间**: {d.get('updated_at', '')}")
+                    lines.append("")
+                return "\n".join(lines)
+            finally:
+                conn.close()
+        except Exception as e:
+            return _degraded_resource("xuansto://decisions/latest", str(e))
+
+    @mcp.resource("xuansto://workflows/active")
+    def workflows_active() -> str:
+        try:
+            from ..core.database import load_workflow_states
+            workflows = load_workflow_states(status="active")
+            if not workflows:
+                return "# 无活跃工作流"
+            lines = ["# 当前活跃的工作流实例\n"]
+            for wf in workflows:
+                lines.append(f"## {wf.get('workflow_id', '')}\n")
+                lines.append(f"- **类型**: {wf.get('workflow_type', '')}")
+                lines.append(f"- **当前阶段**: {wf.get('current_phase', 0)}")
+                lines.append(f"- **项目路径**: {wf.get('project_path', '') or '未指定'}")
+                lines.append(f"- **状态**: {wf.get('status', 'active')}")
+                completed = wf.get("completed_phases_json", [])
+                if isinstance(completed, str):
+                    with contextlib.suppress(json.JSONDecodeError):
+                        completed = json.loads(completed)
+                if completed:
+                    lines.append(f"- **已完成阶段**: {', '.join(str(p) for p in completed)}")
+                tasks = wf.get("tasks_json", {})
+                if isinstance(tasks, str):
+                    with contextlib.suppress(json.JSONDecodeError):
+                        tasks = json.loads(tasks)
+                if tasks:
+                    lines.append(f"- **任务数**: {len(tasks) if isinstance(tasks, list) else len(tasks.keys())}")
+                decisions = wf.get("decisions_json", {})
+                if isinstance(decisions, str):
+                    with contextlib.suppress(json.JSONDecodeError):
+                        decisions = json.loads(decisions)
+                if decisions:
+                    lines.append(f"- **决策数**: {len(decisions) if isinstance(decisions, list) else len(decisions.keys())}")
+                created_at = wf.get("created_at")
+                if created_at:
+                    lines.append(f"- **创建时间**: {created_at}")
+                updated_at = wf.get("updated_at")
+                if updated_at:
+                    lines.append(f"- **更新时间**: {updated_at}")
+                lines.append("")
+            return "\n".join(lines)
+        except Exception as e:
+            return _degraded_resource("xuansto://workflows/active", str(e))

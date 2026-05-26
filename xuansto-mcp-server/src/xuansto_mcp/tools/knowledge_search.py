@@ -441,8 +441,10 @@ def register(mcp: FastMCP) -> None:
         logger.info("knowledge_search called: action=%s query=%s", action, query)
         try:
             if action == "cleanup_versions":
+                from ..core.config import KNOWLEDGE_VERSION_CLEANUP_KEEP_LAST_N
                 from ..core.database import cleanup_knowledge_versions
-                result = cleanup_knowledge_versions(keep_last_n=keep_last_n, keep_marked=True)
+                effective_keep_n = keep_last_n if keep_last_n != 10 else KNOWLEDGE_VERSION_CLEANUP_KEEP_LAST_N
+                result = cleanup_knowledge_versions(keep_last_n=effective_keep_n, keep_marked=True)
                 return make_success_response(result)
 
             if not query:

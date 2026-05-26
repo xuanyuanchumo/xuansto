@@ -2,10 +2,16 @@
 *.yaml text eol=lf
 *.yml text eol=lf
 *.json text eol=lf
+*.toml text eol=lf
 
 *.py text eol=lf diff=python
 *.js text eol=lf
 *.ps1 text eol=crlf
 
+*.lock text eol=lf merge=union
+
 *.db binary
 *.sqlite3 binary
+
+resource_state.json merge=union
+constraints.yaml merge=union

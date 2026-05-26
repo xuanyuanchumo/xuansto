@@ -1,6 +1,6 @@
 # Git/GitHub 管理文档
 
-> 版本：2.0.0 | 项目：xuansto-skill-v2 | 更新日期：2026-05-25
+> 版本：2.1.0 | 项目：xuansto-skill-v2 | 更新日期：2026-05-26
 > 基线版本：Skill v8.0.0 / MCP Server v8.0.0
 > 数据来源：.gitignore、.gitattributes、.github/、.editorconfig、REFACTOR_PLAN.md
 
@@ -23,16 +23,17 @@
 
 ### 1.1 目录结构
 
-所有 worktree 统一放置在 `skiller-worktrees/` 目录下，命名格式为 `feat-{feature-name}-{hash}/`，其中 `{hash}` 为分支名的短哈希或自定义标识符，用于避免同名冲突。
+所有 worktree 统一放置在 `c:\Users\86156\.trae-cn\worktrees\skiller\` 目录下，由 Trae 自动管理。
 
 ```
 D:\Projects\TraeProjects\skiller\                    ← 主仓库（主工作树）
 c:\Users\86156\.trae-cn\worktrees\skiller\            ← Trae 管理的 worktree 根目录
-    ├── feat-develop-main-branch-oTKP5o\              ← 当前活跃 worktree（develop）
-    ├── feat-mcp-resources-a3f1b2\                    ← feature/mcp-resources 并行开发
-    ├── feat-audit-logger-c7d4e9\                     ← feature/audit-logger 并行开发
-    └── feat-persistence-f2a8c5\                      ← feature/persistence 并行开发
+    ├── develop-main-branch-YzihpS\                   ← 当前活跃 worktree（develop）
+    ├── feat-develop-main-branch-Akindx\              ← develop 并行开发 worktree
+    └── feat-develop-main-branch-oTKP5o\              ← develop 并行开发 worktree
 ```
+
+> **注**：当前所有 worktree 均基于 develop 分支，尚未创建 feature 分支的 worktree。feature 分支的 worktree 需在 Phase A 启动时按需创建。
 
 ### 1.2 Worktree 核心概念
 
@@ -83,7 +84,7 @@ git worktree prune --verbose
 
 ### 1.5 Worktree 使用规范
 
-1. **命名约定**：worktree 目录名格式为 `feat-{feature-name}-{hash}/`，hash 取分支创建时 develop 的短哈希前 6 位
+1. **命名约定**：Trae 自动生成的 worktree 目录名格式为 `{type}-{branch}-{hash}/`
 2. **及时清理**：分支合并后立即移除对应 worktree，避免 stale 记录
 3. **避免冲突**：不同 worktree 不要修改同一文件；若必须修改，需在合并时手动解决
 4. **提交前检查**：在 worktree 中提交前，确认当前分支正确 `git branch --show-current`
@@ -95,34 +96,46 @@ git worktree prune --verbose
 
 ### 2.1 分支总览
 
+#### 当前已存在的分支
+
+| 分支 | 类型 | 位置 | 说明 |
+|------|------|------|------|
+| `main` | 长期 | 本地 + 远程 | 生产就绪代码，仅通过 release 或 hotfix 合入 |
+| `develop` | 长期 | 本地 + 远程 | 开发主分支，当前工作基线 |
+| `feat-add-plan-document-dsFOMQ` | 临时 | 仅远程 | Trae 自动创建的计划文档分支 |
+| `feat-add-plan-document-xbkZQe` | 临时 | 仅远程 | Trae 自动创建的计划文档分支 |
+| `feat-develop-main-branch-oTKP5o` | 临时 | 本地 + 远程 | Trae worktree 分支 |
+
+#### 待创建的 feature 分支
+
 ```
 main ──────────────────────────────────────────────────────────────────────►
   └─ develop ──────────────────────────────────────────────────────────────►
        │
-       ├─ develop/v8 ──────────────────────────────────────────────────────► (v8.x 开发线)
+       ├─ develop/v8 ──────────────────────────────────────────────────────► (v8.x 开发线，待创建)
        │
-       ├─ feature/mcp-resources ────────┐ (Phase A, ARCH-05/MCP-02)
+       ├─ feature/mcp-resources ────────┐ (Phase A, ARCH-05/MCP-02，待创建)
        │                                 └─► develop
-       ├─ feature/unified-errors ───────┐ (Phase A, ARCH-11)
+       ├─ feature/unified-errors ───────┐ (Phase A, ARCH-11，待创建)
        │                                 └─► develop
-       ├─ feature/audit-logger ─────────┐ (Phase A, MCP-03)
+       ├─ feature/audit-logger ─────────┐ (Phase A, MCP-03，待创建)
        │                                 └─► develop
-       ├─ feature/skeleton-commands ────┐ (Phase A, SKILL-02)
-       │                                 └─► develop
-       │
-       ├─ feature/persistence ──────────┐ (Phase B, ARCH-06/07)
-       │                                 └─► develop
-       ├─ feature/dual-write ───────────┐ (Phase B, DB-01/02)
-       │                                 └─► develop
-       ├─ feature/hook-timeout ─────────┐ (Phase B, ARCH-09)
+       ├─ feature/skeleton-commands ────┐ (Phase A, SKILL-02，待创建)
        │                                 └─► develop
        │
-       ├─ feature/config-hot-reload ────┐ (Phase C, ARCH-10)
+       ├─ feature/persistence ──────────┐ (Phase B, ARCH-06/07，待创建)
        │                                 └─► develop
-       ├─ feature/api-versioning ───────┐ (Phase C, ARCH-12)
+       ├─ feature/dual-write ───────────┐ (Phase B, DB-01/02，待创建)
+       │                                 └─► develop
+       ├─ feature/hook-timeout ─────────┐ (Phase B, ARCH-09，待创建)
        │                                 └─► develop
        │
-       ├─ feature/progressive-loading ──┐ (Phase D, ARCH-08)
+       ├─ feature/config-hot-reload ────┐ (Phase C, ARCH-10，待创建)
+       │                                 └─► develop
+       ├─ feature/api-versioning ───────┐ (Phase C, ARCH-12，待创建)
+       │                                 └─► develop
+       │
+       ├─ feature/progressive-loading ──┐ (Phase D, ARCH-08，待创建)
        │                                 └─► develop
        │
        └─ release/v8.1.0 ──────────────┐
@@ -135,17 +148,17 @@ main ─────────────────────────
 |------|------|----------|----------|----------|------|
 | `main` | 长期 | 初始化 | — | — | 生产就绪代码，仅通过 release 或 hotfix 合入 |
 | `develop` | 长期 | 从 main 创建 | — | — | 开发主分支，当前工作基线，所有 feature 的最终归宿 |
-| `develop/v8` | 长期 | 从 develop 创建 | — | — | v8.x 开发线，用于 v8 系列的长期维护和特性集成 |
-| `feature/mcp-resources` | 功能 | Phase A 启动时从 develop 创建 | develop | ARCH-05, MCP-02 | Resource 推送通知实现，完善 22 个 Resource 的订阅/推送机制 |
-| `feature/unified-errors` | 功能 | Phase A 启动时从 develop 创建 | develop | ARCH-11 | 统一错误处理，所有工具返回 JSON 格式 `{error, data, degradation_level, hook_errors}` |
-| `feature/audit-logger` | 功能 | Phase A 启动时从 develop 创建（依赖 unified-errors） | develop | MCP-03 | 审计日志，`audit_log` 表 + 工具调用自动记录 + 90 天归档 |
-| `feature/skeleton-commands` | 功能 | Phase A 启动时从 develop 创建 | develop | SKILL-02 | SKELETON 阶段可用命令 `/status`、`/help`、`/budget` |
-| `feature/persistence` | 功能 | Phase B 启动时从 develop 创建 | develop | ARCH-06, ARCH-07 | Agent 持久化 + 工作流持久化，SQLite 双写过渡 + 启动恢复 |
-| `feature/dual-write` | 功能 | Phase B 启动时从 develop 创建 | develop | DB-01, DB-02 | 决策双写事务保证 + ChromaDB 双写增强（重试 + 死信队列） |
-| `feature/hook-timeout` | 功能 | Phase B 启动时从 develop 创建 | develop | ARCH-09 | Hook 执行超时保护（默认 30s）+ 超时后降级策略 |
-| `feature/config-hot-reload` | 功能 | Phase C 启动时从 develop 创建 | develop | ARCH-10 | 配置热更新，constraints.yaml / hooks.json 变更无需重启 |
-| `feature/api-versioning` | 功能 | Phase C 启动时从 develop 创建 | develop | ARCH-12 | API 版本协商，客户端声明版本→服务端返回兼容性+特性列表 |
-| `feature/progressive-loading` | 功能 | Phase D 启动时从 develop 创建 | develop | ARCH-08 | Token-Phase 关联，每阶段独立预算 + 自动调整 + 降级触发 |
+| `develop/v8` | 长期 | 从 develop 创建（待创建） | — | — | v8.x 开发线，用于 v8 系列的长期维护和特性集成 |
+| `feature/mcp-resources` | 功能 | Phase A 启动时从 develop 创建（待创建） | develop | ARCH-05, MCP-02 | Resource 推送通知实现，完善 22 个 Resource 的订阅/推送机制 |
+| `feature/unified-errors` | 功能 | Phase A 启动时从 develop 创建（待创建） | develop | ARCH-11 | 统一错误处理，所有工具返回 JSON 格式 `{error, data, degradation_level, hook_errors}` |
+| `feature/audit-logger` | 功能 | Phase A 启动时从 develop 创建（待创建，依赖 unified-errors） | develop | MCP-03 | 审计日志，`audit_log` 表 + 工具调用自动记录 + 90 天归档 |
+| `feature/skeleton-commands` | 功能 | Phase A 启动时从 develop 创建（待创建） | develop | SKILL-02 | SKELETON 阶段可用命令 `/status`、`/help`、`/budget` |
+| `feature/persistence` | 功能 | Phase B 启动时从 develop 创建（待创建） | develop | ARCH-06, ARCH-07 | Agent 持久化 + 工作流持久化，SQLite 双写过渡 + 启动恢复 |
+| `feature/dual-write` | 功能 | Phase B 启动时从 develop 创建（待创建） | develop | DB-01, DB-02 | 决策双写事务保证 + ChromaDB 双写增强（重试 + 死信队列） |
+| `feature/hook-timeout` | 功能 | Phase B 启动时从 develop 创建（待创建） | develop | ARCH-09 | Hook 执行超时保护（默认 30s）+ 超时后降级策略 |
+| `feature/config-hot-reload` | 功能 | Phase C 启动时从 develop 创建（待创建） | develop | ARCH-10 | 配置热更新，constraints.yaml / hooks.json 变更无需重启 |
+| `feature/api-versioning` | 功能 | Phase C 启动时从 develop 创建（待创建） | develop | ARCH-12 | API 版本协商，客户端声明版本→服务端返回兼容性+特性列表 |
+| `feature/progressive-loading` | 功能 | Phase D 启动时从 develop 创建（待创建） | develop | ARCH-08 | Token-Phase 关联，每阶段独立预算 + 自动调整 + 降级触发 |
 
 ### 2.3 分支创建与合并时机
 
@@ -192,7 +205,7 @@ main ─────────────────────────
 
 ### 3.1 当前项目根目录 .gitignore 分析
 
-当前 `.gitignore` 共 71 行规则，逐项审查如下：
+当前 `.gitignore` 共 109 行规则，逐项审查如下：
 
 #### ✅ 良好的规则
 
@@ -201,19 +214,19 @@ main ─────────────────────────
 | `.trae/*` / `!.trae/skills/` / `.trae/skills/*` / `!.trae/skills/xuansto-skill-v2/` | 精确控制 Trae 目录，仅跟踪 skill 目录 |
 | `.xuansto/` | 排除运行时数据目录 |
 | `chroma_db/` | 排除 ChromaDB 向量数据库数据 |
-| `__pycache__/` / `*.py[cod]` / `*$py.class` | Python 字节码缓存排除 |
-| `*.egg-info/` / `*.whl` | Python 包构建产物排除 |
-| `.DS_Store` / `Thumbs.db` / `._*` | macOS/Windows 系统文件排除 |
+| `__pycache__/` / `*.py[cod]` / `*$py.class` / `*.pyo` / `*.pyc` | Python 字节码缓存排除（`*.pyc` 和 `*.pyo` 已显式声明） |
+| `*.egg-info/` / `*.egg` / `*.whl` | Python 包构建产物排除（`*.egg` 已显式声明） |
+| `.DS_Store` / `Thumbs.db` / `Desktop.ini` / `._*` | macOS/Windows 系统文件排除（`Desktop.ini` 已显式声明） |
 | `.idea/` / `.vscode/` / `.claude/` / `.cursor/` / `.windsurf/` | 多种 IDE 配置排除 |
 | `*.swp` / `*.swo` / `*~` | Vim 临时文件排除 |
 | `.env` / `.env.local` / `.env.*.local` / `.env.production` | 环境变量文件保护 |
 | `credentials/` / `*.pem` / `*.key` / `*.p12` / `*.pfx` / `*.jks` | 证书密钥文件保护 |
-| `*.log` / `logs/` | 日志文件排除 |
+| `*.log` / `logs/` / `audit_log.jsonl` | 日志文件排除（含审计日志 JSONL） |
 | `*.db` / `*.sqlite3` | 数据库文件排除 |
 | `.mypy_cache/` / `.pytest_cache/` / `.ruff_cache/` | Python 工具缓存排除 |
 | `htmlcov/` / `.coverage` | 覆盖率报告排除 |
 | `*.bak` / `*.orig` / `*.tmp` / `*.temp` / `.cache/` | 临时/备份文件排除 |
-| `node_modules/` / `dist/` / `build/` | 前端构建产物排除 |
+| `node_modules/` | 前端依赖排除 |
 
 #### ⚠️ 可优化的规则
 
@@ -230,13 +243,14 @@ main ─────────────────────────
 | 规则 | 说明 |
 |------|------|
 | `coverage.xml` | pytest-cov 生成的 XML 覆盖率报告 |
-| `*.pyc` | 虽然 `*.py[cod]` 已覆盖 `.pyc`，但显式声明更清晰（可选） |
 | `.python-version` | pyenv 版本文件（个人环境配置） |
-| `*.egg` | Python egg 文件（构建产物） |
 | `pip-log.txt` | pip 安装日志 |
-| `.tox/` | tox 测试环境 |
 | `*.manifest` / `*.spec` | PyInstaller 打包产物 |
 | `.eggs/` | setuptools 缓存目录 |
+| `.tox/` | tox 测试环境 |
+| `dist/` / `build/` | 构建产物（当前仅排除 `dist/`，`build/` 已存在但建议确认） |
+
+> **注**：v2.0.0 版本文档中标记为缺失的 `*.egg`、`*.pyc`、`Desktop.ini` 规则，当前已在 .gitignore 中显式声明，状态已更新为 ✅。新增 `audit_log.jsonl` 规则也已包含。
 
 ### 3.2 建议的 .gitignore 优化方案
 
@@ -266,6 +280,8 @@ chroma_db/
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyo
+*.pyc
 *.egg-info/
 *.egg
 *.whl
@@ -274,6 +290,7 @@ __pycache__/
 # ===== 系统文件 =====
 .DS_Store
 Thumbs.db
+Desktop.ini
 ._*
 
 # ===== IDE / 编辑器 =====
@@ -301,6 +318,7 @@ credentials/
 # ===== 日志 =====
 *.log
 logs/
+audit_log.jsonl
 
 # ===== 数据库 =====
 *.db
@@ -370,6 +388,7 @@ pip-log.txt
 | IDE 配置 | `.idea/`、`.vscode/` | 个人环境配置 |
 | 测试缓存 | `.pytest_cache/`、`.mypy_cache/` | 可自动生成 |
 | 证书密钥 | `*.pem`、`*.key`、`credentials/` | 安全风险 |
+| 审计日志 | `audit_log.jsonl` | 运行时产生，可重建 |
 
 ---
 
@@ -377,7 +396,7 @@ pip-log.txt
 
 ### 4.1 当前 .gitattributes 分析
 
-当前根目录 `.gitattributes` 共 73 行规则，覆盖面非常全面：
+当前根目录 `.gitattributes` 共 144 行规则，覆盖面非常全面：
 
 #### ✅ 良好的规则
 
@@ -386,7 +405,7 @@ pip-log.txt
 | 默认行为 | `* text=auto eol=lf` | 自动检测文本文件，统一 LF 行尾 |
 | Python | `*.py` / `*.pyx` / `*.pyi` text eol=lf diff=python | 完整覆盖 Python 文件类型 |
 | 文档 | `*.md` diff=markdown / `*.rst` | Markdown 有 diff 驱动 |
-| 配置文件 | `*.yaml` / `*.yml` / `*.json` / `*.toml` / `*.cfg` / `*.ini` / `*.conf` | 7 种配置格式全覆盖 |
+| 配置文件 | `*.yaml` / `*.yml` / `*.json` text eol=lf diff=yaml/json **merge=union** | 7 种配置格式全覆盖，YAML/JSON 已添加 union 合并策略 |
 | 前端 | `*.js` / `*.ts` / `*.jsx` / `*.tsx` / `*.css` / `*.scss` / `*.html` | 完整前端文件类型 |
 | Shell/脚本 | `*.sh` / `*.bash` eol=lf / `*.bat` / `*.cmd` / `*.ps1` eol=crlf | 正确区分 Unix/Windows 脚本行尾 |
 | 标记语言 | `*.xml` / `*.svg` | XML 系列文件 |
@@ -394,8 +413,11 @@ pip-log.txt
 | 锁文件 | `*.lock merge=union` | 锁文件使用 union 合并策略 |
 | 补丁 | `*.patch text eol=lf` | 补丁文件 |
 | 许可证 | `LICENSE text eol=lf` | 许可证文件 |
-| 二进制文件 | 20+ 种二进制格式 | 覆盖数据库、图片、压缩包、字体、音视频等 |
+| 二进制文件 | 20+ 种二进制格式（含 `.woff` / `.eot`） | 覆盖数据库、图片、压缩包、字体、音视频等 |
 | 特殊合并 | `resource_state.json merge=union` | 资源状态文件使用 union 合并 |
+| Linguist | `*.min.js` / `*.min.css` / `package-lock.json` / `yarn.lock` / `pnpm-lock.yaml` linguist-generated | 标记生成文件，排除语言统计 |
+
+> **注**：v2.0.0 版本文档中标记为缺失的 `constraints.yaml merge=union` 和 `hooks.json merge=union`，当前已通过 `*.yaml merge=union` 和 `*.json merge=union` 全局规则覆盖，无需单独添加。
 
 #### ⚠️ 可优化的规则
 
@@ -403,10 +425,8 @@ pip-log.txt
 |------|------|------|
 | 无 Dockerfile 规则 | 项目可能引入 Docker | 添加 `Dockerfile text eol=lf` |
 | 无 docker-compose 规则 | 同上 | 添加 `docker-compose*.yml text eol=lf diff=yaml` |
-| 无 `.env.example` diff 规则 | 当前仅 `text eol=lf` | 可添加 `diff=yaml` 或保持现状 |
 | 无 `requirements*.txt` 规则 | pip 依赖文件 | 添加 `requirements*.txt text eol=lf` |
-| 无 `pyproject.toml` diff 规则 | 当前仅 `diff=toml` | 已有，无需修改 |
-| 配置文件缺少合并策略 | constraints.yaml 等可能冲突 | 添加合并策略 |
+| 无 `.env.example` diff 规则 | 当前仅 `text eol=lf` | 可添加 `diff=yaml` 或保持现状 |
 
 #### ❌ 缺失的规则
 
@@ -415,15 +435,12 @@ pip-log.txt
 | `Dockerfile text eol=lf` | Docker 构建文件 |
 | `docker-compose*.yml text eol=lf diff=yaml` | Docker Compose 配置 |
 | `requirements*.txt text eol=lf` | pip 依赖锁定文件 |
-| `*.tf text eol=lf diff=hcl` | Terraform 基础设施即代码 |
 | `*.sql text eol=lf` | SQL 脚本 |
 | `*.csv text eol=lf` | CSV 数据文件 |
 | `*.tsv text eol=lf` | TSV 数据文件 |
 | `*.7z binary` / `*.rar binary` | 额外压缩格式 |
 | `*.npy binary` / `*.npz binary` | NumPy 数据文件 |
 | `*.h5 binary` / `*.safetensors binary` | ML 模型文件 |
-| `constraints.yaml merge=union` | 项目配置文件合并策略 |
-| `hooks.json merge=union` | Hook 配置文件合并策略 |
 
 ### 4.2 建议的 .gitattributes 优化方案
 
@@ -441,9 +458,9 @@ pip-log.txt
 *.rst text eol=lf
 
 # ===== 配置文件 =====
-*.yaml text eol=lf diff=yaml
-*.yml text eol=lf diff=yaml
-*.json text eol=lf diff=json
+*.yaml text eol=lf diff=yaml merge=union
+*.yml text eol=lf diff=yaml merge=union
+*.json text eol=lf diff=json merge=union
 *.toml text eol=lf diff=toml
 *.cfg text eol=lf
 *.ini text eol=lf
@@ -518,8 +535,10 @@ LICENSE text eol=lf
 *.pkl binary
 *.parquet binary
 *.woff2 binary
+*.woff binary
 *.ttf binary
 *.otf binary
+*.eot binary
 *.mp4 binary
 *.mp3 binary
 *.7z binary
@@ -533,13 +552,18 @@ LICENSE text eol=lf
 
 # ===== 特殊合并策略 =====
 resource_state.json merge=union
-constraints.yaml merge=union
-hooks.json merge=union
+
+# ===== Linguist: generated files =====
+*.min.js linguist-generated
+*.min.css linguist-generated
+package-lock.json linguist-generated
+yarn.lock linguist-generated
+pnpm-lock.yaml linguist-generated
 ```
 
 ### 4.3 Skill 子目录 .gitattributes 审查
 
-当前 `.trae/skills/xuansto-skill-v2/.gitattributes` 仅 11 行，是根目录的子集：
+当前 `.trae/skills/xuansto-skill-v2/.gitattributes` 共 11 行，是根目录的子集：
 
 ```
 *.md text eol=lf diff=markdown
@@ -570,84 +594,89 @@ constraints.yaml merge=union
 
 `.git/info/exclude` 是仅对本地生效的忽略文件，不会被提交到仓库，适合存放个人偏好规则。
 
-### 5.1 推荐配置
+### 5.1 当前 .git-info-exclude-template 模板文件
+
+项目根目录已提供 `.git-info-exclude-template` 模板文件，当前内容如下：
 
 ```gitignore
-# ===== 个人编辑器临时文件 =====
-*.swp
-*.swo
-*~
+# Git local exclude rules
+# This file is NOT tracked by git - add your personal ignore patterns here
+# These rules only apply to your local repository
+#
+# INSTALL: Copy this file to your git info directory:
+#   For worktree: copy .git-info-exclude-template to <gitdir>/info/exclude
+#   For regular repo: copy .git-info-exclude-template to .git/info/exclude
 
-# ===== 个人调试脚本 =====
-debug_*.py
-test_local_*.py
-scratch_*.py
+# Editor-specific
+*.sublime-project
+*.sublime-workspace
 
-# ===== 个人笔记 =====
-NOTES.md
-TODO_PERSONAL.md
+# OS-specific
+desktop.ini
 
-# ===== 大文件临时存储 =====
-*.dump
-*.prof
-*.heap
+# Local development overrides
+docker-compose.override.yml
+.local/
 
-# ===== 本地实验性配置 =====
-local_*.yaml
-local_*.json
-local_*.toml
-
-# ===== OS 特定（Windows） =====
-Desktop.ini
-ehthumbs.db
-
-# ===== 个人 Python 版本 =====
-.python-version
+# Debug files
+*.pyc
+debug/
 ```
 
-### 5.2 .git-info-exclude-template 模板文件
+### 5.2 建议的增强配置
 
-在项目根目录提供 `.git-info-exclude-template` 模板文件，新开发者可复制到 `.git/info/exclude`：
+当前模板较为简洁，建议补充以下规则：
 
 ```gitignore
-# xuansto-skill-v2 本地忽略规则模板
-# 使用方法：复制此文件内容到 .git/info/exclude
-#   PowerShell: Copy-Item .git-info-exclude-template .git/info/exclude
+# Git local exclude rules
+# This file is NOT tracked by git - add your personal ignore patterns here
+# These rules only apply to your local repository
 #
-# 此文件不会被 Git 跟踪，仅对本地仓库生效
+# INSTALL: Copy this file to your git info directory:
+#   For worktree: copy .git-info-exclude-template to <gitdir>/info/exclude
+#   For regular repo: copy .git-info-exclude-template to .git/info/exclude
 
-# ===== 个人编辑器临时文件 =====
+# ===== Editor-specific =====
+*.sublime-project
+*.sublime-workspace
 *.swp
 *.swo
 *~
 
-# ===== 个人调试脚本 =====
+# ===== OS-specific =====
+desktop.ini
+Desktop.ini
+ehthumbs.db
+
+# ===== Local development overrides =====
+docker-compose.override.yml
+.local/
+
+# ===== Debug files =====
+*.pyc
+debug/
 debug_*.py
 test_local_*.py
 scratch_*.py
 
-# ===== 个人笔记 =====
+# ===== Personal notes =====
 NOTES.md
 TODO_PERSONAL.md
 
-# ===== 大文件临时存储 =====
+# ===== Large file temporary storage =====
 *.dump
 *.prof
 *.heap
 
-# ===== 本地实验性配置 =====
+# ===== Local experimental configs =====
 local_*.yaml
 local_*.json
 local_*.toml
 
-# ===== OS 特定（Windows） =====
-Desktop.ini
-ehthumbs.db
-
-# ===== 个人 Python 版本 =====
+# ===== Personal Python version =====
 .python-version
 
-# ===== 个人工具链 =====
+# ===== Personal toolchain =====
 .tool-versions
 ```
 
@@ -659,36 +688,48 @@ Copy-Item ".git-info-exclude-template" ".git/info/exclude"
 
 # 方法 2：直接写入
 @"
-# 个人编辑器临时文件
+# Editor-specific
+*.sublime-project
+*.sublime-workspace
 *.swp
 *.swo
 *~
 
-# 个人调试脚本
+# OS-specific
+desktop.ini
+Desktop.ini
+ehthumbs.db
+
+# Local development overrides
+docker-compose.override.yml
+.local/
+
+# Debug files
+*.pyc
+debug/
 debug_*.py
 test_local_*.py
 scratch_*.py
 
-# 个人笔记
+# Personal notes
 NOTES.md
 TODO_PERSONAL.md
 
-# 大文件临时存储
+# Large file temporary storage
 *.dump
 *.prof
 *.heap
 
-# 本地实验性配置
+# Local experimental configs
 local_*.yaml
 local_*.json
 local_*.toml
 
-# OS 特定（Windows）
-Desktop.ini
-ehthumbs.db
-
-# 个人 Python 版本
+# Personal Python version
 .python-version
+
+# Personal toolchain
+.tool-versions
 "@ | Set-Content -Path ".git\info\exclude" -Encoding UTF8
 ```
 
@@ -705,10 +746,18 @@ ehthumbs.db
 │   ├── config.yml              # Issue 模板配置
 │   └── feature_request.yml     # 功能请求模板
 ├── workflows/
-│   └── ci.yml                  # CI 流水线
+│   ├── ci.yml                  # CI 流水线
+│   └── release.yml             # 发布流水线 ✅ (v2.1.0 已确认存在)
+├── dependabot.yml              # 依赖自动更新 ✅ (v2.1.0 已确认存在)
 ├── FUNDING.yml                 # 赞助配置
 └── PULL_REQUEST_TEMPLATE.md    # PR 模板
+
+项目根目录（GitHub 同样支持）：
+├── CODEOWNERS                  # 代码所有者 ✅ (v2.1.0 已确认存在)
+└── SECURITY.md                 # 安全策略 ✅ (v2.1.0 已确认存在)
 ```
+
+> **注**：`CODEOWNERS` 和 `SECURITY.md` 放置在项目根目录而非 `.github/` 目录下，GitHub 两种位置均支持。
 
 ### 6.2 现有文件审查
 
@@ -731,6 +780,29 @@ ehthumbs.db
 4. **添加路径过滤**：push 触发已有 paths 过滤，但 PR 触发缺少
 5. **mypy 应非容忍失败**：当前 `mypy ... || true` 允许类型检查失败通过，建议逐步收紧
 
+#### release.yml
+
+当前发布流水线包含 3 个 Job：
+
+| Job | 触发条件 | 运行环境 | 评估 |
+|-----|----------|----------|------|
+| `build` | push tag `v*` | ubuntu-latest, Python 3.11 | ✅ pip 缓存 + build 包 + 上传 artifact |
+| `release` | build 通过后 | ubuntu-latest | ✅ 下载 artifact + 创建 GitHub Release（含 prerelease 检测） |
+| `publish-pypi` | build 通过后 + 非 rc/beta/alpha tag | ubuntu-latest | ✅ PyPI 发布（trusted publisher） |
+
+**评估**：比 v2.0.0 文档建议的方案更完善，增加了 PyPI 发布和 prerelease 自动检测。
+
+#### dependabot.yml
+
+当前依赖更新配置：
+
+| 生态系统 | 目录 | 更新频率 | PR 限制 | 评估 |
+|----------|------|----------|---------|------|
+| pip | `/xuansto-mcp-server` | 每周一 06:00 | 5 | ✅ |
+| github-actions | `/` | 每周一 06:00 | 5 | ✅ |
+
+**评估**：比 v2.0.0 文档建议的方案更细致，增加了 `time: "06:00"` 和 `python` 标签，github-actions PR 限制从 3 提升到 5。
+
 #### bug_report.yml
 
 当前模板字段评估：
@@ -739,7 +811,7 @@ ehthumbs.db
 |------|------|------|----------|
 | Component | checkboxes | ✅ 覆盖 5 个组件 | — |
 | Severity | dropdown | ✅ P0-P3 | — |
-| Version | dropdown | ⚠️ 仅 v8.0.0-dev / v7.x | 需随发布添加 v8.1.0、v8.2.0 等 |
+| Version | dropdown | ⚠️ 仅 v8.0.0-dev / v7.x / other | 需随发布添加 v8.1.0、v8.2.0 等 |
 | Bug Description | textarea | ✅ 必填 | — |
 | Steps to Reproduce | textarea | ✅ 必填 | — |
 | Expected Behavior | textarea | ✅ 必填 | — |
@@ -775,163 +847,66 @@ ehthumbs.db
 
 当前配置 `custom: ['https://github.com/xuanyuanchumo/xuansto']` ✅，指向项目仓库。
 
-### 6.3 建议补充的 GitHub 配置
+#### CODEOWNERS（根目录）
 
-#### 6.3.1 release.yml（发布流水线）
+当前配置覆盖以下目录：
 
-```yaml
-name: Release
+| 路径 | 所有者 |
+|------|--------|
+| `*`（默认） | `@xuanyuanchumo` |
+| `/xuansto-mcp-server/` | `@xuanyuanchumo` |
+| `/.trae/skills/xuansto-skill-v2/agents/` | `@xuanyuanchumo` |
+| `/.trae/skills/xuansto-skill-v2/commands/` | `@xuanyuanchumo` |
+| `/.trae/skills/xuansto-skill-v2/configs/` | `@xuanyuanchumo` |
+| `/.trae/skills/xuansto-skill-v2/scripts/` | `@xuanyuanchumo` |
+| `/.trae/skills/xuansto-skill-v2/references/` | `@xuanyuanchumo` |
+| `/.github/` | `@xuanyuanchumo` |
+| `/docs/` | `@xuanyuanchumo` |
+| `/xuansto-mcp-server/pyproject.toml` | `@xuanyuanchumo` |
 
-on:
-  push:
-    tags:
-      - 'v*'
+**评估**：比 v2.0.0 文档建议的方案更细化，按 skill 子目录分别指定了所有者。
 
-permissions:
-  contents: write
+#### SECURITY.md（根目录）
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Build package
-        working-directory: xuansto-mcp-server
-        run: |
-          python -m pip install --upgrade pip build
-          python -m build
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: xuansto-mcp-server/dist/
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          files: xuansto-mcp-server/dist/*
-```
+当前安全策略内容：
 
-#### 6.3.2 dependabot.yml（依赖更新）
+| 区块 | 评估 | 说明 |
+|------|------|------|
+| Supported Versions | ✅ | 8.x 支持，< 8.0 不支持 |
+| How to Report | ✅ | GitHub Security Advisory + 邮件 |
+| What to Include | ✅ | 漏洞描述、复现步骤、影响、建议修复 |
+| Response Timeline | ✅ | 48h 确认，5 工作日评估 |
+| Disclosure Policy | ✅ | 负责任披露 |
+| Security Best Practices | ✅ | 5 条安全建议 |
 
-```yaml
-version: 2
-updates:
-  - package-ecosystem: pip
-    directory: /xuansto-mcp-server
-    schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "automated"
-    reviewers:
-      - xuanyuanchumo
+**评估**：比 v2.0.0 文档建议的方案更完善，增加了 Disclosure Policy 和更详细的 Best Practices。
 
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: monthly
-    open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "github-actions"
-```
+### 6.3 当前 .github/ 目录完整性评估
 
-#### 6.3.3 CODEOWNERS（代码所有者）
+| 文件 | 状态 | 位置 | 说明 |
+|------|------|------|------|
+| `ISSUE_TEMPLATE/bug_report.yml` | ✅ 已存在 | `.github/` | Bug 报告模板 |
+| `ISSUE_TEMPLATE/config.yml` | ✅ 已存在 | `.github/` | Issue 模板配置 |
+| `ISSUE_TEMPLATE/feature_request.yml` | ✅ 已存在 | `.github/` | 功能请求模板 |
+| `workflows/ci.yml` | ✅ 已存在 | `.github/` | CI 流水线 |
+| `workflows/release.yml` | ✅ 已存在 | `.github/` | 发布流水线（含 PyPI 发布） |
+| `dependabot.yml` | ✅ 已存在 | `.github/` | 依赖自动更新 |
+| `FUNDING.yml` | ✅ 已存在 | `.github/` | 赞助配置 |
+| `PULL_REQUEST_TEMPLATE.md` | ✅ 已存在 | `.github/` | PR 模板 |
+| `CODEOWNERS` | ✅ 已存在 | 根目录 | 代码所有者 |
+| `SECURITY.md` | ✅ 已存在 | 根目录 | 安全策略 |
 
-```
-# xuansto-skill-v2 CODEOWNERS
+**结论**：v2.0.0 文档建议补充的所有文件均已存在，.github/ 目录结构完整。
 
-# 默认所有者
-*       @xuanyuanchumo
+### 6.4 仍需改进的项目
 
-# MCP Server 核心代码
-/xuansto-mcp-server/src/xuansto_mcp/core/   @xuanyuanchumo
-/xuansto-mcp-server/src/xuansto_mcp/server.py @xuanyuanchumo
-
-# MCP 工具模块
-/xuansto-mcp-server/src/xuansto_mcp/tools/  @xuanyuanchumo
-
-# Skill 配置与约束
-/.trae/skills/xuansto-skill-v2/SKILL.md      @xuanyuanchumo
-/.trae/skills/xuansto-skill-v2/constraints.yaml @xuanyuanchumo
-/.trae/skills/xuansto-skill-v2/routes.yaml   @xuanyuanchumo
-
-# 数据库相关
-/xuansto-mcp-server/src/xuansto_mcp/core/database.py @xuanyuanchumo
-
-# CI/CD 配置
-/.github/                                    @xuanyuanchumo
-
-# 文档
-/docs/                                       @xuanyuanchumo
-```
-
-#### 6.3.4 SECURITY.md（安全策略）
-
-```markdown
-# Security Policy
-
-## Supported Versions
-
-| Version | Supported          |
-| ------- | ------------------ |
-| v8.x    | :white_check_mark: |
-| v7.x    | :x:                |
-| < v7.0  | :x:                |
-
-## Reporting a Vulnerability
-
-**请勿通过公开 Issue 报告安全漏洞。**
-
-请通过以下方式报告：
-
-1. GitHub Security Advisories: https://github.com/xuanyuanchumo/xuansto/security/advisories/new
-2. Email: 通过 GitHub 个人主页联系维护者
-
-### 报告内容
-
-- 漏洞类型（XSS、注入、权限提升等）
-- 受影响的版本和组件
-- 复现步骤
-- 潜在影响
-
-### 响应时间
-
-- 确认收到：24 小时内
-- 初步评估：72 小时内
-- 修复发布：根据严重程度，P0 在 7 天内，P1 在 14 天内
-
-## 安全最佳实践
-
-- 不要在代码中硬编码密钥或凭证
-- 使用 `.env` 文件管理敏感配置（已在 .gitignore 中排除）
-- MCP Server 工具调用需经过 Hook 拦截验证
-- 审计日志记录所有工具调用（MCP-03 实现后）
-```
-
-### 6.4 建议的完整 .github/ 目录结构
-
-```
-.github/
-├── ISSUE_TEMPLATE/
-│   ├── bug_report.yml          # Bug 报告模板（需更新版本选项）
-│   ├── config.yml              # Issue 模板配置 ✅
-│   └── feature_request.yml     # 功能请求模板 ✅
-├── workflows/
-│   ├── ci.yml                  # CI 流水线（需增强）
-│   └── release.yml             # 🆕 发布流水线
-├── CODEOWNERS                  # 🆕 代码所有者
-├── dependabot.yml              # 🆕 依赖自动更新
-├── FUNDING.yml                 # 赞助配置 ✅
-├── PULL_REQUEST_TEMPLATE.md    # PR 模板（需微调）
-└── SECURITY.md                 # 🆕 安全策略
-```
+| 项目 | 当前状态 | 改进建议 |
+|------|----------|----------|
+| bug_report.yml 版本选项 | 仅 v8.0.0-dev / v7.x | 随版本发布更新选项列表 |
+| ci.yml mypy 容忍失败 | `mypy ... \|\| true` | 逐步收紧为严格检查 |
+| ci.yml PR 路径过滤 | PR 触发缺少 paths 过滤 | 添加 paths 过滤减少不必要的 CI 运行 |
+| ci.yml Schema 验证 | 仅 YAML/JSON 格式校验 | 添加结构化验证步骤 |
+| PULL_REQUEST_TEMPLATE.md | Checklist 4 项 | 可添加"性能影响评估"和"文档已更新" |
 
 ---
 
@@ -1191,14 +1166,16 @@ git reset --hard
 
 ## 8. 分支与 REFACTOR_PLAN.md 重构步骤映射
 
+> **重要更新**：REFACTOR_PLAN.md 中所有 32 项问题（除 P3-01 Open 和 P3-02 Deferred 外）均已标记为 ✅ Fixed。以下分支映射仍作为开发策略参考，但实际实现可能已在 develop 分支上直接完成，无需创建独立 feature 分支。
+
 ### 8.1 Phase A（v8.1.0）— 修复关键问题
 
-| 重构步骤 | 问题 ID | 分支名称 | Worktree 目录 | 核心目标 |
-|----------|---------|----------|---------------|----------|
-| A1 | ARCH-05, MCP-02 | `feature/mcp-resources` | `feat-mcp-resources-a3f1b2` | Resource 推送通知实现：22 个 Resource 变更时通过 MCP `notifications/resources/updated` 通知订阅客户端 |
-| A2 | ARCH-11 | `feature/unified-errors` | `feat-unified-errors-b5e7c3` | 统一错误处理：所有工具统一返回 JSON 格式 `{error, data, degradation_level, hook_errors}` |
-| A3 | MCP-03 | `feature/audit-logger` | `feat-audit-logger-c7d4e9` | 审计日志：`audit_log` 表 + `record_audit_log()` + 工具调用自动记录 + 90 天归档 |
-| A4 | SKILL-02 | `feature/skeleton-commands` | `feat-skeleton-commands-d1f6a4` | SKELETON 阶段可用命令：`/status`、`/help`、`/budget` |
+| 重构步骤 | 问题 ID | 状态 | 分支名称 | Worktree 目录 | 核心目标 |
+|----------|---------|------|----------|---------------|----------|
+| A1 | ARCH-05, MCP-02 | ✅ Fixed | `feature/mcp-resources` | `feat-mcp-resources-a3f1b2` | Resource 推送通知实现：22 个 Resource 变更时通过 MCP `notifications/resources/updated` 通知订阅客户端 |
+| A2 | ARCH-11 | ✅ Fixed | `feature/unified-errors` | `feat-unified-errors-b5e7c3` | 统一错误处理：所有工具统一返回 JSON 格式 `{error, data, degradation_level, hook_errors}` |
+| A3 | MCP-03 | ✅ Fixed | `feature/audit-logger` | `feat-audit-logger-c7d4e9` | 审计日志：`audit_log` 表 + `record_audit_log()` + 工具调用自动记录 + 90 天归档 |
+| A4 | SKILL-02 | ✅ Fixed | `feature/skeleton-commands` | `feat-skeleton-commands-d1f6a4` | SKELETON 阶段可用命令：`/status`、`/help`、`/budget` |
 
 **依赖关系**：
 
@@ -1222,13 +1199,13 @@ A4 (SKELETON命令)                       ← 独立，无依赖
 
 ### 8.2 Phase B（v8.2.0）— 持久化与一致性
 
-| 重构步骤 | 问题 ID | 分支名称 | Worktree 目录 | 核心目标 |
-|----------|---------|----------|---------------|----------|
-| B1 | ARCH-06 | `feature/persistence` | `feat-persistence-f2a8c5` | Agent 持久化：`agent_states` SQLite 表 + 双写过渡 + 启动恢复 |
-| B2 | ARCH-07 | `feature/persistence` | `feat-persistence-f2a8c5` | 工作流持久化：`workflow_states` SQLite 表 + 双写过渡 + 启动恢复 |
-| B3 | DB-01 | `feature/dual-write` | `feat-dual-write-g9b3d7` | 决策双写事务保证：SQLite 为主存储 + 文件系统备份 + 对账 |
-| B4 | DB-02 | `feature/dual-write` | `feat-dual-write-g9b3d7` | ChromaDB 双写增强：重试 3 次 + 死信队列 + 对账修复率 ≥ 99% |
-| B5 | ARCH-09 | `feature/hook-timeout` | `feat-hook-timeout-h4c2e8` | Hook 超时保护：默认 30s + 安全 Hook 超时阻断 + 非 Hook 超时跳过 |
+| 重构步骤 | 问题 ID | 状态 | 分支名称 | Worktree 目录 | 核心目标 |
+|----------|---------|------|----------|---------------|----------|
+| B1 | ARCH-06 | ✅ Fixed | `feature/persistence` | `feat-persistence-f2a8c5` | Agent 持久化：`agent_states` SQLite 表 + 双写过渡 + 启动恢复 |
+| B2 | ARCH-07 | ✅ Fixed | `feature/persistence` | `feat-persistence-f2a8c5` | 工作流持久化：`workflow_states` SQLite 表 + 双写过渡 + 启动恢复 |
+| B3 | DB-01 | ✅ Fixed | `feature/dual-write` | `feat-dual-write-g9b3d7` | 决策双写事务保证：SQLite 为主存储 + 文件系统备份 + 对账 |
+| B4 | DB-02 | ✅ Fixed | `feature/dual-write` | `feat-dual-write-g9b3d7` | ChromaDB 双写增强：重试 3 次 + 死信队列 + 对账修复率 ≥ 99% |
+| B5 | ARCH-09 | ✅ Fixed | `feature/hook-timeout` | `feat-hook-timeout-h4c2e8` | Hook 超时保护：默认 30s + 安全 Hook 超时阻断 + 非 Hook 超时跳过 |
 
 **依赖关系**：
 
@@ -1251,19 +1228,24 @@ B5 (Hook超时)                           ← 独立，无依赖
 
 ### 8.3 Phase C（v8.3.0）— 增强功能
 
-| 重构步骤 | 问题 ID | 分支名称 | Worktree 目录 | 核心目标 |
-|----------|---------|----------|---------------|----------|
-| C1 | ARCH-10 | `feature/config-hot-reload` | `feat-config-hot-reload-j6d5f1` | 配置热更新：constraints.yaml 变更 5s 内生效 + hooks.json 下次 Hook 生效 + 失败回滚 |
-| C2 | ARCH-12 | `feature/api-versioning` | `feat-api-versioning-k8e7a3` | API 版本协商：版本不匹配返回降级建议 + 弃用特性列表 + 向后兼容 |
+| 重构步骤 | 问题 ID | 状态 | 分支名称 | Worktree 目录 | 核心目标 |
+|----------|---------|------|----------|---------------|----------|
+| C1 | ARCH-10 | ✅ Fixed | `feature/config-hot-reload` | `feat-config-hot-reload-j6d5f1` | 配置热更新：constraints.yaml 变更 5s 内生效 + hooks.json 下次 Hook 生效 + 失败回滚 |
+| C2 | ARCH-12 | ✅ Fixed | `feature/api-versioning` | `feat-api-versioning-k8e7a3` | API 版本协商：版本不匹配返回降级建议 + 弃用特性列表 + 向后兼容 |
+| C3 | API-01 | ✅ Fixed | `feature/api-versioning` | `feat-api-versioning-k8e7a3` | HTTP/MCP Schema 统一：相同工具的 HTTP 和 MCP 调用返回相同 JSON 结构 |
+| C4 | DB-03 | ✅ Fixed | `feature/dual-write` | `feat-dual-write-g9b3d7` | 知识版本历史清理：保留最近 10 版本 + 90 天归档 |
+| C5 | MCP-04 | ✅ Fixed | `feature/mcp-resources` | `feat-mcp-resources-a3f1b2` | 便捷 Resource：新增 4 个 Resource |
 
 **依赖关系**：
 
 ```
 C1 (配置热更新)                        ← 独立
 C2 (API版本协商) ──► C3 (HTTP/MCP统一) ← C2 是 Schema 统一的前置
+C4 (版本清理)                           ← 独立
+C5 (便捷Resource)                       ← 独立
 ```
 
-> 注：REFACTOR_PLAN.md 中 C3（HTTP/MCP Schema 统一，API-01）、C4（知识版本清理，DB-03）、C5（便捷 Resource，MCP-04）未单独设立 feature 分支，建议在 `feature/api-versioning` 中顺带完成 C3，在 `feature/dual-write` 中顺带完成 C4，在 `feature/mcp-resources` 中顺带完成 C5。
+> 注：C3 在 `feature/api-versioning` 中完成，C4 在 `feature/dual-write` 中完成，C5 在 `feature/mcp-resources` 中完成。
 
 **受影响文件**：
 
@@ -1271,16 +1253,20 @@ C2 (API版本协商) ──► C3 (HTTP/MCP统一) ← C2 是 Schema 统一的�
 |------|----------|----------|
 | `xuansto-mcp-server/src/xuansto_mcp/core/config.py` | 修改 | C1 |
 | `xuansto-mcp-server/src/xuansto_mcp/tools/server_health.py` | 修改 | C2 |
-| `xuansto-mcp-server/src/xuansto_mcp/core/config.py` | 修改 | C2 |
+| `xuansto-mcp-server/src/xuansto_mcp/server.py` | 修改 | C3 |
+| `scripts/knowledge_server/api.py` | 修改 | C3 |
+| `scripts/knowledge_server/api_routes.py` | 修改 | C3 |
+| `xuansto-mcp-server/src/xuansto_mcp/core/database.py` | 修改 | C4 |
+| `xuansto-mcp-server/src/xuansto_mcp/resources/skill_resources.py` | 修改 | C5 |
 
 ### 8.4 Phase D（v8.4.0）— 优化
 
-| 重构步骤 | 问题 ID | 分支名称 | Worktree 目录 | 核心目标 |
-|----------|---------|----------|---------------|----------|
-| D1 | ARCH-08 | `feature/progressive-loading` | `feat-progressive-loading-l2f9b5` | Token-Phase 关联：每阶段独立预算 + 阶段推进自动分配 + 预算超限触发降级 |
-| D2 | ARCH-13 | `feature/progressive-loading` | `feat-progressive-loading-l2f9b5` | Resource 推送通知增强：批量通知合并 + 推送失败自动重试 |
-| D3 | — | `feature/progressive-loading` | `feat-progressive-loading-l2f9b5` | 渐进式加载增强：4 阶段状态机 + 转换条件 + 降级集成 |
-| D4 | — | `feature/progressive-loading` | `feat-progressive-loading-l2f9b5` | 性能指标体系：P50/P95/P99 延迟 + 错误率 + 降级率 + Token 消耗 |
+| 重构步骤 | 问题 ID | 状态 | 分支名称 | Worktree 目录 | 核心目标 |
+|----------|---------|------|----------|---------------|----------|
+| D1 | ARCH-08 | ✅ Fixed | `feature/progressive-loading` | `feat-progressive-loading-l2f9b5` | Token-Phase 关联：每阶段独立预算 + 阶段推进自动分配 + 预算超限触发降级 |
+| D2 | ARCH-13 | ✅ Fixed | `feature/progressive-loading` | `feat-progressive-loading-l2f9b5` | Resource 推送通知增强：批量通知合并 + 推送失败自动重试 |
+| D3 | — | ✅ Fixed | `feature/progressive-loading` | `feat-progressive-loading-l2f9b5` | 渐进式加载增强：4 阶段状态机 + 转换条件 + 降级集成 |
+| D4 | — | ✅ Fixed | `feature/progressive-loading` | `feat-progressive-loading-l2f9b5` | 性能指标体系：P50/P95/P99 延迟 + 错误率 + 降级率 + Token 消耗 |
 
 **依赖关系**：
 
@@ -1302,13 +1288,13 @@ D2 (推送通知增强)                                        ← 独立
 
 ### 8.5 版本发布计划总览
 
-| 版本 | 包含 Phase | 包含分支 | 预期内容 | 关键问题 |
-|------|-----------|----------|----------|----------|
-| v8.0.0 | 基线 | — | 现有功能稳定版 | P0-01/02 已修复 |
-| v8.1.0 | Phase A | feature/mcp-resources, feature/unified-errors, feature/audit-logger, feature/skeleton-commands | Resource 推送 + 统一错误 + 审计日志 + SKELETON 命令 | ARCH-05, ARCH-11, MCP-03, SKILL-02 |
-| v8.2.0 | Phase B | feature/persistence, feature/dual-write, feature/hook-timeout | Agent/工作流持久化 + 双写一致性 + Hook 超时 | ARCH-06/07, DB-01/02, ARCH-09 |
-| v8.3.0 | Phase C | feature/config-hot-reload, feature/api-versioning | 配置热更新 + API 版本协商 | ARCH-10, ARCH-12 |
-| v8.4.0 | Phase D | feature/progressive-loading | Token-Phase 关联 + 渐进式加载增强 + 性能指标 | ARCH-08, ARCH-13 |
+| 版本 | 包含 Phase | 包含分支 | 预期内容 | 关键问题 | 问题状态 |
+|------|-----------|----------|----------|----------|----------|
+| v8.0.0 | 基线 | — | 现有功能稳定版 | P0-01/02 已修复 | ✅ |
+| v8.1.0 | Phase A | feature/mcp-resources, feature/unified-errors, feature/audit-logger, feature/skeleton-commands | Resource 推送 + 统一错误 + 审计日志 + SKELETON 命令 | ARCH-05, ARCH-11, MCP-03, SKILL-02 | ✅ Fixed |
+| v8.2.0 | Phase B | feature/persistence, feature/dual-write, feature/hook-timeout | Agent/工作流持久化 + 双写一致性 + Hook 超时 | ARCH-06/07, DB-01/02, ARCH-09 | ✅ Fixed |
+| v8.3.0 | Phase C | feature/config-hot-reload, feature/api-versioning | 配置热更新 + API 版本协商 | ARCH-10, ARCH-12, API-01, DB-03, MCP-04 | ✅ Fixed |
+| v8.4.0 | Phase D | feature/progressive-loading | Token-Phase 关联 + 渐进式加载增强 + 性能指标 | ARCH-08, ARCH-13 | ✅ Fixed |
 
 ### 8.6 各阶段分支生命周期
 
@@ -1345,4 +1331,4 @@ main ─────────────────────────
 
 ---
 
-> **文档维护说明**：本文档应随项目版本迭代同步更新，特别是分支列表、版本号和阶段映射关系。每次 release 发布后需更新版本发布计划表。分支与 REFACTOR_PLAN.md 的问题 ID 保持一致，新增问题按原有编号规则续编。
+> **文档维护说明**：本文档应随项目版本迭代同步更新，特别是分支列表、版本号和阶段映射关系。每次 release 发布后需更新版本发布计划表。分支与 REFACTOR_PLAN.md 的问题 ID 保持一致，新增问题按原有编号规则续编。REFACTOR_PLAN.md 中 30/32 项问题已标记为 ✅ Fixed，仅 P3-01 (Open) 和 P3-02 (Deferred) 未修复。

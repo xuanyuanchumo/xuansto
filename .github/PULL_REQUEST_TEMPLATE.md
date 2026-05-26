@@ -48,3 +48,5 @@ Closes #
 - [ ] Self-review completed
 - [ ] No secrets/keys exposed
 - [ ] UNIFIED issue status updated
+- [ ] Performance impact assessed
+- [ ] Documentation updated (if applicable)

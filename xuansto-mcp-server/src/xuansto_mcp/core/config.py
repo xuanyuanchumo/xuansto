@@ -433,6 +433,8 @@ MCP_API_VERSION = "3.0.0"
 MCP_MIN_SUPPORTED_VERSION = "2.0.0"
 SKILL_MIN_VERSION = "8.0.0"
 
+KNOWLEDGE_VERSION_CLEANUP_KEEP_LAST_N: int = int(os.environ.get("XUANSTO_KNOWLEDGE_CLEANUP_KEEP_LAST_N", "10"))
+
 API_CHANGELOG: dict[str, list[str]] = {
     "2.0.0": [
         "Pluggable search engine architecture (SearchEngine Protocol)",

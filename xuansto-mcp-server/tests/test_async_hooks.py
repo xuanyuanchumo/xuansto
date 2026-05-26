@@ -32,4 +32,4 @@ def test_server_wrapped_uses_async_hooks():
 
 
 def test_version_is_350():
-    assert __version__ == "8.0.0"
+    assert __version__ == "8.4.0"

@@ -1,6 +1,6 @@
 ---
 name: xuansto-skill-v2
-version: 8.0.0
+version: 8.4.0
 description: |
   多Agent自主开发编排引擎，通过xuansto-mcp-server的20个MCP原子工具驱动9阶段全生命周期开发流程。务必在以下场景使用本技能：用户要求从零搭建项目、端到端开发功能、TDD/SDD驱动开发、多步骤结构化任务、代码审查+安全审计、规格驱动开发、桌面应用构建，即使用户没有明确说出"多Agent"或"全流程"。支持57个Agent/13层编排、54项质量门禁、31个命令，MCP工具优先不可用时自动降级到脚本调用。
 agents_summary: "13 layers / 57 agents (via MCP v2)"
@@ -20,7 +20,7 @@ license: MIT
 
 <!-- PHASE_0_START -->
 
-# Xuansto Skill v8.0.0 (MCP Edition)
+# Xuansto Skill v8.4.0 (MCP Edition)
 
 > 57 Agents/13层 | 54 Gates | 31 Cmds | 9 Phase | 20 MCP工具驱动
 
