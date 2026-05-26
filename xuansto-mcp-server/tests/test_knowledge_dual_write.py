@@ -41,27 +41,27 @@ class TestPersistKnowledgeDualWrite:
         finally:
             conn.close()
 
-    def test_dual_write_pending_when_chroma_fails(self):
+    def test_dual_write_failed_when_chroma_fails(self):
         def chroma_fail(entry_id, data):
             return False
 
-        result = persist_knowledge_dual_write("k2", {"title": "Fail", "content": "Bad"}, chroma_fail)
-        assert result["status"] == "pending"
+        result = persist_knowledge_dual_write("k2", {"title": "Fail", "content": "Bad"}, chroma_fail, max_retries=1, base_delay=0.0)
+        assert result["status"] == "failed"
         conn = get_db()
         try:
             cursor = conn.execute("SELECT sync_status FROM knowledge_entries WHERE id = 'k2'")
             row = cursor.fetchone()
             assert row is not None
-            assert row["sync_status"] == "pending"
+            assert row["sync_status"] == "failed"
         finally:
             conn.close()
 
-    def test_dual_write_pending_when_chroma_raises(self):
+    def test_dual_write_failed_when_chroma_raises(self):
         def chroma_error(entry_id, data):
             raise RuntimeError("connection refused")
 
-        result = persist_knowledge_dual_write("k3", {"title": "Error", "content": "Oops"}, chroma_error)
-        assert result["status"] == "pending"
+        result = persist_knowledge_dual_write("k3", {"title": "Error", "content": "Oops"}, chroma_error, max_retries=1, base_delay=0.0)
+        assert result["status"] == "failed"
 
     def test_dual_write_pending_when_no_chroma_fn(self):
         result = persist_knowledge_dual_write("k4", {"title": "No Chroma", "content": "Skip"})
@@ -71,13 +71,13 @@ class TestPersistKnowledgeDualWrite:
         def chroma_fail(entry_id, data):
             return False
 
-        persist_knowledge_dual_write("k5", {"title": "Recon", "content": "Log"}, chroma_fail)
+        persist_knowledge_dual_write("k5", {"title": "Recon", "content": "Log"}, chroma_fail, max_retries=1, base_delay=0.0)
         conn = get_db()
         try:
             cursor = conn.execute("SELECT * FROM reconciliation_log WHERE entry_id = 'k5'")
             rows = cursor.fetchall()
             assert len(rows) >= 1
-            assert rows[0]["issue_type"] == "write_failed"
+            assert rows[0]["issue_type"] == "write_failed_after_retries"
         finally:
             conn.close()
 
@@ -111,7 +111,7 @@ class TestReconcileKnowledgeStores:
             return False
 
         persist_knowledge_dual_write("r2", {"title": "Fail", "content": "No fix"}, chroma_write_fn=None)
-        result = reconcile_knowledge_stores(chroma_fail)
+        result = reconcile_knowledge_stores(chroma_fail, max_retries=1, base_delay=0.0)
         assert result["failed"] >= 1
 
     def test_reconcile_no_pending_entries(self):

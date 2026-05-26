@@ -97,7 +97,7 @@ async def handle_tool(arguments: dict, context: dict):
             "saved_at": now_iso,
             "state": state,
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "load":
         if not sessions:
@@ -114,12 +114,12 @@ async def handle_tool(arguments: dict, context: dict):
             "state": session["state"],
             "saved_at": session["saved_at"],
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "list":
         session_list = [{"session_id": sid, "saved_at": s["saved_at"]} for sid, s in sessions.items()]
         result = {"action": "list", "sessions": session_list, "total": len(session_list)}
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "detect":
         error_log = arguments.get("error_log", [])
@@ -129,7 +129,7 @@ async def handle_tool(arguments: dict, context: dict):
             "error_log": error_log[:10],
             "recovery_suggested": len(error_log) > 0,
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "verify":
         pattern_path = arguments.get("pattern_path", "")
@@ -140,7 +140,7 @@ async def handle_tool(arguments: dict, context: dict):
             "success": success,
             "verified_at": now_iso,
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "track":
         current_phase = arguments.get("current_phase")
@@ -153,7 +153,7 @@ async def handle_tool(arguments: dict, context: dict):
             "decisions": arguments.get("decisions", []),
             "tracked_at": now_iso,
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "restore":
         if not sessions:
@@ -170,4 +170,4 @@ async def handle_tool(arguments: dict, context: dict):
             "state": session["state"],
             "restored_at": now_iso,
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]

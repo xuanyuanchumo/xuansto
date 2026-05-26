@@ -61,38 +61,36 @@ _PHASE_AVAILABLE_RESOURCES = {
 SKELETON_ALLOWED_COMMANDS = ["/status", "/help", "/budget"]
 
 _PHASE_COMMANDS = {
-    LoadPhase.SKELETON: list(SKELETON_ALLOWED_COMMANDS),
+    LoadPhase.SKELETON: [
+        "/status", "/help", "/budget",
+    ],
     LoadPhase.FUNCTIONAL: [
-        "/init", "/brainstorm", "/clarify", "/plan", "/spec", "/design",
-        "/design-system", "/implement", "/test", "/review", "/audit",
-        "/fix", "/accept", "/simplify", "/refactor", "/deploy", "/build",
-        "/build-desktop", "/release-desktop", "/sprint", "/learn",
-        "/execute-plan", "/loop", "/cancel-loop", "/agent-status",
-        "/status", "/rollback", "/sdd-tdd-medium", "/sdd-tdd-fast",
-        "/decision", "/budget",
+        "/status", "/help", "/budget",
+        "/init", "/sprint", "/clarify", "/plan", "/spec", "/design",
+        "/learn", "/brainstorm", "/execute-plan", "/agent-status",
     ],
     LoadPhase.ENHANCED: [
-        "/init", "/brainstorm", "/clarify", "/plan", "/spec", "/design",
-        "/design-system", "/implement", "/test", "/review", "/audit",
-        "/fix", "/accept", "/simplify", "/refactor", "/deploy", "/build",
-        "/build-desktop", "/release-desktop", "/sprint", "/learn",
-        "/execute-plan", "/loop", "/cancel-loop", "/agent-status",
-        "/status", "/rollback", "/sdd-tdd-medium", "/sdd-tdd-fast",
-        "/decision", "/budget",
+        "/status", "/help", "/budget",
+        "/init", "/sprint", "/clarify", "/plan", "/spec", "/design",
+        "/learn", "/brainstorm", "/execute-plan", "/agent-status",
+        "/implement", "/test", "/review", "/fix", "/refactor", "/simplify",
+        "/design-system", "/sdd-tdd-medium", "/sdd-tdd-fast", "/decision",
+        "/build", "/accept",
     ],
     LoadPhase.FULL: [
-        "/init", "/brainstorm", "/clarify", "/plan", "/spec", "/design",
-        "/design-system", "/implement", "/test", "/review", "/audit",
-        "/fix", "/accept", "/simplify", "/refactor", "/deploy", "/build",
-        "/build-desktop", "/release-desktop", "/sprint", "/learn",
-        "/execute-plan", "/loop", "/cancel-loop", "/agent-status",
-        "/status", "/rollback", "/sdd-tdd-medium", "/sdd-tdd-fast",
-        "/decision", "/budget",
+        "/status", "/help", "/budget",
+        "/init", "/sprint", "/clarify", "/plan", "/spec", "/design",
+        "/learn", "/brainstorm", "/execute-plan", "/agent-status",
+        "/implement", "/test", "/review", "/fix", "/refactor", "/simplify",
+        "/design-system", "/sdd-tdd-medium", "/sdd-tdd-fast", "/decision",
+        "/build", "/accept",
+        "/deploy", "/build-desktop", "/release-desktop", "/audit",
+        "/rollback", "/loop", "/cancel-loop",
     ],
 }
 
 _DISCLOSURE_NOTES = {
-    LoadPhase.SKELETON: "当前处于骨架阶段，仅核心元数据可用。命令步骤、工作流详情、Agent详情、参考文档不可用。请执行任意命令以推进到功能阶段。",
+    LoadPhase.SKELETON: "当前处于骨架阶段，仅核心元数据可用。可用命令: /status(查询进度), /help(帮助信息), /budget(Token预算)。命令步骤、工作流详情、Agent详情、参考文档不可用。请执行任意命令以推进到功能阶段。",
     LoadPhase.FUNCTIONAL: "当前处于功能阶段，命令执行和工作流概览可用。完整命令路由(含降级策略)、完整Agent注册表、参考文档、知识检索不可用。可通过 resource_load_status(preload) 推进到增强阶段。",
     LoadPhase.ENHANCED: "当前处于增强阶段，完整命令路由、Agent注册表、参考文档和知识检索可用。Hook系统详情、模型路由详情、关键规则完整说明不可用。可通过 resource_load_status(preload) 推进到完整阶段。",
     LoadPhase.FULL: "当前处于完整阶段，全部功能可用。",
@@ -113,14 +111,54 @@ _RESOURCE_PRIORITY_MAP = {
 }
 
 COMMAND_PHASE_MAP: dict[str, LoadPhase] = {
+    "/status": LoadPhase.SKELETON,
+    "/help": LoadPhase.SKELETON,
+    "/budget": LoadPhase.SKELETON,
     "/init": LoadPhase.FUNCTIONAL,
     "/sprint": LoadPhase.FUNCTIONAL,
-    "/implement": LoadPhase.FUNCTIONAL,
-    "/audit": LoadPhase.ENHANCED,
+    "/clarify": LoadPhase.FUNCTIONAL,
+    "/plan": LoadPhase.FUNCTIONAL,
+    "/spec": LoadPhase.FUNCTIONAL,
+    "/design": LoadPhase.FUNCTIONAL,
+    "/learn": LoadPhase.FUNCTIONAL,
+    "/brainstorm": LoadPhase.FUNCTIONAL,
+    "/execute-plan": LoadPhase.FUNCTIONAL,
+    "/agent-status": LoadPhase.FUNCTIONAL,
+    "/implement": LoadPhase.ENHANCED,
+    "/test": LoadPhase.ENHANCED,
+    "/review": LoadPhase.ENHANCED,
+    "/fix": LoadPhase.ENHANCED,
     "/refactor": LoadPhase.ENHANCED,
-    "/loop": LoadPhase.ENHANCED,
-    "/build-desktop": LoadPhase.FULL,
+    "/simplify": LoadPhase.ENHANCED,
+    "/design-system": LoadPhase.ENHANCED,
+    "/sdd-tdd-medium": LoadPhase.ENHANCED,
+    "/sdd-tdd-fast": LoadPhase.ENHANCED,
+    "/decision": LoadPhase.ENHANCED,
+    "/build": LoadPhase.ENHANCED,
+    "/accept": LoadPhase.ENHANCED,
     "/deploy": LoadPhase.FULL,
+    "/build-desktop": LoadPhase.FULL,
+    "/release-desktop": LoadPhase.FULL,
+    "/audit": LoadPhase.FULL,
+    "/rollback": LoadPhase.FULL,
+    "/loop": LoadPhase.FULL,
+    "/cancel-loop": LoadPhase.FULL,
+}
+
+_PHASE_TRANSITION_TEMPLATES = {
+    (LoadPhase.SKELETON, LoadPhase.FUNCTIONAL): (
+        "🔄 阶段提升: SKELETON → FUNCTIONAL | "
+        "新增命令: /init, /sprint, /clarify, /plan, /spec, /design, "
+        "/learn, /brainstorm, /execute-plan, /agent-status"
+    ),
+    (LoadPhase.FUNCTIONAL, LoadPhase.ENHANCED): (
+        "🔄 阶段提升: FUNCTIONAL → ENHANCED | "
+        "新增命令: /implement, /test, /review, /fix, /refactor, /simplify, "
+        "/design-system, /sdd-tdd-medium, /sdd-tdd-fast, /decision, /build, /accept"
+    ),
+    (LoadPhase.ENHANCED, LoadPhase.FULL): (
+        "🔄 阶段提升: ENHANCED → FULL | 全部命令可用"
+    ),
 }
 
 PHASE_SKILL_MAP: dict[int, LoadPhase] = {
@@ -200,6 +238,7 @@ class ProgressiveLoader:
     def __init__(self, initial_state: Optional[LoadingState] = None):
         self._state = initial_state or LoadingState()
         self._last_activity_time: float = time.time()
+        self._last_transition_message: str = ""
 
     def get_current_phase(self) -> LoadPhase:
         return self._state.current_phase
@@ -213,6 +252,10 @@ class ProgressiveLoader:
 
         if target_phase.index <= self._state.current_phase.index:
             return self._state
+
+        old_phase = self._state.current_phase
+        transition_key = (old_phase, target_phase)
+        self._last_transition_message = _PHASE_TRANSITION_TEMPLATES.get(transition_key, "")
 
         now = time.time()
         self._state.current_phase = target_phase
@@ -231,6 +274,9 @@ class ProgressiveLoader:
         self._state.last_updated = now
         self._last_activity_time = now
         return self._state
+
+    def get_transition_message(self) -> str:
+        return self._last_transition_message
 
     def can_access(self, resource_priority: str) -> bool:
         priority_level = _RESOURCE_PRIORITY_MAP.get(resource_priority, 999)

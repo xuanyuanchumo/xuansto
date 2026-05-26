@@ -233,27 +233,58 @@ AGENT_RETRIEVAL_PROFILES = {
 }
 
 
-def make_response(status: str, data: Any = None, meta: dict = None) -> dict:
+def make_response(status: str, data: Any = None, metadata: dict = None) -> dict:
     return {
         "status": status,
         "data": data,
-        "meta": meta or {}
+        "error": None,
+        "metadata": metadata or {}
     }
 
 
 def make_error_response(code: str, message: str, details: dict = None, retryable: bool = False) -> dict:
+    unified_code = KNOWLEDGE_ERROR_TO_UNIFIED.get(code, code)
     return {
         "status": "error",
         "data": None,
-        "meta": {
-            "error": {
-                "code": code,
-                "message": message,
-                "details": details or {},
-                "retryable": retryable
-            }
-        }
+        "error": {
+            "code": unified_code,
+            "message": message,
+            "details": details or {},
+            "retryable": retryable
+        },
+        "metadata": {}
     }
+
+
+KNOWLEDGE_ERROR_TO_UNIFIED: dict[str, str] = {
+    "BAD_REQUEST": "ERR_VALIDATION",
+    "NOT_FOUND": "ERR_NOT_FOUND",
+    "VALIDATION_ERROR": "ERR_VALIDATION",
+    "DUPLICATE_DETECTED": "ERR_DUPLICATE",
+    "VERSION_CONFLICT": "ERR_VERSION_CONFLICT",
+    "INTERNAL_ERROR": "ERR_INTERNAL",
+    "SERVICE_DEGRADED": "ERR_DEGRADATION",
+    "RATE_LIMITED": "ERR_RATE_LIMIT",
+    "UNAUTHORIZED": "ERR_UNAUTHORIZED",
+    "SERVICE_UNAVAILABLE": "ERR_SERVICE_UNAVAILABLE",
+}
+
+UNIFIED_ERROR_TO_HTTP_STATUS: dict[str, int] = {
+    "ERR_VALIDATION": 400,
+    "ERR_NOT_FOUND": 404,
+    "ERR_TIMEOUT": 408,
+    "ERR_DEGRADATION": 503,
+    "ERR_CONFIG": 500,
+    "ERR_INTERNAL": 500,
+    "ERR_RATE_LIMIT": 429,
+    "ERR_PERMISSION": 403,
+    "ERR_WORKFLOW_NOT_FOUND": 404,
+    "ERR_DUPLICATE": 409,
+    "ERR_VERSION_CONFLICT": 409,
+    "ERR_UNAUTHORIZED": 401,
+    "ERR_SERVICE_UNAVAILABLE": 503,
+}
 
 
 class JsonFormatter(logging.Formatter):
@@ -329,9 +360,20 @@ class KnowledgeConfig:
 
     @property
     def sqlite_path(self) -> Path:
-        p = self.database.get("sqlite_path", ".knowledge/index/knowledge.db")
-        resolved = Path(p) if Path(p).is_absolute() else self.knowledge_root / p
-        return resolved
+        p = self.database.get("sqlite_path", "")
+        if p:
+            resolved = Path(p) if Path(p).is_absolute() else self.knowledge_root / p
+            return resolved
+        xuansto_candidate = Path.home() / ".xuansto" / "xuansto.db"
+        if xuansto_candidate.exists():
+            return xuansto_candidate
+        project_root = self.knowledge_root
+        while project_root.parent != project_root:
+            candidate = project_root / ".xuansto" / "xuansto.db"
+            if candidate.exists():
+                return candidate
+            project_root = project_root.parent
+        return Path.home() / ".xuansto" / "xuansto.db"
 
     @property
     def chroma_path(self) -> Path:

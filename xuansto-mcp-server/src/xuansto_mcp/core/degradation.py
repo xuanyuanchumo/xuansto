@@ -513,10 +513,10 @@ def run_script_fallback(
     script_path = SCRIPTS_DIR / script_name
     if not script_path.exists():
         return {
-            "error": True,
-            "code": "SCRIPT_NOT_FOUND",
-            "message": f"脚本不存在: {script_name}",
-            "fallback": True,
+            "status": "error",
+            "data": None,
+            "error": {"code": "SCRIPT_NOT_FOUND", "message": f"脚本不存在: {script_name}"},
+            "metadata": {"fallback": True},
         }
 
     cmd = [sys.executable, str(script_path)]
@@ -533,27 +533,27 @@ def run_script_fallback(
         )
         try:
             parsed = json.loads(result.stdout)
-            return {"error": False, "data": parsed, "fallback": True, "degraded": True}
+            return {"status": "success", "data": parsed, "error": None, "metadata": {"fallback": True, "degraded": True}}
         except json.JSONDecodeError:
             return {
-                "error": False,
+                "status": "success",
                 "data": {"raw_output": result.stdout[:2000]},
-                "fallback": True,
-                "degraded": True,
+                "error": None,
+                "metadata": {"fallback": True, "degraded": True},
             }
     except subprocess.TimeoutExpired:
         return {
-            "error": True,
-            "code": "TIMEOUT",
-            "message": f"脚本执行超时({timeout}s): {script_name}",
-            "fallback": True,
+            "status": "error",
+            "data": None,
+            "error": {"code": "TIMEOUT", "message": f"脚本执行超时({timeout}s): {script_name}"},
+            "metadata": {"fallback": True},
         }
     except Exception as e:
         return {
-            "error": True,
-            "code": "EXECUTION_ERROR",
-            "message": str(e),
-            "fallback": True,
+            "status": "error",
+            "data": None,
+            "error": {"code": "EXECUTION_ERROR", "message": str(e)},
+            "metadata": {"fallback": True},
         }
 
 
@@ -565,7 +565,7 @@ async def run_script_fallback_async(
 ) -> dict[str, Any]:
     script_path = SCRIPTS_DIR / script_name
     if not script_path.exists():
-        return {"error": True, "code": "SCRIPT_NOT_FOUND", "message": f"脚本不存在: {script_name}", "fallback": True}
+        return {"status": "error", "data": None, "error": {"code": "SCRIPT_NOT_FOUND", "message": f"脚本不存在: {script_name}"}, "metadata": {"fallback": True}}
     cmd = [sys.executable, str(script_path)]
     if args:
         cmd.extend(args)
@@ -580,13 +580,13 @@ async def run_script_fallback_async(
         output = stdout.decode("utf-8", errors="replace").strip()
         try:
             parsed = json.loads(output)
-            return {"error": False, "data": parsed, "fallback": True, "degraded": True}
+            return {"status": "success", "data": parsed, "error": None, "metadata": {"fallback": True, "degraded": True}}
         except json.JSONDecodeError:
-            return {"error": False, "data": {"raw_output": output[:2000]}, "fallback": True, "degraded": True}
+            return {"status": "success", "data": {"raw_output": output[:2000]}, "error": None, "metadata": {"fallback": True, "degraded": True}}
     except asyncio.TimeoutError:
-        return {"error": True, "code": "TIMEOUT", "message": f"脚本执行超时({timeout}s): {script_name}", "fallback": True}
+        return {"status": "error", "data": None, "error": {"code": "TIMEOUT", "message": f"脚本执行超时({timeout}s): {script_name}"}, "metadata": {"fallback": True}}
     except Exception as e:
-        return {"error": True, "code": "EXECUTION_ERROR", "message": str(e), "fallback": True}
+        return {"status": "error", "data": None, "error": {"code": "EXECUTION_ERROR", "message": str(e)}, "metadata": {"fallback": True}}
 
 
 def _fallback_success(
@@ -621,9 +621,10 @@ def _standardize_result(
     **extra: Any,
 ) -> dict[str, Any]:
     if result.get("error"):
+        error_info = result["error"]
         return make_error_response(XuanstoMCPError(
-            code=result.get("code", "UNKNOWN_ERROR"),
-            message=result.get("message", "未知错误"),
+            code=error_info.get("code", "UNKNOWN_ERROR"),
+            message=error_info.get("message", "未知错误"),
             details={"tool": tool, "source": "fallback"},
         ), error_code=ERR_INTERNAL)
     data = result.get("data", {})
@@ -1163,12 +1164,45 @@ def _load_fallback_config_from_yaml() -> dict[str, Any] | None:
     return None
 
 
+def _load_tool_fallbacks_from_constraints() -> dict[str, Any] | None:
+    try:
+        from . import config
+        constraints = config._CONSTRAINTS_CONFIG
+        degradation = constraints.get("degradation", {})
+        if isinstance(degradation, dict):
+            tool_fallbacks = degradation.get("tool_fallbacks")
+            if isinstance(tool_fallbacks, dict) and tool_fallbacks:
+                return tool_fallbacks
+    except Exception as exc:
+        logger.warning("Failed to load tool_fallbacks from constraints.yaml: %s", exc)
+    return None
+
+
 def _build_fallback_map_from_yaml(yaml_config: dict[str, Any]) -> dict[str, Callable[..., Any]]:
     built: dict[str, Callable[..., Any]] = {}
     for tool_name, entry in yaml_config.items():
         inline_name = entry.get("inline") if isinstance(entry, dict) else None
         if inline_name and inline_name in _INLINE_FALLBACK_MAP:
             built[tool_name] = _INLINE_FALLBACK_MAP[inline_name]
+        elif tool_name in FALLBACK_MAP:
+            built[tool_name] = FALLBACK_MAP[tool_name]
+    return built
+
+
+def _build_fallback_map_from_constraints(constraints_fallbacks: dict[str, Any]) -> dict[str, Callable[..., Any]]:
+    built: dict[str, Callable[..., Any]] = {}
+    for tool_name, entry in constraints_fallbacks.items():
+        if not isinstance(entry, dict):
+            continue
+        inline_name = entry.get("inline")
+        resolved_fn = None
+        if inline_name:
+            resolved_fn = _INLINE_FALLBACK_MAP.get(inline_name)
+            if resolved_fn is None and inline_name.startswith("_inline_"):
+                alt_name = inline_name[len("_inline_"):] + "_fallback"
+                resolved_fn = _INLINE_FALLBACK_MAP.get(alt_name)
+        if resolved_fn is not None:
+            built[tool_name] = resolved_fn
         elif tool_name in FALLBACK_MAP:
             built[tool_name] = FALLBACK_MAP[tool_name]
     return built
@@ -1188,6 +1222,13 @@ def _get_fallback_config_mtime() -> float:
 
 def _resolve_fallback_map() -> dict[str, Callable[..., Any]]:
     global _fallback_config_mtime
+    constraints_fallbacks = _load_tool_fallbacks_from_constraints()
+    if constraints_fallbacks is not None:
+        merged = _build_fallback_map_from_constraints(constraints_fallbacks)
+        for tool_name, fn in FALLBACK_MAP.items():
+            if tool_name not in merged:
+                merged[tool_name] = fn
+        return merged
     current_mtime = _get_fallback_config_mtime()
     if current_mtime != _fallback_config_mtime:
         _fallback_config_mtime = current_mtime

@@ -58,7 +58,7 @@ def register_crud_routes(application, server):
             result["degradation_name"] = server.degradation.level_name
             if req.agent_role:
                 result["agent_role"] = req.agent_role
-            return make_response("ok", result)
+            return make_response("success", result)
         except Exception as e:
             raise HTTPException(
                 status_code=503,
@@ -108,7 +108,7 @@ def register_crud_routes(application, server):
                 category_counts[c] = category_counts.get(c, 0) + 1
             stats["by_type"] = type_counts
             stats["by_category"] = category_counts
-        return make_response("ok", stats)
+        return make_response("success", stats)
 
     async def _get_entry_handler(entry_id: str):
         entry = server.sqlite.get_entry(entry_id)
@@ -121,7 +121,7 @@ def register_crud_routes(application, server):
                     details={"entry_id": entry_id},
                 ),
             )
-        return make_response("ok", entry)
+        return make_response("success", entry)
 
     @application.get("/v1/knowledge/get/{entry_id}")
     async def get_entry_new(entry_id: str):
@@ -186,7 +186,7 @@ def register_crud_routes(application, server):
                     "entry_id": existing["id"],
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 })
-                return make_response("ok", {
+                return make_response("success", {
                     "id": existing["id"],
                     "status": "merged",
                     "dedup_status": "duplicate_merged",
@@ -226,7 +226,7 @@ def register_crud_routes(application, server):
                 "entry_id": result["id"],
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             })
-            return make_response("ok", {
+            return make_response("success", {
                 "id": result["id"],
                 "status": "created",
                 "dedup_status": "new",
@@ -348,7 +348,7 @@ def register_crud_routes(application, server):
             "entry_id": entry_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
-        return make_response("ok", {
+        return make_response("success", {
             "id": entry_id,
             "status": "updated",
         })
@@ -380,7 +380,7 @@ def register_crud_routes(application, server):
             "entry_id": entry_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
-        return make_response("ok", {
+        return make_response("success", {
             "id": entry_id,
             "status": "deleted",
         })
@@ -434,7 +434,7 @@ def register_crud_routes(application, server):
             "target_version": req.target_version,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
-        return make_response("ok", {
+        return make_response("success", {
             "id": req.entry_id,
             "status": "rolled_back",
             "target_version": req.target_version,
@@ -443,7 +443,7 @@ def register_crud_routes(application, server):
     @application.get("/v1/knowledge/{entry_id}/versions")
     async def get_version_history(entry_id: str):
         versions = server.sqlite.get_version_history(entry_id)
-        return make_response("ok", {
+        return make_response("success", {
             "entry_id": entry_id,
             "versions": versions,
             "total": len(versions),
@@ -471,7 +471,7 @@ def register_crud_routes(application, server):
             )
             result["degradation_level"] = server.degradation.level
             result["degradation_name"] = server.degradation.level_name
-            return make_response("ok", result)
+            return make_response("success", result)
         except Exception as e:
             raise HTTPException(
                 status_code=503,
@@ -495,7 +495,7 @@ def register_crud_routes(application, server):
                     details={"entry_id": req.entry_id},
                 ),
             )
-        return make_response("ok", result)
+        return make_response("success", result)
 
     @application.post("/v1/knowledge/web_update")
     async def knowledge_web_update(req: WebUpdateRequest):
@@ -541,7 +541,7 @@ def register_crud_routes(application, server):
             web_results = []
 
         if not web_results:
-            return make_response("ok", {
+            return make_response("success", {
                 "status": "no_results",
                 "query": query,
                 "message": "网络搜索未找到相关结果，可能处于离线状态",
@@ -549,7 +549,7 @@ def register_crud_routes(application, server):
 
         structured = extract_and_structure(web_results, existing_entry=target_entry)
         if not structured:
-            return make_response("ok", {
+            return make_response("success", {
                 "status": "extraction_failed",
                 "query": query,
                 "sources_found": len(web_results),
@@ -597,7 +597,7 @@ def register_crud_routes(application, server):
                         "timestamp": datetime.now(timezone.utc).isoformat(),
                     })
                     logger.info("operation=web_update, entry_id=%s, status=updated", req.entry_id)
-                    return make_response("ok", {
+                    return make_response("success", {
                         "id": req.entry_id,
                         "status": "updated",
                         "sources_found": len(web_results),
@@ -605,7 +605,7 @@ def register_crud_routes(application, server):
                         "updated_fields": list(updates.keys()),
                     })
 
-            return make_response("ok", {
+            return make_response("success", {
                 "id": req.entry_id,
                 "status": "no_change",
                 "sources_found": len(web_results),
@@ -637,7 +637,7 @@ def register_crud_routes(application, server):
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 })
                 logger.info("operation=web_update, new_entry_id=%s, status=created_pending_review", entry_id)
-                return make_response("ok", {
+                return make_response("success", {
                     "id": entry_id,
                     "status": "created_pending_review",
                     "sources_found": len(web_results),
@@ -661,7 +661,7 @@ def register_crud_routes(application, server):
                 query=req.query,
                 token_budget=req.token_budget,
             )
-            return make_response("ok", result)
+            return make_response("success", result)
         except Exception as e:
             raise HTTPException(
                 status_code=503,

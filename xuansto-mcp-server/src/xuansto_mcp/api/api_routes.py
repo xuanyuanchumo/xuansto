@@ -16,7 +16,11 @@ except ImportError:
 
 
 def _error_response_to_http_status(result: dict[str, Any]) -> int:
-    error_code = result.get("error_code", "")
+    error_info = result.get("error")
+    if isinstance(error_info, dict):
+        error_code = error_info.get("code", "")
+    else:
+        error_code = result.get("error_code", "")
     return ERROR_CODE_TO_HTTP_STATUS.get(error_code, 500)
 
 
@@ -47,7 +51,6 @@ def create_api_app() -> Any:
             return JSONResponse(content=result)
         except Exception as e:
             result = make_error_response(e)
-            result["http_status"] = 500
             return JSONResponse(content=result, status_code=500)
 
     @app.get("/health/version")

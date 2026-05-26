@@ -236,6 +236,24 @@ degradation:
     knowledge_inject:
       script: scripts/knowledge_inject.py
       args: ["--format", "json"]
+    knowledge_search:
+      script: scripts/knowledge_search.py
+      args: ["--format", "json"]
+      inline: _inline_knowledge_search
+    resource_load_status:
+      inline: _inline_resource_load_status
+    project_init:
+      script: scripts/project_init.py
+      args: ["--format", "json"]
+      inline: _inline_project_init
+    agent_manage:
+      inline: _inline_agent_manage
+    metrics_report:
+      script: scripts/metrics_report.py
+      args: ["--format", "json"]
+      inline: _inline_metrics_report
+    config_manage:
+      inline: _inline_config_manage
   knowledge_search_degradation: "ChromaDB→SQLite FTS→关键词匹配"
 
 key_rules:

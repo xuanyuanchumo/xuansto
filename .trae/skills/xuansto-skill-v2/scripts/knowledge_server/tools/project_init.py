@@ -104,7 +104,7 @@ async def handle_tool(arguments: dict, context: dict):
             "stack": stack,
             "template": template,
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "validate":
         project_path = arguments.get("project_path", ".")
@@ -128,7 +128,7 @@ async def handle_tool(arguments: dict, context: dict):
             "block_count": sum(1 for i in issues if i.get("severity") == "BLOCK"),
             "warn_count": sum(1 for i in issues if i.get("severity") == "WARN"),
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "detect_stack":
         project_path = arguments.get("project_path", ".")
@@ -163,4 +163,4 @@ async def handle_tool(arguments: dict, context: dict):
             "primary_stack": primary,
             "total_detected": len(detected),
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]

@@ -432,13 +432,13 @@ class MCPToolFallback:
                             "operation=script_fallback, script=%s, status=success",
                             script_rel_path,
                         )
-                        return make_response("ok", script_output)
+                        return make_response("success", script_output)
                     except json.JSONDecodeError:
                         logger.warning(
                             "operation=script_fallback, script=%s, status=non_json_output",
                             script_rel_path,
                         )
-                        return make_response("ok", {
+                        return make_response("success", {
                             "raw_output": stdout,
                             "format": "text",
                             "degraded": True,
@@ -447,7 +447,7 @@ class MCPToolFallback:
                     "operation=script_fallback, script=%s, status=success_empty",
                     script_rel_path,
                 )
-                return make_response("ok", {"degraded": True})
+                return make_response("success", {"degraded": True})
             else:
                 stderr_preview = result.stderr[:1000] if result.stderr else ""
                 logger.error(
@@ -520,7 +520,7 @@ class MCPToolFallback:
                         "status": "no_implementation_found",
                     })
 
-        return make_response("ok", {
+        return make_response("success", {
             "drift_detected": len(drift_items) > 0,
             "items": drift_items,
             "total": len(drift_items),
@@ -563,7 +563,7 @@ class MCPToolFallback:
                     except OSError:
                         pass
 
-        return make_response("ok", {
+        return make_response("success", {
             "findings": findings[:50],
             "total": len(findings),
             "scanned_path": str(target),
@@ -579,7 +579,7 @@ class MCPToolFallback:
             try:
                 import ast
             except ImportError:
-                return make_response("ok", {
+                return make_response("success", {
                     "opportunities": [],
                     "total": 0,
                     "degraded": True,
@@ -624,7 +624,7 @@ class MCPToolFallback:
                     except (OSError, SyntaxError):
                         pass
 
-        return make_response("ok", {
+        return make_response("success", {
             "opportunities": opportunities[:50],
             "total": len(opportunities),
             "degraded": True,
@@ -637,14 +637,14 @@ class MCPToolFallback:
 
         if action == "advance":
             next_phase = min(phase + 1, 8)
-            return make_response("ok", {
+            return make_response("success", {
                 "action": "advance",
                 "previous_phase": phase,
                 "current_phase": next_phase,
                 "degraded": True,
             })
 
-        return make_response("ok", {
+        return make_response("success", {
             "action": action,
             "current_phase": phase,
             "degraded": True,
@@ -666,7 +666,7 @@ class MCPToolFallback:
                         "available": True,
                     })
 
-        return make_response("ok", {
+        return make_response("success", {
             "agents": agent_list,
             "total": len(agent_list),
             "degraded": True,
@@ -686,13 +686,13 @@ class MCPToolFallback:
                     hooks = hooks_data if isinstance(hooks_data, list) else [hooks_data]
                 except (json.JSONDecodeError, OSError):
                     pass
-            return make_response("ok", {
+            return make_response("success", {
                 "hooks": hooks,
                 "total": len(hooks),
                 "degraded": True,
             })
 
-        return make_response("ok", {
+        return make_response("success", {
             "action": action,
             "status": "executed",
             "degraded": True,
@@ -712,10 +712,10 @@ class MCPToolFallback:
 
         state.setdefault("phase", 0)
         state.setdefault("degraded", True)
-        return make_response("ok", state)
+        return make_response("success", state)
 
     def _inline_server_health(self, arguments: Optional[Dict[str, Any]] = None) -> dict:
-        return make_response("ok", {
+        return make_response("success", {
             "status": "degraded",
             "mcp_available": False,
             "fallback_active": True,

@@ -102,7 +102,7 @@ async def handle_tool(arguments: dict, context: dict):
             "phases": phases,
             "started_at": now_iso,
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "status":
         workflow_id = arguments.get("workflow_id", "")
@@ -122,7 +122,7 @@ async def handle_tool(arguments: dict, context: dict):
             "status": wf["status"],
             "started_at": wf["started_at"],
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "abort":
         workflow_id = arguments.get("workflow_id", "")
@@ -139,7 +139,7 @@ async def handle_tool(arguments: dict, context: dict):
             "workflow_id": workflow_id,
             "aborted_at": now_iso,
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "phase":
         workflow_id = arguments.get("workflow_id", "")
@@ -172,7 +172,7 @@ async def handle_tool(arguments: dict, context: dict):
                 "workflow_id": workflow_id,
                 "current_phase": wf["current_phase"],
             }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "recover":
         workflow_id = arguments.get("workflow_id", "")
@@ -200,7 +200,7 @@ async def handle_tool(arguments: dict, context: dict):
             "recovered_to_phase": target,
             "recovered_at": now_iso,
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "snapshots":
         workflow_id = arguments.get("workflow_id", "")
@@ -221,4 +221,4 @@ async def handle_tool(arguments: dict, context: dict):
             "snapshots": snapshots,
             "total": len(snapshots),
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]

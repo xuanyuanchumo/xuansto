@@ -101,4 +101,4 @@ async def handle_tool(arguments: dict, context: dict):
         "dependencies": dependencies,
         "issues": issues,
     }
-    return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+    return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]

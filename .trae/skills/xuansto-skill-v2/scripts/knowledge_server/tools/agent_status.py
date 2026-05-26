@@ -77,7 +77,7 @@ async def handle_tool(arguments: dict, context: dict):
             "total_agents": len(agents),
             "available_count": sum(1 for a in agents if a.get("status", "AVAILABLE") == "AVAILABLE"),
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "by_phase":
         phase = arguments.get("phase", 0)
@@ -91,7 +91,7 @@ async def handle_tool(arguments: dict, context: dict):
             "total_agents": len(filtered),
             "available_count": sum(1 for a in filtered if a.get("status", "AVAILABLE") == "AVAILABLE"),
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "detail":
         agent_name = arguments.get("agent_name", "")
@@ -107,7 +107,7 @@ async def handle_tool(arguments: dict, context: dict):
             "action": "detail",
             "agent": matched[0],
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "create":
         agent_type = arguments.get("agent_type", "developer")
@@ -126,7 +126,7 @@ async def handle_tool(arguments: dict, context: dict):
         }
         agent_instances[agent_id] = instance
         result = {"action": "create", **instance}
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action in ("assign", "release", "instance_status", "destroy"):
         agent_id = arguments.get("agent_id", "")
@@ -156,7 +156,7 @@ async def handle_tool(arguments: dict, context: dict):
             instance["status"] = "destroyed"
             del agent_instances[agent_id]
             result = {"action": "destroy", "agent_id": agent_id, "status": "destroyed"}
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "match":
         capabilities = arguments.get("capabilities", [])
@@ -168,11 +168,11 @@ async def handle_tool(arguments: dict, context: dict):
             "total_matched": len(matched),
             "requested_capabilities": capabilities,
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "schedule":
         result = {"action": "schedule", "status": "not_implemented", "message": "Scheduling requires external orchestrator"}
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     return [TextContent(type="text", text=json.dumps(make_error_response(
         code="INVALID_INPUT",

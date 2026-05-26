@@ -124,7 +124,7 @@ async def handle_tool(arguments: dict, context: dict):
             "entry": entry,
             "total_decisions": len(decisions),
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "query":
         keyword = arguments.get("keyword", "")
@@ -149,7 +149,7 @@ async def handle_tool(arguments: dict, context: dict):
             "total": len(results),
             "limit": limit,
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "export":
         fmt = arguments.get("format", "json")
@@ -172,4 +172,4 @@ async def handle_tool(arguments: dict, context: dict):
             "content": content,
             "total": len(entries),
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]

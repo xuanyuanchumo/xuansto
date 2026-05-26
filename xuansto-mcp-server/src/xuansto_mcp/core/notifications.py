@@ -37,6 +37,7 @@ _NOTIFICATION_EVENTS = frozenset({
     "token_budget_exceeded",
     "gate_failed",
     "config_change",
+    "resource_updated",
 })
 
 

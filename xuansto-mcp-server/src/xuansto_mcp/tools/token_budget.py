@@ -158,7 +158,7 @@ def _set_budget_from_phase(phase: str) -> dict[str, Any]:
     budget_value = PHASE_TOKEN_BUDGET_MAP.get(phase)
     if budget_value is None:
         valid_phases = ", ".join(sorted(PHASE_TOKEN_BUDGET_MAP.keys()))
-        return {"error": True, "message": f"Unknown phase: {phase}. Valid phases: {valid_phases}"}
+        return make_error_response(ValueError(f"Unknown phase: {phase}. Valid phases: {valid_phases}"), error_code=ERR_VALIDATION)
     result = _set_budget(total_budget=budget_value)
     result["phase"] = phase
     result["budget_source"] = "phase_mapping"
@@ -233,13 +233,13 @@ def _inline_token_budget(action: str, **kwargs: Any) -> dict[str, Any]:
     elif action == "set_from_phase":
         phase = kwargs.get("phase")
         if not phase:
-            return {"error": True, "message": "set_from_phase requires 'phase' parameter"}
+            return make_error_response(ValueError("set_from_phase requires 'phase' parameter"), error_code=ERR_VALIDATION)
         return _set_budget_from_phase(phase)
     elif action == "recommend":
         return _recommend(**{k: v for k, v in kwargs.items() if k in ("project_size", "complexity", "team_size")})
     elif action == "report":
         return _report(**{k: v for k, v in kwargs.items() if k in ("period",)})
-    return {"error": True, "message": f"未知操作: {action}"}
+    return make_error_response(ValueError(f"未知操作: {action}"), error_code=ERR_VALIDATION)
 
 
 def register(mcp: FastMCP) -> None:
@@ -277,8 +277,8 @@ def register(mcp: FastMCP) -> None:
                 if not phase:
                     return make_error_response(ValueError("set_from_phase操作需要phase参数(skeleton/functional/enhanced/full)"), error_code=ERR_VALIDATION)
                 result = _set_budget_from_phase(phase)
-                if result.get("error"):
-                    return make_error_response(ValueError(result.get("message", "Unknown phase")), error_code=ERR_VALIDATION)
+                if result.get("status") == "error":
+                    return result
                 return make_success_response(result)
             elif action == "recommend":
                 return make_success_response(_recommend(project_size, complexity, team_size))

@@ -19,12 +19,13 @@
       "type": "object",
       "required": ["action"],
       "properties": {
-        "action": {"type": "string", "enum": ["retrieve"], "description": "操作类型: retrieve"},
+        "action": {"type": "string", "enum": ["retrieve", "cleanup_versions"], "description": "操作类型: retrieve, cleanup_versions"},
         "query": {"type": ["string", "null"], "description": "搜索查询文本"},
         "top_k": {"type": "integer", "minimum": 1, "maximum": 50, "default": 5, "description": "返回结果数量上限"},
         "search_type": {"type": "string", "enum": ["hybrid", "semantic_only", "keyword_only"], "default": "hybrid", "description": "搜索策略: hybrid, semantic_only, keyword_only"},
         "scope": {"type": ["string", "null"], "enum": ["general", "workspace", "experience", null], "description": "限定搜索范围: general, workspace, experience"},
-        "min_confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0, "default": 0.0, "description": "最低置信度阈值"}
+        "min_confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0, "default": 0.0, "description": "最低置信度阈值"},
+        "keep_last_n": {"type": "integer", "minimum": 1, "maximum": 100, "default": 10, "description": "版本清理保留数量(cleanup_versions时使用)"}
       },
       "additionalProperties": false
     },
@@ -119,8 +120,8 @@
       "type": "object",
       "required": ["action"],
       "properties": {
-        "action": {"type": "string", "enum": ["list", "by_phase", "detail", "match", "merge"], "description": "操作类型: list, by_phase, detail, match, merge"},
-        "phase": {"type": ["integer", "null"], "minimum": 0, "maximum": 8, "description": "按阶段查询Agent(by_phase时使用, 0-8)"},
+        "action": {"type": "string", "enum": ["list", "by_phase", "detail", "match", "merge", "merge_policy"], "description": "操作类型: list, by_phase, detail, match, merge, merge_policy"},
+        "phase": {"type": ["integer", "null"], "minimum": 0, "maximum": 8, "description": "按阶段查询Agent(by_phase时使用0-8工作流阶段; list时使用1-2加载阶段过滤, phase<=值)"},
         "agent_name": {"type": ["string", "null"], "description": "Agent名称(detail时使用)"},
         "capabilities": {"type": ["array", "null"], "items": {"type": "string"}, "description": "Agent能力列表(match时使用)，如: ['code_review', 'testing']"},
         "project_file_count": {"type": ["integer", "null"], "minimum": 0, "description": "项目文件数量(merge时使用)，用于判断是否自动合并"}
@@ -154,7 +155,7 @@
       "type": "object",
       "required": ["action"],
       "properties": {
-        "action": {"type": "string", "enum": ["status", "preload", "cache", "clear_cache", "loading_progress", "token_report", "disclosure_transition"], "description": "操作类型: status, preload, cache, clear_cache, loading_progress, token_report, disclosure_transition"},
+        "action": {"type": "string", "enum": ["status", "preload", "cache", "clear_cache", "loading_progress", "token_report", "disclosure_transition", "transition_check", "features", "metrics"], "description": "操作类型: status, preload, cache, clear_cache, loading_progress, token_report, disclosure_transition, transition_check, features, metrics"},
         "phase": {"type": ["integer", "null"], "minimum": 0, "maximum": 3, "description": "目标加载阶段(0-3): 0=骨架, 1=功能, 2=增强, 3=完整"},
         "resource_ids": {"type": ["array", "null"], "items": {"type": "string"}, "description": "指定资源ID列表"},
         "resource_uris": {"type": ["array", "null"], "items": {"type": "string"}, "description": "资源URI列表(preload时使用)"},
@@ -169,8 +170,9 @@
       "type": "object",
       "required": ["action"],
       "properties": {
-        "action": {"type": "string", "enum": ["check", "negotiate_version", "capabilities"], "description": "操作类型: check, negotiate_version, capabilities"},
-        "client_version": {"type": ["string", "null"], "description": "客户端API版本(negotiate_version时使用)"}
+        "action": {"type": "string", "enum": ["check", "negotiate_version", "capabilities", "version"], "description": "操作类型: check, negotiate_version, capabilities, version"},
+        "client_version": {"type": ["string", "null"], "description": "客户端API版本(negotiate_version时使用)"},
+        "client_api_version": {"type": ["string", "null"], "description": "客户端API版本(version时使用，与client_version等效)"}
       },
       "additionalProperties": false
     },
@@ -189,7 +191,7 @@
       "type": "object",
       "required": ["action"],
       "properties": {
-        "action": {"type": "string", "enum": ["log", "list", "query", "update", "export", "stats"], "description": "操作类型: log, list, query, update, export, stats"},
+        "action": {"type": "string", "enum": ["log", "list", "query", "update", "export", "stats", "reconcile", "configure"], "description": "操作类型: log, list, query, update, export, stats, reconcile, configure"},
         "title": {"type": ["string", "null"], "description": "决策标题(log时使用)"},
         "description": {"type": ["string", "null"], "description": "决策描述(log时使用)"},
         "context": {"type": ["string", "null"], "description": "决策上下文(log/query时使用)"},
@@ -206,7 +208,8 @@
         "offset": {"type": "integer", "minimum": 0, "maximum": 10000, "default": 0, "description": "偏移量(list/query时使用)"},
         "format": {"type": "string", "enum": ["json", "markdown"], "default": "json", "description": "导出格式(export时使用): json, markdown"},
         "decision_id": {"type": ["string", "null"], "description": "决策ID(update时使用)"},
-        "status": {"type": ["string", "null"], "enum": ["proposed", "accepted", "deprecated", "superseded", null], "description": "决策状态(log/update时使用): proposed, accepted, deprecated, superseded"}
+        "status": {"type": ["string", "null"], "enum": ["proposed", "accepted", "deprecated", "superseded", null], "description": "决策状态(log/update时使用): proposed, accepted, deprecated, superseded"},
+        "file_backup": {"type": ["boolean", "null"], "description": "是否启用文件系统备份(configure时使用)"}
       },
       "additionalProperties": false
     },
@@ -214,13 +217,14 @@
       "type": "object",
       "required": ["action"],
       "properties": {
-        "action": {"type": "string", "enum": ["status", "set_budget", "recommend", "report"], "description": "操作类型: status, set_budget, recommend, report"},
+        "action": {"type": "string", "enum": ["status", "set_budget", "recommend", "report", "enforce", "set_from_phase"], "description": "操作类型: status, set_budget, recommend, report, enforce, set_from_phase"},
         "total_budget": {"type": ["integer", "null"], "minimum": 1000, "description": "总Token预算(set_budget时使用)"},
         "phase_allocations": {"type": ["object", "null"], "additionalProperties": {"type": "integer"}, "description": "阶段分配(set_budget时使用)"},
         "project_size": {"type": ["string", "null"], "enum": ["small", "medium", "large", null], "description": "项目规模(recommend时使用): small, medium, large"},
         "complexity": {"type": ["string", "null"], "enum": ["low", "medium", "high", null], "description": "复杂度(recommend时使用): low, medium, high"},
         "team_size": {"type": ["integer", "null"], "minimum": 1, "maximum": 50, "description": "团队人数(recommend时使用)"},
-        "period": {"type": "string", "enum": ["daily", "weekly", "session"], "default": "session", "description": "报告周期(report时使用): daily, weekly, session"}
+        "period": {"type": "string", "enum": ["daily", "weekly", "session"], "default": "session", "description": "报告周期(report时使用): daily, weekly, session"},
+        "phase": {"type": ["string", "null"], "description": "阶段名称(set_from_phase时使用): skeleton, functional, enhanced, full"}
       },
       "additionalProperties": false
     },
@@ -228,13 +232,13 @@
       "type": "object",
       "required": ["action"],
       "properties": {
-        "action": {"type": "string", "enum": ["create", "validate", "detect_stack"], "description": "操作类型: create, validate, detect_stack"},
+        "action": {"type": "string", "enum": ["create", "validate", "detect_stack", "init", "detect", "configure"], "description": "操作类型: create/init=创建项目, validate=验证配置, detect_stack/detect=检测技术栈, configure=配置项目"},
         "name": {"type": ["string", "null"], "description": "项目名称(create时使用)"},
-        "description": {"type": ["string", "null"], "description": "项目描述(create时使用)"},
-        "stack": {"type": ["array", "null"], "items": {"type": "string"}, "description": "技术栈列表(create时使用)"},
-        "template": {"type": ["string", "null"], "description": "项目模板(create时使用)"},
-        "directory": {"type": ["string", "null"], "description": "项目目录(create时使用)"},
-        "project_path": {"type": ["string", "null"], "description": "项目路径(validate/detect_stack时使用)"}
+        "description": {"type": ["string", "null"], "description": "项目描述(create/init/configure时使用)"},
+        "stack": {"type": ["array", "null"], "items": {"type": "string"}, "description": "技术栈列表(create/init/configure时使用)"},
+        "template": {"type": ["string", "null"], "description": "项目模板(create/init时使用)"},
+        "directory": {"type": ["string", "null"], "description": "项目目录(create/init时使用)"},
+        "project_path": {"type": ["string", "null"], "description": "项目路径(validate/detect_stack/detect/configure时使用)"}
       },
       "additionalProperties": false
     },
@@ -242,10 +246,11 @@
       "type": "object",
       "required": ["action"],
       "properties": {
-        "action": {"type": "string", "enum": ["query", "summary"], "description": "操作类型: query, summary"},
+        "action": {"type": "string", "enum": ["query", "summary", "evaluate"], "description": "操作类型: query, summary, evaluate"},
         "tool_name": {"type": ["string", "null"], "description": "工具名称(query时使用)"},
         "time_range": {"type": "string", "enum": ["1h", "6h", "24h", "7d", "all"], "default": "all", "description": "时间范围: 1h, 6h, 24h, 7d, all"},
-        "metric_type": {"type": "string", "enum": ["calls", "errors", "latency", "all"], "default": "all", "description": "指标类型: calls, errors, latency, all"}
+        "metric_type": {"type": "string", "enum": ["calls", "errors", "latency", "all"], "default": "all", "description": "指标类型: calls, errors, latency, all"},
+        "criterion": {"type": "string", "enum": ["error_rate", "availability", "latency", "all"], "default": "all", "description": "评估标准: error_rate, availability, latency, all"}
       },
       "additionalProperties": false
     },

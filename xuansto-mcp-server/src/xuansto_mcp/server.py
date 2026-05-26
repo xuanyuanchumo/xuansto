@@ -26,6 +26,7 @@ mcp = FastMCP(
 from .tools import (
     agent_manage,
     agent_status,
+    audit_query,
     code_simplify,
     config_manage,
     context_compress,
@@ -37,6 +38,7 @@ from .tools import (
     project_init,
     quality_gate_check,
     resource_load_status,
+    resource_subscribe,
     security_scan,
     server_health,
     session_manage,
@@ -182,6 +184,7 @@ for tool_module in [
     agent_manage,
     hook_manage,
     resource_load_status,
+    resource_subscribe,
     context_compress,
     server_health,
     decision_log,
@@ -189,6 +192,7 @@ for tool_module in [
     project_init,
     metrics_report,
     config_manage,
+    audit_query,
 ]:
     tool_module.register(mcp)
 

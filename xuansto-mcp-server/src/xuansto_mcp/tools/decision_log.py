@@ -27,6 +27,7 @@ DECISIONS_FILE = DECISIONS_JSON_FILE
 _cache: dict[str, dict[str, Any]] = {}
 _cache_lock = threading.Lock()
 _db_lock = threading.Lock()
+_file_backup_enabled: bool = True
 
 _CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS decisions (
@@ -219,16 +220,11 @@ def _log_decision(
             )
             conn.commit()
 
-            try:
-                _write_decision_file(entry)
-            except Exception as file_exc:
-                logger.warning("Decision file write failed for %s, rolling back SQLite: %s", entry_id, file_exc)
+            if _file_backup_enabled:
                 try:
-                    cursor.execute("DELETE FROM decisions WHERE id = ?", (entry_id,))
-                    conn.commit()
-                except Exception as rollback_exc:
-                    logger.error("Failed to rollback SQLite decision for %s: %s", entry_id, rollback_exc)
-                raise
+                    _write_decision_file(entry)
+                except Exception as file_exc:
+                    logger.warning("Decision file backup failed for %s (SQLite record preserved): %s", entry_id, file_exc)
 
             with _cache_lock:
                 _cache[entry_id] = entry
@@ -428,7 +424,7 @@ def _update_decision(
 ) -> dict[str, Any]:
     valid_statuses = ("proposed", "accepted", "deprecated", "superseded")
     if status and status not in valid_statuses:
-        return {"error": True, "message": f"无效状态: {status}，支持: {', '.join(valid_statuses)}"}
+        return make_error_response(ValueError(f"无效状态: {status}，支持: {', '.join(valid_statuses)}"), error_code=ERR_VALIDATION)
 
     with _db_lock:
         conn = _get_connection()
@@ -438,7 +434,7 @@ def _update_decision(
             cursor.execute("SELECT * FROM decisions WHERE id = ?", (decision_id,))
             row = cursor.fetchone()
             if not row:
-                return {"error": True, "message": f"决策未找到: {decision_id}"}
+                return make_error_response(ValueError(f"决策未找到: {decision_id}"), error_code=ERR_NOT_FOUND)
 
             now_iso = datetime.now().isoformat()
             if status:
@@ -637,6 +633,12 @@ def _reconcile_decisions() -> dict[str, Any]:
     }
 
 
+def _set_file_backup_enabled(enabled: bool) -> dict[str, Any]:
+    global _file_backup_enabled
+    _file_backup_enabled = enabled
+    return {"file_backup_enabled": _file_backup_enabled}
+
+
 def register(mcp: FastMCP) -> None:
     @mcp.tool(
         annotations=ToolAnnotations(
@@ -665,9 +667,10 @@ def register(mcp: FastMCP) -> None:
         export_format: str = "json",
         decision_id: str | None = None,
         status: str | None = None,
+        file_backup: bool | None = None,
     ) -> dict[str, Any]:
-        """决策日志管理：记录决策条目、搜索决策、导出决策记录。log操作记录一条决策(含标题/描述/上下文/备选方案/最终决策/理由/影响/决策者)，list操作分页列出决策，query操作按关键词/标签/日期范围搜索决策，update操作更新决策状态，export操作导出决策为JSON或Markdown ADR格式，stats操作返回决策统计信息。"""
-        validated, err = validate_input(DecisionLogInput, action=action, title=title, description=description, context=context, alternatives=alternatives, decision=decision, rationale=rationale, impact=impact, decided_by=decided_by, keyword=keyword, tag=tag, date_from=date_from, date_to=date_to, limit=limit, offset=offset, format=export_format, decision_id=decision_id, status=status)
+        """决策日志管理：记录决策条目、搜索决策、导出决策记录。log操作记录一条决策(含标题/描述/上下文/备选方案/最终决策/理由/影响/决策者)，list操作分页列出决策，query操作按关键词/标签/日期范围搜索决策，update操作更新决策状态，export操作导出决策为JSON或Markdown ADR格式，stats操作返回决策统计信息，configure操作配置选项(如file_backup控制是否启用文件系统备份)。"""
+        validated, err = validate_input(DecisionLogInput, action=action, title=title, description=description, context=context, alternatives=alternatives, decision=decision, rationale=rationale, impact=impact, decided_by=decided_by, keyword=keyword, tag=tag, date_from=date_from, date_to=date_to, limit=limit, offset=offset, format=export_format, decision_id=decision_id, status=status, file_backup=file_backup)
         if err:
             return err
         logger.info("decision_log called: action=%s", action)
@@ -684,8 +687,8 @@ def register(mcp: FastMCP) -> None:
                 if not decision_id:
                     return make_error_response(ValueError("update操作需要decision_id参数"), error_code=ERR_VALIDATION)
                 result = _update_decision(decision_id, status)
-                if result.get("error"):
-                    return make_error_response(ValueError(result["message"]), error_code=ERR_NOT_FOUND)
+                if result.get("status") == "error":
+                    return result
                 return make_success_response(result)
             elif action == "export":
                 return make_success_response(_export_decisions(export_format, date_from, date_to))
@@ -693,8 +696,13 @@ def register(mcp: FastMCP) -> None:
                 return make_success_response(_stats_decisions(date_from, date_to))
             elif action == "reconcile":
                 return make_success_response(_reconcile_decisions())
+            elif action == "configure":
+                config_result: dict[str, Any] = {"file_backup_enabled": _file_backup_enabled}
+                if file_backup is not None:
+                    config_result = _set_file_backup_enabled(file_backup)
+                return make_success_response(config_result)
             else:
-                return make_error_response(ValueError(f"未知操作: {action}，支持: log, list, query, update, export, stats, reconcile"), error_code=ERR_VALIDATION)
+                return make_error_response(ValueError(f"未知操作: {action}，支持: log, list, query, update, export, stats, reconcile, configure"), error_code=ERR_VALIDATION)
         except Exception as e:
             logger.error("decision_log error: %s", e)
             return make_error_response(e)

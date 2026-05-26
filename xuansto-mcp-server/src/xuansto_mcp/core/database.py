@@ -84,6 +84,24 @@ CREATE TABLE IF NOT EXISTS knowledge_entries (
     metadata_json TEXT NOT NULL DEFAULT '{}',
     sync_status TEXT NOT NULL DEFAULT 'ready',
     deleted_at TEXT,
+    confidence REAL DEFAULT 0.6,
+    source_path TEXT,
+    source_rating INTEGER DEFAULT 3,
+    occurrences INTEGER DEFAULT 1,
+    content_hash TEXT,
+    type TEXT NOT NULL DEFAULT 'unknown',
+    category TEXT NOT NULL DEFAULT 'uncategorized',
+    summary TEXT,
+    content_path TEXT,
+    source TEXT,
+    last_validated TEXT,
+    success_count INTEGER DEFAULT 0,
+    failure_count INTEGER DEFAULT 0,
+    version INTEGER DEFAULT 1,
+    embedding_status TEXT DEFAULT 'pending',
+    embedding_retry_count INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'active',
+    last_accessed TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -144,6 +162,77 @@ CREATE TABLE IF NOT EXISTS workflow_states (
     created_at REAL,
     updated_at REAL
 );
+
+CREATE TABLE IF NOT EXISTS schema_version (
+    version INTEGER PRIMARY KEY,
+    applied_at TEXT DEFAULT (datetime('now')),
+    description TEXT
+);
+
+CREATE TABLE IF NOT EXISTS knowledge_tags (
+    entry_id TEXT NOT NULL,
+    tag TEXT NOT NULL,
+    PRIMARY KEY (entry_id, tag),
+    FOREIGN KEY (entry_id) REFERENCES knowledge_entries(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS dedup_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    new_entry_id TEXT NOT NULL,
+    existing_entry_id TEXT NOT NULL,
+    similarity_score REAL NOT NULL,
+    action TEXT NOT NULL,
+    merged_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS version_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entry_id TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    title TEXT,
+    content TEXT,
+    scope TEXT,
+    tags TEXT,
+    confidence REAL,
+    source_path TEXT,
+    source_rating INTEGER,
+    content_hash TEXT,
+    change_type TEXT DEFAULT 'update',
+    content_snapshot TEXT,
+    saved_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(entry_id, version)
+);
+
+CREATE TABLE IF NOT EXISTS usage_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entry_id TEXT,
+    agent_role TEXT,
+    query_text TEXT,
+    result_count INTEGER DEFAULT 0,
+    elapsed_ms REAL DEFAULT 0.0,
+    timestamp TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS backup_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    backup_type TEXT NOT NULL,
+    destination TEXT,
+    entry_count INTEGER DEFAULT 0,
+    size_bytes INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'completed',
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS kb_reconciliation_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    check_time TEXT NOT NULL,
+    sqlite_ready_count INTEGER,
+    chroma_vector_count INTEGER,
+    missing_in_chroma INTEGER DEFAULT 0,
+    orphan_in_chroma INTEGER DEFAULT 0,
+    fixed_count INTEGER DEFAULT 0,
+    details TEXT
+);
 """
 
 _CREATE_INDEXES_SQL = """
@@ -159,6 +248,13 @@ CREATE INDEX IF NOT EXISTS idx_metrics_metric_type ON metrics(metric_type);
 CREATE INDEX IF NOT EXISTS idx_decision_records_workflow_id ON decision_records(workflow_id);
 CREATE INDEX IF NOT EXISTS idx_knowledge_entries_scope ON knowledge_entries(scope);
 CREATE INDEX IF NOT EXISTS idx_knowledge_entries_deleted_at ON knowledge_entries(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_knowledge_entries_confidence ON knowledge_entries(confidence);
+CREATE INDEX IF NOT EXISTS idx_knowledge_entries_type ON knowledge_entries(type);
+CREATE INDEX IF NOT EXISTS idx_knowledge_entries_category ON knowledge_entries(category);
+CREATE INDEX IF NOT EXISTS idx_knowledge_entries_hash ON knowledge_entries(content_hash);
+CREATE INDEX IF NOT EXISTS idx_knowledge_entries_status ON knowledge_entries(status);
+CREATE INDEX IF NOT EXISTS idx_knowledge_entries_last_accessed ON knowledge_entries(last_accessed);
+CREATE INDEX IF NOT EXISTS idx_knowledge_entries_embedding_status ON knowledge_entries(embedding_status);
 CREATE INDEX IF NOT EXISTS idx_reconciliation_log_resolved ON reconciliation_log(resolved);
 CREATE INDEX IF NOT EXISTS idx_reconciliation_log_entry_id ON reconciliation_log(entry_id);
 CREATE INDEX IF NOT EXISTS idx_token_budget_states_session ON token_budget_states(session_id);
@@ -168,7 +264,96 @@ CREATE INDEX IF NOT EXISTS idx_agent_states_status ON agent_states(status);
 CREATE INDEX IF NOT EXISTS idx_agent_states_agent_type ON agent_states(agent_type);
 CREATE INDEX IF NOT EXISTS idx_workflow_states_status ON workflow_states(status);
 CREATE INDEX IF NOT EXISTS idx_workflow_states_workflow_type ON workflow_states(workflow_type);
+CREATE INDEX IF NOT EXISTS idx_tags_tag ON knowledge_tags(tag);
+CREATE INDEX IF NOT EXISTS idx_dedup_new ON dedup_log(new_entry_id);
+CREATE INDEX IF NOT EXISTS idx_version_entry ON version_history(entry_id, version);
+CREATE INDEX IF NOT EXISTS idx_usage_entry ON usage_logs(entry_id);
+CREATE INDEX IF NOT EXISTS idx_usage_agent ON usage_logs(agent_role);
+CREATE INDEX IF NOT EXISTS idx_usage_timestamp ON usage_logs(timestamp);
 """
+
+_FTS5_SQL = """
+CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5(
+    id UNINDEXED,
+    summary,
+    type,
+    category,
+    content='knowledge_entries',
+    content_rowid='rowid',
+    tokenize='unicode61'
+);
+
+CREATE TRIGGER IF NOT EXISTS knowledge_entries_ai AFTER INSERT ON knowledge_entries BEGIN
+    INSERT INTO knowledge_fts(rowid, id, summary, type, category)
+    VALUES (new.rowid, new.id, new.summary, new.type, new.category);
+END;
+
+CREATE TRIGGER IF NOT EXISTS knowledge_entries_ad AFTER DELETE ON knowledge_entries BEGIN
+    INSERT INTO knowledge_fts(knowledge_fts, rowid, id, summary, type, category)
+    VALUES ('delete', old.rowid, old.id, old.summary, old.type, old.category);
+END;
+
+CREATE TRIGGER IF NOT EXISTS knowledge_entries_au AFTER UPDATE ON knowledge_entries BEGIN
+    INSERT INTO knowledge_fts(knowledge_fts, rowid, id, summary, type, category)
+    VALUES ('delete', old.rowid, old.id, old.summary, old.type, old.category);
+    INSERT INTO knowledge_fts(rowid, id, summary, type, category)
+    VALUES (new.rowid, new.id, new.summary, new.type, new.category);
+END;
+"""
+
+
+def _needs_v13_migration(conn: sqlite3.Connection) -> bool:
+    try:
+        cur = conn.execute("PRAGMA table_info(knowledge_entries)")
+        columns = {row[1] for row in cur.fetchall()}
+        return "confidence" not in columns
+    except Exception:
+        return False
+
+
+def _run_v13_migration(conn: sqlite3.Connection) -> None:
+    if not _needs_v13_migration(conn):
+        return
+    logger.info("Starting v13 migration: merging knowledge.db schema into xuansto.db")
+
+    try:
+        cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='reconciliation_log'")
+        if cur.fetchone() is not None:
+            cur2 = conn.execute("PRAGMA table_info(reconciliation_log)")
+            columns = {row[1] for row in cur2.fetchall()}
+            if "check_time" in columns:
+                conn.execute("ALTER TABLE reconciliation_log RENAME TO reconciliation_log_legacy")
+                logger.info("v13 migration: renamed reconciliation_log (kb schema) to reconciliation_log_legacy")
+    except Exception as exc:
+        logger.warning("v13 migration: reconciliation_log rename check failed: %s", exc)
+
+    try:
+        conn.execute("ALTER TABLE knowledge_entries RENAME TO knowledge_entries_legacy")
+        logger.info("v13 migration: renamed knowledge_entries to knowledge_entries_legacy")
+    except Exception as exc:
+        logger.warning("v13 migration: knowledge_entries rename failed: %s", exc)
+
+    conn.commit()
+
+
+def _copy_v13_legacy_data(conn: sqlite3.Connection) -> None:
+    try:
+        cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='knowledge_entries_legacy'")
+        if cur.fetchone() is None:
+            return
+
+        conn.execute("""
+            INSERT OR IGNORE INTO knowledge_entries
+            (id, title, content, scope, tags_json, metadata_json, sync_status, deleted_at, created_at, updated_at)
+            SELECT id, title, content, scope, tags_json, metadata_json, sync_status, deleted_at, created_at, updated_at
+            FROM knowledge_entries_legacy
+        """)
+
+        cur2 = conn.execute("SELECT COUNT(*) FROM knowledge_entries_legacy")
+        legacy_count = cur2.fetchone()[0]
+        logger.info("v13 migration: copied %d rows from knowledge_entries_legacy", legacy_count)
+    except Exception as exc:
+        logger.warning("v13 migration: legacy data copy failed: %s", exc)
 
 
 def get_db() -> sqlite3.Connection:
@@ -186,7 +371,13 @@ def init_db() -> None:
     with _db_lock:
         conn = get_db()
         try:
+            _run_v13_migration(conn)
             conn.executescript(_CREATE_TABLES_SQL)
+            _copy_v13_legacy_data(conn)
+            if is_fts5_available():
+                with contextlib.suppress(Exception):
+                    conn.executescript(_FTS5_SQL)
+                    conn.execute("INSERT INTO knowledge_fts(knowledge_fts) VALUES ('rebuild')")
             conn.executescript(_CREATE_INDEXES_SQL)
             with contextlib.suppress(Exception):
                 conn.execute("ALTER TABLE knowledge_entries ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'ready'")
@@ -222,8 +413,15 @@ def persist_state(table: str, data: dict[str, Any]) -> None:
         "degradation_states", "error_patterns", "metrics",
         "decision_records", "knowledge_entries", "reconciliation_log",
         "token_budget_states", "experience_patterns",
+        "schema_version", "knowledge_tags", "dedup_log",
+        "version_history", "usage_logs", "backup_history",
+        "kb_reconciliation_log",
     }
-    _AUTO_INCREMENT_TABLES = {"metrics", "reconciliation_log"}
+    _AUTO_INCREMENT_TABLES = {
+        "metrics", "reconciliation_log", "dedup_log",
+        "version_history", "usage_logs", "backup_history",
+        "kb_reconciliation_log",
+    }
     if table not in _VALID_TABLES:
         logger.warning("Attempted to persist to invalid table: %s", table)
         return
@@ -285,6 +483,9 @@ def load_state(table: str, query: dict[str, Any] | None = None) -> list[dict[str
         "degradation_states", "error_patterns", "metrics",
         "decision_records", "knowledge_entries", "reconciliation_log",
         "token_budget_states", "experience_patterns",
+        "schema_version", "knowledge_tags", "dedup_log",
+        "version_history", "usage_logs", "backup_history",
+        "kb_reconciliation_log",
     }
     if table not in _VALID_TABLES:
         logger.warning("Attempted to load from invalid table: %s", table)
@@ -319,45 +520,70 @@ def load_state(table: str, query: dict[str, Any] | None = None) -> list[dict[str
         conn.close()
 
 
+def _chroma_write_with_retry(
+    entry_id: str,
+    data: dict[str, Any],
+    chroma_write_fn: Callable[[str, dict[str, Any]], bool],
+    max_retries: int = 3,
+    base_delay: float = 1.0,
+) -> tuple[bool, str]:
+    last_error = ""
+    for attempt in range(max_retries):
+        try:
+            success = chroma_write_fn(entry_id, data)
+            if success:
+                return True, ""
+            last_error = "chroma_write_returned_false"
+        except Exception as exc:
+            last_error = str(exc)
+        if attempt < max_retries - 1:
+            delay = base_delay * (2 ** attempt)
+            logger.warning(
+                "ChromaDB write attempt %d/%d failed for %s, retrying in %.1fs: %s",
+                attempt + 1, max_retries, entry_id, delay, last_error,
+            )
+            time.sleep(delay)
+    return False, last_error
+
+
 def persist_knowledge_dual_write(
     entry_id: str,
     data: dict[str, Any],
     chroma_write_fn: Callable[[str, dict[str, Any]], bool] | None = None,
+    max_retries: int = 3,
+    base_delay: float = 1.0,
 ) -> dict[str, Any]:
     data["sync_status"] = "pending"
     persist_state("knowledge_entries", {"id": entry_id, **data})
 
     if chroma_write_fn is not None:
-        try:
-            success = chroma_write_fn(entry_id, data)
-            if success:
-                data["sync_status"] = "ready"
-                persist_state("knowledge_entries", {"id": entry_id, **data})
-                return {"status": "synced", "entry_id": entry_id}
-            else:
-                persist_state("reconciliation_log", {
-                    "entry_id": entry_id,
-                    "store": "chromadb",
-                    "issue_type": "write_failed",
-                    "details_json": {"reason": "chroma_write_returned_false"},
-                    "created_at": datetime.now(timezone.utc).isoformat(),
-                })
-                return {"status": "pending", "entry_id": entry_id}
-        except Exception as exc:
+        success, error_reason = _chroma_write_with_retry(
+            entry_id, data, chroma_write_fn, max_retries, base_delay,
+        )
+        if success:
+            data["sync_status"] = "ready"
+            persist_state("knowledge_entries", {"id": entry_id, **data})
+            return {"status": "synced", "entry_id": entry_id}
+        else:
+            data["sync_status"] = "failed"
+            persist_state("knowledge_entries", {"id": entry_id, **data})
             persist_state("reconciliation_log", {
                 "entry_id": entry_id,
                 "store": "chromadb",
-                "issue_type": "write_error",
-                "details_json": {"reason": str(exc)},
+                "issue_type": "write_failed_after_retries",
+                "details_json": {"reason": error_reason, "retries": max_retries},
                 "created_at": datetime.now(timezone.utc).isoformat(),
             })
-            return {"status": "pending", "entry_id": entry_id}
+            return {"status": "failed", "entry_id": entry_id, "reason": error_reason}
 
     return {"status": "pending", "entry_id": entry_id}
 
 
 def reconcile_knowledge_stores(
     chroma_write_fn: Callable[[str, dict[str, Any]], bool] | None = None,
+    include_failed: bool = True,
+    max_retries: int = 3,
+    base_delay: float = 1.0,
 ) -> dict[str, Any]:
     conn = get_db()
     try:
@@ -366,7 +592,10 @@ def reconcile_knowledge_stores(
     finally:
         conn.close()
 
-    pending_entries = [e for e in all_entries if e.get("sync_status") != "ready"]
+    if include_failed:
+        pending_entries = [e for e in all_entries if e.get("sync_status") != "ready"]
+    else:
+        pending_entries = [e for e in all_entries if e.get("sync_status") == "pending"]
 
     total = len(pending_entries)
     repaired = 0
@@ -385,35 +614,29 @@ def reconcile_knowledge_stores(
                 entry_data[key] = value
 
         if chroma_write_fn is not None:
-            try:
-                success = chroma_write_fn(entry_id, entry_data)
-                if success:
-                    entry_data["sync_status"] = "ready"
-                    persist_state("knowledge_entries", {"id": entry_id, **entry_data})
-                    persist_state("reconciliation_log", {
-                        "entry_id": entry_id,
-                        "store": "chromadb",
-                        "issue_type": "repair_success",
-                        "details_json": {"original_status": entry.get("sync_status", "unknown")},
-                        "resolved": 1,
-                        "created_at": datetime.now(timezone.utc).isoformat(),
-                    })
-                    repaired += 1
-                else:
-                    persist_state("reconciliation_log", {
-                        "entry_id": entry_id,
-                        "store": "chromadb",
-                        "issue_type": "repair_failed",
-                        "details_json": {"reason": "chroma_write_returned_false"},
-                        "created_at": datetime.now(timezone.utc).isoformat(),
-                    })
-                    failed += 1
-            except Exception as exc:
+            success, error_reason = _chroma_write_with_retry(
+                entry_id, entry_data, chroma_write_fn, max_retries, base_delay,
+            )
+            if success:
+                entry_data["sync_status"] = "ready"
+                persist_state("knowledge_entries", {"id": entry_id, **entry_data})
+                persist_state("reconciliation_log", {
+                    "entry_id": entry_id,
+                    "store": "chromadb",
+                    "issue_type": "repair_success",
+                    "details_json": {"original_status": entry.get("sync_status", "unknown")},
+                    "resolved": 1,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                })
+                repaired += 1
+            else:
+                entry_data["sync_status"] = "failed"
+                persist_state("knowledge_entries", {"id": entry_id, **entry_data})
                 persist_state("reconciliation_log", {
                     "entry_id": entry_id,
                     "store": "chromadb",
                     "issue_type": "repair_failed",
-                    "details_json": {"reason": str(exc)},
+                    "details_json": {"reason": error_reason, "original_status": entry.get("sync_status", "unknown"), "retries": max_retries},
                     "created_at": datetime.now(timezone.utc).isoformat(),
                 })
                 failed += 1
@@ -433,6 +656,8 @@ def reconcile_knowledge_stores(
 def cleanup_stale_pending_entries(
     max_age_hours: int = 24,
     chroma_write_fn: Callable[[str, dict[str, Any]], bool] | None = None,
+    max_retries: int = 3,
+    base_delay: float = 1.0,
 ) -> dict[str, Any]:
     from datetime import timedelta
 
@@ -440,7 +665,7 @@ def cleanup_stale_pending_entries(
     conn = get_db()
     try:
         cursor = conn.execute(
-            "SELECT * FROM knowledge_entries WHERE sync_status != 'ready' AND updated_at < ? AND deleted_at IS NULL",
+            "SELECT * FROM knowledge_entries WHERE sync_status IN ('pending', 'failed') AND updated_at < ? AND deleted_at IS NULL",
             (cutoff,),
         )
         stale_entries = [dict(row) for row in cursor.fetchall()]
@@ -464,23 +689,22 @@ def cleanup_stale_pending_entries(
                 entry_data[key] = value
 
         if chroma_write_fn is not None:
-            try:
-                success = chroma_write_fn(entry_id, entry_data)
-                if success:
-                    entry_data["sync_status"] = "ready"
-                    persist_state("knowledge_entries", {"id": entry_id, **entry_data})
-                    persist_state("reconciliation_log", {
-                        "entry_id": entry_id,
-                        "store": "chromadb",
-                        "issue_type": "stale_retry_success",
-                        "details_json": {"original_status": entry.get("sync_status", "unknown"), "age_hours": max_age_hours},
-                        "resolved": 1,
-                        "created_at": datetime.now(timezone.utc).isoformat(),
-                    })
-                    retried += 1
-                    continue
-            except Exception:
-                pass
+            success, error_reason = _chroma_write_with_retry(
+                entry_id, entry_data, chroma_write_fn, max_retries, base_delay,
+            )
+            if success:
+                entry_data["sync_status"] = "ready"
+                persist_state("knowledge_entries", {"id": entry_id, **entry_data})
+                persist_state("reconciliation_log", {
+                    "entry_id": entry_id,
+                    "store": "chromadb",
+                    "issue_type": "stale_retry_success",
+                    "details_json": {"original_status": entry.get("sync_status", "unknown"), "age_hours": max_age_hours},
+                    "resolved": 1,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                })
+                retried += 1
+                continue
 
         now = datetime.now(timezone.utc).isoformat()
         persist_state("knowledge_entries", {"id": entry_id, "deleted_at": now})
@@ -627,7 +851,7 @@ def cleanup_knowledge_versions(keep_last_n: int = 10, keep_marked: bool = True) 
             }
         except Exception as exc:
             logger.error("Knowledge version cleanup failed: %s", exc)
-            return {"error": True, "message": str(exc), "total_deleted": 0}
+            return {"status": "error", "data": None, "error": {"code": "ERR_INTERNAL", "message": str(exc)}, "metadata": {}}
         finally:
             conn.close()
 

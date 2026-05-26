@@ -16,23 +16,65 @@ _PHASE_NAMES = [
     "初始化", "需求分析", "架构设计", "测试先行",
     "代码实现", "测试验证", "验收确认", "持续重构", "部署交付",
 ]
+_CROSS_PHASE_NAME = "跨阶段"
 
 _SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 
 _QUALITY_GATES = [
+    {"gate_id": "DESIGN-REVIEW-PRODUCT", "phase": 0, "severity": "BLOCK"},
+    {"gate_id": "DESIGN-REVIEW-TECH", "phase": 0, "severity": "BLOCK"},
+    {"gate_id": "DESIGN-REVIEW-DESIGN", "phase": 0, "severity": "BLOCK"},
+    {"gate_id": "DESIGN-TOKENS", "phase": 0, "severity": "BLOCK"},
     {"gate_id": "DESIGN-SYSTEM-COMPLETE", "phase": 0, "severity": "BLOCK"},
-    {"gate_id": "ANTI-PATTERN-CHECK", "phase": 0, "severity": "WARN"},
-    {"gate_id": "SPEC-COMPLETE", "phase": 1, "severity": "BLOCK"},
-    {"gate_id": "REQUIREMENT-TRACEABLE", "phase": 1, "severity": "WARN"},
-    {"gate_id": "ARCH-REVIEW", "phase": 2, "severity": "BLOCK"},
-    {"gate_id": "API-CONTRACT", "phase": 2, "severity": "WARN"},
+    {"gate_id": "ANTI-PATTERN-CHECK", "phase": 0, "severity": "BLOCK"},
+    {"gate_id": "GATE-001", "phase": 1, "severity": "BLOCK"},
+    {"gate_id": "GATE-002", "phase": 1, "severity": "BLOCK"},
+    {"gate_id": "BRAINSTORM-COMPLETE", "phase": 1, "severity": "BLOCK"},
+    {"gate_id": "GATE-003", "phase": 2, "severity": "BLOCK"},
+    {"gate_id": "GATE-004", "phase": 2, "severity": "BLOCK"},
+    {"gate_id": "PLAN-ATOMIC", "phase": 2, "severity": "BLOCK"},
+    {"gate_id": "SPEC-ATOMIC", "phase": 2, "severity": "BLOCK"},
+    {"gate_id": "TEST-FIRST", "phase": 3, "severity": "BLOCK"},
     {"gate_id": "GATE-007", "phase": 4, "severity": "BLOCK"},
     {"gate_id": "TEST-PASS", "phase": 4, "severity": "BLOCK"},
-    {"gate_id": "FILE-ENCODING", "phase": 4, "severity": "BLOCK"},
+    {"gate_id": "GATE-009", "phase": 4, "severity": "BLOCK"},
+    {"gate_id": "MULTI-PERSPECTIVE-COVERAGE", "phase": 4, "severity": "BLOCK"},
+    {"gate_id": "TDD-RED", "phase": 4, "severity": "BLOCK"},
+    {"gate_id": "TDD-GREEN", "phase": 4, "severity": "BLOCK"},
+    {"gate_id": "TDD-REFACTOR", "phase": 4, "severity": "WARN"},
+    {"gate_id": "EXECUTION-VERIFY", "phase": 4, "severity": "BLOCK"},
+    {"gate_id": "SCRIPT-SECURITY", "phase": 4, "severity": "BLOCK"},
+    {"gate_id": "SCRIPT-CLEANUP", "phase": 4, "severity": "BLOCK"},
+    {"gate_id": "TOKEN-BUDGET", "phase": -1, "severity": "BLOCK"},
+    {"gate_id": "GATE-011", "phase": 5, "severity": "BLOCK"},
+    {"gate_id": "GATE-012", "phase": 5, "severity": "BLOCK"},
+    {"gate_id": "SPEC-CONSISTENCY", "phase": 5, "severity": "BLOCK"},
+    {"gate_id": "AGENTIC-SECURITY", "phase": 5, "severity": "BLOCK"},
     {"gate_id": "AI-PENTEST", "phase": 5, "severity": "BLOCK"},
-    {"gate_id": "SPEC-CONSISTENCY", "phase": 5, "severity": "WARN"},
-    {"gate_id": "SIMPLIFICATION-BEHAVIOR", "phase": 7, "severity": "WARN"},
-    {"gate_id": "GATE-015", "phase": 7, "severity": "BLOCK"},
+    {"gate_id": "VISUAL-REGRESSION", "phase": 5, "severity": "BLOCK"},
+    {"gate_id": "RENDER-CHECK", "phase": 5, "severity": "BLOCK"},
+    {"gate_id": "ACCESSIBILITY", "phase": 5, "severity": "BLOCK"},
+    {"gate_id": "PERFORMANCE", "phase": 5, "severity": "WARN"},
+    {"gate_id": "SECURITY-FIX-CLOSED", "phase": 5, "severity": "BLOCK"},
+    {"gate_id": "GATE-013", "phase": 6, "severity": "BLOCK"},
+    {"gate_id": "GATE-014", "phase": 6, "severity": "BLOCK"},
+    {"gate_id": "UX-ACCEPTANCE", "phase": 6, "severity": "BLOCK"},
+    {"gate_id": "DOD-CHECK", "phase": 6, "severity": "BLOCK"},
+    {"gate_id": "GATE-015", "phase": 7, "severity": "WARN"},
+    {"gate_id": "DOC-COMPLETENESS", "phase": 7, "severity": "BLOCK"},
+    {"gate_id": "SIMPLIFICATION-BEHAVIOR", "phase": 7, "severity": "BLOCK"},
+    {"gate_id": "CHESTERTON-FENCE", "phase": 7, "severity": "WARN"},
+    {"gate_id": "DESKTOP-BUILD", "phase": 8, "severity": "BLOCK"},
+    {"gate_id": "DESKTOP-SIGN", "phase": 8, "severity": "BLOCK"},
+    {"gate_id": "DESKTOP-UPDATE", "phase": 8, "severity": "BLOCK"},
+    {"gate_id": "DESKTOP-CROSS", "phase": 8, "severity": "BLOCK"},
+    {"gate_id": "IPC-CONTRACT", "phase": 8, "severity": "BLOCK"},
+    {"gate_id": "ITERATION-BUDGET", "phase": -1, "severity": "BLOCK"},
+    {"gate_id": "SESSION-RECOVERY", "phase": -1, "severity": "WARN"},
+    {"gate_id": "BUILD-SUCCESS", "phase": -1, "severity": "BLOCK"},
+    {"gate_id": "ROLLBACK-SAFETY", "phase": -1, "severity": "BLOCK"},
+    {"gate_id": "INIT-COMPLETE", "phase": -1, "severity": "BLOCK"},
+    {"gate_id": "STATUS-HEALTHY", "phase": -1, "severity": "WARN"},
 ]
 
 _HOOK_DEFINITIONS = {
@@ -173,8 +215,9 @@ def _check_single_gate(gate: dict, root: Path) -> dict:
     message = f"Gate {gate_id} passed"
     details = {}
 
-    if gate_id == "FILE-ENCODING":
+    if gate_id == "GATE-007":
         bom_files = []
+        ffbd_files = []
         for root_dir, _dirs, files in os.walk(str(root)):
             if any(skip in root_dir for skip in (".git", "node_modules", "__pycache__", ".knowledge")):
                 continue
@@ -184,15 +227,22 @@ def _check_single_gate(gate: dict, root: Path) -> dict:
                 fpath = os.path.join(root_dir, fname)
                 try:
                     with open(fpath, "rb") as fh:
-                        start = fh.read(3)
-                        if start == b'\xef\xbb\xbf':
+                        raw = fh.read()
+                        if raw[:3] == b'\xef\xbb\xbf':
                             bom_files.append(os.path.relpath(fpath, str(root)))
+                        if b'\xef\xbf\xbd' in raw:
+                            ffbd_files.append(os.path.relpath(fpath, str(root)))
                 except OSError:
                     pass
+        issues = []
         if bom_files:
+            issues.append(f"{len(bom_files)} files have BOM markers")
+        if ffbd_files:
+            issues.append(f"{len(ffbd_files)} files have U+FFFD replacement chars")
+        if issues:
             passed = False
-            message = f"{len(bom_files)} files have BOM markers"
-            details = {"offending_files": bom_files, "issue": "UTF-8 BOM detected"}
+            message = "; ".join(issues)
+            details = {"bom_files": bom_files, "ffbd_files": ffbd_files}
     elif gate_id == "TEST-PASS":
         details = {"total_tests": 0, "passed": 0, "failed": 0, "coverage_pct": 0.0}
         message = "No test runner detected, gate skipped"
@@ -205,6 +255,61 @@ def _check_single_gate(gate: dict, root: Path) -> dict:
     elif gate_id == "ANTI-PATTERN-CHECK":
         details = {"patterns_checked": 0}
         message = "Anti-pattern check passed (inline scan)"
+    elif gate_id == "GATE-001":
+        req_files = list(root.rglob("requirements*.md")) + list(root.rglob("spec*.md"))
+        if not req_files:
+            passed = False
+            message = "No requirement/spec documents found"
+            details = {"req_files_found": 0}
+    elif gate_id == "GATE-002":
+        spec_files = list(root.rglob("spec*.md")) + list(root.rglob("*.spec.*"))
+        details = {"spec_files_found": len(spec_files)}
+        message = f"Found {len(spec_files)} spec files"
+    elif gate_id == "GATE-003":
+        arch_files = list(root.rglob("architecture*.md")) + list(root.rglob("ARCHITECTURE*"))
+        details = {"arch_files_found": len(arch_files)}
+        message = f"Found {len(arch_files)} architecture files"
+    elif gate_id == "GATE-004":
+        api_files = list(root.rglob("api*.md")) + list(root.rglob("openapi*"))
+        details = {"api_files_found": len(api_files)}
+        message = f"Found {len(api_files)} API contract files"
+    elif gate_id == "GATE-009":
+        test_files = list(root.rglob("test_*.py")) + list(root.rglob("*_test.py"))
+        details = {"test_files_found": len(test_files)}
+        message = f"Found {len(test_files)} test files"
+    elif gate_id == "GATE-011":
+        e2e_files = list(root.rglob("*e2e*")) + list(root.rglob("*playwright*"))
+        details = {"e2e_files_found": len([f for f in e2e_files if f.is_file()])}
+        message = f"Found {len(e2e_files)} E2E test files"
+    elif gate_id == "GATE-012":
+        sec_files = list(root.rglob("*security*")) + list(root.rglob("*owasp*"))
+        details = {"security_files_found": len([f for f in sec_files if f.is_file()])}
+        message = f"Found {len(sec_files)} security files"
+    elif gate_id == "GATE-013":
+        ci_files = list(root.glob(".github/workflows/*.yml")) + list(root.glob("Dockerfile*"))
+        details = {"ci_files_found": len(ci_files)}
+        message = f"Found {len(ci_files)} CI/deployment files"
+    elif gate_id == "GATE-014":
+        deploy_files = list(root.rglob("docker-compose*")) + list(root.rglob("Dockerfile*"))
+        details = {"deploy_files_found": len([f for f in deploy_files if f.is_file()])}
+        message = f"Found {len(deploy_files)} deployment files"
+    elif gate_id == "GATE-015":
+        release_files = list(root.rglob("CHANGELOG*")) + list(root.rglob("changelog*"))
+        details = {"release_files_found": len([f for f in release_files if f.is_file()])}
+        message = f"Found {len(release_files)} release files"
+    elif gate_id == "BUILD-SUCCESS":
+        details = {"note": "Build success requires external verification"}
+        message = "Build success check (requires external CI)"
+    elif gate_id == "INIT-COMPLETE":
+        required_dirs = [".trae", "scripts"]
+        missing = [d for d in required_dirs if not (root / d).is_dir()]
+        if missing:
+            passed = False
+            message = f"Missing required directories: {missing}"
+            details = {"missing_dirs": missing}
+    elif gate_id == "STATUS-HEALTHY":
+        details = {"note": "Status health requires runtime check"}
+        message = "Status health check (requires runtime)"
     else:
         details = {"note": "Gate check not fully implemented in inline mode"}
 

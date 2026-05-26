@@ -23,6 +23,8 @@
 17. [knowledge_inject](#knowledge_inject)
 18. [project_init](#project_init)
 19. [metrics_report](#metrics_report)
+20. [audit_query](#audit_query)
+21. [resource_subscribe](#resource_subscribe)
 
 ---
 
@@ -1416,4 +1418,192 @@ Token预算管理：查询预算状态、设置预算、获取推荐、生成使
 
 调用: metrics_report(action="summary", time_range="24h")
 响应: {status: "success", data: {total_calls: 256, total_errors: 3, overall_error_rate: 0.0117, latency_p50_ms: 195.0, latency_p95_ms: 450.0, latency_p99_ms: 780.0, latency_avg_ms: 230.5, total_tools: 15, top_tools: [{tool_name: "skill_analyze", call_count: 42, ...}, ...], degradation_counts: {level_1: 2, level_2: 0}, time_range: "24h"}, ...}
+```
+
+## audit_query
+
+审计日志查询：查询MCP工具调用审计记录，支持按工具名和日期范围过滤。
+
+**参数：**
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| tool_name | str\|None | None | 按工具名称过滤，为空则查询全部工具 |
+| date_range | str\|None | None | 日期范围过滤，格式: YYYY-MM-DD:YYYY-MM-DD |
+| limit | int | 50 | 返回结果数量上限(1-500) |
+
+**完整返回值JSON Schema：**
+```json
+{
+  "status": "success",
+  "data": {
+    "entries": [
+      {
+        "timestamp": 1737548400.123,
+        "tool": "skill_analyze",
+        "params_summary": {"skill_path": "/path/to/project", "depth": "basic"},
+        "success": true,
+        "latency_ms": 234.56,
+        "result_summary": {"error": false, "keys": ["metadata", "structure", "agents"]}
+      },
+      {
+        "timestamp": 1737548395.456,
+        "tool": "security_scan",
+        "params_summary": {"target": "src", "severity_threshold": "medium"},
+        "success": false,
+        "latency_ms": 1847.23,
+        "result_summary": {"error": true, "keys": ["error", "message"]}
+      }
+    ],
+    "total_returned": 2,
+    "filters": {
+      "tool_name": null,
+      "date_range": null,
+      "limit": 50
+    },
+    "summary": {
+      "success_count": 1,
+      "error_count": 1,
+      "unique_tools": 2,
+      "tool_names": ["security_scan", "skill_analyze"]
+    }
+  },
+  "metadata": {
+    "tool": "audit_query",
+    "latency_ms": 15,
+    "degraded": false
+  }
+}
+```
+
+**错误码定义：**
+| 错误码 | 说明 | 处理建议 |
+|--------|------|----------|
+| INVALID_INPUT | date_range格式错误或limit超出范围 | date_range格式应为YYYY-MM-DD:YYYY-MM-DD，limit范围1-500 |
+| DEGRADED | 降级模式执行 | 检查MCP Server连接 |
+| INTERNAL_ERROR | 审计日志读取失败 | 检查audit_log.jsonl文件完整性 |
+
+**降级脚本路径：** 内联审计日志读取（直接读取audit_log.jsonl文件）
+
+**调用示例：**
+```
+调用: audit_query(tool_name="skill_analyze", limit=10)
+响应: {status: "success", data: {entries: [{timestamp: 1737548400.123, tool: "skill_analyze", success: true, latency_ms: 234.56, ...}], total_returned: 1, filters: {tool_name: "skill_analyze", date_range: null, limit: 10}, summary: {success_count: 1, error_count: 0, unique_tools: 1, tool_names: ["skill_analyze"]}}, ...}
+
+调用: audit_query(date_range="2025-01-20:2025-01-22", limit=100)
+响应: {status: "success", data: {entries: [{timestamp: ..., tool: "skill_analyze", ...}, {timestamp: ..., tool: "security_scan", ...}], total_returned: 15, filters: {tool_name: null, date_range: "2025-01-20:2025-01-22", limit: 100}, summary: {success_count: 12, error_count: 3, unique_tools: 5, tool_names: ["agent_status", "context_compress", "security_scan", "skill_analyze", "workflow_dispatch"]}}, ...}
+
+调用: audit_query()
+响应: {status: "success", data: {entries: [...], total_returned: 50, filters: {tool_name: null, date_range: null, limit: 50}, summary: {success_count: 45, error_count: 5, unique_tools: 8, tool_names: [...]}}, ...}
+```
+
+## resource_subscribe
+
+资源订阅管理：订阅/取消订阅/列出资源变更通知。当订阅的资源(如xuansto://loading/status)发生变化时，服务器会通过MCP通知推送更新。
+
+**参数：**
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| action | str | 必填 | 操作类型: subscribe, unsubscribe, list |
+| uri | str\|None | None | 资源URI(subscribe/unsubscribe时使用)，如: xuansto://loading/status |
+| client_id | str\|None | None | 客户端标识(subscribe/unsubscribe时使用)，用于区分不同订阅者 |
+
+**action说明：**
+- `subscribe`: 订阅指定URI的资源变更通知。若未提供client_id，服务器自动生成唯一标识。订阅后，当该资源发生变化(如phase变更)时，服务器通过MCP `resource_updated` 通知推送更新
+- `unsubscribe`: 取消订阅指定URI的资源变更通知。需要提供uri和client_id
+- `list`: 列出当前所有订阅信息。若提供uri则返回该URI的订阅者列表，否则返回全部订阅
+
+**subscribe返回值JSON Schema：**
+```json
+{
+  "status": "success",
+  "data": {
+    "action": "subscribe",
+    "uri": "xuansto://loading/status",
+    "client_id": "client-a1b2c3d4",
+    "subscribed": true
+  },
+  "metadata": {
+    "api_version": "3.0.0"
+  }
+}
+```
+
+**unsubscribe返回值JSON Schema：**
+```json
+{
+  "status": "success",
+  "data": {
+    "action": "unsubscribe",
+    "uri": "xuansto://loading/status",
+    "client_id": "client-a1b2c3d4",
+    "unsubscribed": true
+  },
+  "metadata": {
+    "api_version": "3.0.0"
+  }
+}
+```
+
+**list返回值JSON Schema：**
+```json
+{
+  "status": "success",
+  "data": {
+    "action": "list",
+    "subscriptions": {
+      "xuansto://loading/status": ["client-a1b2c3d4", "client-e5f6g7h8"]
+    },
+    "total_uris": 1
+  },
+  "metadata": {
+    "api_version": "3.0.0"
+  }
+}
+```
+
+**MCP通知事件：**
+当资源发生变化时，服务器发送 `resource_updated` 类型的MCP通知：
+```json
+{
+  "event_type": "resource_updated",
+  "data": {
+    "uri": "xuansto://loading/status",
+    "subscribers": ["client-a1b2c3d4"],
+    "event_data": {
+      "event": "phase_transition",
+      "from_phase": "skeleton",
+      "to_phase": "functional",
+      "loaded_resources": ["commands_detail", "workflow_phases", "quality_gates_summary", "core_agents"]
+    }
+  }
+}
+```
+
+**支持的资源URI：**
+| URI | 变更触发条件 |
+|-----|-------------|
+| xuansto://loading/status | 加载阶段(phase)变更时通知(skeleton→functional→enhanced→full) |
+
+**错误码定义：**
+| 错误码 | 说明 | 处理建议 |
+|--------|------|----------|
+| INVALID_INPUT | action不在允许列表中或缺少必要参数 | 使用subscribe/unsubscribe/list |
+| ERR_VALIDATION | subscribe缺少uri或uri格式无效 | 确保uri以xuansto://开头 |
+
+**调用示例：**
+```
+调用: resource_subscribe(action="subscribe", uri="xuansto://loading/status")
+响应: {status: "success", data: {action: "subscribe", uri: "xuansto://loading/status", client_id: "client-a1b2c3d4", subscribed: true}, ...}
+
+调用: resource_subscribe(action="subscribe", uri="xuansto://loading/status", client_id="my-client")
+响应: {status: "success", data: {action: "subscribe", uri: "xuansto://loading/status", client_id: "my-client", subscribed: true}, ...}
+
+调用: resource_subscribe(action="unsubscribe", uri="xuansto://loading/status", client_id="my-client")
+响应: {status: "success", data: {action: "unsubscribe", uri: "xuansto://loading/status", client_id: "my-client", unsubscribed: true}, ...}
+
+调用: resource_subscribe(action="list")
+响应: {status: "success", data: {action: "list", subscriptions: {"xuansto://loading/status": ["client-a1b2c3d4"]}, total_uris: 1}, ...}
+
+调用: resource_subscribe(action="list", uri="xuansto://loading/status")
+响应: {status: "success", data: {action: "list", uri: "xuansto://loading/status", subscribers: ["client-a1b2c3d4"], count: 1}, ...}
 ```

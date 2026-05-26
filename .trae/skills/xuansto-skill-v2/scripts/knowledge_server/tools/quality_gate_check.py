@@ -106,4 +106,4 @@ async def handle_tool(arguments: dict, context: dict):
         "phase": phase,
         "can_proceed": can_proceed,
     }
-    return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+    return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
