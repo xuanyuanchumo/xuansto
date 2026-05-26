@@ -58,8 +58,10 @@ _PHASE_AVAILABLE_RESOURCES = {
     ],
 }
 
+SKELETON_ALLOWED_COMMANDS = ["/status", "/help", "/budget"]
+
 _PHASE_COMMANDS = {
-    LoadPhase.SKELETON: [],
+    LoadPhase.SKELETON: list(SKELETON_ALLOWED_COMMANDS),
     LoadPhase.FUNCTIONAL: [
         "/init", "/brainstorm", "/clarify", "/plan", "/spec", "/design",
         "/design-system", "/implement", "/test", "/review", "/audit",
@@ -247,6 +249,12 @@ class ProgressiveLoader:
 
     def get_available_commands(self) -> list[str]:
         return list(_PHASE_COMMANDS.get(self._state.current_phase, []))
+
+    def can_execute_command(self, command: str) -> bool:
+        if self._state.current_phase == LoadPhase.SKELETON:
+            return command in SKELETON_ALLOWED_COMMANDS
+        available = _PHASE_COMMANDS.get(self._state.current_phase, [])
+        return command in available
 
     def check_token_budget(self, current_usage: int, total_budget: int) -> bool:
         if total_budget <= 0:

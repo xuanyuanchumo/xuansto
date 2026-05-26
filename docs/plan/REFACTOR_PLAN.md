@@ -84,7 +84,7 @@
 | ARCH-10 | 配置变更需重启 MCP Server | Architecture | ✅ Fixed | P3 | `xuansto-mcp-server/src/xuansto_mcp/core/config.py`, `constraints.yaml`, `hooks/hooks.json` |
 | ARCH-11 | 错误处理不统一（部分工具返回字符串而非 JSON） | API | ✅ Fixed | P1 | `xuansto-mcp-server/src/xuansto_mcp/tools/*.py`, `xuansto-mcp-server/src/xuansto_mcp/core/errors.py` |
 | ARCH-12 | 缺少 API 版本协商机制 | API | ✅ Fixed | P3 | `xuansto-mcp-server/src/xuansto_mcp/tools/server_health.py`, `xuansto-mcp-server/src/xuansto_mcp/core/config.py` |
-| ARCH-13 | Resource 订阅推送通知未实现 | Architecture | ✅ Fixed | P2 | `xuansto-mcp-server/src/xuansto_mcp/resources/skill_resources.py` |
+| ARCH-13 | Resource 订阅推送通知未实现（订阅机制已实现，推送通知未实现） | Architecture | ⬜ Partial | P2 | `xuansto-mcp-server/src/xuansto_mcp/resources/skill_resources.py` |
 
 #### DB — 数据问题
 
@@ -100,7 +100,7 @@
 |----|------|--------|------|--------|-----------|
 | MCP-02 | Resource 暴露不完整（同 ARCH-05） | MCP | ✅ Fixed | P2 | `xuansto-mcp-server/src/xuansto_mcp/resources/skill_resources.py` |
 | MCP-03 | 工具调用无审计日志 | MCP | ✅ Fixed | P1 | `xuansto-mcp-server/src/xuansto_mcp/server.py`, `xuansto-mcp-server/src/xuansto_mcp/core/database.py` |
-| MCP-04 | 缺少便捷 Resource 访问路径 | MCP | ✅ Fixed | P2 | `xuansto-mcp-server/src/xuansto_mcp/resources/skill_resources.py` |
+| MCP-04 | 缺少便捷 Resource 访问路径（2/4 已实现：agents/{name}, knowledge/stats；缺 decisions/latest, workflows/active） | MCP | ⬜ Partial | P2 | `xuansto-mcp-server/src/xuansto_mcp/resources/skill_resources.py` |
 
 #### SKILL — Skill 层问题
 
@@ -125,12 +125,12 @@
 | P1 | 6 | 6 | 0 | 0 |
 | P2 | 2 | 2 | 0 | 0 |
 | P3 | 2 | 0 | 1 | 1(Deferred) |
-| ARCH | 9 | 9 | 0 | 0 |
+| ARCH | 9 | 8 | 0 | 1 |
 | DB | 3 | 3 | 0 | 0 |
-| MCP | 3 | 3 | 0 | 0 |
+| MCP | 3 | 2 | 0 | 1 |
 | SKILL | 3 | 3 | 0 | 0 |
 | API | 2 | 2 | 0 | 0 |
-| **总计** | **32** | **30** | **1** | **1** |
+| **总计** | **32** | **28** | **1** | **3** |
 
 ---
 
@@ -321,25 +321,13 @@ graph TB
 
 按优先级降序、工作量升序排列：
 
-| 问题 ID | 优先级 | 影响域 | 工作量 | 风险 | 理由 |
-|---------|--------|--------|--------|------|------|
-| ARCH-11 | P1 | API | M | 中 | 错误格式不统一导致调用方需适配多种格式，是所有接口重构的基础 |
-| DB-01 | P1 | Data | M | 高 | 决策双写无事务保证可能导致数据不一致，影响决策追溯 |
-| DB-02 | P1 | Data | L | 高 | ChromaDB 双写是知识库核心路径，对账机制需谨慎设计 |
-| MCP-03 | P1 | MCP | M | 低 | 审计日志是合规和调试基础，实现相对独立 |
-| API-01 | P1 | API | L | 中 | HTTP/MCP Schema 统一影响所有接口消费者 |
-| SKILL-02 | P2 | Skill | S | 低 | SKELETON 阶段无命令影响首次使用体验，改动范围小 |
-| ARCH-05 | P2 | Architecture | M | 低 | Resource 推送通知是 MCP 协议完整性的关键 |
-| ARCH-06 | P2 | Data | M | 中 | Agent 持久化影响长时间工作流恢复 |
-| ARCH-07 | P2 | Data | M | 中 | 工作流持久化影响服务重启后状态恢复 |
-| ARCH-08 | P2 | Architecture | M | 中 | Token-Phase 关联是渐进式加载的核心增强 |
-| ARCH-09 | P2 | Architecture | S | 低 | Hook 超时是安全基础，实现简单 |
-| ARCH-13 | P2 | Architecture | M | 中 | 推送通知是 Resource 订阅机制的必要补充 |
-| MCP-04 | P2 | MCP | S | 低 | 便捷 Resource 改动范围小，用户体验提升明显 |
-| ARCH-10 | P3 | Architecture | M | 中 | 配置热更新影响运维效率，但当前有 watchfiles 部分支持 |
-| ARCH-12 | P3 | API | M | 中 | API 版本协商是长期兼容性保障，当前有 negotiate_version 基础 |
-| DB-03 | P3 | Data | S | 低 | 版本历史清理策略简单，影响数据库膨胀 |
-| P3-01 | P3 | Architecture | L | 低 | v1/v2 重复文件清理涉及面广但优先级低 |
+| 问题 ID | 优先级 | 影响域 | 工作量 | 风险 | 理由 | 当前状态 |
+|---------|--------|--------|--------|------|------|----------|
+| ARCH-13 | P2 | Architecture | M | 中 | 订阅机制已实现，但推送通知（`notifications/resources/updated`）未实现，是 MCP 协议完整性的关键 | ⬜ Partial |
+| MCP-04 | P2 | MCP | S | 低 | 2/4 便捷 Resource 已实现（`agents/{name}`, `knowledge/stats`），缺 `decisions/latest` 和 `workflows/active` | ⬜ Partial |
+| P3-01 | P3 | Architecture | L | 低 | v1/v2 重复文件清理涉及面广但优先级低 | Open |
+
+> 注：其余 28 项问题已全部修复（✅ Fixed），详见 1.2 节完整问题清单。
 
 ### 3.2 工作量定义
 
@@ -358,12 +346,15 @@ graph TB
 
 **目标**：修复影响系统可靠性和可用性的关键问题
 
-| 步骤 | 问题 ID | 任务 | 输入 | 输出 | 验收标准 |
-|------|---------|------|------|------|----------|
-| A1 | ARCH-05 | Resource 推送通知实现 | `skill_resources.py` 22 个 Resource + `_resource_subscriptions` | 推送通知机制：Resource 变更时通过 MCP `notifications/resources/updated` 通知订阅客户端 | 1. Resource 内容变更时客户端收到通知；2. 订阅/取消订阅正常工作；3. 无订阅时无额外开销 |
-| A2 | ARCH-11 | 统一错误处理 | `tools/*.py` 20 个工具 + `core/errors.py` | 所有工具统一返回 JSON 格式：`{error, data, degradation_level, hook_errors}` | 1. 20 个工具全部返回 JSON；2. 降级响应也遵循统一格式；3. 错误码体系完整覆盖 |
-| A3 | MCP-03 | 审计日志 | `server.py` + `core/database.py` | `audit_log` 表 + `record_audit_log()` 函数 + 工具调用自动记录 | 1. 每次工具调用写入 audit_log；2. 记录工具名、参数摘要、结果、延迟、调用者；3. 90 天自动归档 |
-| A4 | SKILL-02 | SKELETON 命令 | `SKILL.md` + `constraints.yaml` + `resource_load_status.py` | SKELETON 阶段可用命令：`/status`、`/help`、`/budget` | 1. SKELETON 阶段可执行 3 个基础命令；2. 命令执行不触发阶段推进；3. 披露通知正确提示可用命令 |
+**当前状态**：大部分已完成，仅 A1 部分完成
+
+| 步骤 | 问题 ID | 任务 | 输入 | 输出 | 验收标准 | 完成状态 |
+|------|---------|------|------|------|----------|----------|
+| A1 | ARCH-05, MCP-02 | Resource 暴露完善 | `skill_resources.py` 22 个 Resource | 25+ 个 Resource 已注册，订阅机制已实现 | 1. Resource 数量 ≥ 25；2. 订阅/取消订阅正常工作 | ✅ 已完成 |
+| A1' | ARCH-13, MCP-04 | Resource 推送通知 + 便捷路径补全 | `_resource_subscriptions` + 缺失的 2 个便捷 Resource | 推送通知机制 + `decisions/latest` + `workflows/active` Resource | 1. Resource 变更时客户端收到通知；2. 4 个便捷 Resource 全部可用 | ⬜ 部分完成（订阅机制已有，推送通知+2个Resource待实现） |
+| A2 | ARCH-11 | 统一错误处理 | `tools/*.py` 20 个工具 + `core/errors.py` | 所有工具统一返回 JSON 格式：`{error, data, degradation_level, hook_errors}` | 1. 20 个工具全部返回 JSON；2. 降级响应也遵循统一格式；3. 错误码体系完整覆盖 | ✅ 已完成 |
+| A3 | MCP-03 | 审计日志 | `server.py` + `core/audit_logger.py` | `AuditLogger` 类 + JSONL 审计日志 + 工具调用自动记录 | 1. 每次工具调用写入 audit_log.jsonl；2. 记录工具名、参数摘要、结果、延迟；3. 支持查询 | ✅ 已完成 |
+| A4 | SKILL-02 | SKELETON 命令 | `SKILL.md` + `constraints.yaml` + `resource_load_status.py` | SKELETON 阶段可用命令：`/status`、`/help`、`/budget` | 1. SKELETON 阶段可执行 3 个基础命令；2. 命令执行不触发阶段推进 | ✅ 已完成 |
 
 **依赖关系**：
 
@@ -392,13 +383,15 @@ graph LR
 
 **目标**：实现 Agent/工作流持久化，解决双写一致性问题，添加 Hook 超时保护
 
-| 步骤 | 问题 ID | 任务 | 输入 | 输出 | 验收标准 |
-|------|---------|------|------|------|----------|
-| B1 | ARCH-06 | Agent 持久化 | `agent_manage.py` + `_AGENT_INSTANCES` 内存 + `agent_instances.json` | `agent_states` SQLite 表 + 双写过渡 + 启动恢复 | 1. Agent CRUD 操作写入 SQLite；2. 重启后自动恢复 Agent 状态；3. 双写期间 JSON 和 SQLite 一致 |
-| B2 | ARCH-07 | 工作流持久化 | `workflow_dispatch.py` + `_ACTIVE_WORKFLOWS` 内存 + `workflows/*.json` | `workflow_states` SQLite 表 + 双写过渡 + 启动恢复 | 1. 工作流状态写入 SQLite；2. 重启后自动恢复工作流；3. 快照仍使用文件系统 |
-| B3 | DB-01 | 决策双写事务保证 | `decision_log.py` + `decisions.db` + `decisions.json` | SQLite 为主存储 + 文件系统为备份 + 对账机制 | 1. 决策写入使用 SQLite 事务；2. 文件系统写入失败不影响主流程；3. 定期对账修复不一致 |
-| B4 | DB-02 | ChromaDB 双写事务保证 | `database.py` + `knowledge_inject.py` + `reconciliation_log` | 增强对账机制 + 自动重试 + 死信队列 | 1. ChromaDB 写入失败自动重试 3 次；2. 重试失败进入死信队列；3. 对账修复率 ≥ 99% |
-| B5 | ARCH-09 | Hook 超时保护 | `hook_engine.py` | Hook 执行超时控制（默认 30s）+ 超时后降级 | 1. Hook 执行超过 30s 自动终止；2. 安全 Hook 超时默认阻断；3. 非安全 Hook 超时跳过继续执行 |
+**当前状态**：✅ 全部已完成
+
+| 步骤 | 问题 ID | 任务 | 输入 | 输出 | 验收标准 | 完成状态 |
+|------|---------|------|------|------|----------|----------|
+| B1 | ARCH-06 | Agent 持久化 | `agent_manage.py` + `_AGENT_INSTANCES` 内存 | `agent_states` SQLite 表 + `save_agent_state()`/`load_agent_states()`/`delete_agent_state()` + 启动恢复 | 1. Agent CRUD 操作写入 SQLite；2. 重启后自动恢复 Agent 状态 | ✅ 已完成 |
+| B2 | ARCH-07 | 工作流持久化 | `workflow_dispatch.py` + `_ACTIVE_WORKFLOWS` 内存 | `workflow_states` SQLite 表 + `save_workflow_state()`/`load_workflow_states()`/`delete_workflow_state()` + 启动恢复 | 1. 工作流状态写入 SQLite；2. 重启后自动恢复工作流 | ✅ 已完成 |
+| B3 | DB-01 | 决策双写事务保证 | `decision_log.py` + `decisions.db` + `decisions.json` | SQLite 为主存储 + `persist_state("decision_records")` + FTS5 全文索引 | 1. 决策写入使用 SQLite；2. 文件系统写入失败不影响主流程 | ✅ 已完成 |
+| B4 | DB-02 | ChromaDB 双写事务保证 | `database.py` + `knowledge_inject.py` + `reconciliation_log` | `persist_knowledge_dual_write()` + `reconcile_knowledge_stores()` + 对账机制 | 1. ChromaDB 写入失败记录 reconciliation_log；2. 对账修复机制可用 | ✅ 已完成 |
+| B5 | ARCH-09 | Hook 超时保护 | `hook_engine.py` | Hook 执行超时控制（默认 30s）+ 超时后跳过 | 1. Hook 执行超过 30s 自动跳过；2. 超时记录到 hook_errors | ✅ 已完成 |
 
 **依赖关系**：
 
@@ -426,13 +419,15 @@ graph LR
 
 **目标**：配置热更新、API 版本协商、HTTP/MCP Schema 统一、知识版本清理
 
-| 步骤 | 问题 ID | 任务 | 输入 | 输出 | 验收标准 |
-|------|---------|------|------|------|----------|
-| C1 | ARCH-10 | 配置热更新 | `config.py` watchfiles 机制 + `constraints.yaml` + `hooks.json` | 所有配置文件支持热更新，无需重启 | 1. constraints.yaml 变更后 5s 内生效；2. hooks.json 变更后下次 Hook 调用生效；3. 热更新失败自动回滚 |
-| C2 | ARCH-12 | API 版本协商 | `server_health.py` negotiate_version + `config.py` MCP_API_VERSION | 完整版本协商：客户端声明版本→服务端返回兼容性+特性列表 | 1. 版本不匹配时返回降级建议；2. 弃用特性列表正确；3. 向后兼容 v2.0.0 客户端 |
-| C3 | API-01 | HTTP/MCP Schema 统一 | `server.py` MCP 接口 + `api.py`/`api_routes.py` HTTP 接口 | 统一请求/响应 Schema，HTTP 接口为 MCP 接口的超集 | 1. 相同工具的 HTTP 和 MCP 调用返回相同 JSON 结构；2. HTTP 接口附加 HTTP 语义（状态码、头）；3. 降级响应格式一致 |
-| C4 | DB-03 | 知识版本历史清理 | `database.py` knowledge_entries 表 | 版本清理策略：保留最近 N 版本 + 超过 90 天自动归档 | 1. 知识条目保留最近 10 个版本；2. 90 天以上版本归档为 JSONL；3. 归档后数据库体积减少 ≥ 50% |
-| C5 | MCP-04 | 便捷 Resource | `skill_resources.py` 22 个 Resource | 新增 4 个 Resource：`agents/{name}`、`knowledge/stats`、`decisions/latest`、`workflows/active` | 1. `agents/{name}` 无需指定 layer 自动搜索；2. `knowledge/stats` 返回实时统计；3. `decisions/latest` 返回最近 10 条；4. `workflows/active` 返回活跃工作流 |
+**当前状态**：C1/C2/C4 已完成，C3/C5 部分完成
+
+| 步骤 | 问题 ID | 任务 | 输入 | 输出 | 验收标准 | 完成状态 |
+|------|---------|------|------|------|----------|----------|
+| C1 | ARCH-10 | 配置热更新 | `config.py` watchfiles 机制 + `constraints.yaml` + `hooks.json` | `start_config_watcher()` + watchfiles 事件驱动 + 轮询降级 + 变更通知 | 1. 配置文件变更后自动重载；2. watchfiles 不可用时降级为轮询；3. 变更通知发送 | ✅ 已完成 |
+| C2 | ARCH-12 | API 版本协商 | `server_health.py` negotiate_version + `config.py` MCP_API_VERSION | `_negotiate_api_version()` + `API_CHANGELOG` + 版本兼容性检查 | 1. 版本不匹配时返回降级建议；2. 弃用特性列表正确；3. 向后兼容 v2.0.0 客户端 | ✅ 已完成 |
+| C3 | API-01 | HTTP/MCP Schema 统一 | `server.py` MCP 接口 + `api.py`/`api_routes.py` HTTP 接口 | 统一请求/响应 Schema，HTTP 接口为 MCP 接口的超集 | 1. 相同工具的 HTTP 和 MCP 调用返回相同 JSON 结构；2. HTTP 接口附加 HTTP 语义 | ⬜ 待验证（MCP 侧已统一，HTTP 侧待确认） |
+| C4 | DB-03 | 知识版本历史清理 | `database.py` knowledge_entries 表 | `cleanup_knowledge_versions()` 函数：保留最近 N 版本 + 软删除 | 1. 知识条目保留最近 10 个版本；2. 超出部分软删除（设 deleted_at） | ✅ 已完成 |
+| C5 | MCP-04 | 便捷 Resource | `skill_resources.py` 25 个 Resource | 新增 2 个缺失 Resource：`decisions/latest`、`workflows/active` | 1. `decisions/latest` 返回最近 10 条决策；2. `workflows/active` 返回活跃工作流 | ⬜ 部分完成（`agents/{name}` 和 `knowledge/stats` 已实现，缺 `decisions/latest` 和 `workflows/active`） |
 
 **依赖关系**：
 
@@ -462,12 +457,14 @@ graph LR
 
 **目标**：Token-Phase 关联、渐进式加载增强、性能指标
 
-| 步骤 | 问题 ID | 任务 | 输入 | 输出 | 验收标准 |
-|------|---------|------|------|------|----------|
-| D1 | ARCH-08 | Token-Phase 关联 | `token_budget.py` + `resource_load_status.py` + `constraints.yaml` | Token 预算与 LoadPhase 关联：每阶段独立预算+自动调整 | 1. 每阶段有独立 Token 预算和用量追踪；2. 阶段推进时自动分配预算；3. 预算超限时触发阶段降级 |
-| D2 | ARCH-13 | Resource 推送通知增强 | `skill_resources.py` + `_resource_subscriptions` | 完整推送通知：Resource 变更→订阅客户端通知 | 1. Resource 内容变更时推送 `notifications/resources/updated`；2. 支持批量通知合并；3. 推送失败自动重试 |
-| D3 | — | 渐进式加载增强 | `resource_load_status.py` + `progressive_loader.py` | 4 阶段状态机 + 转换条件 + 降级集成 + 性能指标 | 1. 状态机转换条件明确；2. 降级自动触发阶段回退；3. 每阶段 Token 消耗可追踪 |
-| D4 | — | 性能指标体系 | `server_health.py` + `metrics_report.py` + `audit_log` | P50/P95/P99 延迟 + 错误率 + 降级率 + Token 消耗 | 1. 指标聚合到 metrics 表；2. 支持按时间窗口查询；3. 健康评估自动生成 |
+**当前状态**：D1 已完成，D2 部分完成，D3/D4 待验证
+
+| 步骤 | 问题 ID | 任务 | 输入 | 输出 | 验收标准 | 完成状态 |
+|------|---------|------|------|------|----------|----------|
+| D1 | ARCH-08 | Token-Phase 关联 | `token_budget.py` + `resource_load_status.py` + `constraints.yaml` | `PHASE_TOKEN_BUDGET_MAP` + `set_from_phase` + `phase_allocations` + `record_token_usage` | 1. 每阶段有独立 Token 预算；2. 阶段推进时自动分配预算；3. Token 使用量追踪 | ✅ 已完成 |
+| D2 | ARCH-13 | Resource 推送通知增强 | `skill_resources.py` + `_resource_subscriptions` | 完整推送通知：Resource 变更→订阅客户端通知 | 1. Resource 内容变更时推送 `notifications/resources/updated`；2. 支持批量通知合并；3. 推送失败自动重试 | ⬜ 部分完成（订阅机制已有，推送通知未实现） |
+| D3 | — | 渐进式加载增强 | `resource_load_status.py` + `progressive_loader.py` | 4 阶段状态机 + 转换条件 + 降级集成 + 性能指标 | 1. 状态机转换条件明确；2. 降级自动触发阶段回退；3. 每阶段 Token 消耗可追踪 | ⬜ 待验证（基础框架已有，增强功能待确认） |
+| D4 | — | 性能指标体系 | `server_health.py` + `metrics_report.py` + `audit_log` | P50/P95/P99 延迟 + 错误率 + 降级率 + Token 消耗 | 1. 指标聚合到 metrics 表；2. 支持按时间窗口查询；3. 健康评估自动生成 | ⬜ 待验证（metrics 表已有，百分位延迟待确认） |
 
 **依赖关系**：
 

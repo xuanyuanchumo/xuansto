@@ -12,7 +12,7 @@ def test_server_starts():
 
     server = FastMCP(
         "xuansto-mcp-server-test",
-        instructions="Xuansto Skill MCP服务器 v8.0.0",
+        instructions="Xuansto Skill MCP服务器 v8.4.0",
     )
     assert server is not None
     assert server.name == "xuansto-mcp-server-test"

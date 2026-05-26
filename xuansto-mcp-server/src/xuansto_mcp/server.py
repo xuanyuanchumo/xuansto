@@ -20,7 +20,7 @@ _TOOL_FUNCTIONS: dict[str, Callable[..., Any]] = {}
 
 mcp = FastMCP(
     "xuansto-mcp-server",
-    instructions="Xuansto Skill MCP服务器 v8.0.0",
+    instructions="Xuansto Skill MCP服务器 v8.4.0",
 )
 
 from .tools import (
@@ -245,7 +245,15 @@ def main() -> None:
     degradation_load_on_startup()
     from .core.degradation import start_fallback_watcher
     start_fallback_watcher()
-    mcp.run(transport="stdio")
+
+    import os
+    transport = os.environ.get("XUANSTO_TRANSPORT", "stdio")
+    if transport == "streamable-http":
+        host = os.environ.get("XUANSTO_HOST", "127.0.0.1")
+        port = int(os.environ.get("XUANSTO_PORT", "8000"))
+        mcp.run(transport="streamable-http", host=host, port=port)
+    else:
+        mcp.run(transport="stdio")
 
 
 if __name__ == "__main__":

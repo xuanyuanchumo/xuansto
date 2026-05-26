@@ -96,8 +96,8 @@ class TestP1_01_VersionConsistency:
         v = parse_version("v2.1.5")
         assert v == (2, 1, 5)
 
-        v = parse_version("8.0.0")
-        assert v == (8, 0, 0)
+        v = parse_version("8.4.0")
+        assert v == (8, 4, 0)
 
 
 class TestP1_04_ToolsSubpackageSplit:

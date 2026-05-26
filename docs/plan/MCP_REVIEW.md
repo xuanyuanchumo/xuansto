@@ -1,6 +1,6 @@
 # MCP 审查文档
 
-> 版本: 8.0.0 | 更新日期: 2026-05-25 | 编码: UTF-8 | 行尾: LF
+> 版本: 8.0.0 | 更新日期: 2026-05-26 | 编码: UTF-8 | 行尾: LF
 > MCP Server 目录: `xuansto-mcp-server/src/xuansto_mcp/`
 > Skill 目录: `.trae/skills/xuansto-skill-v2/`
 
@@ -690,7 +690,7 @@
 }
 ```
 
-### 1.2 MCP Resources（22 个）
+### 1.2 MCP Resources（25 个）
 
 定义位置：[skill_resources.py](../../xuansto-mcp-server/src/xuansto_mcp/resources/skill_resources.py)，通过 `skill_resources.register(mcp)` 注册。所有 Resource 均支持降级响应（`_degraded_resource` 返回 `status: "degraded"` JSON）。
 
@@ -703,21 +703,24 @@
 | 5 | `xuansto://templates/{name}` | 模板文件（按名称） | text/markdown | name: 模板名 |
 | 6 | `xuansto://sessions/latest` | 最新会话记录 | text/markdown | — |
 | 7 | `xuansto://sessions/{session_id}` | 指定 ID 的会话记录 | text/markdown | session_id: 会话 ID |
-| 8 | `xuansto://agents/{layer}/{name}` | 指定层级和名称的 Agent 定义 | text/markdown | layer: 层级, name: 名称 |
-| 9 | `xuansto://loading/status` | 渐进式加载状态 | application/json | — |
-| 10 | `xuansto://metrics/summary` | 工具指标汇总 | application/json | — |
-| 11 | `xuansto://degradation/status` | 降级状态 | application/json | — |
-| 12 | `xuansto://skill/config` | Skill 配置（统一入口） | text/markdown | — |
-| 13 | `xuansto://skill/constraints` | Skill 约束配置 | text/markdown | — |
-| 14 | `xuansto://agents/registry` | Agent 注册表（JSON 格式） | application/json | — |
-| 15 | `xuansto://gates/definitions` | 质量门禁定义 | text/markdown | — |
-| 16 | `xuansto://workflows/definitions` | 工作流定义 | text/markdown | — |
-| 17 | `xuansto://hooks/definitions` | Hook 定义 | text/markdown | — |
-| 18 | `xuansto://knowledge/status` | 知识库状态 | application/json | — |
-| 19 | `xuansto://templates/index` | 模板索引 | application/json | — |
-| 20 | `xuansto://commands/routes` | 命令路由索引 | application/json | — |
-| 21 | `xuansto://session/state` | 当前会话状态 | application/json | — |
-| 22 | `xuansto://health/status` | 健康状态 | application/json | — |
+| 8 | `xuansto://agents/{name}` | 按名称获取 Agent 定义（递归搜索，无需指定层级） | text/markdown | name: Agent 名称 |
+| 9 | `xuansto://agents/{layer}/{name}` | 指定层级和名称的 Agent 定义 | text/markdown | layer: 层级, name: 名称 |
+| 10 | `xuansto://loading/status` | 渐进式加载状态 | application/json | — |
+| 11 | `xuansto://metrics/summary` | 工具指标汇总 | application/json | — |
+| 12 | `xuansto://degradation/status` | 降级状态 | application/json | — |
+| 13 | `xuansto://skill/config` | Skill 配置（统一入口） | text/markdown | — |
+| 14 | `xuansto://skill/constraints` | Skill 约束配置 | text/markdown | — |
+| 15 | `xuansto://agents/registry` | Agent 注册表（JSON 格式） | application/json | — |
+| 16 | `xuansto://gates/definitions` | 质量门禁定义 | text/markdown | — |
+| 17 | `xuansto://workflows/definitions` | 工作流定义 | text/markdown | — |
+| 18 | `xuansto://hooks/definitions` | Hook 定义 | text/markdown | — |
+| 19 | `xuansto://knowledge/status` | 知识库状态 | application/json | — |
+| 20 | `xuansto://knowledge/stats` | 知识库统计信息（含 ChromaDB 向量数、SQLite 条目数、按 scope 分组） | application/json | — |
+| 21 | `xuansto://templates/index` | 模板索引 | application/json | — |
+| 22 | `xuansto://commands/routes` | 命令路由索引 | application/json | — |
+| 23 | `xuansto://session/state` | 当前会话状态 | application/json | — |
+| 24 | `xuansto://health/status` | 健康状态 | application/json | — |
+| 25 | `xuansto://audit/log` | 审计日志（最近 50 条工具调用记录） | application/json | — |
 
 ### 1.3 MCP Prompts（2 个）
 
@@ -761,45 +764,16 @@
 
 ### 2.2 适合封装为 Resource 的数据
 
-当前 MCP Server 已暴露 22 个 Resource。以下为建议新增的 Resource：
+当前 MCP Server 已暴露 25 个 Resource。以下为建议新增的 Resource：
 
 | URI 模式 | 描述 | 内容类型 | 建议阶段 | 数据来源 |
 |---------|------|----------|----------|----------|
-| `xuansto://agents/{name}` | 单个 Agent 的完整定义（无需指定 layer） | text/markdown | Phase 2+ | `AGENTS_DIR` 递归搜索 `{name}.md` |
-| `xuansto://knowledge/stats` | 知识库实时统计（含 ChromaDB 向量数、SQLite 条目数） | application/json | Phase 1+ | `knowledge_stats` 工具返回值 |
 | `xuansto://decisions/latest` | 最近 10 条决策记录 | application/json | Phase 2+ | `decision_log` SQLite 查询 |
 | `xuansto://workflows/active` | 当前活跃工作流列表 | application/json | Phase 1+ | `workflow_dispatch` 内存状态 |
 
+> **注**：`xuansto://agents/{name}` 和 `xuansto://knowledge/stats` 已在 v8.0.0 中实现（见 1.2 节 #8 和 #20），`xuansto://audit/log` 亦已实现（见 1.2 节 #25）。
+
 #### 新增 Resource 详细设计
-
-**xuansto://agents/{name}**
-
-- 描述：按 Agent 名称获取完整 Agent 定义文件内容（无需指定层级，自动递归搜索）
-- URI 参数：`{name}` 为 Agent 文件名（不含扩展名），如 `backend-developer`、`qa-engineer`
-- 内容类型：`text/markdown`
-- 可用阶段：Phase 2 (Enhanced) 及以上
-- 实现方式：在 `AGENTS_DIR` 下递归搜索 `{name}.md`
-- 与现有 `xuansto://agents/{layer}/{name}` 的区别：无需预知 layer，更易用
-
-**xuansto://knowledge/stats**
-
-- 描述：知识库实时统计信息，包含条目数、嵌入状态、引擎健康度
-- 内容类型：`application/json`
-- 可用阶段：Phase 1 (Functional) 及以上
-- 实现方式：调用 `knowledge_stats(detailed=false)` 并返回结果
-- 示例返回值：
-
-```json
-{
-  "total_entries": 42,
-  "by_scope": {"general": 15, "workspace": 20, "experience": 7},
-  "embedding": {"pending": 3, "ready": 39},
-  "chroma_available": true,
-  "degradation_level": 0,
-  "degradation_name": "full",
-  "last_change_timestamp": "2026-05-25T08:30:00+00:00"
-}
-```
 
 **xuansto://decisions/latest**
 
@@ -832,7 +806,7 @@
 | 框架 | FastMCP (Python) |
 | 依赖 | Python ≥3.10, mcp SDK, chromadb(可选), watchfiles(可选) |
 | 注册工具数 | 20 |
-| 注册资源数 | 22 |
+| 注册资源数 | 25 |
 | 注册提示数 | 2 |
 
 ### 3.2 完整 Tool 列表
@@ -871,21 +845,24 @@
 | 5 | `xuansto://templates/{name}` | 模板文件 | text/markdown | Phase 2+ |
 | 6 | `xuansto://sessions/latest` | 最新会话 | text/markdown | Phase 1+ |
 | 7 | `xuansto://sessions/{session_id}` | 指定会话 | text/markdown | Phase 1+ |
-| 8 | `xuansto://agents/{layer}/{name}` | Agent 定义 | text/markdown | Phase 2+ |
-| 9 | `xuansto://loading/status` | 加载状态 | application/json | Phase 0+ |
-| 10 | `xuansto://metrics/summary` | 指标汇总 | application/json | Phase 2+ |
-| 11 | `xuansto://degradation/status` | 降级状态 | application/json | Phase 1+ |
-| 12 | `xuansto://skill/config` | Skill 配置（统一） | text/markdown | Phase 0+ |
-| 13 | `xuansto://skill/constraints` | 约束配置 | text/markdown | Phase 0+ |
-| 14 | `xuansto://agents/registry` | Agent 注册表（JSON） | application/json | Phase 1+ |
-| 15 | `xuansto://gates/definitions` | 门禁定义 | text/markdown | Phase 1+ |
-| 16 | `xuansto://workflows/definitions` | 工作流定义 | text/markdown | Phase 1+ |
-| 17 | `xuansto://hooks/definitions` | Hook 定义 | text/markdown | Phase 1+ |
-| 18 | `xuansto://knowledge/status` | 知识库状态 | application/json | Phase 1+ |
-| 19 | `xuansto://templates/index` | 模板索引 | application/json | Phase 2+ |
-| 20 | `xuansto://commands/routes` | 命令路由 | application/json | Phase 1+ |
-| 21 | `xuansto://session/state` | 会话状态 | application/json | Phase 1+ |
-| 22 | `xuansto://health/status` | 健康状态 | application/json | Phase 0+ |
+| 8 | `xuansto://agents/{name}` | Agent 定义（按名称，递归搜索） | text/markdown | Phase 2+ |
+| 9 | `xuansto://agents/{layer}/{name}` | Agent 定义（按层级+名称） | text/markdown | Phase 2+ |
+| 10 | `xuansto://loading/status` | 加载状态 | application/json | Phase 0+ |
+| 11 | `xuansto://metrics/summary` | 指标汇总 | application/json | Phase 2+ |
+| 12 | `xuansto://degradation/status` | 降级状态 | application/json | Phase 1+ |
+| 13 | `xuansto://skill/config` | Skill 配置（统一） | text/markdown | Phase 0+ |
+| 14 | `xuansto://skill/constraints` | 约束配置 | text/markdown | Phase 0+ |
+| 15 | `xuansto://agents/registry` | Agent 注册表（JSON） | application/json | Phase 1+ |
+| 16 | `xuansto://gates/definitions` | 门禁定义 | text/markdown | Phase 1+ |
+| 17 | `xuansto://workflows/definitions` | 工作流定义 | text/markdown | Phase 1+ |
+| 18 | `xuansto://hooks/definitions` | Hook 定义 | text/markdown | Phase 1+ |
+| 19 | `xuansto://knowledge/status` | 知识库状态 | application/json | Phase 1+ |
+| 20 | `xuansto://knowledge/stats` | 知识库统计（含 scope 分组） | application/json | Phase 1+ |
+| 21 | `xuansto://templates/index` | 模板索引 | application/json | Phase 2+ |
+| 22 | `xuansto://commands/routes` | 命令路由 | application/json | Phase 1+ |
+| 23 | `xuansto://session/state` | 会话状态 | application/json | Phase 1+ |
+| 24 | `xuansto://health/status` | 健康状态 | application/json | Phase 0+ |
+| 25 | `xuansto://audit/log` | 审计日志（最近 50 条） | application/json | Phase 1+ |
 
 ### 3.4 权限与安全边界
 
@@ -910,7 +887,24 @@
 
 ### 3.5 mcpServers 配置 JSON
 
-**uvx 方式（推荐）**
+**uvx 方式（推荐，来自 Git 仓库）**
+
+```json
+{
+  "mcpServers": {
+    "xuansto-mcp-server": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/xuanyuanchumo/xuansto#subdirectory=xuansto-mcp-server",
+        "xuansto-mcp"
+      ]
+    }
+  }
+}
+```
+
+**uvx 方式（PyPI 发布后）**
 
 ```json
 {
@@ -1085,26 +1079,41 @@
 
 ### 5.1 调用方式：Skill 命令 → MCP 工具调用链
 
-Skill 命令通过 SKILL.md 中的路由规则映射到 MCP 工具调用链。每个命令可能触发一个或多个 MCP 工具的顺序调用：
+Skill 命令通过 `commands/routes.yaml` 中的路由规则映射到 MCP 工具调用链。每个命令可能触发一个或多个 MCP 工具的顺序调用：
 
-| Skill 命令 | MCP 工具调用链 | 说明 |
-|-----------|-------------|------|
-| `/init` | project_init(create) → skill_analyze → knowledge_search → workflow_dispatch(start) | 项目初始化全流程 |
-| `/brainstorm` | knowledge_search → workflow_dispatch(start) | 头脑风暴启动 |
-| `/plan` | skill_analyze → knowledge_search → agent_status(list) → workflow_dispatch(start) → decision_log(log) → token_budget(recommend) | 规划阶段 |
-| `/spec` | workflow_dispatch(phase) → quality_gate_check → spec_drift_detect | 规格编写 |
-| `/design` | quality_gate_check → knowledge_search → workflow_dispatch(phase) | 架构设计 |
-| `/implement` | workflow_dispatch(phase) → quality_gate_check → hook_manage(list) | 代码实现 |
-| `/test` | quality_gate_check → workflow_dispatch(phase) | 测试验证 |
-| `/review` | quality_gate_check → security_scan → code_simplify | 代码审查 |
-| `/audit` | security_scan → quality_gate_check → spec_drift_detect | 安全审计 |
-| `/fix` | session_manage(load) → quality_gate_check → hook_manage(list) | 问题修复 |
-| `/simplify` | code_simplify → quality_gate_check → context_compress | 代码简化 |
-| `/refactor` | code_simplify → quality_gate_check → context_compress | 代码重构 |
-| `/deploy` | quality_gate_check → server_health(check) → workflow_dispatch(phase) | 部署交付 |
-| `/learn` | knowledge_search → knowledge_inject(inject) → session_manage(save) | 知识学习 |
-| `/loop` | workflow_dispatch(start) → session_manage(save) → resource_load_status(status) → token_budget(status) → decision_log(log) | 循环开发 |
-| `/sprint` | workflow_dispatch(start) → session_manage(save) → resource_load_status(preload) → token_budget(recommend) → project_init(detect_stack) | 冲刺开发 |
+| Skill 命令 | 意图 | MCP 工具调用链 | 说明 |
+|-----------|------|-------------|------|
+| `/init` | 从零开始新项目 | skill_analyze → knowledge_search → workflow_dispatch → project_init → decision_log | 项目初始化全流程 |
+| `/brainstorm` | 头脑风暴/需求探索 | knowledge_search → workflow_dispatch | 头脑风暴启动 |
+| `/clarify` | 澄清需求 | knowledge_search → workflow_dispatch → quality_gate_check | 需求澄清 |
+| `/plan` | 规划架构 | skill_analyze → knowledge_search → agent_status → workflow_dispatch → decision_log → token_budget | 规划阶段 |
+| `/spec` | 写规格文档 | workflow_dispatch → quality_gate_check → spec_drift_detect | 规格编写 |
+| `/design` | 设计 | quality_gate_check → knowledge_search → workflow_dispatch | 架构设计 |
+| `/design-system` | 设计系统 | quality_gate_check → knowledge_search → workflow_dispatch | 设计系统生成 |
+| `/implement` | 写代码 | workflow_dispatch → quality_gate_check → hook_manage | 代码实现 |
+| `/test` | 跑测试 | quality_gate_check → workflow_dispatch | 测试验证 |
+| `/review` | 代码审查 | quality_gate_check → security_scan → code_simplify | 代码审查 |
+| `/audit` | 安全审计 | security_scan → quality_gate_check → spec_drift_detect | 安全审计 |
+| `/accept` | 验收确认 | quality_gate_check → workflow_dispatch | 验收门禁 |
+| `/fix` | 修复Bug | session_manage → quality_gate_check → hook_manage | 问题修复 |
+| `/simplify` | 代码简化 | code_simplify → quality_gate_check → context_compress | 代码简化 |
+| `/refactor` | 代码重构 | code_simplify → quality_gate_check → context_compress | 代码重构 |
+| `/deploy` | 部署交付 | quality_gate_check → server_health → workflow_dispatch | 部署交付 |
+| `/build` | 构建项目 | skill_analyze → quality_gate_check → server_health | 项目构建 |
+| `/build-desktop` | 桌面构建 | quality_gate_check → skill_analyze → workflow_dispatch | 桌面应用构建 |
+| `/release-desktop` | 桌面发布 | quality_gate_check → workflow_dispatch | 桌面应用发布 |
+| `/learn` | 知识学习 | knowledge_search → knowledge_inject → session_manage | 知识学习 |
+| `/execute-plan` | 执行计划 | workflow_dispatch → session_manage | 执行已有计划 |
+| `/cancel-loop` | 取消循环 | workflow_dispatch → session_manage | 取消自主循环 |
+| `/loop` | 自主循环 | workflow_dispatch → session_manage → resource_load_status → token_budget → decision_log | 循环开发 |
+| `/sprint` | 冲刺 | workflow_dispatch → session_manage → resource_load_status → token_budget → project_init | 冲刺开发 |
+| `/agent-status` | 查询Agent | agent_status | Agent 状态查询 |
+| `/status` | 查询进度 | workflow_dispatch → session_manage → server_health | 项目进度查询 |
+| `/rollback` | 回滚 | session_manage → workflow_dispatch | 回滚到保存点 |
+| `/sdd-tdd-medium` | 中等规模SDD+TDD | skill_analyze → workflow_dispatch → resource_load_status | 中等规模开发 |
+| `/sdd-tdd-fast` | 快速SDD+TDD | workflow_dispatch → resource_load_status | 快速开发 |
+| `/decision` | 决策记录 | decision_log | 决策日志 |
+| `/budget` | Token预算管理 | token_budget → resource_load_status | Token 预算 |
 
 ### 5.2 参数传递：命令参数 → MCP 工具参数映射
 
@@ -1273,7 +1282,7 @@ MCP Tool（主路径）
 
 | Skill 版本 | 最低 MCP Server 版本 | API 版本 | 工具数量 | Resource 数量 |
 |-----------|-------------------|---------|---------|-------------|
-| 8.0.0 | 8.0.0 | 3.0.0 | 20 | 22 |
+| 8.0.0 | 8.0.0 | 3.0.0 | 20 | 25 |
 | 7.0.0 | 7.0.0 | 2.0.0 | 15 | 3 |
 | 6.0.0 | 6.0.0 | 1.0.0 | 13 | 0 |
 

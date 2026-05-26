@@ -1,6 +1,6 @@
 # Xuansto Skill v2 综合分析文档
 
-> 版本：8.0.0 | 分析日期：2026-05-25
+> 版本：8.0.0 | 分析日期：2026-05-26
 > 分析范围：SKILL.md、57个Agent、31个命令、20个MCP工具、降级脚本、渐进式加载、模块化重构
 
 ---
@@ -34,7 +34,7 @@
 
 ### 1.2 PHASE_0（骨架）
 
-**代码位置**：[SKILL.md](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/SKILL.md#L21-L44) `<!-- PHASE_0_START -->` ~ `<!-- PHASE_0_END -->`
+**代码位置**：[SKILL.md](file:///c:/Users/86156/.trae-cn/worktrees/skiller/develop-main-branch-YzihpS/.trae/skills/xuansto-skill-v2/SKILL.md#L21-L44) `<!-- PHASE_0_START -->` ~ `<!-- PHASE_0_END -->`
 
 **命令列表**（31个）：
 
@@ -63,7 +63,7 @@
 
 ### 1.3 PHASE_1（功能）
 
-**代码位置**：[SKILL.md](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/SKILL.md#L46-L124) `<!-- PHASE_1_START -->` ~ `<!-- PHASE_1_END -->`
+**代码位置**：[SKILL.md](file:///c:/Users/86156/.trae-cn/worktrees/skiller/develop-main-branch-YzihpS/.trae/skills/xuansto-skill-v2/SKILL.md#L46-L124) `<!-- PHASE_1_START -->` ~ `<!-- PHASE_1_END -->`
 
 **执行入口**（5步）：
 
@@ -87,7 +87,7 @@
 | 7 | 持续重构 | code_simplify, context_compress | SIMPLIFICATION-BEHAVIOR, GATE-015 |
 | 8 | 部署交付 | — | DESKTOP-BUILD/SIGN/UPDATE/CROSS |
 
-**命令路由表（精简）**：31个命令按意图→命令→MCP工具链→Phase映射，详见 [SKILL.md#L70-L104](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/SKILL.md#L70-L104)。
+**命令路由表（精简）**：31个命令按意图→命令→MCP工具链→Phase映射，详见 [SKILL.md#L70-L104](file:///c:/Users/86156/.trae-cn/worktrees/skiller/develop-main-branch-YzihpS/.trae/skills/xuansto-skill-v2/SKILL.md#L70-L104)。
 
 **核心Agent索引（13个）**：
 
@@ -109,7 +109,7 @@
 
 ### 1.4 PHASE_2（增强）
 
-**代码位置**：[SKILL.md](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/SKILL.md#L126-L220) `<!-- PHASE_2_START -->` ~ `<!-- PHASE_2_END -->`
+**代码位置**：[SKILL.md](file:///c:/Users/86156/.trae-cn/worktrees/skiller/develop-main-branch-YzihpS/.trae/skills/xuansto-skill-v2/SKILL.md#L126-L220) `<!-- PHASE_2_START -->` ~ `<!-- PHASE_2_END -->`
 
 **完整命令路由表**：通过 `{{include:commands/routes.yaml}}` 内联加载，31条路由含降级策略（fallback字段）。每条路由包含：intent、command、mcp_tools、fallback、phase、detail。
 
@@ -188,7 +188,7 @@
 
 ### 1.5 PHASE_3（完整）
 
-**代码位置**：[SKILL.md](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/SKILL.md#L222-L249) `<!-- PHASE_3_START -->` ~ `<!-- PHASE_3_END -->`
+**代码位置**：[SKILL.md](file:///c:/Users/86156/.trae-cn/worktrees/skiller/develop-main-branch-YzihpS/.trae/skills/xuansto-skill-v2/SKILL.md#L222-L249) `<!-- PHASE_3_START -->` ~ `<!-- PHASE_3_END -->`
 
 **Hook系统说明**：
 
@@ -234,7 +234,7 @@
 
 ### Step 1: 平台检测 → 检查项目依赖和结构
 
-**代码位置**：[default.yaml#L174-L192](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/configs/default.yaml#L174-L192)（平台检测配置）
+**代码位置**：[default.yaml#L174-L192](file:///c:/Users/86156/.trae-cn/worktrees/skiller/develop-main-branch-YzihpS/.trae/skills/xuansto-skill-v2/configs/default.yaml#L174-L192)（平台检测配置）
 
 **执行逻辑**：
 
@@ -248,7 +248,7 @@
 
 ### Step 2: 规模评估 → 统计文件数判断规模
 
-**代码位置**：[default.yaml#L18-L20](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/configs/default.yaml#L18-L20)（精简模式阈值）
+**代码位置**：[default.yaml#L18-L20](file:///c:/Users/86156/.trae-cn/worktrees/skiller/develop-main-branch-YzihpS/.trae/skills/xuansto-skill-v2/configs/default.yaml#L18-L20)（精简模式阈值）
 
 **执行逻辑**：
 
@@ -273,7 +273,7 @@
 
 ### Step 3: 工作流选择 → full/medium/fast
 
-**代码位置**：[SKILL.md#L48-L54](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/SKILL.md#L48-L54)（执行入口）
+**代码位置**：[SKILL.md#L48-L54](file:///c:/Users/86156/.trae-cn/worktrees/skiller/develop-main-branch-YzihpS/.trae/skills/xuansto-skill-v2/SKILL.md#L48-L54)（执行入口）
 
 **执行逻辑**：
 
@@ -286,33 +286,44 @@
 ### Step 4: MCP+知识检索 → skill_analyze → knowledge_search → 注入Agent上下文
 
 **代码位置**：
-- [skill_tools.py#L60-L78](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/scripts/knowledge_server/skill_tools.py#L60-L78)（handle方法）
-- [tools/skill_analyze.py](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/scripts/knowledge_server/tools/skill_analyze.py)
-- [tools/knowledge_inject.py](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/scripts/knowledge_server/tools/knowledge_inject.py)
+- [server.py](file:///c:/Users/86156/.trae-cn/worktrees/skiller/develop-main-branch-YzihpS/xuansto-mcp-server/src/xuansto_mcp/server.py)（MCP Server入口，工具注册与Hook拦截）
+- [tools/skill_analyze.py](file:///c:/Users/86156/.trae-cn/worktrees/skiller/develop-main-branch-YzihpS/xuansto-mcp-server/src/xuansto_mcp/tools/skill_analyze.py)
+- [tools/knowledge_inject.py](file:///c:/Users/86156/.trae-cn/worktrees/skiller/develop-main-branch-YzihpS/xuansto-mcp-server/src/xuansto_mcp/tools/knowledge_inject.py)
+- [core/search_engine.py](file:///c:/Users/86156/.trae-cn/worktrees/skiller/develop-main-branch-YzihpS/xuansto-mcp-server/src/xuansto_mcp/core/search_engine.py)（搜索引擎架构）
 
 **执行逻辑**：
 
 1. `skill_analyze(skill_path, depth)` → 分析项目结构，返回技术栈、文件统计
-2. `knowledge_search(query, top_k=5, search_type="hybrid")` → 三层知识库检索
-   - hybrid：语义+关键词混合（默认）
-   - semantic_only：纯语义搜索（需embedding）
-   - keyword_only：纯关键词搜索（FTS5）
+2. `knowledge_search(query, top_k=5, search_type="hybrid")` → 多引擎知识库检索
+   - hybrid：语义+关键词混合（默认，权重0.6语义+0.4 BM25）
+   - semantic_only：纯ChromaDB语义搜索
+   - keyword_only：纯关键词搜索（SQLite FTS5 BM25 / SimpleSearchEngine）
 3. `knowledge_inject(content, scope)` → 将检索结果注入Agent上下文
-4. 知识检索降级链：ChromaDB → SQLite FTS → 关键词匹配
+4. 知识检索降级链：ChromaDB(hybrid) → SQLite FTS5(BM25) → SimpleSearchEngine(文件关键词匹配)
+
+**搜索引擎架构**（代码位置：[core/search_engine.py](file:///c:/Users/86156/.trae-cn/worktrees/skiller/develop-main-branch-YzihpS/xuansto-mcp-server/src/xuansto_mcp/core/search_engine.py)）：
+
+| 引擎 | 类名 | 搜索方式 | 降级条件 |
+|------|------|----------|----------|
+| chromadb | ChromaDBSearchEngine | 向量语义搜索 | ImportError/运行时异常 |
+| sqlite_fts5 | SQLiteFTSSearchEngine | FTS5 BM25全文检索 | OperationalError |
+| simple | SimpleSearchEngine | 文件关键词匹配 | 始终可用 |
+| hybrid | HybridSearchEngine | ChromaDB(0.6)+FTS5(0.4)混合 | ChromaDB不可用时降级到FTS5 |
+
+自动检测逻辑：ChromaDB可用+SQLite存在 → hybrid；ChromaDB可用+SQLite不存在 → chromadb；ChromaDB不可用+SQLite存在 → sqlite_fts5；均不可用 → simple
 
 ### Step 5: 执行Phase 0 → 按Phase顺序推进
 
 **代码位置**：
-- [progressive_loader.py#L113-L129](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/scripts/knowledge_server/progressive_loader.py#L113-L129)（COMMAND_PHASE_MAP + PHASE_SKILL_MAP）
-- [skill_tools.py#L80-L92](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/scripts/knowledge_server/skill_tools.py#L80-L92)（_try_advance_phase）
+- [tools/resource_load_status.py](file:///c:/Users/86156/.trae-cn/worktrees/skiller/develop-main-branch-YzihpS/xuansto-mcp-server/src/xuansto_mcp/tools/resource_load_status.py)（渐进式加载状态管理）
+- [resources/skill_resources.py#L198-L351](file:///c:/Users/86156/.trae-cn/worktrees/skiller/develop-main-branch-YzihpS/xuansto-mcp-server/src/xuansto_mcp/resources/skill_resources.py#L198-L351)（xuansto://loading/status Resource）
 
 **执行逻辑**：
 
-1. 工具执行成功后，`SkillToolHandler.handle()` 调用 `_try_advance_phase(tool_name)`
-2. 通过 `TOOL_COMMAND_MAP` 映射工具→命令
-3. 通过 `COMMAND_PHASE_MAP` 映射命令→目标加载阶段
-4. 如果目标阶段 > 当前阶段，调用 `ProgressiveLoader.advance_phase()` 推进
-5. 推进时自动加载新阶段的资源列表
+1. 工具执行成功后，`server.py` 中 `_with_hook_interception()` 处理工具调用
+2. 通过 `resource_load_status` 工具管理渐进式加载阶段推进
+3. 推进时自动加载新阶段的资源列表
+4. `xuansto://loading/status` Resource 提供只读加载状态快照
 
 **命令→阶段推进映射**：
 
@@ -397,7 +408,7 @@
 
 ### 4.1 四阶段Token预算
 
-**代码位置**：[constraints.yaml#L15-L35](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/constraints.yaml#L15-L35) + [progressive_loader.py#L20-L25](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/scripts/knowledge_server/progressive_loader.py#L20-L25)
+**代码位置**：[constraints.yaml](file:///c:/Users/86156/.trae-cn/worktrees/skiller/develop-main-branch-YzihpS/.trae/skills/xuansto-skill-v2/constraints.yaml) + [resources/skill_resources.py#L198-L351](file:///c:/Users/86156/.trae-cn/worktrees/skiller/develop-main-branch-YzihpS/xuansto-mcp-server/src/xuansto_mcp/resources/skill_resources.py#L198-L351)
 
 | 加载阶段 | 触发条件 | 加载内容 | Token预算 | 累计预算 |
 |----------|----------|----------|-----------|----------|
@@ -408,7 +419,7 @@
 
 ### 4.2 资源优先级
 
-**代码位置**：[constraints.yaml#L37-L53](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/constraints.yaml#L37-L53)
+**代码位置**：[constraints.yaml](file:///c:/Users/86156/.trae-cn/worktrees/skiller/develop-main-branch-YzihpS/.trae/skills/xuansto-skill-v2/constraints.yaml)
 
 | 优先级 | 名称 | 包含内容 | 加载阶段 |
 |--------|------|----------|----------|
@@ -419,7 +430,7 @@
 
 ### 4.3 披露机制
 
-**代码位置**：[constraints.yaml#L83-L101](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/constraints.yaml#L83-L101) + [SKILL.md](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/SKILL.md) PHASE标记
+**代码位置**：[constraints.yaml](file:///c:/Users/86156/.trae-cn/worktrees/skiller/develop-main-branch-YzihpS/.trae/skills/xuansto-skill-v2/constraints.yaml) + [SKILL.md](file:///c:/Users/86156/.trae-cn/worktrees/skiller/develop-main-branch-YzihpS/.trae/skills/xuansto-skill-v2/SKILL.md) PHASE标记 + [resources/skill_resources.py#L198-L351](file:///c:/Users/86156/.trae-cn/worktrees/skiller/develop-main-branch-YzihpS/xuansto-mcp-server/src/xuansto_mcp/resources/skill_resources.py#L198-L351)
 
 SKILL.md通过HTML注释标记实现分段加载：
 
@@ -430,7 +441,7 @@ SKILL.md通过HTML注释标记实现分段加载：
 | `<!-- PHASE_2_START -->` ~ `<!-- PHASE_2_END -->` | L126-L220 | 完整命令路由表 + 完整Agent注册表 + 外部参考文件表 + MCP工具摘要表 |
 | `<!-- PHASE_3_START -->` ~ `<!-- PHASE_3_END -->` | L222-L249 | Hook系统说明 + 模型路由说明 + 关键规则 |
 
-**披露通知机制**（代码位置：[progressive_loader.py#L92-L104](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/scripts/knowledge_server/progressive_loader.py#L92-L104)）：
+**披露通知机制**（代码位置：[resources/skill_resources.py#L222-L286](file:///c:/Users/86156/.trae-cn/worktrees/skiller/develop-main-branch-YzihpS/xuansto-mcp-server/src/xuansto_mcp/resources/skill_resources.py#L222-L286)）：
 
 | 阶段 | 披露通知 | 升级提示 |
 |------|----------|----------|
@@ -441,7 +452,7 @@ SKILL.md通过HTML注释标记实现分段加载：
 
 ### 4.4 降级规则
 
-**代码位置**：[constraints.yaml#L154-L182](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/constraints.yaml#L154-L182) + [progressive_loader.py#L262-L289](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/scripts/knowledge_server/progressive_loader.py#L262-L289)
+**代码位置**：[constraints.yaml](file:///c:/Users/86156/.trae-cn/worktrees/skiller/develop-main-branch-YzihpS/.trae/skills/xuansto-skill-v2/constraints.yaml) + [core/degradation.py](file:///c:/Users/86156/.trae-cn/worktrees/skiller/develop-main-branch-YzihpS/xuansto-mcp-server/src/xuansto_mcp/core/degradation.py)
 
 | 功能 | 不可用阶段 | 降级行为 |
 |------|-----------|----------|
@@ -454,32 +465,40 @@ SKILL.md通过HTML注释标记实现分段加载：
 | Hook系统 | Phase 0, 1, 2 | 使用minimal配置(security-block仅)；Phase 3加载完整Hook系统 |
 | 模型路由 | Phase 0, 1, 2 | 默认使用standard路由；Phase 3加载完整模型路由说明 |
 
-**MCP工具降级链**（代码位置：[degradation.py#L172-L500](file:///c:/Users/86156/.trae-cn/worktrees/skiller/feat-develop-main-branch-oTKP5o/.trae/skills/xuansto-skill-v2/scripts/knowledge_server/degradation.py#L172-L500)）：
+**MCP工具降级链**（代码位置：[core/degradation.py#L650-L1068](file:///c:/Users/86156/.trae-cn/worktrees/skiller/develop-main-branch-YzihpS/xuansto-mcp-server/src/xuansto_mcp/core/degradation.py#L650-L1068)）：
 
 ```
-MCP工具调用 → 脚本降级(scripts/xxx.py --format json) → 内联降级(_inline_xxx) → 错误响应
+MCP工具调用 → 脚本降级(scripts/xxx.py --format json) → 内联降级(_try_inline_fallback) → 最小化响应
 ```
 
-14个MCP工具的降级映射：
+20个MCP工具的降级映射（FALLBACK_MAP）：
 
 | MCP工具 | 降级脚本 | 内联降级 |
 |---------|----------|----------|
-| skill_analyze | scripts/skill-test.py | — |
-| quality_gate_check | scripts/skill-test.py | — |
-| knowledge_search | scripts/knowledge-server.py | — |
-| knowledge_inject | scripts/knowledge_server/main.py | — |
-| spec_drift_detect | scripts/spec-drift-detector.py | _inline_spec_drift_detect |
-| security_scan | scripts/agentic-security-scanner.py | _inline_security_scan |
-| code_simplify | scripts/code-simplifier.py | _inline_code_simplify |
-| session_manage | scripts/init-session.py等 | — |
+| skill_analyze | scripts/skill-test.py | _inline_skill_analyze |
+| quality_gate_check | scripts/skill-test.py | _inline_quality_gate |
+| knowledge_search | scripts/knowledge-server.py | _inline_knowledge_search |
+| knowledge_inject | scripts/knowledge-server.py | _inline_knowledge_inject |
+| spec_drift_detect | scripts/spec-drift-detector.py | _inline_spec_drift |
+| security_scan | scripts/agentic-security-scanner.py | _inline_agentic_scan |
+| code_simplify | scripts/code-simplifier.py | _inline_simplify |
+| session_manage | scripts/init-session.py等 | _inline_session_manage |
 | workflow_dispatch | scripts/project-initializer.py | _inline_workflow_dispatch |
 | agent_status | scripts/skill-test.py | _inline_agent_status |
-| hook_manage | scripts/check-encoding.py等 | _inline_hook_manage |
+| hook_manage | 按hook名映射脚本 | _inline_hook_manage |
 | resource_load_status | — | _inline_resource_load_status |
-| context_compress | scripts/context-compressor.py | — |
+| context_compress | scripts/context-compressor.py | _inline_context_compress |
 | server_health | scripts/health-checker.py | _inline_server_health |
+| decision_log | scripts/decision-log.py | _inline_decision_log |
+| token_budget | scripts/token-budget-guard.py | _inline_token_budget |
+| project_init | scripts/project-initializer.py | _inline_project_init |
+| agent_manage | — | _inline_agent_manage |
+| metrics_report | scripts/test-reporter.py | _inline_metrics_report |
+| config_manage | — | _inline_config_manage |
 
-**知识检索降级链**：ChromaDB(hybrid) → SQLite FTS(keyword_only) → 文件搜索(file_search)
+**降级配置热重载**：`DegradationExecutor` 支持从 `data/fallback_config.yaml` 动态加载降级映射，通过 `start_fallback_watcher()` 守护线程监控配置变更（watchfiles优先，polling降级）。
+
+**知识检索降级链**：ChromaDB(hybrid) → SQLite FTS5(BM25) → SimpleSearchEngine(文件关键词匹配)
 
 ---
 
@@ -496,17 +515,21 @@ MCP工具调用 → 脚本降级(scripts/xxx.py --format json) → 内联降级(
 | default.yaml | `.trae/skills/xuansto-skill-v2/configs/default.yaml` | 编排器/质量门禁/安全/桌面等全量默认配置 | ⭐⭐⭐ 配置权威源 |
 | references/ | `.trae/skills/xuansto-skill-v2/references/` | 79+参考文档（含agent-details/57个Agent详情） | ⭐⭐ 知识库核心 |
 | .skill-config.yaml | `.trae/skills/xuansto-skill-v2/.skill-config.yaml` | 运行时配置（循环/规划/按需加载/知识服务） | ⭐⭐ 运行时核心 |
-| progressive_loader.py | `scripts/knowledge_server/progressive_loader.py` | 渐进式加载引擎 | ⭐⭐ 加载核心 |
-| degradation.py | `scripts/knowledge_server/degradation.py` | MCPToolFallback + DegradationManager | ⭐⭐ 降级核心 |
-| tools/ 子包 | `scripts/knowledge_server/tools/` | 15个独立工具模块 + __init__.py + _shared.py | ⭐⭐ 工具核心 |
+| server.py | `xuansto-mcp-server/src/xuansto_mcp/server.py` | MCP Server主入口，工具注册+Hook拦截+重试 | ⭐⭐⭐ 服务核心 |
+| degradation.py | `xuansto-mcp-server/src/xuansto_mcp/core/degradation.py` | DegradationManager + DegradationExecutor + FALLBACK_MAP | ⭐⭐ 降级核心 |
+| search_engine.py | `xuansto-mcp-server/src/xuansto_mcp/core/search_engine.py` | 4种搜索引擎(ChromaDB/FTS5/Simple/Hybrid) | ⭐⭐ 搜索核心 |
+| database.py | `xuansto-mcp-server/src/xuansto_mcp/core/database.py` | SQLite引擎(13张表+双写+一致性修复) | ⭐⭐ 持久化核心 |
+| hook_engine.py | `xuansto-mcp-server/src/xuansto_mcp/core/hook_engine.py` | HookEngine(8种HookType+动态注册+超时) | ⭐⭐ Hook核心 |
+| errors.py | `xuansto-mcp-server/src/xuansto_mcp/core/errors.py` | 统一错误响应+重试+异常分类 | ⭐⭐ 错误处理核心 |
+| schemas.py | `xuansto-mcp-server/src/xuansto_mcp/models/schemas.py` | 20个Pydantic输入Schema | ⭐⭐ Schema核心 |
+| skill_resources.py | `xuansto-mcp-server/src/xuansto_mcp/resources/skill_resources.py` | 25个MCP Resource注册 | ⭐⭐ Resource核心 |
+| tools/ 子包 | `xuansto-mcp-server/src/xuansto_mcp/tools/` | 20个独立工具模块 + __init__.py | ⭐⭐ 工具核心 |
 
 ### 5.2 需重写部分
 
 | 模块 | 当前状态 | 重写方向 |
 |------|----------|----------|
-| skill_tools.py | 已从2300+行拆分为74行委托模式，委托给 tools/ 子包 | ✅ 已完成拆分，当前为薄委托层 |
-| 降级映射 | MCPToolFallback原硬编码14个工具映射 | ✅ 已改为从constraints.yaml读取，失败回退硬编码 |
-| LoadingState | 已扩展degraded/degraded_from字段 | ✅ 已完成，支持降级感知 |
+| api_routes.py (根级+api/子包) | 两份完全相同的文件，仅6个HTTP端点 | 🔄 合并为单文件，扩展端点覆盖所有20个工具 |
 | 错误处理 | 部分工具返回字符串而非JSON（ARCH-11） | 🔄 计划v8.3.0统一为JSON格式 |
 | API Schema | HTTP API与MCP stdio两套接口无统一Schema（API-01） | 🔄 计划v8.3.0统一 |
 
@@ -515,8 +538,7 @@ MCP工具调用 → 脚本降级(scripts/xxx.py --format json) → 内联降级(
 | 模块 | 说明 | 废弃计划 |
 |------|------|----------|
 | v1 Skill文件 | agents/、commands/、workflows/等目录在v1和v2中同时存在（P3-01） | v8.5.0标记v1为archived |
-| 旧skill_tools.py单文件 | 已拆分为tools/子包，原文件仅保留委托 | 随v2稳定后移除 |
-| 旧resource_state.json v2格式 | 已升级到v3格式（新增phase字段） | 迁移完成后移除v2兼容 |
+| api_routes.py (根级) | 与api/api_routes.py完全重复 | 随api模块稳定后移除根级副本 |
 
 ---
 
@@ -540,25 +562,37 @@ graph TB
     end
 
     subgraph "MCP Server层"
-        MCP_SERVER["mcp_server.py<br/>MCP协议入口"]
-        SKILL_TOOLS["skill_tools.py<br/>SkillToolHandler<br/>(74行委托层)"]
-        TOOLS["tools/ 子包<br/>15个独立工具模块"]
-        SHARED["tools/_shared.py<br/>共享常量"]
-        TOOLS_INIT["tools/__init__.py<br/>TOOL_REGISTRY"]
-        PROGRESSIVE["progressive_loader.py<br/>渐进式加载引擎"]
-        DEGRADATION["degradation.py<br/>MCPToolFallback<br/>DegradationManager"]
-        CONFIG["config.py<br/>make_response等"]
-        DB_ENGINE["db_engine.py<br/>SQLite引擎"]
-        VECTOR["vector_engine.py<br/>ChromaDB引擎"]
-        EMBEDDING["embedding.py<br/>Embedding管理"]
-        HYBRID["hybrid_search.py<br/>混合搜索"]
-        SECURITY["security.py<br/>InputValidator"]
-        KB_CLIENT["kb_client.py<br/>知识库客户端"]
+        SERVER["server.py<br/>FastMCP入口+Hook拦截"]
+        TOOLS["tools/ 子包<br/>20个独立工具模块"]
+        TOOLS_INIT["tools/__init__.py<br/>__all__导出"]
+        RESOURCES["resources/skill_resources.py<br/>25个MCP Resource"]
+        SCHEMAS["models/schemas.py<br/>20个Pydantic输入Schema"]
+        CONFIG_MODELS["models/config_models.py<br/>配置Pydantic模型"]
+        HOOK_ENGINE["core/hook_engine.py<br/>HookEngine<br/>8种HookType"]
+        RATE_LIMITER["core/rate_limiter.py<br/>TokenBucket限流"]
+        DEGRADATION["core/degradation.py<br/>DegradationManager<br/>DegradationExecutor<br/>FALLBACK_MAP(20)"]
+        CONFIG["core/config.py<br/>路径/配置/热重载"]
+        DB["core/database.py<br/>SQLite引擎(13张表)"]
+        SEARCH["core/search_engine.py<br/>4种搜索引擎"]
+        ERRORS["core/errors.py<br/>统一错误+重试+异常分类"]
+        NOTIFICATIONS["core/notifications.py<br/>通知回调"]
+        AUDIT["core/audit_logger.py<br/>审计日志"]
+        CACHE["core/cache.py<br/>LRUCache"]
+        VALIDATOR["core/validator.py<br/>路径安全验证"]
+        CRYPTO["core/crypto.py<br/>加密工具"]
+        PROTOCOL["core/protocol.py<br/>协议定义"]
+        METRICS["core/metrics.py<br/>指标收集"]
+        SUBPROCESS["core/subprocess_utils.py<br/>子进程工具"]
+        LOGGING["core/logging_config.py<br/>日志配置"]
+    end
+
+    subgraph "HTTP API层"
+        API_ROUTES["api/api_routes.py<br/>FastAPI HTTP端点(6个)"]
+        API_ROOT["api_routes.py<br/>根级副本(重复)"]
     end
 
     subgraph "降级脚本层"
         SCRIPTS["scripts/*.py<br/>50+降级脚本"]
-        SCRIPT_KB["scripts/knowledge_server/<br/>MCP Server主程序"]
     end
 
     SKILL --> CONSTRAINTS
@@ -574,51 +608,69 @@ graph TB
     ROUTES --> COMMANDS_MD
     REGISTRY --> AGENTS_MD
 
-    MCP_SERVER --> SKILL_TOOLS
-    MCP_SERVER --> PROGRESSIVE
-    MCP_SERVER --> SECURITY
-    SKILL_TOOLS --> TOOLS
-    SKILL_TOOLS --> DEGRADATION
+    SERVER --> TOOLS
+    SERVER --> RESOURCES
+    SERVER --> HOOK_ENGINE
+    SERVER --> RATE_LIMITER
+    SERVER --> ERRORS
     TOOLS --> TOOLS_INIT
-    TOOLS --> SHARED
-    TOOLS_INIT --> SKILL_TOOLS
+    TOOLS --> DB
+    TOOLS --> SEARCH
+    TOOLS --> CONFIG
+    TOOLS --> DEGRADATION
+    TOOLS --> CACHE
+    TOOLS --> VALIDATOR
 
-    DEGRADATION --> CONSTRAINTS
     DEGRADATION --> CONFIG
-    DEGRADATION --> EMBEDDING
+    DEGRADATION --> ERRORS
     DEGRADATION --> SCRIPTS
+    DEGRADATION -->|"fallback_config.yaml热重载"| CONFIG
 
-    PROGRESSIVE --> CONFIG
-    SKILL_TOOLS --> PROGRESSIVE
+    HOOK_ENGINE --> HOOKS
+    HOOK_ENGINE --> LOGGING
 
-    SCRIPT_KB --> DB_ENGINE
-    SCRIPT_KB --> VECTOR
-    SCRIPT_KB --> HYBRID
-    SCRIPT_KB --> EMBEDDING
-    SCRIPT_KB --> KB_CLIENT
-    SCRIPT_KB --> SECURITY
+    RESOURCES --> CONFIG
+    RESOURCES --> DB
+    RESOURCES --> VALIDATOR
+    RESOURCES --> DEGRADATION
 
-    SKILL -.->|"MCP工具调用"| MCP_SERVER
+    CONFIG -->|"watchfiles/polling热重载"| CONSTRAINTS
+    CONFIG --> SKILL_CONFIG
+
+    API_ROUTES --> CONFIG
+    API_ROUTES --> SEARCH
+    API_ROUTES --> ERRORS
+    API_ROOT --> CONFIG
+    API_ROOT --> SEARCH
+    API_ROOT --> ERRORS
+
+    SKILL -.->|"MCP工具调用<br/>(stdio JSON-RPC)"| SERVER
     SKILL -.->|"脚本降级"| SCRIPTS
-    MCP_SERVER -.->|"Resource暴露<br/>(计划v8.2.0)"| SKILL
+    SERVER -.->|"Resource暴露"| SKILL
 
     style SKILL fill:#e1f5fe,stroke:#0288d1,stroke-width:2px
-    style MCP_SERVER fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style SERVER fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
     style DEGRADATION fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
-    style PROGRESSIVE fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style SEARCH fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
     style TOOLS fill:#fce4ec,stroke:#c62828,stroke-width:2px
     style SCRIPTS fill:#f5f5f5,stroke:#616161,stroke-width:1px
+    style API_ROUTES fill:#e0f2f1,stroke:#00695c,stroke-width:1px
 ```
 
 **依赖关系说明**：
 
 1. **SKILL.md → 配置文件**：SKILL.md通过`{{include:}}`指令内联加载constraints.yaml、routes.yaml、registry.yaml、triggers.yaml
 2. **SKILL.md → references/**：79+参考文档通过外部引用按需加载，按P0/P1/P2优先级分组
-3. **MCP Server → tools/**：15个Skill工具模块通过TOOL_REGISTRY动态注册，skill_tools.py作为薄委托层
-4. **MCP Server → core模块**：config.py提供响应构造，security.py提供输入验证，progressive_loader.py管理加载阶段
-5. **MCP Server → degradation.py**：MCPToolFallback从constraints.yaml读取降级映射，失败回退硬编码；DegradationManager管理知识检索降级链
-6. **Skill → MCP Server**：Skill层通过MCP协议调用工具，工具执行后自动推进加载阶段
-7. **Skill → scripts/**：MCP不可用时降级到scripts/目录Python脚本，脚本返回JSON格式结果
+3. **server.py → tools/**：20个工具模块通过`register(mcp)`动态注册，server.py替换`mcp.tool`为`_tool_with_hooks`实现Hook拦截
+4. **server.py → core模块**：hook_engine.py提供Hook拦截，rate_limiter.py提供限流，errors.py提供重试和错误响应，degradation.py提供降级
+5. **server.py → resources/**：skill_resources.py通过`register(mcp)`注册25个MCP Resource
+6. **degradation.py → scripts/**：FALLBACK_MAP映射20个工具到脚本降级函数，支持fallback_config.yaml热重载
+7. **degradation.py → DegradationManager**：监控4个组件(search_engine/knowledge_base/hooks/resources)健康状态，指数退避恢复
+8. **config.py → 热重载**：watchfiles优先/polling降级监控.xuansto-config.yaml、constraints.yaml、.skill-config.yaml变更
+9. **search_engine.py**：4种搜索引擎(ChromaDB/FTS5/Simple/Hybrid)，自动检测最佳引擎
+10. **api_routes.py**：FastAPI HTTP端点(6个)，与MCP stdio并行提供HTTP访问
+11. **Skill → MCP Server**：Skill层通过MCP协议(stdio JSON-RPC)调用工具
+12. **Skill → scripts/**：MCP不可用时降级到scripts/目录Python脚本
 
 ---
 
@@ -638,7 +690,7 @@ graph TB
 | **总计** | **30** | **13** | **17** |
 
 关键未修复问题：
-- ARCH-05: MCP Server未暴露Resource（计划v8.2.0）
+- ARCH-05: MCP Server未暴露Resource（计划v8.2.0）→ 已实现25个Resource
 - ARCH-11: 错误处理不统一（计划v8.3.0）
 - DB-01/02: 双写一致性风险（计划v8.3.0）
 - SKILL-02: SKELETON阶段无可用命令（计划v8.2.0）

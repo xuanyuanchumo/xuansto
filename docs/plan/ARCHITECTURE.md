@@ -1,7 +1,7 @@
 # Xuansto Skill v2 架构文档
 
-> 版本：8.0.0 | 更新日期：2026-05-25
-> 分析范围：SKILL.md、57个Agent定义、31个命令、20个MCP工具、降级脚本、渐进式加载、MCP Server资源层
+> 版本：8.0.0 | 更新日期：2026-05-26
+> 分析范围：SKILL.md、57个Agent定义、31个命令、20个MCP工具、22+个MCP资源、2个MCP Prompts、降级脚本、渐进式加载、MCP Server资源层
 
 ---
 
@@ -31,8 +31,8 @@ Xuansto Skill v2 是一个**多Agent自主开发编排引擎**，通过 `xuansto
 | 质量门禁 | 54 项 | 分布在 Phase 0~8，包含编码检查、测试覆盖率、安全扫描、规格一致性等 |
 | 命令 | 31 个 | 从 `/init` 到 `/deploy`，覆盖全生命周期 |
 | MCP 工具 | 20 个 | 通过 `xuansto-mcp-server` 暴露的原子工具 |
-| MCP 资源 | 18+ 个 | 通过 `xuansto://` URI 模式暴露的只读状态快照 |
-| MCP Prompts | 2 个 | `xuansto_workflow` 和 `xuansto_analysis` |
+| MCP 资源 | 22+ 个 | 通过 `xuansto://` URI 模式暴露的只读状态快照，含订阅机制 |
+| MCP Prompts | 2 个 | `xuansto_workflow` 和 `xuansto_analysis`，已实现 |
 | 工作流阶段 | 9 个 | Phase 0(初始化) → Phase 8(部署交付) |
 | 降级脚本 | 14+ 个 | MCP 不可用时自动降级到 `scripts/` 目录 Python 脚本 |
 
@@ -189,6 +189,7 @@ Xuansto Skill v2 是一个**多Agent自主开发编排引擎**，通过 `xuansto
 │
 ├── memory/
 │   ├── fixes/                        # 修复记忆
+│   │   ├── README.md
 │   │   └── refactoring/README.md
 │   └── patterns/                     # 模式记忆
 │       └── testing/README.md
@@ -251,6 +252,7 @@ Xuansto Skill v2 是一个**多Agent自主开发编排引擎**，通过 `xuansto
 │
 ├── scripts/                          # 降级脚本 + 工具脚本
 │   ├── knowledge_server/             # 知识库服务器(独立HTTP服务)
+│   │   ├── __init__.py               # 包初始化
 │   │   ├── tools/                    # 15个工具处理器(拆分自skill_tools.py)
 │   │   │   ├── __init__.py           # TOOL_REGISTRY动态注册
 │   │   │   ├── _shared.py            # 共享常量和辅助函数
@@ -296,6 +298,11 @@ Xuansto Skill v2 是一个**多Agent自主开发编排引擎**，通过 `xuansto
 │   │   ├── skill_tools.py            # 工具处理器委托(74行)
 │   │   ├── sync.py                   # 同步模块
 │   │   ├── tech_stack_detector.py    # 技术栈检测
+│   │   ├── test_auto_retrieve.py     # 自动检索测试
+│   │   ├── test_context_formatter_optimization.py # 上下文格式化优化测试
+│   │   ├── test_kb_client.py         # 知识库客户端测试
+│   │   ├── test_progressive_search.py # 渐进式搜索测试
+│   │   ├── test_web_search.py        # Web搜索测试
 │   │   ├── vector_engine.py          # 向量引擎
 │   │   ├── web_search.py             # Web搜索
 │   │   └── websocket_manager.py      # WebSocket管理
@@ -406,8 +413,12 @@ xuansto-mcp-server/
 │
 ├── src/xuansto_mcp/
 │   ├── __init__.py
-│   ├── server.py                     # MCP服务器主入口：FastMCP实例、Hook拦截、工具注册、启动流程
+│   ├── server.py                     # MCP服务器主入口：FastMCP实例、Hook拦截、工具注册、Prompt注册、启动流程
 │   ├── cli.py                        # CLI入口
+│   ├── api_routes.py                 # API路由(根级兼容层)
+│   │
+│   ├── api/                          # HTTP API层
+│   │   └── api_routes.py             # API路由定义
 │   │
 │   ├── core/                         # 核心基础设施
 │   │   ├── __init__.py
@@ -425,6 +436,7 @@ xuansto-mcp-server/
 │   │   ├── rate_limiter.py           # 速率限制
 │   │   ├── search_engine.py          # 搜索引擎：ChromaDB→SQLite FTS→关键词
 │   │   ├── subprocess_utils.py       # 子进程工具
+│   │   ├── audit_logger.py           # 审计日志：工具调用审计记录(JSONL持久化)
 │   │   └── validator.py              # 路径安全验证
 │   │
 │   ├── models/                       # 数据模型
@@ -432,9 +444,9 @@ xuansto-mcp-server/
 │   │   ├── config_models.py          # Pydantic配置模型(SkillConfigModel)
 │   │   └── schemas.py                # JSON Schema定义
 │   │
-│   ├── resources/                    # MCP资源层(18+个Resource)
+│   ├── resources/                    # MCP资源层(22+个Resource)
 │   │   ├── __init__.py
-│   │   └── skill_resources.py        # 资源注册：xuansto:// URI模式，含订阅机制
+│   │   └── skill_resources.py        # 资源注册：xuansto:// URI模式，含订阅机制、25个资源端点
 │   │
 │   ├── tools/                        # MCP工具层(20个Tool)
 │   │   ├── __init__.py               # 工具导出列表
@@ -476,10 +488,36 @@ xuansto-mcp-server/
     │   ├── degradation_behavior.json
     │   └── tool_standard_response.json
     ├── integration/                  # 集成测试
+    │   ├── conftest.py
+    │   └── test_mcp_tool_integration.py
     ├── test_integration/             # 组件集成测试
+    │   ├── test_degradation_chain.py
+    │   ├── test_hook_interception.py
+    │   ├── test_resource_access.py
+    │   └── test_skill_mcp_protocol.py
     ├── test_e2e/                     # 端到端测试
+    │   ├── test_command_flows.py
+    │   ├── test_degradation_scenarios.py
+    │   └── test_session_recovery.py
     ├── test_tools/                   # 工具单元测试
+    │   ├── conftest.py
+    │   ├── test_agent_status.py
+    │   ├── test_context_compress.py
+    │   ├── test_decision_log.py
+    │   ├── test_hook_manage.py
+    │   ├── test_knowledge_search.py
+    │   ├── test_project_init.py
+    │   ├── test_quality_gate_check.py
+    │   ├── test_resource_load_status.py
+    │   ├── test_security_scan.py
+    │   ├── test_server_health.py
+    │   ├── test_session_manage.py
+    │   ├── test_skill_analyze.py
+    │   ├── test_token_budget.py
+    │   └── test_workflow_dispatch.py
     ├── test_compatibility/           # 兼容性测试
+    │   ├── test_api_version_negotiation.py
+    │   └── test_version_compatibility.py
     └── test_*.py                     # 100+独立测试文件
 ```
 
@@ -522,7 +560,7 @@ Skill 层是面向 LLM 的 Prompt Engineering 层，负责将开发工作流编�
 
 执行层是 MCP Server 和降级脚本组成的运行时基础设施。
 
-**MCP Server**（20 个工具，定义在 `xuansto-mcp-server/src/xuansto_mcp/tools/`）：
+**MCP Server**（20 个工具 + 2 个 Prompt，定义在 `xuansto-mcp-server/src/xuansto_mcp/`）：
 
 | 工具 | 文件 | 功能 | 降级脚本 |
 |------|------|------|----------|
@@ -547,6 +585,13 @@ Skill 层是面向 LLM 的 Prompt Engineering 层，负责将开发工作流编�
 | metrics_report | metrics_report.py | 指标报告 | — |
 | config_manage | config_manage.py | 配置管理 | — |
 
+**MCP Prompts**（2 个，定义在 [server.py](../../xuansto-mcp-server/src/xuansto_mcp/server.py)）：
+
+| Prompt | 参数 | 功能 |
+|--------|------|------|
+| xuansto_workflow | task_description: str | 工作流启动提示，接收任务描述 |
+| xuansto_analysis | skill_path: str | 项目分析提示，接收Skill路径 |
+
 **降级链**（定义在 [constraints.yaml](../../.trae/skills/xuansto-skill-v2/constraints.yaml) 的 `degradation` 节）：
 
 ```
@@ -562,7 +607,7 @@ MCP工具调用 → 脚本降级(subprocess.run) → 内联降级(_inline_*) →
 
 资源层提供只读状态快照，通过 `xuansto://` URI 模式暴露（定义在 [skill_resources.py](../../xuansto-mcp-server/src/xuansto_mcp/resources/skill_resources.py)）。
 
-**MCP Resources**（18+ 个）：
+**MCP Resources**（22+ 个）：
 
 | URI 模式 | 功能 |
 |----------|------|
@@ -576,7 +621,8 @@ MCP工具调用 → 脚本降级(subprocess.run) → 内联降级(_inline_*) →
 | `xuansto://templates/index` | 模板索引 |
 | `xuansto://sessions/latest` | 最新会话记录 |
 | `xuansto://sessions/{session_id}` | 指定会话记录(参数化) |
-| `xuansto://agents/{layer}/{name}` | Agent定义(参数化) |
+| `xuansto://agents/{name}` | Agent定义(按名称，参数化) |
+| `xuansto://agents/{layer}/{name}` | Agent定义(按层+名称，参数化) |
 | `xuansto://agents/registry` | Agent注册表(JSON) |
 | `xuansto://loading/status` | 渐进式加载状态 |
 | `xuansto://metrics/summary` | 指标摘要 |
@@ -585,9 +631,11 @@ MCP工具调用 → 脚本降级(subprocess.run) → 内联降级(_inline_*) →
 | `xuansto://workflows/definitions` | 工作流定义 |
 | `xuansto://hooks/definitions` | Hook定义 |
 | `xuansto://knowledge/status` | 知识库状态 |
+| `xuansto://knowledge/stats` | 知识库统计(含按scope分组) |
 | `xuansto://commands/routes` | 命令路由 |
 | `xuansto://session/state` | 会话状态 |
 | `xuansto://health/status` | 健康状态 |
+| `xuansto://audit/log` | 审计日志(最近50条) |
 
 **references/ 目录**（79+ 文档）：包含 57 个 Agent 详细定义、54 项质量门禁、20 个 MCP 工具参数、9 阶段工作流、安全框架、编码标准等。
 
@@ -643,6 +691,7 @@ sequenceDiagram
     participant MCP as MCP Server(server.py)
     participant Hook as Hook引擎(hook_engine.py)
     participant Tool as 工具执行(tools/*.py)
+    participant Audit as 审计日志(audit_logger.py)
     participant Script as 降级脚本(scripts/*.py)
     participant FS as 文件系统
 
@@ -657,14 +706,17 @@ sequenceDiagram
         Hook-->>MCP: Pre-Hook结果(status: pass)
         MCP->>Tool: 执行工具逻辑
         Tool-->>MCP: 工具结果
+        MCP->>Audit: 记录工具调用审计日志
         MCP->>Hook: 执行Post-Hook(auto-format, encoding-check)
         Hook-->>MCP: Post-Hook结果
         MCP-->>Skill: 返回工具结果(含hook_errors)
     else Pre-Hook阻断(security-block)
         Hook-->>MCP: Pre-Hook结果(status: block)
+        MCP->>Audit: 记录阻断审计日志
         MCP-->>Skill: 返回阻断结果(action: blocked)
     else Pre-Hook失败(安全Hook异常)
         Hook-->>MCP: 安全Hook执行失败
+        MCP->>Audit: 记录安全阻断审计日志
         MCP-->>Skill: 返回安全阻断(block_reason: Security hook execution failed)
     end
 
@@ -744,8 +796,9 @@ flowchart LR
 | **数据存储** | 只读参考文档(references/) | 读写数据库(SQLite + ChromaDB) |
 | **交互方式** | 声明式(SKILL.md + YAML配置) | 命令式(Python工具函数) |
 | **加载控制** | PHASE标记分段加载 | resource_load_status工具追踪 |
-| **降级策略** | 声明降级规则(constraints.yaml) | 实现降级逻辑(degradation.py) |
+| **降级策略** | 声明降级规则(constraints.yaml) | 实现降级逻辑(degradation.py) + 三级降级链(MCP→script→inline) |
 | **Hook管理** | 声明Hook配置(hooks.json) | 实现Hook引擎(hook_engine.py) |
+| **审计日志** | — | 实现审计记录(audit_logger.py)，JSONL持久化 |
 | **版本兼容** | SKILL.md声明compatible_mcp_server | server.py实现API版本协商 |
 
 ### 5.2 MCP Server 边界与接口
@@ -770,7 +823,7 @@ flowchart LR
 │  ├── 决策:     decision_log, token_budget                │
 │  └── 指标:     metrics_report                            │
 │                                                         │
-│  Resources (18+个, 只读)                                 │
+│  Resources (22+个, 只读)                                │
 │  ├── 配置: xuansto://config/skill, skill/config          │
 │  ├── 参考: xuansto://references/*                        │
 │  ├── 模板: xuansto://templates/*                         │
@@ -782,9 +835,10 @@ flowchart LR
 │  ├── 门禁: xuansto://gates/definitions                   │
 │  ├── 工作流: xuansto://workflows/definitions             │
 │  ├── Hook: xuansto://hooks/definitions                   │
-│  ├── 知识: xuansto://knowledge/status                    │
+│  ├── 知识: xuansto://knowledge/status, knowledge/stats   │
 │  ├── 命令: xuansto://commands/routes                     │
-│  └── 健康: xuansto://health/status                       │
+│  ├── 健康: xuansto://health/status                       │
+│  └── 审计: xuansto://audit/log                           │
 │                                                         │
 │  Prompts (2个)                                           │
 │  ├── xuansto_workflow: 工作流启动提示                     │
@@ -824,10 +878,14 @@ flowchart LR
 
 | 维度 | 当前架构 | 目标架构 | 差距 | 计划版本 |
 |------|----------|----------|------|----------|
-| **Resource 暴露** | 18+ 个 Resource 已实现，含订阅机制 | 完整的 URI 订阅 + 推送通知 | 订阅已实现但推送通知未实现 | v8.2.0 |
+| **Resource 暴露** | ✅ 22+ 个 Resource 已实现，含订阅机制、25个资源端点 | 完整的 URI 订阅 + 推送通知 | 订阅已实现但推送通知未实现 | v8.2.0 |
+| **MCP Prompts** | ✅ 2 个 Prompt 已实现(xuansto_workflow, xuansto_analysis) | 完整的 Prompt 模板库 | 当前仅2个基础Prompt，缺少参数化模板 | v8.2.0 |
+| **渐进式加载** | ✅ 4 Phase 已实现(SKELETON→FUNCTIONAL→ENHANCED→FULL)，resource_load_status工具追踪 | 完整的按需加载 + Token-Phase关联 | Token预算与LoadPhase尚未关联 | v8.4.0 |
+| **降级机制** | ✅ 三级降级已实现(MCP→script→inline)，degradation.py管理 | 完整的降级 + 自动恢复 + 对账 | 降级自动恢复逻辑待完善 | v8.3.0 |
+| **Tool Registry** | ✅ TOOL_REGISTRY动态注册已实现(scripts/knowledge_server/tools/__init__.py) | 完整的动态注册 + 热插拔 | 当前为静态导入，不支持运行时热插拔 | v8.5.0 |
+| **审计日志** | ✅ audit_logger.py已实现，JSONL持久化，server.py集成 | 完整的审计日志 + 查询API | 已实现基础审计，查询API待增强 | v8.3.0 |
 | **错误处理** | 部分工具返回字符串而非 JSON | 统一所有工具返回 JSON 格式 | 不统一，调用方需适配多种格式 | v8.3.0 |
 | **持久化** | Agent/工作流状态仅内存存储 | Agent + 工作流状态持久化到 SQLite | 重启后状态丢失 | v8.4.0 |
-| **审计日志** | MCP 工具调用无审计记录 | 完整的工具调用审计日志 | 无法追踪工具调用历史 | v8.3.0 |
 | **Token-Phase 关联** | Token 预算独立于加载阶段管理 | Token 预算与 LoadPhase 关联 | 无法根据加载阶段自动调整 Token 分配 | v8.4.0 |
 | **Hook 超时** | Hook 执行无超时限制 | Hook 执行添加超时控制 | 恶意或错误 Hook 可能无限阻塞 | v8.4.0 |
 | **配置热更新** | 已实现(watchfiles/polling)，但 constraints.yaml 和 .skill-config.yaml 变更需重启 | 所有配置文件支持热更新 | 部分配置仍需重启 | v8.4.0 |
@@ -880,7 +938,7 @@ flowchart LR
 | **路径遍历** | 恶意输入可能访问任意文件 | [skill_resources.py](../../xuansto-mcp-server/src/xuansto_mcp/resources/skill_resources.py) 使用 `validate_path_safety()` 验证路径安全；所有参数化 Resource 检查路径是否在允许的基础目录内 |
 | **速率限制** | 工具调用可能被滥用 | [server.py](../../xuansto-mcp-server/src/xuansto_mcp/server.py) 集成 `check_rate_limit()` 检查 |
 | **安全硬门禁** | 生产部署等关键操作需人工确认 | [configs/default.yaml](../../.trae/skills/xuansto-skill-v2/configs/default.yaml) 定义 `security_hard_gates: [production_deploy, secret_key_rotation, database_schema_destructive_change]` |
-| **Hook 无超时** | 恶意或错误 Hook 可能无限阻塞 | [PROBLEM.md](../../.trae/skills/xuansto-skill-v2/PROBLEM.md) 记录 ARCH-09：Hook 执行无超时保护，计划在 v8.4.0 实现 |
+| **Hook 无超时** | 恶意或错误 Hook 可能无限阻塞 | [PROBLEM.md](../../.trae/skills/xuansto-skill-v2/PROBLEM.md) 记录 ARCH-09：Hook 执行无超时保护，计划在 v8.4.0 实现；[audit_logger.py](../../xuansto-mcp-server/src/xuansto_mcp/core/audit_logger.py) 已记录 Hook 执行延迟 |
 
 ---
 
@@ -897,4 +955,7 @@ flowchart LR
 > - [server.py](../../xuansto-mcp-server/src/xuansto_mcp/server.py)
 > - [skill_resources.py](../../xuansto-mcp-server/src/xuansto_mcp/resources/skill_resources.py)
 > - [config.py](../../xuansto-mcp-server/src/xuansto_mcp/core/config.py)
+> - [audit_logger.py](../../xuansto-mcp-server/src/xuansto_mcp/core/audit_logger.py)
+> - [degradation.py](../../xuansto-mcp-server/src/xuansto_mcp/core/degradation.py)
 > - [pyproject.toml](../../xuansto-mcp-server/pyproject.toml)
+> - [tools/__init__.py](../../.trae/skills/xuansto-skill-v2/scripts/knowledge_server/tools/__init__.py)

@@ -9,6 +9,11 @@ on:
       - 'scripts/**'
   pull_request:
     branches: [main, develop, develop/v8]
+    paths:
+      - '.trae/skills/xuansto-skill-v2/**'
+      - 'xuansto-mcp-server/**'
+      - 'scripts/**'
+      - '.github/**'
   schedule:
     - cron: '0 6 * * *'
 

@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS knowledge_entries (
     content TEXT NOT NULL DEFAULT '',
     scope TEXT NOT NULL DEFAULT 'general',
     tags_json TEXT NOT NULL DEFAULT '[]',
+    metadata_json TEXT NOT NULL DEFAULT '{}',
     sync_status TEXT NOT NULL DEFAULT 'ready',
     deleted_at TEXT,
     created_at TEXT NOT NULL,
@@ -426,6 +427,79 @@ def reconcile_knowledge_stores(
         "repaired": repaired,
         "failed": failed,
         "success_rate": round(success_rate, 1),
+    }
+
+
+def cleanup_stale_pending_entries(
+    max_age_hours: int = 24,
+    chroma_write_fn: Callable[[str, dict[str, Any]], bool] | None = None,
+) -> dict[str, Any]:
+    from datetime import timedelta
+
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=max_age_hours)).isoformat()
+    conn = get_db()
+    try:
+        cursor = conn.execute(
+            "SELECT * FROM knowledge_entries WHERE sync_status != 'ready' AND updated_at < ? AND deleted_at IS NULL",
+            (cutoff,),
+        )
+        stale_entries = [dict(row) for row in cursor.fetchall()]
+    finally:
+        conn.close()
+
+    retried = 0
+    purged = 0
+    failed = 0
+
+    for entry in stale_entries:
+        entry_id = entry.get("id", "")
+        entry_data: dict[str, Any] = {}
+        for key, value in entry.items():
+            if key.endswith("_json") and isinstance(value, str):
+                try:
+                    entry_data[key] = json.loads(value)
+                except (json.JSONDecodeError, TypeError):
+                    entry_data[key] = value
+            else:
+                entry_data[key] = value
+
+        if chroma_write_fn is not None:
+            try:
+                success = chroma_write_fn(entry_id, entry_data)
+                if success:
+                    entry_data["sync_status"] = "ready"
+                    persist_state("knowledge_entries", {"id": entry_id, **entry_data})
+                    persist_state("reconciliation_log", {
+                        "entry_id": entry_id,
+                        "store": "chromadb",
+                        "issue_type": "stale_retry_success",
+                        "details_json": {"original_status": entry.get("sync_status", "unknown"), "age_hours": max_age_hours},
+                        "resolved": 1,
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    })
+                    retried += 1
+                    continue
+            except Exception:
+                pass
+
+        now = datetime.now(timezone.utc).isoformat()
+        persist_state("knowledge_entries", {"id": entry_id, "deleted_at": now})
+        persist_state("reconciliation_log", {
+            "entry_id": entry_id,
+            "store": "chromadb",
+            "issue_type": "stale_purged",
+            "details_json": {"reason": "exceeded_max_age", "max_age_hours": max_age_hours},
+            "resolved": 1,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        purged += 1
+
+    total = len(stale_entries)
+    return {
+        "total_stale": total,
+        "retried": retried,
+        "purged": purged,
+        "failed": failed,
     }
 
 

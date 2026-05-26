@@ -250,8 +250,10 @@ _PHASE_TRANSITION_KEYS: dict[int, str] = {
     2: "enhanced_to_full",
 }
 
+SKELETON_ALLOWED_COMMANDS = ["/status", "/help", "/budget"]
+
 _PHASE_AVAILABLE_COMMANDS: dict[int, list[str]] = {
-    0: ["/status", "/help", "/budget"],
+    0: list(SKELETON_ALLOWED_COMMANDS),
     1: ["/sprint", "/clarify", "/plan", "/spec", "/design", "/implement", "/test", "/review", "/fix", "/accept", "/deploy", "/build", "/brainstorm", "/execute-plan", "/status", "/agent-status", "/init"],
     2: ["/sprint", "/clarify", "/plan", "/spec", "/design", "/implement", "/test", "/review", "/fix", "/accept", "/deploy", "/build", "/brainstorm", "/execute-plan", "/audit", "/build-desktop", "/release-desktop", "/refactor", "/simplify", "/loop", "/cancel-loop", "/learn", "/design-system", "/rollback", "/status", "/agent-status", "/init"],
     3: ["/sprint", "/clarify", "/plan", "/spec", "/design", "/implement", "/test", "/review", "/fix", "/accept", "/deploy", "/build-desktop", "/release-desktop", "/refactor", "/audit", "/agent-status", "/learn", "/brainstorm", "/execute-plan", "/design-system", "/simplify", "/loop", "/cancel-loop", "/build", "/init", "/status", "/rollback"],
@@ -881,6 +883,20 @@ def check_phase_for_capability(capability: str) -> DisclosureTransition | None:
     if required_phase is None:
         return None
     return require_phase(required_phase)
+
+
+def can_execute_command(command: str) -> dict[str, Any]:
+    with _phase_lock:
+        current = _current_phase
+    if current == PHASE_SKELETON:
+        allowed = command in SKELETON_ALLOWED_COMMANDS
+        if allowed:
+            return {"allowed": True, "command": command, "phase": current, "phase_name": "skeleton", "reason": "skeleton_allowed_command"}
+        return {"allowed": False, "command": command, "phase": current, "phase_name": "skeleton", "reason": "command_not_available_in_skeleton", "skeleton_allowed_commands": list(SKELETON_ALLOWED_COMMANDS), "upgrade_hint": _UPGRADE_HINTS.get(PHASE_SKELETON, "")}
+    available = _PHASE_AVAILABLE_COMMANDS.get(current, [])
+    if command in available:
+        return {"allowed": True, "command": command, "phase": current, "phase_name": PHASE_NAMES.get(current, "unknown")}
+    return {"allowed": False, "command": command, "phase": current, "phase_name": PHASE_NAMES.get(current, "unknown"), "reason": "command_not_in_available_list", "available_commands": available}
 
 
 def register(mcp: FastMCP) -> None:
