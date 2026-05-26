@@ -96,11 +96,11 @@ async def handle_tool(arguments: dict, context: dict):
             result["memory_usage_mb"] = 0.0
             result["active_workflows"] = len(workflows)
             result["active_sessions"] = len(sessions)
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "version":
         result = {"version": "4.0.0", "api_version": "3.0.0"}
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "status":
         result = {
@@ -108,7 +108,7 @@ async def handle_tool(arguments: dict, context: dict):
             "uptime_seconds": uptime,
             "degradation_level": "none",
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     return [TextContent(type="text", text=json.dumps(make_error_response(
         code="INVALID_INPUT",

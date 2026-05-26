@@ -414,7 +414,7 @@ class KnowledgeServer:
         result["degradation_name"] = self.degradation.level_name
         if agent_role:
             result["agent_role"] = agent_role
-        return make_response("ok", result)
+        return make_response("success", result)
 
     def mcp_knowledge_progressive_search(self, query: str, task_type: str = "feature", tech_stack: Optional[dict] = None, token_budget: int = 2048) -> dict:
         result = self.progressive_searcher.search(
@@ -425,7 +425,7 @@ class KnowledgeServer:
         )
         result["degradation_level"] = self.degradation.level
         result["degradation_name"] = self.degradation.level_name
-        return make_response("ok", result)
+        return make_response("success", result)
 
     def mcp_knowledge_deep_load(self, entry_id: str) -> dict:
         result = self.progressive_searcher.deep_load(entry_id)
@@ -435,7 +435,7 @@ class KnowledgeServer:
                 message="知识条目不存在",
                 details={"entry_id": entry_id},
             )
-        return make_response("ok", result)
+        return make_response("success", result)
 
     def mcp_knowledge_add(self, title: str, content: str, scope: str = "workspace", tags: Optional[list[str]] = None, source_rating: int = 3) -> dict:
         has_sensitive, findings = SensitiveContentFilter.check(content)
@@ -481,7 +481,7 @@ class KnowledgeServer:
                     "entry_id": existing["id"],
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 })
-                return make_response("ok", {
+                return make_response("success", {
                     "id": existing["id"],
                     "status": "merged",
                     "dedup_status": "duplicate_merged",
@@ -509,7 +509,7 @@ class KnowledgeServer:
             "entry_id": result["id"],
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
-        return make_response("ok", {"id": result["id"], "status": "created", "dedup_status": "new"})
+        return make_response("success", {"id": result["id"], "status": "created", "dedup_status": "new"})
 
     def mcp_knowledge_update(self, entry_id: str, content: Optional[str] = None, tags: Optional[list[str]] = None, confidence: Optional[float] = None) -> dict:
         updates = {}
@@ -565,7 +565,7 @@ class KnowledgeServer:
             "entry_id": entry_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
-        return make_response("ok", {"id": entry_id, "status": "updated"})
+        return make_response("success", {"id": entry_id, "status": "updated"})
 
     def mcp_knowledge_delete(self, entry_id: str) -> dict:
         deleted = self.sqlite.delete_entry(entry_id)
@@ -578,7 +578,7 @@ class KnowledgeServer:
                 "entry_id": entry_id,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             })
-            return make_response("ok", {"id": entry_id, "status": "deleted"})
+            return make_response("success", {"id": entry_id, "status": "deleted"})
         return make_error_response(
             code="NOT_FOUND",
             message="知识条目不存在",
@@ -588,7 +588,7 @@ class KnowledgeServer:
     def mcp_knowledge_rollback(self, backup_path: str, dry_run: bool = False) -> dict:
         try:
             result = self.backup_mgr.rollback(backup_path, dry_run=dry_run)
-            return make_response("ok", result)
+            return make_response("success", result)
         except FileNotFoundError as e:
             return make_error_response(
                 code="NOT_FOUND",
@@ -627,7 +627,7 @@ class KnowledgeServer:
             "target_version": target_version,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
-        return make_response("ok", {"id": entry_id, "status": "rolled_back", "target_version": target_version})
+        return make_response("success", {"id": entry_id, "status": "rolled_back", "target_version": target_version})
 
     def shutdown(self):
         logger.info("operation=shutdown, status=starting")

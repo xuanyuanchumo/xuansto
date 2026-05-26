@@ -1,8 +1,8 @@
 # Xuansto Skill v2 (MCP Edition) 问题清单
 
-> 版本：8.1.0-dev
-> 更新日期：2026-05-25
-> 分析范围：SKILL.md、57个Agent定义、31个命令、26个MCP工具、降级脚本、渐进式加载、模块化重构
+> 版本：8.5.0
+> 更新日期：2026-05-26
+> 分析范围：SKILL.md、57个Agent定义、32个命令、20个MCP工具、降级脚本、渐进式加载、模块化重构
 
 ---
 
@@ -117,108 +117,243 @@
 
 ## 新增问题（来自8.1.0-dev重构分析）
 
-### ARCH-05: MCP Server未暴露Resource（优先级：中）
-- **当前状态**: 26个MCP工具全部为Tool，无Resource暴露
-- **影响**: Agent无法通过URI模式订阅状态变更
-- **修复方案**: 新增3个Resource（xuansto://agents/{name}、xuansto://knowledge/stats、xuansto://loading/status），计划在v8.2.0实现
+### ARCH-05: MCP Server未暴露Resource ✅ 已修复（v8.4.0）
+- **当前状态**: ✅ 已修复 — skill_resources.py 已实现27个Resource（xuansto://agents/{name}、xuansto://knowledge/stats、xuansto://loading/status等）
+- **修复内容**:
+  - 新增 skill_resources.py 模块，实现27个MCP Resource
+  - Resource URI模式覆盖：xuansto://agents/{name}、xuansto://knowledge/stats、xuansto://loading/status等
+  - 支持Agent通过URI模式订阅状态变更
+- **文件路径**: xuansto-mcp-server/src/xuansto_mcp/resources/skill_resources.py
+- **影响**: Agent可通过URI模式订阅状态变更
 
-### ARCH-06: 缺少Agent持久化机制（优先级：低）
-- **当前状态**: Agent实例仅内存存储，重启丢失
-- **影响**: 长时间工作流中断后无法恢复Agent状态
-- **修复方案**: 将Agent状态持久化到SQLite，计划在v8.4.0实现
+### ARCH-06: 缺少Agent持久化机制 ✅ 已修复（v8.4.0）
+- **当前状态**: ✅ 已修复 — database.py 已创建 agent_states 表，实现 save/load/delete_agent_state 函数
+- **修复内容**:
+  - 新增 agent_states 表存储Agent状态
+  - 实现 save_agent_state、load_agent_state、delete_agent_state 函数
+  - Agent重启后可从SQLite恢复状态
+- **文件路径**: xuansto-mcp-server/src/xuansto_mcp/core/database.py
+- **影响**: 长时间工作流中断后可恢复Agent状态
 
-### ARCH-07: 工作流状态仅内存存储（优先级：低）
-- **当前状态**: 工作流状态存储在SkillToolHandler._workflows字典中
-- **影响**: MCP Server重启后工作流状态丢失
-- **修复方案**: 工作流状态持久化到SQLite，计划在v8.4.0实现
+### ARCH-07: 工作流状态仅内存存储 ✅ 已修复（v8.4.0）
+- **当前状态**: ✅ 已修复 — database.py 已创建 workflow_states 表，实现 save/load/delete/list_workflow_state 函数
+- **修复内容**:
+  - 新增 workflow_states 表存储工作流状态
+  - 实现 save_workflow_state、load_workflow_state、delete_workflow_state、list_workflow_states 函数
+  - MCP Server重启后工作流状态可从SQLite恢复
+- **文件路径**: xuansto-mcp-server/src/xuansto_mcp/core/database.py
+- **影响**: MCP Server重启后工作流状态不再丢失
 
-### ARCH-08: Token预算与加载阶段未关联（优先级：低）
-- **当前状态**: Token预算独立于加载阶段管理
-- **影响**: 无法根据加载阶段自动调整Token分配
-- **修复方案**: 建立Token预算与LoadPhase的关联，计划在v8.4.0实现
+### ARCH-08: Token预算与加载阶段未关联 ✅ 已修复（v8.4.0）
+- **当前状态**: ✅ 已修复 — token_budget.py 已实现 PHASE_TOKEN_BUDGET_MAP 和 set_from_phase 操作
+- **修复内容**:
+  - 新增 PHASE_TOKEN_BUDGET_MAP 建立LoadPhase与Token预算的映射关系
+  - 实现 set_from_phase 操作，根据加载阶段自动调整Token分配
+  - Token预算与渐进式加载阶段联动
+- **文件路径**: xuansto-mcp-server/src/xuansto_mcp/tools/token_budget.py
+- **影响**: 可根据加载阶段自动调整Token分配
 
-### ARCH-09: Hook执行无超时保护（优先级：低）
-- **当前状态**: Hook执行无超时限制
-- **影响**: 恶意或错误Hook可能无限阻塞
-- **修复方案**: 为Hook执行添加超时控制，计划在v8.4.0实现
+### ARCH-09: Hook执行无超时保护 ✅ 已修复（v8.4.0）
+- **当前状态**: ✅ 已修复 — hook_engine.py 已实现 DEFAULT_HOOK_TIMEOUT_SECONDS 和 asyncio.wait_for 超时控制
+- **修复内容**:
+  - 新增 DEFAULT_HOOK_TIMEOUT_SECONDS 常量定义默认超时时间
+  - 使用 asyncio.wait_for 为Hook执行添加超时控制
+  - 超时后自动取消Hook执行并返回超时错误
+- **文件路径**: xuansto-mcp-server/src/xuansto_mcp/core/hook_engine.py
+- **影响**: 恶意或错误Hook不再无限阻塞
 
-### ARCH-10: 配置变更需重启MCP Server（优先级：低）
-- **当前状态**: constraints.yaml和.skill-config.yaml变更需重启生效
-- **影响**: 无法热更新配置
-- **修复方案**: 实现配置热更新机制，计划在v8.4.0实现
+### ARCH-10: 配置变更需重启MCP Server ✅ 已修复（v8.4.0）
+- **当前状态**: ✅ 已修复 — config.py 已实现 start_config_watcher 和 watchfiles 热更新机制
+- **修复内容**:
+  - 新增 start_config_watcher 函数启动配置文件监听
+  - 使用 watchfiles 库实现配置文件变更检测
+  - 配置变更后自动热更新，无需重启MCP Server
+- **文件路径**: xuansto-mcp-server/src/xuansto_mcp/core/config.py
+- **影响**: 配置变更后无需重启即可生效
 
-### ARCH-11: 错误处理不统一（优先级：中）
-- **当前状态**: 部分工具返回字符串而非JSON
-- **影响**: 调用方需处理多种返回格式
-- **修复方案**: 统一所有工具返回JSON格式，计划在v8.3.0实现
+### ARCH-11: 错误处理不统一 ✅ 已修复（v8.4.0）
+- **当前状态**: ✅ 已修复 — 所有20个MCP工具统一使用 make_success_response/make_error_response 返回JSON格式
+- **修复内容**:
+  - errors.py 新增 make_success_response 和 make_error_response 统一响应函数
+  - 所有20个MCP工具统一使用JSON格式返回结果
+  - 错误码和错误信息标准化
+- **文件路径**: xuansto-mcp-server/src/xuansto_mcp/core/errors.py
+- **影响**: 调用方只需处理统一的JSON返回格式
 
-### ARCH-12: 缺少API版本协商机制（优先级：低）
-- **当前状态**: 无API版本协商
-- **影响**: 客户端与服务端版本不匹配时无法优雅降级
-- **修复方案**: 实现API版本协商，计划在v8.4.0实现
+### ARCH-12: 缺少API版本协商机制 ✅ 已修复（v8.4.0）
+- **当前状态**: ✅ 已修复 — server_health.py 已实现 _negotiate_api_version 函数和 negotiate_version 操作
+- **修复内容**:
+  - 新增 _negotiate_api_version 函数实现API版本协商逻辑
+  - server_health 工具新增 negotiate_version 操作
+  - 客户端与服务端版本不匹配时可优雅降级
+- **文件路径**: xuansto-mcp-server/src/xuansto_mcp/tools/server_health.py
+- **影响**: 客户端与服务端版本不匹配时可优雅降级
 
-### DB-01: 决策记录双写一致性风险（优先级：中）
-- **当前状态**: 决策同时写入SQLite和文件系统
-- **影响**: 双写无事务保证，可能出现不一致
-- **修复方案**: 实现双写事务保证，计划在v8.3.0实现
+### DB-01: 决策记录双写一致性风险 ✅ 已修复（v8.5.0）
+- **当前状态**: ✅ 已修复 — decision_log.py SQLite 主存储策略，文件备份可选（configure action），_reconcile_decisions 增强
+- **修复内容**:
+  - v8.4.0: decision_log.py 新增 _reconcile_decisions 对账函数和 reconcile 操作
+  - v8.5.0: SQLite 主存储策略（决策记录以 SQLite 为权威源，文件备份可选）
+  - v8.5.0: decision_log 新增 configure action（file_backup: true/false）
+  - v8.5.0: _reconcile_decisions 增强（SQLite→文件单向同步，文件写入失败不影响主存储）
+- **文件路径**: xuansto-mcp-server/src/xuansto_mcp/tools/decision_log.py
+- **影响**: 决策记录双写有一致性保证和对账机制，SQLite 为权威源
 
-### DB-02: ChromaDB与SQLite双写无事务保证（优先级：中）
-- **当前状态**: 先写SQLite标记pending，再写ChromaDB，成功后标记ready
-- **影响**: ChromaDB写入失败时SQLite标记仍为pending
-- **修复方案**: 实现对账机制和自动重试，计划在v8.3.0实现
+### DB-02: ChromaDB与SQLite双写无事务保证 ✅ 已修复（v8.5.0）
+- **当前状态**: ✅ 已修复 — database.py ChromaDB 3次指数退避重试，sync_status='failed' 追踪，reconcile 增强对账
+- **修复内容**:
+  - v8.4.0: persist_knowledge_dual_write 函数实现双写事务保证，reconcile_knowledge_stores 对账函数
+  - v8.5.0: ChromaDB 双写重试机制（3次指数退避重试，1s/2s/4s间隔）
+  - v8.5.0: sync_status='failed' 状态追踪（ChromaDB写入失败时标记，reconcile可修复）
+  - v8.5.0: reconcile 增强对账（自动检测 failed 条目并重试同步，reconciliation_log 审计追踪）
+- **文件路径**: xuansto-mcp-server/src/xuansto_mcp/core/database.py
+- **影响**: ChromaDB与SQLite双写有事务保证、重试机制和自动对账
 
-### DB-03: 知识条目版本历史无清理策略（优先级：低）
-- **当前状态**: 版本历史无限增长
-- **影响**: 数据库膨胀
-- **修复方案**: 添加版本历史清理策略，计划在v8.5.0实现
+### DB-03: 知识条目版本历史无清理策略 ✅ 已修复（v8.4.0）
+- **当前状态**: ✅ 已修复 — 已实现 cleanup_knowledge_versions 函数和 KNOWLEDGE_VERSION_CLEANUP_KEEP_LAST_N 环境变量
+- **修复内容**:
+  - 新增 cleanup_knowledge_versions 函数自动清理过期版本历史
+  - 新增 KNOWLEDGE_VERSION_CLEANUP_KEEP_LAST_N 环境变量控制保留版本数
+  - 防止版本历史无限增长导致数据库膨胀
+- **文件路径**: xuansto-mcp-server/src/xuansto_mcp/core/database.py
+- **影响**: 版本历史有清理策略，数据库不再膨胀
 
-### MCP-02: 缺少Resource暴露（优先级：中）
-- **当前状态**: 同ARCH-05
-- **修复方案**: 同ARCH-05
+### MCP-02: 缺少Resource暴露 ✅ 已修复（v8.4.0）
+- **当前状态**: ✅ 已修复 — 同ARCH-05，skill_resources.py 已实现27个Resource
+- **修复内容**: 同ARCH-05
+- **文件路径**: xuansto-mcp-server/src/xuansto_mcp/resources/skill_resources.py
 
-### MCP-03: 工具调用无审计日志（优先级：中）
-- **当前状态**: MCP工具调用无审计记录
-- **影响**: 无法追踪工具调用历史
-- **修复方案**: 添加审计日志，计划在v8.3.0实现
+### MCP-03: 工具调用无审计日志 ✅ 已修复（v8.4.0）
+- **当前状态**: ✅ 已修复 — 已实现 AuditLogger 类和 audit_logger 模块
+- **修复内容**:
+  - 新增 AuditLogger 类实现MCP工具调用审计记录
+  - 新增 audit_logger 模块提供统一的审计日志接口
+  - 可追踪所有工具调用历史
+- **文件路径**: xuansto-mcp-server/src/xuansto_mcp/core/audit_logger.py
+- **影响**: MCP工具调用有完整审计记录
 
 ### SKILL-01: PHASE标记与LoadPhase枚举值不对应 ✅ 已修复（8.1.0-dev）
 - **当前状态**: ✅ 已修复 — PHASE_SKILL_MAP 建立了 PHASE_0→SKELETON、PHASE_1→FUNCTIONAL、PHASE_2→ENHANCED、PHASE_3→FULL 的映射
 - **修复内容**: progressive_loader.py 新增 PHASE_SKILL_MAP 和 sync_from_skill_phase() 方法
 - **影响**: Skill层PHASE标记与MCP层LoadPhase可正确对应
 
-### SKILL-02: SKELETON阶段无可用命令（优先级：低）
-- **当前状态**: SKELETON阶段仅加载骨架信息，无可用命令
-- **影响**: 用户在SKELETON阶段无法执行任何操作
-- **修复方案**: 为SKELETON阶段添加基础命令（/status、/help），计划在v8.2.0实现
+### SKILL-02: SKELETON阶段无可用命令 ✅ 已修复（v8.5.0）
+- **当前状态**: ✅ 已修复 — SKELETON阶段已支持 /status、/help、/budget 基础命令
+- **修复内容**:
+  - COMMAND_PHASE_MAP 新增 /status、/help、/budget → SKELETON 映射
+  - routes.yaml /status phase null→0，新增 /help 命令路由（phase:0）
+  - SKILL.md PHASE_0 新增 SKELETON 阶段可用命令表格
+- **影响**: 用户在SKELETON阶段可执行基础命令
 
 ### SKILL-03: 降级时Skill层不感知MCP层状态 ✅ 已修复（8.1.0-dev）
 - **当前状态**: ✅ 已修复 — degrade_phase() 设置 degraded=True，resource_load_status 返回降级信息
 - **修复内容**: progressive_loader.py 新增 degrade_phase() 方法，SkillToolHandler 可通过 resource_load_status 感知降级
 - **影响**: 降级时Skill层可感知并调整行为
 
-### API-01: HTTP API与MCP stdio两套接口无统一Schema（优先级：中）
-- **当前状态**: HTTP API和MCP stdio接口返回格式不同
-- **影响**: 调用方需适配两套接口
-- **修复方案**: 统一Schema，计划在v8.3.0实现
+### API-01: HTTP API与MCP stdio两套接口无统一Schema ✅ 已修复（v8.4.0）
+- **当前状态**: ✅ 已修复 — 所有MCP工具统一使用 make_success_response/make_error_response 返回JSON格式，HTTP API使用统一响应格式
+- **修复内容**:
+  - errors.py 新增 make_success_response 和 make_error_response 统一响应函数
+  - 所有MCP工具统一使用JSON格式返回结果
+  - HTTP API使用统一响应格式与MCP工具一致
+- **文件路径**: xuansto-mcp-server/src/xuansto_mcp/core/errors.py
+- **影响**: 调用方只需适配一套统一Schema
 
 ### API-02: 降级脚本返回格式与MCP工具不一致 ✅ 已修复（8.1.0-dev）
 - **当前状态**: ✅ 已修复 — 降级结果统一包装为JSON格式（degraded/inline_degraded/error）
 - **修复内容**: degradation.py 新增 _wrap_degraded()、_wrap_inline_degraded()、_wrap_error() 方法
 - **影响**: 降级脚本返回格式与MCP工具一致
 
+### NEW-01: 降级映射不完整（14/20） ✅ 已修复（v8.5.0）
+- **需求来源**: degradation.py MCPToolFallback 仅映射14个工具，constraints.yaml 声明20个MCP工具
+- **当前状态**: ✅ 已修复 — 降级映射补全6个缺失项，20/20完整覆盖所有MCP工具
+- **修复内容**:
+  - 补全6个缺失降级映射（knowledge_inject、knowledge_precipitate、resource_subscribe、audit_query、decision_log configure、server_health negotiate_version）
+  - constraints.yaml 作为降级映射权威源（tool_fallbacks 结构化配置）
+  - degradation.py 从 constraints.yaml 动态加载映射，YAML读取失败回退硬编码
+- **影响**: 所有20个MCP工具均有降级路径
+
+### NEW-03: Schema验证缺失 ✅ 已修复（v8.5.0）
+- **需求来源**: MCP工具定义与实际代码可能存在Schema不一致，缺乏自动化验证
+- **当前状态**: ✅ 已修复 — validate_schemas.py 验证脚本已实现，5处不一致已修复
+- **修复内容**:
+  - 新增 validate_schemas.py 验证脚本
+  - 检查 MCP 工具定义与实际代码的 Schema 一致性
+  - 检查 SKILL.md 声明与实际实现的匹配度
+  - 修复 5 个 Schema-代码不一致问题
+  - CI 集成：schema 验证可作为 pre-commit hook 运行
+- **影响**: Schema不一致可自动检测和修复
+
+### NEW-05: COMMAND_PHASE_MAP不完整（6/32） ✅ 已修复（v8.5.0）
+- **需求来源**: progressive_loader.py COMMAND_PHASE_MAP 仅映射6个命令，32个命令中26个无阶段映射
+- **当前状态**: ✅ 已修复 — COMMAND_PHASE_MAP 从6个命令扩展到32个命令完整映射
+- **修复内容**:
+  - COMMAND_PHASE_MAP 扩展到32个命令完整映射
+  - 阶段转换披露模板：phase_transition_templates 定义阶段推进时的通知格式
+  - 新增 get_commands_for_phase() 和 get_phase_for_command() 查询函数
+- **影响**: 所有32个命令均有明确的阶段归属
+
+### NEW-06: 质量门禁不完整（13/54） ✅ 已修复（v8.5.0）
+- **需求来源**: _shared.py QUALITY_GATES 仅定义13项，SKILL.md 声明54项质量门禁
+- **当前状态**: ✅ 已修复 — 质量门禁从13项扩展到54项（_shared.py QUALITY_GATES 完整定义）
+- **修复内容**:
+  - QUALITY_GATES 扩展到54项完整定义
+  - 新增跨阶段门禁：cross_phase_gates 检查阶段间一致性
+  - 门禁分类：BLOCK（阻塞）/ WARN（警告）/ INFO（信息）三级
+  - 门禁覆盖全部9个阶段 + 跨阶段检查
+- **影响**: 质量门禁完整覆盖所有阶段
+
+### NEW-07: 双SQLite数据库分裂 ✅ 已修复（v8.5.0）
+- **需求来源**: knowledge.db 与 workflow.db 两个独立SQLite数据库，缺乏事务一致性保证
+- **当前状态**: ✅ 已修复 — 双SQLite合并为统一 xuansto.db（22+表合并）
+- **修复内容**:
+  - 双SQLite数据库合并为统一 xuansto.db（22+表合并，消除 knowledge.db 与 workflow.db 分裂）
+  - migration_v13 迁移脚本：合并表结构、数据迁移、索引重建
+  - FTS5 全文搜索触发器：decision_fts、knowledge_fts 自动同步全文索引
+  - db_engine.py 统一数据库引擎：单连接池管理、事务一致性保证、统一 xuansto.db 路径
+- **文件路径**: xuansto-mcp-server/src/xuansto_mcp/core/db_engine.py
+- **影响**: 数据库事务一致性保证，消除分裂问题
+
+### NEW-08: 缺少Resource订阅机制 ✅ 已修复（v8.5.0）
+- **需求来源**: MCP Resource 变更无通知机制，Agent无法感知Resource状态变更
+- **当前状态**: ✅ 已修复 — resource_subscribe 工具已实现（subscribe/unsubscribe/list）
+- **修复内容**:
+  - 新增 resource_subscribe 工具
+  - subscribe：订阅 Resource URI 变更通知
+  - unsubscribe：取消订阅
+  - list：列出当前所有活跃订阅
+- **文件路径**: xuansto-mcp-server/src/xuansto_mcp/tools/resource_subscribe.py
+- **影响**: Agent可订阅Resource变更通知
+
+### NEW-09: 缺少审计日志查询 ✅ 已修复（v8.5.0）
+- **需求来源**: AuditLogger 仅写入审计日志，无查询接口
+- **当前状态**: ✅ 已修复 — audit_query 工具已实现
+- **修复内容**:
+  - 新增 audit_query 工具（查询审计日志）
+  - 支持 tool_name、time_range、success 过滤
+  - 支持分页（limit/offset）
+  - 返回审计记录详情（tool_name、params_summary、latency_ms、success、timestamp）
+- **文件路径**: xuansto-mcp-server/src/xuansto_mcp/tools/audit_query.py
+- **影响**: 审计日志可查询和过滤
+
 ---
 
 ## 统计摘要
 
-| 优先级 | 总数 | 已修复 | 未修复 |
-|--------|------|--------|--------|
-| P0 | 2 | 2 | 0 |
-| P1 | 6 | 6 | 0 |
-| P2 | 2 | 2 | 0 |
-| P3 | 2 | 0 | 2 |
-| 新增(ARCH) | 8 | 0 | 8 |
-| 新增(DB) | 3 | 0 | 3 |
-| 新增(MCP) | 2 | 0 | 2 |
-| 新增(SKILL) | 3 | 2 | 1 |
-| 新增(API) | 2 | 1 | 1 |
-| **总计** | **30** | **13** | **17** |
+| 优先级 | 总数 | 已修复 | 未修复 | 缓解 |
+|--------|------|--------|--------|------|
+| P0 | 2 | 2 | 0 | 0 |
+| P1 | 6 | 6 | 0 | 0 |
+| P2 | 2 | 2 | 0 | 0 |
+| P3 | 2 | 0 | 1 | 1 |
+| 新增(ARCH) | 8 | 8 | 0 | 0 |
+| 新增(DB) | 3 | 3 | 0 | 0 |
+| 新增(MCP) | 2 | 2 | 0 | 0 |
+| 新增(SKILL) | 3 | 3 | 0 | 0 |
+| 新增(API) | 2 | 2 | 0 | 0 |
+| 新增(NEW-v8.5.0) | 7 | 7 | 0 | 0 |
+| **总计** | **37** | **35** | **1** | **1** |
+
+> 未修复项：P3-01（v1与v2重复文件）
+> 缓解项：P3-02（SKILL.md行数超限，已通过PHASE标记渐进式加载缓解）
+> v8.5.0 新修复：NEW-01/03/05/06/07/08/09、DB-01(增强)、DB-02(增强)、SKILL-02

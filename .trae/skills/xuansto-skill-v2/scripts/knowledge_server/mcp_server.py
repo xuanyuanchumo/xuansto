@@ -701,7 +701,7 @@ def register_mcp_tools(server, mcp_server):
                 )
                 result["degradation_level"] = server.degradation.level
                 result["degradation_name"] = server.degradation.level_name
-                return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+                return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
     
             elif name == "knowledge_add":
                 content = arguments.get("content", "")
@@ -746,7 +746,7 @@ def register_mcp_tools(server, mcp_server):
                                     server.sqlite.update_embedding_status(existing["id"], "pending")
                             server.exporter.export_entry(existing["id"])
                             server._touch_change()
-                            return [TextContent(type="text", text=json.dumps(make_response("ok", {
+                            return [TextContent(type="text", text=json.dumps(make_response("success", {
                                 "id": existing["id"],
                                 "status": "merged",
                                 "dedup_status": "duplicate_merged",
@@ -767,7 +767,7 @@ def register_mcp_tools(server, mcp_server):
                         server.sqlite.update_embedding_status(result["id"], "pending")
                 server.exporter.export_entry(result["id"])
                 server._touch_change()
-                return [TextContent(type="text", text=json.dumps(make_response("ok", {
+                return [TextContent(type="text", text=json.dumps(make_response("success", {
                     "id": result["id"],
                     "status": "created",
                     "dedup_status": "new",
@@ -828,7 +828,7 @@ def register_mcp_tools(server, mcp_server):
                         server.sqlite.update_embedding_status(entry_id, "pending")
                 server.exporter.export_entry(entry_id)
                 server._touch_change()
-                return [TextContent(type="text", text=json.dumps(make_response("ok", {
+                return [TextContent(type="text", text=json.dumps(make_response("success", {
                     "id": entry_id,
                     "status": "updated",
                 }), ensure_ascii=False))]
@@ -876,7 +876,7 @@ def register_mcp_tools(server, mcp_server):
                         category_counts[c] = category_counts.get(c, 0) + 1
                     stats["by_type"] = type_counts
                     stats["by_category"] = category_counts
-                return [TextContent(type="text", text=json.dumps(make_response("ok", stats), ensure_ascii=False))]
+                return [TextContent(type="text", text=json.dumps(make_response("success", stats), ensure_ascii=False))]
     
             elif name == "knowledge_rollback":
                 entry_id = arguments.get("id", "")
@@ -920,7 +920,7 @@ def register_mcp_tools(server, mcp_server):
                         query=query,
                         token_budget=token_budget,
                     )
-                    return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+                    return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
                 except Exception as e:
                     return [TextContent(type="text", text=json.dumps(make_error_response(
                         code="INTERNAL_ERROR",
@@ -971,14 +971,14 @@ def register_mcp_tools(server, mcp_server):
                     logger.warning("operation=mcp_web_update, search_error=%s", e)
                     web_results = []
                 if not web_results:
-                    return [TextContent(type="text", text=json.dumps(make_response("ok", {
+                    return [TextContent(type="text", text=json.dumps(make_response("success", {
                         "status": "no_results",
                         "query": query,
                         "message": "Web search returned no results, may be offline",
                     }), ensure_ascii=False))]
                 structured = extract_and_structure(web_results, existing_entry=target_entry)
                 if not structured:
-                    return [TextContent(type="text", text=json.dumps(make_response("ok", {
+                    return [TextContent(type="text", text=json.dumps(make_response("success", {
                         "status": "extraction_failed",
                         "query": query,
                         "sources_found": len(web_results),
@@ -1017,14 +1017,14 @@ def register_mcp_tools(server, mcp_server):
                                     server.sqlite.update_embedding_status(entry_id, "pending")
                             server.exporter.export_entry(entry_id)
                             logger.info("operation=mcp_web_update, entry_id=%s, status=updated", entry_id)
-                            return [TextContent(type="text", text=json.dumps(make_response("ok", {
+                            return [TextContent(type="text", text=json.dumps(make_response("success", {
                                 "id": entry_id,
                                 "status": "updated",
                                 "sources_found": len(web_results),
                                 "best_source_rating": max(r.get("source_rating", 0) for r in web_results),
                                 "updated_fields": list(updates.keys()),
                             }), ensure_ascii=False))]
-                    return [TextContent(type="text", text=json.dumps(make_response("ok", {
+                    return [TextContent(type="text", text=json.dumps(make_response("success", {
                         "id": entry_id,
                         "status": "no_change",
                         "sources_found": len(web_results),
@@ -1049,7 +1049,7 @@ def register_mcp_tools(server, mcp_server):
                                 server.sqlite.update_embedding_status(new_id, "pending")
                         server.exporter.export_entry(new_id)
                         logger.info("operation=mcp_web_update, new_entry_id=%s, status=created_pending_review", new_id)
-                        return [TextContent(type="text", text=json.dumps(make_response("ok", {
+                        return [TextContent(type="text", text=json.dumps(make_response("success", {
                             "id": new_id,
                             "status": "created_pending_review",
                             "sources_found": len(web_results),
@@ -1093,7 +1093,7 @@ def register_mcp_tools(server, mcp_server):
                     "degraded_from": state.degraded_from,
                     "timestamp": now_iso,
                 }
-                return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+                return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
             elif action == "preload":
                 target_phase_str = arguments.get("target_phase", "functional")
@@ -1121,7 +1121,7 @@ def register_mcp_tools(server, mcp_server):
                     "degraded_from": state.degraded_from,
                     "timestamp": now_iso,
                 }
-                return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+                return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
             elif action == "cache":
                 state = loader._state
@@ -1140,7 +1140,7 @@ def register_mcp_tools(server, mcp_server):
                     "degraded_from": state.degraded_from,
                     "timestamp": now_iso,
                 }
-                return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+                return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
             elif action == "clear_cache":
                 loader._state = ProgressiveLoader()._state
@@ -1157,7 +1157,7 @@ def register_mcp_tools(server, mcp_server):
                     "degraded_from": state.degraded_from,
                     "timestamp": now_iso,
                 }
-                return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+                return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
             elif action == "loading_progress":
                 state = loader._state
@@ -1176,7 +1176,7 @@ def register_mcp_tools(server, mcp_server):
                     "degraded_from": state.degraded_from,
                     "timestamp": now_iso,
                 }
-                return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+                return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
             else:
                 return [TextContent(type="text", text=json.dumps(make_error_response(

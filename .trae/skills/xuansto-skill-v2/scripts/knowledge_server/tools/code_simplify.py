@@ -112,4 +112,4 @@ async def handle_tool(arguments: dict, context: dict):
         "safe_count": safe_count,
         "caution_count": caution_count,
     }
-    return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+    return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]

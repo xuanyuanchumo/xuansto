@@ -1,13 +1,13 @@
 ---
 name: xuansto-skill-v2
-version: 8.4.0
+version: 8.5.0
 description: |
-  多Agent自主开发编排引擎，通过xuansto-mcp-server的20个MCP原子工具驱动9阶段全生命周期开发流程。务必在以下场景使用本技能：用户要求从零搭建项目、端到端开发功能、TDD/SDD驱动开发、多步骤结构化任务、代码审查+安全审计、规格驱动开发、桌面应用构建，即使用户没有明确说出"多Agent"或"全流程"。支持57个Agent/13层编排、54项质量门禁、31个命令，MCP工具优先不可用时自动降级到脚本调用。
+  多Agent自主开发编排引擎，通过xuansto-mcp-server的20个MCP原子工具驱动9阶段全生命周期开发流程。务必在以下场景使用本技能：用户要求从零搭建项目、端到端开发功能、TDD/SDD驱动开发、多步骤结构化任务、代码审查+安全审计、规格驱动开发、桌面应用构建，即使用户没有明确说出"多Agent"或"全流程"。支持57个Agent/13层编排、54项质量门禁、32个命令，MCP工具优先不可用时自动降级到脚本调用。
 agents_summary: "13 layers / 57 agents (via MCP v2)"
 triggers:
   phrases: ["build this properly", "write tests first", "plan my sprint", "review architecture", "implement properly", "build a full feature", "start a new project", "refactor this module", "set up a project", "create a new app", "build from scratch", "develop a feature end-to-end", "plan development", "write specs first", "develop feature", "create project", "add feature", "build app", "code quality", "quality check", "write code", "develop app", "帮我搭建项目", "先写测试再写代码", "做个代码审查", "安全审计一下", "重构这段代码", "帮我规划一下", "完整开发一个功能", "从需求到部署", "多agent协作", "TDD开发", "SDD驱动", "桌面打包", "渗透测试", "规格驱动开发", "搭建项目", "从零开发", "端到端开发", "开发一个功能", "先写规格", "做需求分析", "帮我开发", "写个功能", "添加功能", "新建项目", "创建项目", "代码质量", "质量检查", "写代码", "开发应用", "test-first", "spec-first", "full-stack feature", "multi-step task", "structured workflow", "全流程开发", "规格驱动", "测试先行", "brainstorm", "design system", "simplify code", "loop task", "security review", "vulnerability scan", "penetration test", "桌面应用", "desktop build", "app packaging", "pentest"]
-  keywords: [xuansto, SDD, TDD, spec-driven, test-driven, quality-gates, multi-agent, agent-orchestration, autonomous-development, self-evolving-code, desktop-development, desktop-app, cross-platform, Electron, Tauri, Flutter, OWASP, TrinityGuard, penetration-testing, pentest, security-audit, vulnerability-scan, IPC-contracts, token-optimization, spec-drift, 9-phase-workflow, 54-quality-gates, 57-agents, 31-commands, project-setup, build-from-scratch, end-to-end-development, develop-feature, create-project, add-feature, build-app, code-quality, quality-check, write-code, develop-app, 冲刺规划, 需求澄清, 架构规划, 代码审查, 安全审计, 桌面构建, 桌面开发, 桌面应用, 全生命周期, 质量门禁, 自动化开发, 编排器, agent协作, 规格优先, 测试先行, 重构安全网, 全流程开发, 规格驱动, 多agent协作, 桌面打包, 渗透测试, brainstorm, design-system, simplify, loop, 搭建项目, 从零开发, 端到端开发, 先写规格, 需求分析, 帮我开发, 写个功能, 添加功能, 新建项目, 创建项目, 代码质量, 质量检查, 写代码, 开发应用]
-  commands: [/sprint, /clarify, /plan, /spec, /design, /implement, /test, /review, /fix, /accept, /deploy, /build-desktop, /release-desktop, /refactor, /audit, /agent-status, /learn, /brainstorm, /execute-plan, /design-system, /simplify, /loop, /cancel-loop, /build, /init, /status, /rollback, /sdd-tdd-medium, /sdd-tdd-fast, /decision, /budget]
+  keywords: [xuansto, SDD, TDD, spec-driven, test-driven, quality-gates, multi-agent, agent-orchestration, autonomous-development, self-evolving-code, desktop-development, desktop-app, cross-platform, Electron, Tauri, Flutter, OWASP, TrinityGuard, penetration-testing, pentest, security-audit, vulnerability-scan, IPC-contracts, token-optimization, spec-drift, 9-phase-workflow, 54-quality-gates, 57-agents, 32-commands, project-setup, build-from-scratch, end-to-end-development, develop-feature, create-project, add-feature, build-app, code-quality, quality-check, write-code, develop-app, 冲刺规划, 需求澄清, 架构规划, 代码审查, 安全审计, 桌面构建, 桌面开发, 桌面应用, 全生命周期, 质量门禁, 自动化开发, 编排器, agent协作, 规格优先, 测试先行, 重构安全网, 全流程开发, 规格驱动, 多agent协作, 桌面打包, 渗透测试, brainstorm, design-system, simplify, loop, 搭建项目, 从零开发, 端到端开发, 先写规格, 需求分析, 帮我开发, 写个功能, 添加功能, 新建项目, 创建项目, 代码质量, 质量检查, 写代码, 开发应用]
+  commands: [/sprint, /clarify, /plan, /spec, /design, /implement, /test, /review, /fix, /accept, /deploy, /build-desktop, /release-desktop, /refactor, /audit, /agent-status, /learn, /brainstorm, /execute-plan, /design-system, /simplify, /loop, /cancel-loop, /build, /init, /status, /help, /rollback, /sdd-tdd-medium, /sdd-tdd-fast, /decision, /budget]
   not_for: ["simple single-file edits (add comment, fix typo)", "pure infrastructure/DevOps without code changes", "documentation-only tasks without code", "simple Q&A or explanations", "pure UI/UX design without code development (use ui-ux-pro-max)", "pure data analysis or reporting", "simple config changes (env vars, flags)", "one-line fixes or trivial patches", "simple security scans without code remediation", "documentation-only security reports", "desktop app UI design only without code", "quick hotfixes under 5 lines"]
 author: skiller-team
 tags: [xuansto, multi-agent, sdd, tdd, orchestration, autonomous-development, quality-gates, cross-platform, desktop, electron, tauri, flutter, trinityguard, pentest, security-audit, brainstorm, design-system, simplify, loop, hooks, model-routing, parallelization, evaluation, mcp]
@@ -20,13 +20,25 @@ license: MIT
 
 <!-- PHASE_0_START -->
 
-# Xuansto Skill v8.4.0 (MCP Edition)
+# Xuansto Skill v8.5.0 (MCP Edition)
 
-> 57 Agents/13层 | 54 Gates | 31 Cmds | 9 Phase | 20 MCP工具驱动
+> 57 Agents/13层 | 54 Gates | 32 Cmds | 9 Phase | 20 MCP工具驱动
 
 ## 命令列表
 
-/sprint /clarify /plan /spec /design /implement /test /review /fix /accept /deploy /build-desktop /release-desktop /refactor /audit /agent-status /learn /brainstorm /execute-plan /design-system /simplify /loop /cancel-loop /build /init /status /rollback /sdd-tdd-medium /sdd-tdd-fast /decision /budget
+/sprint /clarify /plan /spec /design /implement /test /review /fix /accept /deploy /build-desktop /release-desktop /refactor /audit /agent-status /learn /brainstorm /execute-plan /design-system /simplify /loop /cancel-loop /build /init /status /help /rollback /sdd-tdd-medium /sdd-tdd-fast /decision /budget
+
+## SKELETON阶段可用命令
+
+在SKELETON阶段（PHASE_0），以下基本命令始终可用：
+
+| 命令 | 用途 | 说明 |
+|------|------|------|
+| /status | 查询进度 | 查看项目当前状态、工作流进度和资源负载 |
+| /help | 帮助信息 | 显示当前阶段可用命令列表和使用说明 |
+| /budget | Token预算 | 查看和管理Token预算使用情况 |
+
+执行任意非SKELETON命令（如 /init, /sprint）可推进到FUNCTIONAL阶段。
 
 ## MCP依赖
 
@@ -69,39 +81,40 @@ MCP不可用时自动降级到 scripts/ 目录Python脚本，详见 {{include:co
 
 ## 命令路由表（精简）
 
-| 意图 | 命令 | MCP工具链 | Phase |
-|------|------|-----------|-------|
-| 从零开始新项目 | /init | skill_analyze, knowledge_search, workflow_dispatch, project_init, decision_log | 0 |
-| 头脑风暴/需求探索 | /brainstorm | knowledge_search, workflow_dispatch | 1 |
-| 澄清需求 | /clarify | knowledge_search, workflow_dispatch, quality_gate_check | 1 |
-| 规划架构 | /plan | skill_analyze, knowledge_search, agent_status, workflow_dispatch, decision_log, token_budget | 2 |
-| 写规格文档 | /spec | workflow_dispatch, quality_gate_check, spec_drift_detect | 2 |
-| 设计 | /design | quality_gate_check, knowledge_search, workflow_dispatch | 2 |
-| 设计系统 | /design-system | quality_gate_check, knowledge_search, workflow_dispatch | 2 |
-| 写代码 | /implement | workflow_dispatch, quality_gate_check, hook_manage | 4 |
-| 跑测试 | /test | quality_gate_check, workflow_dispatch | 5 |
-| 代码审查 | /review | quality_gate_check, security_scan, code_simplify | 5 |
-| 安全审计 | /audit | security_scan, quality_gate_check, spec_drift_detect | 5 |
-| 修复Bug | /fix | session_manage, quality_gate_check, hook_manage | 4 |
-| 验收确认 | /accept | quality_gate_check, workflow_dispatch | 6 |
-| 代码简化 | /simplify | code_simplify, quality_gate_check, context_compress | 7 |
-| 代码重构 | /refactor | code_simplify, quality_gate_check, context_compress | 7 |
-| 部署交付 | /deploy | quality_gate_check, server_health, workflow_dispatch | 8 |
-| 构建项目 | /build | skill_analyze, quality_gate_check, server_health | 8 |
-| 桌面构建 | /build-desktop | quality_gate_check, skill_analyze, workflow_dispatch | 8 |
-| 桌面发布 | /release-desktop | quality_gate_check, workflow_dispatch | 8 |
-| 冲刺 | /sprint | workflow_dispatch, session_manage, resource_load_status, token_budget, project_init | 0 |
-| 知识学习 | /learn | knowledge_search, knowledge_inject, session_manage | — |
-| 执行计划 | /execute-plan | workflow_dispatch, session_manage | — |
-| 自主循环 | /loop | workflow_dispatch, session_manage, resource_load_status, token_budget, decision_log | — |
-| 取消循环 | /cancel-loop | workflow_dispatch, session_manage | — |
-| 查询Agent | /agent-status | agent_status | — |
-| 查询进度 | /status | workflow_dispatch, session_manage, server_health | — |
-| 回滚 | /rollback | session_manage, workflow_dispatch | — |
-| 中等SDD+TDD | /sdd-tdd-medium | skill_analyze, workflow_dispatch, resource_load_status | 0 |
-| 快速SDD+TDD | /sdd-tdd-fast | workflow_dispatch, resource_load_status | 1 |
-| 决策记录 | /decision | decision_log | — |
-| Token预算 | /budget | token_budget, resource_load_status | — |
+| 意图 | 命令 | MCP工具链 | 工作流Phase | 加载阶段 |
+|------|------|-----------|-------------|----------|
+| 从零开始新项目 | /init | skill_analyze, knowledge_search, workflow_dispatch, project_init, decision_log | 0 | FUNCTIONAL |
+| 头脑风暴/需求探索 | /brainstorm | knowledge_search, workflow_dispatch | 1 | FUNCTIONAL |
+| 澄清需求 | /clarify | knowledge_search, workflow_dispatch, quality_gate_check | 1 | FUNCTIONAL |
+| 规划架构 | /plan | skill_analyze, knowledge_search, agent_status, workflow_dispatch, decision_log, token_budget | 2 | FUNCTIONAL |
+| 写规格文档 | /spec | workflow_dispatch, quality_gate_check, spec_drift_detect | 2 | FUNCTIONAL |
+| 设计 | /design | quality_gate_check, knowledge_search, workflow_dispatch | 2 | FUNCTIONAL |
+| 设计系统 | /design-system | quality_gate_check, knowledge_search, workflow_dispatch | 2 | ENHANCED |
+| 写代码 | /implement | workflow_dispatch, quality_gate_check, hook_manage | 4 | ENHANCED |
+| 跑测试 | /test | quality_gate_check, workflow_dispatch | 5 | ENHANCED |
+| 代码审查 | /review | quality_gate_check, security_scan, code_simplify | 5 | ENHANCED |
+| 安全审计 | /audit | security_scan, quality_gate_check, spec_drift_detect | 5 | FULL |
+| 修复Bug | /fix | session_manage, quality_gate_check, hook_manage | 4 | ENHANCED |
+| 验收确认 | /accept | quality_gate_check, workflow_dispatch | 6 | ENHANCED |
+| 代码简化 | /simplify | code_simplify, quality_gate_check, context_compress | 7 | ENHANCED |
+| 代码重构 | /refactor | code_simplify, quality_gate_check, context_compress | 7 | ENHANCED |
+| 部署交付 | /deploy | quality_gate_check, server_health, workflow_dispatch | 8 | FULL |
+| 构建项目 | /build | skill_analyze, quality_gate_check, server_health | 8 | ENHANCED |
+| 桌面构建 | /build-desktop | quality_gate_check, skill_analyze, workflow_dispatch | 8 | FULL |
+| 桌面发布 | /release-desktop | quality_gate_check, workflow_dispatch | 8 | FULL |
+| 冲刺 | /sprint | workflow_dispatch, session_manage, resource_load_status, token_budget, project_init | 0 | FUNCTIONAL |
+| 知识学习 | /learn | knowledge_search, knowledge_inject, session_manage | — | FUNCTIONAL |
+| 执行计划 | /execute-plan | workflow_dispatch, session_manage | — | FUNCTIONAL |
+| 自主循环 | /loop | workflow_dispatch, session_manage, resource_load_status, token_budget, decision_log | — | FULL |
+| 取消循环 | /cancel-loop | workflow_dispatch, session_manage | — | FULL |
+| 查询Agent | /agent-status | agent_status | — | FUNCTIONAL |
+| 查询进度 | /status | workflow_dispatch, session_manage, server_health | 0 | SKELETON |
+| 帮助信息 | /help | resource_load_status | 0 | SKELETON |
+| 回滚 | /rollback | session_manage, workflow_dispatch | — | FULL |
+| 中等SDD+TDD | /sdd-tdd-medium | skill_analyze, workflow_dispatch, resource_load_status | 0 | ENHANCED |
+| 快速SDD+TDD | /sdd-tdd-fast | workflow_dispatch, resource_load_status | 1 | ENHANCED |
+| 决策记录 | /decision | decision_log | — | ENHANCED |
+| Token预算 | /budget | token_budget, resource_load_status | — | SKELETON |
 
 ## 核心Agent索引（编排+产品+工程层）
 

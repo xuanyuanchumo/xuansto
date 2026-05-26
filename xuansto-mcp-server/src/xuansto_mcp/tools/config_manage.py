@@ -29,7 +29,7 @@ def _validate_all_configs() -> dict[str, Any]:
     try:
         from ..models.config_models import ConstraintsModel, FallbackConfigModel, SkillConfigModel
     except ImportError:
-        return {"error": True, "message": "config_models not available"}
+        return make_error_response(ValueError("config_models not available"), error_code=ERR_CONFIG)
 
     skill_config_path = _resolve_skill_file(".xuansto-config.yaml")
     if skill_config_path.exists():
@@ -145,9 +145,13 @@ def register(mcp: FastMCP) -> None:
         try:
             if action == "reload":
                 reload_result = reload_config()
+                if reload_result.get("status") == "error":
+                    return reload_result
                 validation_results = _validate_all_configs()
-                reload_result["validation_results"] = validation_results
-                return make_success_response(reload_result)
+                reload_data = reload_result.get("data", reload_result)
+                if isinstance(reload_data, dict):
+                    reload_data["validation_results"] = validation_results
+                return make_success_response(reload_data)
             elif action == "status":
                 return make_success_response(_get_config_status())
             elif action == "validate":

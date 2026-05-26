@@ -445,6 +445,8 @@ def register(mcp: FastMCP) -> None:
                 from ..core.database import cleanup_knowledge_versions
                 effective_keep_n = keep_last_n if keep_last_n != 10 else KNOWLEDGE_VERSION_CLEANUP_KEEP_LAST_N
                 result = cleanup_knowledge_versions(keep_last_n=effective_keep_n, keep_marked=True)
+                if result.get("status") == "error":
+                    return result
                 return make_success_response(result)
 
             if not query:

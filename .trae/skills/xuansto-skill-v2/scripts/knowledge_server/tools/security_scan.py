@@ -150,4 +150,4 @@ async def handle_tool(arguments: dict, context: dict):
         "dependency_findings": dep_findings,
         "scan_duration_ms": elapsed_ms,
     }
-    return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+    return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]

@@ -104,4 +104,4 @@ async def handle_tool(arguments: dict, context: dict):
         "preserved_sections": preserved,
         "quality_score": round(quality, 2),
     }
-    return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+    return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]

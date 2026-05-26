@@ -103,7 +103,7 @@ async def handle_tool(arguments: dict, context: dict):
             "priority": priority,
             "context_window_usage_pct": round(context_usage, 1),
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "preview":
         content = arguments.get("content", "")
@@ -120,7 +120,7 @@ async def handle_tool(arguments: dict, context: dict):
             "context_window_usage_pct": round(context_usage, 1),
             "would_exceed": context_usage > 90,
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "clear":
         cleared_count = len(injected_contexts)
@@ -130,4 +130,4 @@ async def handle_tool(arguments: dict, context: dict):
             "cleared_items": cleared_count,
             "context_window_usage_pct": 0.0,
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]

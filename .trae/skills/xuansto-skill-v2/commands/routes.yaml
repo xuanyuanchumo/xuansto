@@ -198,8 +198,16 @@ routes:
       - session_manage
       - server_health
     fallback: "工作流状态→持久化文件读取"
-    phase: null
+    phase: 0
     detail: commands/status.md
+
+  - intent: "帮助信息"
+    command: "/help"
+    mcp_tools:
+      - resource_load_status
+    fallback: "内联帮助文本输出"
+    phase: 0
+    detail: commands/help.md
 
   - intent: "修复Bug"
     command: "/fix"

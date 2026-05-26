@@ -70,7 +70,7 @@ async def handle_tool(arguments: dict, context: dict):
             "total_hooks": len(hooks_copy),
             "enabled_count": sum(1 for h in hooks_copy if h.get("enabled", True)),
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "execute":
         hook_name = arguments.get("hook_name", "")
@@ -100,7 +100,7 @@ async def handle_tool(arguments: dict, context: dict):
             "post_callbacks_result": post_results,
             "context": hook_context,
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     return [TextContent(type="text", text=json.dumps(make_error_response(
         code="INVALID_INPUT",

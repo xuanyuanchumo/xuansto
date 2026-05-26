@@ -80,7 +80,7 @@ async def handle_tool(arguments: dict, context: dict):
     if action == "status":
         result = dict(token_budget_state)
         result["action"] = "status"
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "set_budget":
         total_budget = arguments.get("total_budget")
@@ -103,7 +103,7 @@ async def handle_tool(arguments: dict, context: dict):
             "phase_allocations": token_budget_state["phase_allocations"],
             "updated_at": now_iso,
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "recommend":
         project_size = arguments.get("project_size", "medium")
@@ -126,7 +126,7 @@ async def handle_tool(arguments: dict, context: dict):
             "team_size": team_size,
             "adjusted_total": recommended,
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]
 
     elif action == "report":
         period = arguments.get("period", "session")
@@ -142,4 +142,4 @@ async def handle_tool(arguments: dict, context: dict):
             "remaining": remaining,
             "usage_pct": round(usage_pct, 1),
         }
-        return [TextContent(type="text", text=json.dumps(make_response("ok", result), ensure_ascii=False))]
+        return [TextContent(type="text", text=json.dumps(make_response("success", result), ensure_ascii=False))]

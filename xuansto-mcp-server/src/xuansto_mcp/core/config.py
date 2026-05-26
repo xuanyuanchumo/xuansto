@@ -84,18 +84,37 @@ DEFAULT_GATE_SCRIPTS_MAP = {
     "FILE-ENCODING": "check-encoding.py",
     "COMMENT-LANGUAGE": "check-comment-lang.py",
     "SCRIPT-SECURITY": "script-security-scanner.py",
+    "SCRIPT-CLEANUP": "script-cleanup-checker.py",
+    "DESIGN-TOKENS": "design-tokens-sync.js",
+    "GATE-004": "api-contract-validator.py",
+    "SPEC-CONSISTENCY": "spec-drift-detector.py",
+    "AGENTIC-SECURITY": "agentic-security-scanner.py",
+    "AI-PENTEST": "ai-pentest-runner.py",
+    "VISUAL-REGRESSION": "visual-regression.js",
+    "ACCESSIBILITY": "accessibility-test.js",
+    "PERFORMANCE": "performance-benchmark.js",
+    "DOC-COMPLETENESS": "documentation-coverage.py",
+    "IPC-CONTRACT": "ipc-contract-validator.js",
+    "ITERATION-BUDGET": "loop-guard.py",
+    "SESSION-RECOVERY": "session-catchup.py",
+    "DESKTOP-BUILD": "build-desktop.ps1",
+    "DESKTOP-SIGN": "sign-desktop.ps1",
+    "DESKTOP-UPDATE": "verify-auto-update.ps1",
+    "TOKEN-BUDGET": "token-budget-guard.py",
+    "SECURITY-FIX-CLOSED": "security-fix-closure.py",
 }
 
 DEFAULT_QUALITY_GATES_PHASE_MAP = {
-    "0": ["DESIGN-SYSTEM-COMPLETE", "ANTI-PATTERN-CHECK", "DESIGN-REVIEW-PRODUCT", "DESIGN-REVIEW-TECH", "DESIGN-REVIEW-DESIGN"],
-    "1": ["BRAINSTORM-COMPLETE", "GATE-001", "GATE-002"],
-    "2": ["PLAN-ATOMIC", "GATE-003", "GATE-004"],
+    "0": ["DESIGN-REVIEW-PRODUCT", "DESIGN-REVIEW-TECH", "DESIGN-REVIEW-DESIGN", "DESIGN-TOKENS", "DESIGN-SYSTEM-COMPLETE", "ANTI-PATTERN-CHECK"],
+    "1": ["GATE-001", "GATE-002", "BRAINSTORM-COMPLETE"],
+    "2": ["GATE-003", "GATE-004", "PLAN-ATOMIC", "SPEC-ATOMIC"],
     "3": ["TEST-FIRST"],
-    "4": ["SUBAGENT-REVIEW", "REVIEW-CONFIDENCE", "GATE-007", "TEST-PASS", "GATE-009", "FILE-ENCODING"],
-    "5": ["PLAYWRIGHT-E2E-PASS", "GATE-011", "GATE-012", "AI-PENTEST", "SPEC-CONSISTENCY"],
-    "6": ["GATE-013", "GATE-014", "INFRA-HEALTH", "UX-ACCEPTANCE"],
-    "7": ["SIMPLIFICATION-BEHAVIOR", "CHESTERTON-FENCE", "GATE-015"],
+    "4": ["GATE-007", "TEST-PASS", "GATE-009", "MULTI-PERSPECTIVE-COVERAGE", "TDD-RED", "TDD-GREEN", "TDD-REFACTOR", "EXECUTION-VERIFY", "SCRIPT-SECURITY", "SCRIPT-CLEANUP", "FILE-ENCODING", "COMMENT-LANGUAGE"],
+    "5": ["GATE-011", "GATE-012", "SPEC-CONSISTENCY", "AGENTIC-SECURITY", "AI-PENTEST", "VISUAL-REGRESSION", "RENDER-CHECK", "ACCESSIBILITY", "PERFORMANCE", "SECURITY-FIX-CLOSED", "PLAYWRIGHT-E2E-PASS"],
+    "6": ["GATE-013", "GATE-014", "UX-ACCEPTANCE", "DOD-CHECK", "INFRA-HEALTH"],
+    "7": ["GATE-015", "DOC-COMPLETENESS", "SIMPLIFICATION-BEHAVIOR", "CHESTERTON-FENCE", "SCRIPT-CLEANUP"],
     "8": ["DESKTOP-BUILD", "DESKTOP-SIGN", "DESKTOP-UPDATE", "DESKTOP-CROSS", "IPC-CONTRACT"],
+    "cross": ["TOKEN-BUDGET", "ITERATION-BUDGET", "SESSION-RECOVERY", "BUILD-SUCCESS", "ROLLBACK-SAFETY", "INIT-COMPLETE", "STATUS-HEALTHY"],
 }
 
 DEFAULT_HOOK_SCRIPTS_MAP = {
@@ -229,10 +248,10 @@ def reload_config() -> dict[str, Any]:
     except yaml.YAMLError as exc:
         logger.error("YAML parse error during config reload: %s", exc)
         return {
-            "error": True,
-            "code": "YAML_PARSE_ERROR",
-            "message": str(exc),
-            "validation_warnings": validation_warnings,
+            "status": "error",
+            "data": None,
+            "error": {"code": "YAML_PARSE_ERROR", "message": str(exc), "validation_warnings": validation_warnings},
+            "metadata": {},
         }
 
     if not isinstance(_new_config, dict):
@@ -381,7 +400,7 @@ KNOWLEDGE_DIR = DATA_DIR / "knowledge"
 KNOWLEDGE_GENERAL_DIR = KNOWLEDGE_DIR / "general"
 KNOWLEDGE_WORKSPACE_DIR = KNOWLEDGE_DIR / "workspace"
 KNOWLEDGE_EXPERIENCE_DIR = KNOWLEDGE_DIR / "experience"
-KNOWLEDGE_DB_PATH = KNOWLEDGE_DIR / "index" / "knowledge.db"
+KNOWLEDGE_DB_PATH = WORK_DIR / "xuansto.db"
 KNOWLEDGE_CHROMA_PATH = KNOWLEDGE_DIR / "index" / "chroma_db"
 
 if not KNOWLEDGE_CHROMA_PATH.exists():

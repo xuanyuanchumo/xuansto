@@ -8,7 +8,7 @@ from typing import Any
 
 
 def _format_error(code: str, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
-    return {"error": True, "code": code, "message": message, "details": details}
+    return {"status": "error", "data": None, "error": {"code": code, "message": message, "details": details}, "metadata": {}}
 
 
 def _run_async(coro: Any) -> Any:
@@ -40,7 +40,7 @@ def _invoke_tool(tool_name: str, params_json: str) -> dict[str, Any]:
         result = _run_async(tool_fn(**params))
         if isinstance(result, dict):
             return result
-        return {"error": False, "data": result}
+        return {"status": "success", "data": result, "error": None, "metadata": {}}
     except Exception as e:
         return _format_error("EXECUTION_ERROR", str(e))
 
@@ -56,7 +56,7 @@ def _health_check() -> dict[str, Any]:
         result = _run_async(tool_fn(action="check"))
         if isinstance(result, dict):
             return result
-        return {"error": False, "data": result}
+        return {"status": "success", "data": result, "error": None, "metadata": {}}
     except Exception as e:
         return _format_error("HEALTH_CHECK_FAILED", str(e))
 

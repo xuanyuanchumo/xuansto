@@ -21,7 +21,9 @@ from ..core.config import QUALITY_GATES_PHASE_MAP, WORK_DIR, WORKFLOWS_DIR, _res
 from ..core.database import delete_workflow_state, load_workflow_states, save_workflow_state
 from ..core.errors import (
     ERR_INTERNAL,
+    ERR_NOT_FOUND,
     ERR_VALIDATION,
+    ERR_WORKFLOW_NOT_FOUND,
     XuanstoMCPError,
     make_error_response,
     make_success_response,
@@ -231,7 +233,7 @@ def _start_workflow(workflow: str, project_path: str) -> dict[str, Any]:
     workflow_file = WORKFLOWS_DIR / f"{workflow}.md"
     if not workflow_file.exists():
         available = [w["name"] for w in _list_workflows()]
-        return {"error": True, "code": "WORKFLOW_NOT_FOUND", "message": f"工作流不存在: {workflow}", "available": available}
+        return make_error_response(XuanstoMCPError("WORKFLOW_NOT_FOUND", f"工作流不存在: {workflow}", {"available": available}), error_code=ERR_WORKFLOW_NOT_FOUND)
     workflow_id = f"wf-{uuid.uuid4().hex[:8]}"
     entry = {
         "workflow_id": workflow_id,
@@ -273,14 +275,14 @@ def _get_workflow_status(workflow_id: str) -> dict[str, Any]:
         with _workflows_lock:
             _ACTIVE_WORKFLOWS[workflow_id] = loaded
         return loaded
-    return {"error": True, "code": "WORKFLOW_NOT_FOUND", "message": f"工作流实例不存在: {workflow_id}"}
+    return make_error_response(XuanstoMCPError("WORKFLOW_NOT_FOUND", f"工作流实例不存在: {workflow_id}"), error_code=ERR_WORKFLOW_NOT_FOUND)
 
 def _abort_workflow(workflow_id: str) -> dict[str, Any]:
     with _workflows_lock:
         if workflow_id not in _ACTIVE_WORKFLOWS:
             loaded = _load_workflow(workflow_id)
             if loaded is None:
-                return {"error": True, "code": "WORKFLOW_NOT_FOUND", "message": f"工作流实例不存在: {workflow_id}"}
+                return make_error_response(XuanstoMCPError("WORKFLOW_NOT_FOUND", f"工作流实例不存在: {workflow_id}"), error_code=ERR_WORKFLOW_NOT_FOUND)
             _ACTIVE_WORKFLOWS[workflow_id] = loaded
         entry = _ACTIVE_WORKFLOWS.pop(workflow_id)
     entry["status"] = "aborted"
@@ -298,7 +300,7 @@ def _advance_phase(workflow_id: str) -> dict[str, Any]:
     with _phase_advance_lock:
         state = _load_workflow(workflow_id)
         if state is None:
-            return {"error": True, "code": "WORKFLOW_NOT_FOUND", "message": f"工作流实例不存在: {workflow_id}"}
+            return make_error_response(XuanstoMCPError("WORKFLOW_NOT_FOUND", f"工作流实例不存在: {workflow_id}"), error_code=ERR_WORKFLOW_NOT_FOUND)
         current_phase = state.get("current_phase", 0)
         project_path = state.get("project_path", ".")
         phase_defs = state.get("phase_definitions", [])
@@ -417,7 +419,7 @@ def _advance_phase(workflow_id: str) -> dict[str, Any]:
 def _current_phase(workflow_id: str) -> dict[str, Any]:
     state = _load_workflow(workflow_id)
     if state is None:
-        return {"error": True, "code": "WORKFLOW_NOT_FOUND", "message": f"工作流实例不存在: {workflow_id}"}
+        return make_error_response(XuanstoMCPError("WORKFLOW_NOT_FOUND", f"工作流实例不存在: {workflow_id}"), error_code=ERR_WORKFLOW_NOT_FOUND)
     current = state.get("current_phase", 0)
     completed = state.get("completed_phases", [])
     total_phases = 9
@@ -627,7 +629,7 @@ def register(mcp: FastMCP) -> None:
                 if not workflow:
                     return make_error_response(ValueError("start操作需要workflow参数"), error_code=ERR_VALIDATION)
                 result = _start_workflow(workflow, project_path)
-                if result.get("error"):
+                if result.get("status") == "error":
                     return result
                 return make_success_response(result)
             elif action == "status":
@@ -640,14 +642,14 @@ def register(mcp: FastMCP) -> None:
                             all_workflows[wid] = data
                     return make_success_response({"workflows": all_workflows})
                 result = _get_workflow_status(workflow_id)
-                if result.get("error"):
+                if result.get("status") == "error":
                     return result
                 return make_success_response(result)
             elif action == "abort":
                 if not workflow_id:
                     return make_error_response(ValueError("abort操作需要workflow_id参数"), error_code=ERR_VALIDATION)
                 result = _abort_workflow(workflow_id)
-                if result.get("error"):
+                if result.get("status") == "error":
                     return result
                 return make_success_response(result)
             elif action == "phase":
@@ -657,12 +659,12 @@ def register(mcp: FastMCP) -> None:
                     return make_error_response(ValueError("phase操作需要phase_action参数: advance, current"), error_code=ERR_VALIDATION)
                 if phase_action == "advance":
                     result = _advance_phase(workflow_id)
-                    if result.get("error"):
+                    if result.get("status") == "error":
                         return result
                     return make_success_response(result)
                 elif phase_action == "current":
                     result = _current_phase(workflow_id)
-                    if result.get("error"):
+                    if result.get("status") == "error":
                         return result
                     return make_success_response(result)
                 else:

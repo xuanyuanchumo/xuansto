@@ -540,7 +540,8 @@ def register(mcp: FastMCP) -> None:
                         args.extend(["--context", json.dumps(context, ensure_ascii=False)])
                     script_result = run_script(script_path, args=args, timeout=30)
                     if script_result.get("error"):
-                        return make_error_response(Exception(script_result.get("message", "脚本执行失败")), error_code=ERR_INTERNAL)
+                        error_info = script_result["error"]
+                        return make_error_response(Exception(error_info.get("message", "脚本执行失败")), error_code=ERR_INTERNAL)
                     return make_success_response({"hook": hook_name, "status": "executed", "result": script_result.get("data", {})})
                 inline_fn = INLINE_HOOK_LOGIC.get(hook_name)
                 if inline_fn:

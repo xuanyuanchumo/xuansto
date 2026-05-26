@@ -149,7 +149,7 @@ class ContextCompressInput(BaseModel):
 
 class DecisionLogInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["log", "list", "query", "update", "export", "stats", "reconcile"] = Field(description="操作类型: log, list, query, update, export, stats, reconcile")
+    action: Literal["log", "list", "query", "update", "export", "stats", "reconcile", "configure"] = Field(description="操作类型: log, list, query, update, export, stats, reconcile, configure")
     title: str | None = Field(default=None, description="决策标题(log时使用)")
     description: str | None = Field(default=None, description="决策描述(log时使用)")
     context: str | None = Field(default=None, description="决策上下文(log/query时使用)")
@@ -167,6 +167,7 @@ class DecisionLogInput(BaseModel):
     format: Literal["json", "markdown"] = Field(default="json", description="导出格式(export时使用): json, markdown")
     decision_id: str | None = Field(default=None, description="决策ID(update时使用)")
     status: Literal["proposed", "accepted", "deprecated", "superseded"] | None = Field(default=None, description="决策状态(log/update时使用): proposed, accepted, deprecated, superseded")
+    file_backup: bool | None = Field(default=None, description="是否启用文件系统备份(configure时使用)")
 
 
 class TokenBudgetInput(BaseModel):
@@ -219,3 +220,17 @@ class MetricsReportInput(BaseModel):
 class ConfigManageInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     action: Literal["reload", "status", "validate"] = Field(description="操作类型: reload, status, validate")
+
+
+class ResourceSubscribeInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    action: Literal["subscribe", "unsubscribe", "list"] = Field(description="操作类型: subscribe, unsubscribe, list")
+    uri: str | None = Field(default=None, description="资源URI(subscribe/unsubscribe时使用)，如: xuansto://loading/status")
+    client_id: str | None = Field(default=None, description="客户端标识(subscribe/unsubscribe时使用)，用于区分不同订阅者")
+
+
+class AuditQueryInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    tool_name: str | None = Field(default=None, description="按工具名称过滤，为空则查询全部工具")
+    date_range: str | None = Field(default=None, description="日期范围过滤，格式: YYYY-MM-DD:YYYY-MM-DD")
+    limit: int = Field(default=50, ge=1, le=500, description="返回结果数量上限(1-500)")

@@ -681,20 +681,13 @@ def _check_transition_conditions(from_phase: int) -> dict[str, Any]:
 def advance_phase(target_phase: int, force: bool = False) -> dict[str, Any]:
     global _current_phase
     if not can_advance_to(target_phase):
-        return {"success": False, "reason": "invalid_target", "current_phase": _current_phase, "target_phase": target_phase}
+        return make_error_response(ValueError(f"无效目标阶段: current={_current_phase}, target={target_phase}"), error_code=ERR_VALIDATION)
     with _phase_lock:
         from_phase = _current_phase
         if not force:
             transition_check = _check_transition_conditions(from_phase)
             if not transition_check["can_transition"]:
-                return {
-                    "success": False,
-                    "reason": "conditions_not_met",
-                    "current_phase": from_phase,
-                    "target_phase": target_phase,
-                    "transition_check": transition_check,
-                    "hint": "使用 force=True 可跳过条件验证",
-                }
+                return make_error_response(ValueError(f"阶段转换条件未满足: {', '.join(transition_check.get('missing', []))}"), error_code=ERR_VALIDATION)
         now_iso = datetime.now(timezone.utc).isoformat()
         now_ts = time.time()
         from_name = PHASE_NAMES.get(from_phase, "skeleton")
@@ -740,6 +733,16 @@ def advance_phase(target_phase: int, force: bool = False) -> dict[str, Any]:
         "to_phase": to_name,
     })
     notify(f"Phase advanced: {from_name} -> {to_name}", "info")
+    try:
+        from .resource_subscribe import notify_subscribers
+        notify_subscribers("xuansto://loading/status", {
+            "event": "phase_transition",
+            "from_phase": from_name,
+            "to_phase": to_name,
+            "loaded_resources": resources,
+        })
+    except Exception as sub_err:
+        logger.debug("resource_subscribe notification skipped: %s", sub_err)
     new_budget = PHASE_TOKEN_BUDGET.get(target_phase, PHASE_TOKEN_BUDGET[3])
     try:
         from .token_budget import _set_budget
@@ -761,7 +764,6 @@ def advance_phase(target_phase: int, force: bool = False) -> dict[str, Any]:
     newly_available = [f for f in to_features.get("available", []) if f not in from_features.get("available", [])]
     still_unavailable = to_features.get("unavailable", [])
     result = {
-        "success": True,
         "from_phase": from_name,
         "to_phase": to_name,
         "loaded_resources": resources,
@@ -769,7 +771,7 @@ def advance_phase(target_phase: int, force: bool = False) -> dict[str, Any]:
         "still_unavailable": still_unavailable,
         "phase_metrics": _phase_state["phase_metrics"].get(to_name, {}),
     }
-    if isinstance(budget_result, dict) and "error" not in budget_result:
+    if isinstance(budget_result, dict) and budget_result.get("status") != "error":
         result["token_budget_update"] = budget_result
     return result
 
@@ -778,7 +780,7 @@ def degrade_phase() -> dict[str, Any]:
     global _current_phase
     with _phase_lock:
         if _current_phase <= 0:
-            return {"success": False, "reason": "already_at_minimum", "current_phase": _current_phase}
+            return make_error_response(ValueError("已在最低阶段，无法降级"), error_code=ERR_VALIDATION)
         from_phase = _current_phase
         _current_phase -= 1
         to_phase = _current_phase
@@ -803,7 +805,7 @@ def degrade_phase() -> dict[str, Any]:
         atomic_write(state_file, json.dumps(state_data, ensure_ascii=False, indent=2))
     except (json.JSONDecodeError, OSError):
         pass
-    return {"success": True, "from_phase": from_name, "to_phase": to_name, "reason": "token_budget"}
+    return {"from_phase": from_name, "to_phase": to_name, "reason": "token_budget"}
 
 
 def check_token_budget() -> dict[str, Any]:

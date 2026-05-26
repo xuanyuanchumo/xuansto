@@ -46,12 +46,12 @@ def _create_project(
     directory: str | None = None,
 ) -> dict[str, Any]:
     if not name:
-        return {"error": True, "message": "项目名称不能为空"}
+        return make_error_response(ValueError("项目名称不能为空"), error_code=ERR_VALIDATION)
     project_dir = Path(directory) if directory else Path.cwd() / name
     project_dir.mkdir(parents=True, exist_ok=True)
     config_path = project_dir / ".xuansto-config.yaml"
     if config_path.exists():
-        return {"error": True, "message": f"项目配置已存在: {config_path}"}
+        return make_error_response(ValueError(f"项目配置已存在: {config_path}"), error_code=ERR_VALIDATION)
     stack_items = "\n".join(f"  - {s}" for s in (stack or []))
     content = CONFIG_TEMPLATE.format(
         name=name,
@@ -73,10 +73,10 @@ def _create_project(
 
 def _validate_project(project_path: str | None = None) -> dict[str, Any]:
     if not project_path:
-        return {"error": True, "message": "项目路径不能为空"}
+        return make_error_response(ValueError("项目路径不能为空"), error_code=ERR_VALIDATION)
     path = Path(project_path)
     if not path.exists():
-        return {"error": True, "message": f"路径不存在: {project_path}"}
+        return make_error_response(ValueError(f"路径不存在: {project_path}"), error_code=ERR_NOT_FOUND)
     config_path = path / ".xuansto-config.yaml"
     issues: list[dict[str, str]] = []
     if not config_path.exists():
@@ -102,10 +102,10 @@ def _validate_project(project_path: str | None = None) -> dict[str, Any]:
 
 def _detect_stack(project_path: str | None = None) -> dict[str, Any]:
     if not project_path:
-        return {"error": True, "message": "项目路径不能为空"}
+        return make_error_response(ValueError("项目路径不能为空"), error_code=ERR_VALIDATION)
     path = Path(project_path)
     if not path.exists():
-        return {"error": True, "message": f"路径不存在: {project_path}"}
+        return make_error_response(ValueError(f"路径不存在: {project_path}"), error_code=ERR_NOT_FOUND)
     detected: list[dict[str, Any]] = []
     for stack_name, markers in STACK_MARKERS.items():
         found_markers = []
@@ -134,10 +134,10 @@ def _configure_project(
     stack: list[str] | None = None,
 ) -> dict[str, Any]:
     if not project_path:
-        return {"error": True, "message": "项目路径不能为空"}
+        return make_error_response(ValueError("项目路径不能为空"), error_code=ERR_VALIDATION)
     path = Path(project_path)
     if not path.exists():
-        return {"error": True, "message": f"路径不存在: {project_path}"}
+        return make_error_response(ValueError(f"路径不存在: {project_path}"), error_code=ERR_NOT_FOUND)
     config_path = path / ".xuansto-config.yaml"
     if config_path.exists():
         try:
@@ -184,7 +184,7 @@ def _inline_project_init(action: str, **kwargs: Any) -> dict[str, Any]:
         return _validate_project(kwargs.get("project_path"))
     elif action == "detect_stack":
         return _detect_stack(kwargs.get("project_path"))
-    return {"error": True, "message": f"未知操作: {action}"}
+    return make_error_response(ValueError(f"未知操作: {action}"), error_code=ERR_VALIDATION)
 
 
 def register(mcp: FastMCP) -> None:
@@ -219,8 +219,8 @@ def register(mcp: FastMCP) -> None:
                     if dir_err:
                         return make_error_response(ValueError(dir_err), error_code=ERR_VALIDATION)
                 result = _create_project(name, description, stack, template, directory)
-                if result.get("error"):
-                    return make_error_response(ValueError(result["message"]), error_code=ERR_VALIDATION)
+                if result.get("status") == "error":
+                    return result
                 return make_success_response(result)
             elif action == "validate":
                 if not project_path:
@@ -229,8 +229,8 @@ def register(mcp: FastMCP) -> None:
                 if path_err:
                     return make_error_response(ValueError(path_err), error_code=ERR_VALIDATION)
                 result = _validate_project(project_path)
-                if result.get("error"):
-                    return make_error_response(ValueError(result["message"]), error_code=ERR_NOT_FOUND)
+                if result.get("status") == "error":
+                    return result
                 return make_success_response(result)
             elif action in ("detect_stack", "detect"):
                 if not project_path:
@@ -239,8 +239,8 @@ def register(mcp: FastMCP) -> None:
                 if path_err:
                     return make_error_response(ValueError(path_err), error_code=ERR_VALIDATION)
                 result = _detect_stack(project_path)
-                if result.get("error"):
-                    return make_error_response(ValueError(result["message"]), error_code=ERR_NOT_FOUND)
+                if result.get("status") == "error":
+                    return result
                 return make_success_response(result)
             elif action == "configure":
                 if not project_path:
@@ -249,8 +249,8 @@ def register(mcp: FastMCP) -> None:
                 if path_err:
                     return make_error_response(ValueError(path_err), error_code=ERR_VALIDATION)
                 result = _configure_project(project_path, name, description, stack)
-                if result.get("error"):
-                    return make_error_response(ValueError(result["message"]), error_code=ERR_VALIDATION)
+                if result.get("status") == "error":
+                    return result
                 return make_success_response(result)
             else:
                 return make_error_response(ValueError(f"未知操作: {action}，支持: create, init, validate, detect_stack, detect, configure"), error_code=ERR_VALIDATION)
