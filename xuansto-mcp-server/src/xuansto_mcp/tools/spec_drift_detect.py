@@ -170,7 +170,7 @@ def register(mcp: FastMCP) -> None:
             script_path = SCRIPTS_DIR / "spec-drift-detector.py"
 
             if script_path.exists():
-                result = run_script(
+                result = await run_script(
                     script_path,
                     args=["--spec-dir", spec_dir, "--src-dir", src_dir, "--format", "json"],
                     timeout=60,

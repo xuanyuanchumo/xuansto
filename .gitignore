@@ -21,6 +21,8 @@ chroma_db/
 # =============================================================================
 xuansto-mcp-server/.skill-logs/
 xuansto-mcp-server/.agent_cache/
+xuansto-mcp-server/data/knowledge/general/added-*
+xuansto-mcp-server/src/xuansto_mcp/data/knowledge/general/added-*
 
 # =============================================================================
 # Python
@@ -115,6 +117,8 @@ audit_log.jsonl
 *.tmp
 *.temp
 .cache/
+docs/plan/*.tmp
+docs/plan/*.bak
 
 # =============================================================================
 # Node.js

@@ -97,36 +97,6 @@ def register(mcp: FastMCP) -> None:
         except Exception as e:
             return _degraded_resource("xuansto://config/skill", str(e))
 
-    @mcp.resource("xuansto://references/quality-gates")
-    def quality_gates() -> str:
-        try:
-            ref_path = REFERENCES_DIR / "quality-gates.md"
-            if ref_path.exists():
-                return ref_path.read_text(encoding="utf-8")
-            return "# 质量门禁文档不存在"
-        except Exception as e:
-            return _degraded_resource("xuansto://references/quality-gates", str(e))
-
-    @mcp.resource("xuansto://references/agent-registry")
-    def agent_registry() -> str:
-        try:
-            ref_path = REFERENCES_DIR / "agent-registry.md"
-            if ref_path.exists():
-                return ref_path.read_text(encoding="utf-8")
-            return "# Agent注册表不存在"
-        except Exception as e:
-            return _degraded_resource("xuansto://references/agent-registry", str(e))
-
-    @mcp.resource("xuansto://references/workflow-phases")
-    def workflow_phases() -> str:
-        try:
-            ref_path = REFERENCES_DIR / "workflow-phases.md"
-            if ref_path.exists():
-                return ref_path.read_text(encoding="utf-8")
-            return "# 工作流定义不存在"
-        except Exception as e:
-            return _degraded_resource("xuansto://references/workflow-phases", str(e))
-
     @mcp.resource("xuansto://templates/{name}")
     def template(name: str) -> str:
         try:
@@ -388,16 +358,6 @@ def register(mcp: FastMCP) -> None:
         except Exception as e:
             return _degraded_resource("xuansto://degradation/status", str(e))
 
-    @mcp.resource("xuansto://skill/config")
-    def skill_config_unified() -> str:
-        try:
-            config_path = _resolve_skill_file(".skill-config.yaml")
-            if config_path.exists():
-                return config_path.read_text(encoding="utf-8")
-            return json.dumps({"status": "not_found", "message": "配置文件不存在"}, ensure_ascii=False, indent=2)
-        except Exception as e:
-            return _degraded_resource("xuansto://skill/config", str(e))
-
     @mcp.resource("xuansto://skill/constraints")
     def skill_constraints() -> str:
         try:
@@ -468,37 +428,6 @@ def register(mcp: FastMCP) -> None:
             return json.dumps({"hooks": hooks}, ensure_ascii=False, indent=2)
         except Exception as e:
             return _degraded_resource("xuansto://hooks/definitions", str(e))
-
-    @mcp.resource("xuansto://knowledge/status")
-    def knowledge_status() -> str:
-        try:
-            status: dict[str, Any] = {
-                "knowledge_dir_exists": KNOWLEDGE_DIR.exists(),
-                "db_exists": KNOWLEDGE_DB_PATH.exists(),
-                "chroma_exists": KNOWLEDGE_CHROMA_PATH.exists(),
-            }
-            if KNOWLEDGE_DB_PATH.exists():
-                try:
-                    import sqlite3
-                    conn = sqlite3.connect(str(KNOWLEDGE_DB_PATH))
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT COUNT(*) FROM knowledge_entries WHERE deleted_at IS NULL")
-                    status["db_entry_count"] = cursor.fetchone()[0]
-                    conn.close()
-                except Exception:
-                    status["db_entry_count"] = -1
-            if KNOWLEDGE_CHROMA_PATH.exists():
-                try:
-                    import chromadb
-                    client = chromadb.PersistentClient(path=str(KNOWLEDGE_CHROMA_PATH))
-                    collection = client.get_or_create_collection("knowledge")
-                    status["chroma_entry_count"] = collection.count()
-                except Exception:
-                    status["chroma_entry_count"] = -1
-            status["timestamp"] = time.time()
-            return json.dumps(status, ensure_ascii=False, indent=2)
-        except Exception as e:
-            return _degraded_resource("xuansto://knowledge/status", str(e))
 
     @mcp.resource("xuansto://knowledge/stats")
     def knowledge_stats() -> str:

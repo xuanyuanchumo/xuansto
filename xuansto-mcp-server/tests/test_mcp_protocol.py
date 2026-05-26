@@ -115,9 +115,9 @@ async def test_list_resources():
         resource_uris = [str(r.uri) for r in resources_result.resources]
         expected_static = [
             "xuansto://config/skill",
-            "xuansto://references/quality-gates",
-            "xuansto://references/agent-registry",
-            "xuansto://references/workflow-phases",
+            "xuansto://gates/definitions",
+            "xuansto://agents/registry",
+            "xuansto://workflows/definitions",
             "xuansto://sessions/latest",
         ]
         for uri in expected_static:

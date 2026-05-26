@@ -8,7 +8,6 @@ import importlib
 import importlib.util
 import json
 import random
-import subprocess
 import sys
 import threading
 import time
@@ -504,7 +503,7 @@ def check_mcp_available() -> bool:
         return False
 
 
-def run_script_fallback(
+async def run_script_fallback(
     script_name: str,
     args: list[str] | None = None,
     cwd: str = ".",
@@ -524,24 +523,25 @@ def run_script_fallback(
         cmd.extend(args)
 
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
         )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        output = stdout.decode("utf-8", errors="replace").strip()
         try:
-            parsed = json.loads(result.stdout)
+            parsed = json.loads(output)
             return {"status": "success", "data": parsed, "error": None, "metadata": {"fallback": True, "degraded": True}}
         except json.JSONDecodeError:
             return {
                 "status": "success",
-                "data": {"raw_output": result.stdout[:2000]},
+                "data": {"raw_output": output[:2000]},
                 "error": None,
                 "metadata": {"fallback": True, "degraded": True},
             }
-    except subprocess.TimeoutExpired:
+    except asyncio.TimeoutError:
         return {
             "status": "error",
             "data": None,
@@ -555,38 +555,6 @@ def run_script_fallback(
             "error": {"code": "EXECUTION_ERROR", "message": str(e)},
             "metadata": {"fallback": True},
         }
-
-
-async def run_script_fallback_async(
-    script_name: str,
-    args: list[str] | None = None,
-    cwd: str = ".",
-    timeout: int = 60,
-) -> dict[str, Any]:
-    script_path = SCRIPTS_DIR / script_name
-    if not script_path.exists():
-        return {"status": "error", "data": None, "error": {"code": "SCRIPT_NOT_FOUND", "message": f"脚本不存在: {script_name}"}, "metadata": {"fallback": True}}
-    cmd = [sys.executable, str(script_path)]
-    if args:
-        cmd.extend(args)
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=cwd,
-        )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-        output = stdout.decode("utf-8", errors="replace").strip()
-        try:
-            parsed = json.loads(output)
-            return {"status": "success", "data": parsed, "error": None, "metadata": {"fallback": True, "degraded": True}}
-        except json.JSONDecodeError:
-            return {"status": "success", "data": {"raw_output": output[:2000]}, "error": None, "metadata": {"fallback": True, "degraded": True}}
-    except asyncio.TimeoutError:
-        return {"status": "error", "data": None, "error": {"code": "TIMEOUT", "message": f"脚本执行超时({timeout}s): {script_name}"}, "metadata": {"fallback": True}}
-    except Exception as e:
-        return {"status": "error", "data": None, "error": {"code": "EXECUTION_ERROR", "message": str(e)}, "metadata": {"fallback": True}}
 
 
 def _fallback_success(
@@ -648,16 +616,16 @@ def _try_inline_fallback(tool_module: str, func_name: str, *args: Any, **kwargs:
         return None
 
 
-def skill_analyze_fallback(skill_path: str, **kwargs: Any) -> dict[str, Any]:
+async def skill_analyze_fallback(skill_path: str, **kwargs: Any) -> dict[str, Any]:
     logger.warning("Tool %s using fallback", "skill_analyze")
-    script_result = run_script_fallback(
+    script_result = await run_script_fallback(
         "skill-test.py",
         args=["--analyze", "--path", skill_path, "--format", "json"],
         timeout=30,
     )
     if not script_result.get("error"):
         return _standardize_result(script_result, "skill_analyze")
-    script_result = run_script_fallback(
+    script_result = await run_script_fallback(
         "skill-test.py",
         args=["--path", skill_path, "--format", "json"],
         timeout=30,
@@ -670,16 +638,16 @@ def skill_analyze_fallback(skill_path: str, **kwargs: Any) -> dict[str, Any]:
     return _fallback_success("skill_analyze", {"skill_path": skill_path, "analyzed": False}, degradation_level="minimal")
 
 
-def knowledge_search_fallback(query: str, **kwargs: Any) -> dict[str, Any]:
+async def knowledge_search_fallback(query: str, **kwargs: Any) -> dict[str, Any]:
     logger.warning("Tool %s using fallback", "knowledge_search")
-    script_result = run_script_fallback(
+    script_result = await run_script_fallback(
         "knowledge-server.py",
         args=["--search", "--query", query, "--format", "json"],
         timeout=30,
     )
     if not script_result.get("error"):
         return _standardize_result(script_result, "knowledge_search")
-    script_result = run_script_fallback(
+    script_result = await run_script_fallback(
         "knowledge-server.py",
         args=["search", "--query", query, "--format", "json"],
         timeout=30,
@@ -692,9 +660,9 @@ def knowledge_search_fallback(query: str, **kwargs: Any) -> dict[str, Any]:
     return _fallback_success("knowledge_search", {"query": query, "results": []}, degradation_level="minimal")
 
 
-def knowledge_inject_fallback(action: str = "inject", topics: list[str] | None = None, scope: str = "general", **kwargs: Any) -> dict[str, Any]:
+async def knowledge_inject_fallback(action: str = "inject", topics: list[str] | None = None, scope: str = "general", **kwargs: Any) -> dict[str, Any]:
     logger.warning("Tool %s using fallback", "knowledge_inject")
-    script_result = run_script_fallback(
+    script_result = await run_script_fallback(
         "knowledge-server.py",
         args=["--inject", "--action", action, "--scope", scope, "--format", "json"],
         timeout=30,
@@ -707,12 +675,12 @@ def knowledge_inject_fallback(action: str = "inject", topics: list[str] | None =
     return _fallback_success("knowledge_inject", {"action": action, "injected_count": 0, "topics": topics or []}, degradation_level="minimal")
 
 
-def quality_gate_fallback(gate_ids: list[str] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def quality_gate_fallback(gate_ids: list[str] | None = None, **kwargs: Any) -> dict[str, Any]:
     logger.warning("Tool %s using fallback", "quality_gate_check")
     gate_args = ["--gate", "--format", "json"]
     if gate_ids:
         gate_args.extend(["--gate-ids", ",".join(gate_ids)])
-    script_result = run_script_fallback(
+    script_result = await run_script_fallback(
         "skill-test.py",
         args=gate_args,
         timeout=30,
@@ -726,7 +694,7 @@ def quality_gate_fallback(gate_ids: list[str] | None = None, **kwargs: Any) -> d
     for gate_id in gate_ids:
         script = GATE_SCRIPTS_MAP.get(gate_id)
         if script:
-            result = run_script_fallback(script, args=["--format", "json"], timeout=30)
+            result = await run_script_fallback(script, args=["--format", "json"], timeout=30)
             results.append({"gate_id": gate_id, **result})
         else:
             results.append({"gate_id": gate_id, "status": "SKIP", "fallback": True})
@@ -738,9 +706,9 @@ def quality_gate_fallback(gate_ids: list[str] | None = None, **kwargs: Any) -> d
     return _fallback_success("quality_gate_check", {"checks": results}, degradation_level="minimal")
 
 
-def spec_drift_fallback(spec_dir: str = ".trae/specs", src_dir: str = ".", **kwargs: Any) -> dict[str, Any]:
+async def spec_drift_fallback(spec_dir: str = ".trae/specs", src_dir: str = ".", **kwargs: Any) -> dict[str, Any]:
     logger.warning("Tool %s using fallback", "spec_drift_detect")
-    script_result = run_script_fallback(
+    script_result = await run_script_fallback(
         "spec-drift-detector.py",
         args=["--spec-dir", spec_dir, "--src-dir", src_dir, "--format", "json"],
         timeout=60,
@@ -753,11 +721,11 @@ def spec_drift_fallback(spec_dir: str = ".trae/specs", src_dir: str = ".", **kwa
     return _fallback_success("spec_drift_detect", {"spec_dir": spec_dir, "src_dir": src_dir, "drifts": []}, degradation_level="minimal")
 
 
-def security_scan_fallback(target: str = ".", severity_threshold: str = "medium", **kwargs: Any) -> dict[str, Any]:
+async def security_scan_fallback(target: str = ".", severity_threshold: str = "medium", **kwargs: Any) -> dict[str, Any]:
     logger.warning("Tool %s using fallback", "security_scan")
     script_path = SCRIPTS_DIR / "agentic-security-scanner.py"
     if script_path.exists():
-        result = run_script_fallback(
+        result = await run_script_fallback(
             "agentic-security-scanner.py",
             args=["--target", target, "--severity-threshold", severity_threshold, "--format", "json"],
             timeout=120,
@@ -770,9 +738,9 @@ def security_scan_fallback(target: str = ".", severity_threshold: str = "medium"
     return _fallback_success("security_scan", {"target": target, "issues": [], "scanned": False}, degradation_level="minimal")
 
 
-def code_simplify_fallback(target: str, scope: str = "recent", **kwargs: Any) -> dict[str, Any]:
+async def code_simplify_fallback(target: str, scope: str = "recent", **kwargs: Any) -> dict[str, Any]:
     logger.warning("Tool %s using fallback", "code_simplify")
-    script_result = run_script_fallback(
+    script_result = await run_script_fallback(
         "code-simplifier.py",
         args=["--target", target, "--scope", scope, "--format", "json"],
         timeout=60,
@@ -785,10 +753,10 @@ def code_simplify_fallback(target: str, scope: str = "recent", **kwargs: Any) ->
     return _fallback_success("code_simplify", {"target": target, "scope": scope, "simplified": False}, degradation_level="minimal")
 
 
-def session_manage_fallback(action: str, **kwargs: Any) -> dict[str, Any]:
+async def session_manage_fallback(action: str, **kwargs: Any) -> dict[str, Any]:
     logger.warning("Tool %s using fallback", "session_manage")
     if action in ("save", "init"):
-        script_result = run_script_fallback(
+        script_result = await run_script_fallback(
             "init-session.py",
             args=["--action", action, "--format", "json"],
             timeout=15,
@@ -796,7 +764,7 @@ def session_manage_fallback(action: str, **kwargs: Any) -> dict[str, Any]:
         if not script_result.get("error"):
             return _standardize_result(script_result, "session_manage")
     if action in ("load", "detect", "restore"):
-        script_result = run_script_fallback(
+        script_result = await run_script_fallback(
             "session-catchup.py",
             args=["--action", action, "--format", "json"],
             timeout=15,
@@ -809,7 +777,7 @@ def session_manage_fallback(action: str, **kwargs: Any) -> dict[str, Any]:
         "list": ["list"],
     }
     args = args_map.get(action, [action])
-    script_result = run_script_fallback(
+    script_result = await run_script_fallback(
         "session-persist.py",
         args=args,
         timeout=15,
@@ -822,10 +790,10 @@ def session_manage_fallback(action: str, **kwargs: Any) -> dict[str, Any]:
     return _fallback_success("session_manage", {"action": action, "status": "unavailable"}, degradation_level="minimal")
 
 
-def workflow_dispatch_fallback(action: str, **kwargs: Any) -> dict[str, Any]:
+async def workflow_dispatch_fallback(action: str, **kwargs: Any) -> dict[str, Any]:
     logger.warning("Tool %s using fallback", "workflow_dispatch")
     if action == "start":
-        script_result = run_script_fallback("project-initializer.py", args=["--format", "json"], timeout=30)
+        script_result = await run_script_fallback("project-initializer.py", args=["--format", "json"], timeout=30)
         if not script_result.get("error"):
             return _standardize_result(script_result, "workflow_dispatch")
         try:
@@ -850,7 +818,7 @@ def workflow_dispatch_fallback(action: str, **kwargs: Any) -> dict[str, Any]:
     return _fallback_error("workflow_dispatch", "UNKNOWN_ACTION", f"未知操作: {action}")
 
 
-def agent_status_fallback(action: str = "list", **kwargs: Any) -> dict[str, Any]:
+async def agent_status_fallback(action: str = "list", **kwargs: Any) -> dict[str, Any]:
     logger.warning("Tool %s using fallback", "agent_status")
     from .config import AGENTS_DIR
     registry_yaml = AGENTS_DIR / "registry.yaml"
@@ -899,7 +867,7 @@ def agent_status_fallback(action: str = "list", **kwargs: Any) -> dict[str, Any]
                 name = agent_file.stem
                 phase_agents.append({"name": name, "layer": agent_file.parent.name, "phase": phase_map.get(name, 2)})
             return _fallback_success("agent_status", {"agents": phase_agents, "phase": phase, "source": "static_registry"})
-    script_result = run_script_fallback("skill-test.py", args=["--agents", "--format", "json"], timeout=30)
+    script_result = await run_script_fallback("skill-test.py", args=["--agents", "--format", "json"], timeout=30)
     if not script_result.get("error"):
         return _standardize_result(script_result, "agent_status")
     inline_result = _try_inline_fallback("agent_status", "_inline_agent_status", action, **kwargs)
@@ -908,7 +876,7 @@ def agent_status_fallback(action: str = "list", **kwargs: Any) -> dict[str, Any]
     return _fallback_success("agent_status", {"agents": [], "total": 0}, degradation_level="minimal")
 
 
-def hook_manage_fallback(action: str = "list", **kwargs: Any) -> dict[str, Any]:
+async def hook_manage_fallback(action: str = "list", **kwargs: Any) -> dict[str, Any]:
     logger.warning("Tool %s using fallback", "hook_manage")
     if action == "execute" and kwargs.get("hook_name"):
         hook_scripts = {
@@ -918,7 +886,7 @@ def hook_manage_fallback(action: str = "list", **kwargs: Any) -> dict[str, Any]:
         }
         script = hook_scripts.get(kwargs["hook_name"])
         if script:
-            script_result = run_script_fallback(script, args=["--format", "json"], timeout=30)
+            script_result = await run_script_fallback(script, args=["--format", "json"], timeout=30)
             if not script_result.get("error"):
                 return _standardize_result(script_result, "hook_manage")
     inline_result = _try_inline_fallback("hook_manage", "_inline_hook_manage", action, **kwargs)
@@ -927,7 +895,7 @@ def hook_manage_fallback(action: str = "list", **kwargs: Any) -> dict[str, Any]:
     return _fallback_success("hook_manage", {"hooks": []}, degradation_level="minimal")
 
 
-def resource_load_status_fallback(action: str = "status", **kwargs: Any) -> dict[str, Any]:
+async def resource_load_status_fallback(action: str = "status", **kwargs: Any) -> dict[str, Any]:
     logger.warning("Tool %s using fallback", "resource_load_status")
     try:
         from .config import WORK_DIR
@@ -943,9 +911,9 @@ def resource_load_status_fallback(action: str = "status", **kwargs: Any) -> dict
     return _fallback_success("resource_load_status", {"resources": {}}, degradation_level="minimal")
 
 
-def context_compress_fallback(content: str = "", strategy: str = "semantic", **kwargs: Any) -> dict[str, Any]:
+async def context_compress_fallback(content: str = "", strategy: str = "semantic", **kwargs: Any) -> dict[str, Any]:
     logger.warning("Tool %s using fallback", "context_compress")
-    script_result = run_script_fallback("context-compressor.py", args=["--strategy", strategy, "--format", "json"], timeout=30)
+    script_result = await run_script_fallback("context-compressor.py", args=["--strategy", strategy, "--format", "json"], timeout=30)
     if not script_result.get("error"):
         return _standardize_result(script_result, "context_compress")
     inline_result = _try_inline_fallback("context_compress", "_inline_context_compress", content, strategy, **kwargs)
@@ -954,9 +922,9 @@ def context_compress_fallback(content: str = "", strategy: str = "semantic", **k
     return _fallback_success("context_compress", {"strategy": strategy, "compressed": False}, degradation_level="minimal")
 
 
-def server_health_fallback(**kwargs: Any) -> dict[str, Any]:
+async def server_health_fallback(**kwargs: Any) -> dict[str, Any]:
     logger.warning("Tool %s using fallback", "server_health")
-    script_result = run_script_fallback(
+    script_result = await run_script_fallback(
         "health-checker.py",
         args=["--format", "json"],
         timeout=15,
@@ -969,9 +937,9 @@ def server_health_fallback(**kwargs: Any) -> dict[str, Any]:
     return _fallback_success("server_health", {"status": "degraded", "mcp_available": False}, degradation_level="minimal")
 
 
-def fallback_decision_log(action: str, **kwargs: Any) -> dict[str, Any]:
+async def fallback_decision_log(action: str, **kwargs: Any) -> dict[str, Any]:
     logger.warning("Tool %s using fallback", "decision_log")
-    script_result = run_script_fallback(
+    script_result = await run_script_fallback(
         "decision-log.py",
         args=["--action", action, "--format", "json"],
         timeout=30,
@@ -984,9 +952,9 @@ def fallback_decision_log(action: str, **kwargs: Any) -> dict[str, Any]:
     return _fallback_success("decision_log", {"action": action, "entries": []}, degradation_level="minimal")
 
 
-def fallback_token_budget(action: str, **kwargs: Any) -> dict[str, Any]:
+async def fallback_token_budget(action: str, **kwargs: Any) -> dict[str, Any]:
     logger.warning("Tool %s using fallback", "token_budget")
-    script_result = run_script_fallback(
+    script_result = await run_script_fallback(
         "token-budget-guard.py",
         args=["--action", action, "--format", "json"],
         timeout=30,
@@ -999,9 +967,9 @@ def fallback_token_budget(action: str, **kwargs: Any) -> dict[str, Any]:
     return _fallback_success("token_budget", {"action": action, "budget": {}}, degradation_level="minimal")
 
 
-def fallback_project_init(action: str, **kwargs: Any) -> dict[str, Any]:
+async def fallback_project_init(action: str, **kwargs: Any) -> dict[str, Any]:
     logger.warning("Tool %s using fallback", "project_init")
-    script_result = run_script_fallback(
+    script_result = await run_script_fallback(
         "project-initializer.py",
         args=["--action", action, "--format", "json"],
         timeout=30,
@@ -1014,7 +982,7 @@ def fallback_project_init(action: str, **kwargs: Any) -> dict[str, Any]:
     return _fallback_success("project_init", {"action": action, "initialized": False}, degradation_level="minimal")
 
 
-def agent_manage_fallback(action: str, **kwargs: Any) -> dict[str, Any]:
+async def agent_manage_fallback(action: str, **kwargs: Any) -> dict[str, Any]:
     logger.warning("Tool %s using fallback", "agent_manage")
     inline_result = _try_inline_fallback("agent_manage", "_inline_agent_manage", action, **kwargs)
     if inline_result is not None:
@@ -1022,9 +990,9 @@ def agent_manage_fallback(action: str, **kwargs: Any) -> dict[str, Any]:
     return _fallback_success("agent_manage", {"action": action, "managed": False}, degradation_level="minimal")
 
 
-def metrics_report_fallback(action: str, **kwargs: Any) -> dict[str, Any]:
+async def metrics_report_fallback(action: str, **kwargs: Any) -> dict[str, Any]:
     logger.warning("Tool %s using fallback", "metrics_report")
-    script_result = run_script_fallback(
+    script_result = await run_script_fallback(
         "test-reporter.py",
         args=["--action", action, "--format", "json"],
         timeout=30,
@@ -1037,7 +1005,7 @@ def metrics_report_fallback(action: str, **kwargs: Any) -> dict[str, Any]:
     return _fallback_success("metrics_report", {"action": action, "metrics": {}}, degradation_level="minimal")
 
 
-def config_manage_fallback(action: str, **kwargs: Any) -> dict[str, Any]:
+async def config_manage_fallback(action: str, **kwargs: Any) -> dict[str, Any]:
     logger.warning("Tool %s using fallback", "config_manage")
     inline_result = _try_inline_fallback("config_manage", "_inline_config_manage", action, **kwargs)
     if inline_result is not None:
@@ -1080,7 +1048,7 @@ class DegradationExecutor:
         if fallback_fn is not None:
             try:
                 result = await asyncio.wait_for(
-                    asyncio.get_event_loop().run_in_executor(None, lambda: fallback_fn(**kwargs)),
+                    fallback_fn(**kwargs),
                     timeout=self._timeout,
                 )
                 if isinstance(result, dict):
@@ -1097,7 +1065,17 @@ class DegradationExecutor:
         fallback_fn = self._fallback_map.get(tool_name)
         if fallback_fn is not None:
             try:
-                result = fallback_fn(**kwargs)
+                try:
+                    loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    loop = None
+                if loop is not None and loop.is_running():
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as pool:
+                        future = pool.submit(asyncio.run, fallback_fn(**kwargs))
+                        result = future.result(timeout=self._timeout)
+                else:
+                    result = asyncio.run(fallback_fn(**kwargs))
                 if isinstance(result, dict):
                     result["degraded"] = True
                 return result

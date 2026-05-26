@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import sqlite3
 from datetime import datetime, timezone
@@ -421,11 +422,11 @@ def register(mcp: FastMCP) -> None:
                         ValueError("inject action requires topics parameter"),
                         error_code=ERR_VALIDATION,
                     )
-                result = _action_inject(topics, scope, max_tokens, relevance_threshold)
+                result = await asyncio.to_thread(_action_inject, topics, scope, max_tokens, relevance_threshold)
                 return make_success_response(data=result)
 
             if action == "list_available":
-                result = _action_list_available(scope if scope != "general" else None)
+                result = await asyncio.to_thread(_action_list_available, scope if scope != "general" else None)
                 return make_success_response(data=result)
 
             if action == "precipitate":
@@ -434,7 +435,7 @@ def register(mcp: FastMCP) -> None:
                         ValueError("precipitate action requires category, title, and content parameters"),
                         error_code=ERR_VALIDATION,
                     )
-                result = _action_precipitate(category, title, content, tags, confidence)
+                result = await asyncio.to_thread(_action_precipitate, category, title, content, tags, confidence)
                 return make_success_response(data=result)
 
             if action == "add":
@@ -443,7 +444,7 @@ def register(mcp: FastMCP) -> None:
                         ValueError("add action requires title and content parameters"),
                         error_code=ERR_VALIDATION,
                     )
-                result = _action_add(title, content, scope, tags)
+                result = await asyncio.to_thread(_action_add, title, content, scope, tags)
                 return make_success_response(data=result)
 
             if action == "update":
@@ -452,7 +453,7 @@ def register(mcp: FastMCP) -> None:
                         ValueError("update action requires entry_id parameter"),
                         error_code=ERR_VALIDATION,
                     )
-                result = _action_update(entry_id, title, content, tags)
+                result = await asyncio.to_thread(_action_update, entry_id, title, content, tags)
                 return make_success_response(data=result)
 
             return make_error_response(

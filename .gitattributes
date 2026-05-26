@@ -159,6 +159,7 @@ LICENSE text eol=lf
 # Project-specific merge strategies
 # =============================================================================
 resource_state.json merge=union
+spec-locks/*.json merge=union
 
 # =============================================================================
 # Linguist: generated files

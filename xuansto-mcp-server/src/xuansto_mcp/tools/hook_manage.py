@@ -532,13 +532,13 @@ def register(mcp: FastMCP) -> None:
                         inline_fn = INLINE_HOOK_LOGIC.get(hook_name)
                         if inline_fn:
                             project_path = context.get("project_path", ".") if context else "."
-                            inline_result = inline_fn(project_path, context)
+                            inline_result = await asyncio.to_thread(inline_fn, project_path, context)
                             return make_success_response({"hook": hook_name, "status": inline_result["status"], "message": inline_result["message"], "details": inline_result["details"], "source": "inline_fallback"})
                         return make_success_response({"hook": hook_name, "status": "skipped", "reason": f"脚本不存在且无内嵌逻辑: {script}"})
                     args = []
                     if context:
                         args.extend(["--context", json.dumps(context, ensure_ascii=False)])
-                    script_result = run_script(script_path, args=args, timeout=30)
+                    script_result = await run_script(script_path, args=args, timeout=30)
                     if script_result.get("error"):
                         error_info = script_result["error"]
                         return make_error_response(Exception(error_info.get("message", "脚本执行失败")), error_code=ERR_INTERNAL)
@@ -546,7 +546,7 @@ def register(mcp: FastMCP) -> None:
                 inline_fn = INLINE_HOOK_LOGIC.get(hook_name)
                 if inline_fn:
                     project_path = context.get("project_path", ".") if context else "."
-                    inline_result = inline_fn(project_path, context)
+                    inline_result = await asyncio.to_thread(inline_fn, project_path, context)
                     return make_success_response({"hook": hook_name, "status": inline_result["status"], "message": inline_result["message"], "details": inline_result["details"], "source": "inline"})
                 return make_success_response({"hook": hook_name, "status": "skipped", "reason": "无对应脚本或内联逻辑，需手动执行"})
             else:

@@ -38,10 +38,10 @@ Xuansto Skill MCP Server v8.0.0 — 20 atomic tools + 8 resources for autonomous
 
 ### 8 MCP Resources
 
-- `xuansto://skill/config` — Skill configuration
-- `xuansto://quality/gates` — Quality gates reference
+- `xuansto://config/skill` — Skill configuration
+- `xuansto://gates/definitions` — Quality gates reference
 - `xuansto://agents/registry` — Agent registry
-- `xuansto://workflow/phases` — Workflow phases definition
+- `xuansto://workflows/definitions` — Workflow phases definition
 - `xuansto://templates/{name}` — Template documents
 - `xuansto://session/history` — Session history
 - `xuansto://loading/status` — Resource loading status
@@ -212,10 +212,10 @@ src/xuansto_mcp/
 
 | URI | Description |
 |-----|-------------|
-| `xuansto://skill/config` | Skill configuration |
-| `xuansto://quality/gates` | Quality gates reference |
+| `xuansto://config/skill` | Skill configuration |
+| `xuansto://gates/definitions` | Quality gates reference |
 | `xuansto://agents/registry` | Agent registry |
-| `xuansto://workflow/phases` | Workflow phases definition |
+| `xuansto://workflows/definitions` | Workflow phases definition |
 | `xuansto://templates/{name}` | Template documents |
 | `xuansto://session/history` | Session history |
 | `xuansto://loading/status` | Resource loading status |

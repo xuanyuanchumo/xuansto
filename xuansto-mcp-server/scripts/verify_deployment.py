@@ -28,9 +28,9 @@ EXPECTED_TOOLS = [
 
 EXPECTED_RESOURCES = [
     "xuansto://config/skill",
-    "xuansto://references/quality-gates",
-    "xuansto://references/agent-registry",
-    "xuansto://references/workflow-phases",
+    "xuansto://gates/definitions",
+    "xuansto://agents/registry",
+    "xuansto://workflows/definitions",
     "xuansto://templates/{name}",
     "xuansto://sessions/latest",
     "xuansto://loading/status",

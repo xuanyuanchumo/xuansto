@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import math
 import sqlite3
 from pathlib import Path
@@ -444,31 +445,31 @@ def register(mcp: FastMCP) -> None:
                 from ..core.config import KNOWLEDGE_VERSION_CLEANUP_KEEP_LAST_N
                 from ..core.database import cleanup_knowledge_versions
                 effective_keep_n = keep_last_n if keep_last_n != 10 else KNOWLEDGE_VERSION_CLEANUP_KEEP_LAST_N
-                result = cleanup_knowledge_versions(keep_last_n=effective_keep_n, keep_marked=True)
+                result = await asyncio.to_thread(cleanup_knowledge_versions, keep_last_n=effective_keep_n, keep_marked=True)
                 if result.get("status") == "error":
                     return result
                 return make_success_response(result)
 
             if not query:
                 return make_error_response(ValueError("retrieve action requires query parameter"), error_code=ERR_VALIDATION)
-            _ensure_knowledge_index()
+            await asyncio.to_thread(_ensure_knowledge_index)
 
             if search_type in ("hybrid", "semantic_only"):
                 chroma_engine = get_search_engine("chromadb")
-                chroma_results = chroma_engine.search(query, top_k, {"scope": scope, "min_confidence": min_confidence})
+                chroma_results = await asyncio.to_thread(chroma_engine.search, query, top_k, {"scope": scope, "min_confidence": min_confidence})
                 if chroma_results:
                     items = [{"source": r.source, "content": r.content, "match_type": r.match_type, "relevance": r.relevance} for r in chroma_results]
                     return make_success_response(data={"results": items, "total": len(items), "strategy": "chromadb_semantic"}, degradation_level="chromadb")
 
             if search_type in ("hybrid", "keyword_only") or (search_type == "semantic_only" and not chroma_results):
                 sqlite_engine = get_search_engine("sqlite_fts5")
-                sqlite_results = sqlite_engine.search(query, top_k, {"scope": scope, "min_confidence": min_confidence})
+                sqlite_results = await asyncio.to_thread(sqlite_engine.search, query, top_k, {"scope": scope, "min_confidence": min_confidence})
                 if sqlite_results:
                     items = [{"source": r.source, "content": r.content, "match_type": r.match_type, "relevance": r.relevance} for r in sqlite_results]
                     return make_success_response(data={"results": items, "total": len(items), "strategy": "sqlite_fts5_bm25"}, degradation_level="sqlite_fts5")
 
             simple_engine = get_search_engine("simple")
-            simple_results = simple_engine.search(query, top_k, {"scope": scope})
+            simple_results = await asyncio.to_thread(simple_engine.search, query, top_k, {"scope": scope})
             items = [{"source": r.source, "content": r.content, "match_type": r.match_type, "relevance": r.relevance} for r in simple_results]
             return make_success_response(data={"results": items, "total": len(items), "strategy": "keyword_tfidf"}, degradation_level="keyword_fallback")
         except Exception as e:

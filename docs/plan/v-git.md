@@ -1,8 +1,8 @@
 # Xuansto Skill v2 — Git/GitHub 管理方案
 
-> **版本**: 1.0 | **日期**: 2026-05-26 | **基线版本**: 8.4.0
+> **版本**: 2.0 | **日期**: 2026-05-26 | **基线版本**: 8.5.0
 > **适用范围**: xuansto-skill-v2（Skill定义层）+ xuansto-mcp-server（MCP Server执行层）
-> **Worktree 路径**: `c:\Users\86156\.trae-cn\worktrees\skiller\feat-develop-main-branch-H3MhdQ`
+> **Worktree 路径**: `c:\Users\86156\.trae-cn\worktrees\skiller\feat-develop-main-implement-g6ErtN`
 > **主仓库路径**: `D:\Projects\TraeProjects\skiller`
 
 ---
@@ -45,31 +45,28 @@ Worktree: c:\Users\86156\.trae-cn\worktrees\skiller\feat-develop-main-branch-H3M
 
 ### 1.2 Worktree 目录结构设计
 
-基于重构计划的6个阶段，设计以下 Worktree 并行开发布局：
+基于重构计划的5个阶段（对应 REFACTOR_PLAN.md v2.0），设计以下 Worktree 并行开发布局：
 
 ```
 D:\Projects\TraeProjects\skiller\                    # 主仓库（develop 分支）
 │
 ├─ worktrees\
-│   ├─ phase0-status-verify\                         # 阶段0: 状态验证
-│   │   └─ 分支: feature/status-verify
+│   ├─ phase1-version-interface\                      # 阶段1: 版本与接口统一
+│   │   └─ 分支: feature/version-interface
 │   │
-│   ├─ phase1-data-unification\                      # 阶段1: 数据层统一
-│   │   └─ 分支: feature/data-unification
+│   ├─ phase2-data-integration\                       # 阶段2: 数据层整合
+│   │   └─ 分支: feature/data-integration
 │   │
-│   ├─ phase2-api-unification\                       # 阶段2: 接口层统一
-│   │   └─ 分支: feature/api-unification
+│   ├─ phase3-skill-slim\                             # 阶段3: Skill层瘦身
+│   │   └─ 分支: feature/skill-slim
 │   │
-│   ├─ phase3-mcp-enhance\                           # 阶段3: MCP层增强
-│   │   └─ 分支: feature/mcp-enhance
+│   ├─ phase4-perf-automation\                        # 阶段4: 性能与自动化
+│   │   └─ 分支: feature/perf-automation
 │   │
-│   ├─ phase4-skill-optimize\                        # 阶段4: Skill层优化
-│   │   └─ 分支: feature/skill-optimize
-│   │
-│   └─ phase5-cleanup-verify\                        # 阶段5: 清理与验证
-│       └─ 分支: feature/cleanup-verify
+│   └─ phase5-cleanup-polish\                         # 阶段5: 清理与完善
+│       └─ 分支: feature/cleanup-polish
 │
-└─ (主仓库工作目录 — develop/v8.4 分支检出)
+└─ (主仓库工作目录 — develop/v8.5 分支检出)
 ```
 
 ### 1.3 Worktree 操作规范
@@ -86,8 +83,8 @@ D:\Projects\TraeProjects\skiller\                    # 主仓库（develop 分�
 ### 1.4 Worktree 并行开发约束
 
 1. **同一分支不可在多个 Worktree 中检出**：Git 禁止同一分支同时在两个 Worktree 中检出
-2. **阶段间依赖关系**：阶段1依赖阶段0，阶段2依赖阶段1，不可真正并行；但阶段3/4可在阶段2完成后并行
-3. **合并顺序**：必须按阶段0→1→2→3→4→5顺序合并到 develop/v8.4
+2. **阶段间依赖关系**：阶段1→2必须顺序执行，阶段3在阶段2完成后可开始，阶段4依赖阶段3，阶段5最后执行
+3. **合并顺序**：必须按阶段1→2→3→4→5顺序合并到 develop/v8.5
 4. **冲突预防**：每个阶段修改的文件尽量不重叠（参考 REFACTOR_PLAN.md 的文件影响范围统计）
 
 ### 1.5 Trae 环境 Worktree 特殊处理
@@ -110,20 +107,19 @@ main ─────────────────────────
   │
   └─ develop ───────────────────────────────────────────────────→ 开发主线
        │
-       └─ develop/v8.4 ─────────────────────────────────────────→ v8.4.x 开发基线
+       └─ develop/v8.5 ─────────────────────────────────────────→ v8.5.x 开发基线
             │
-            ├─ feature/status-verify        (阶段0) ──→ 合并到 develop/v8.4
-            ├─ feature/data-unification     (阶段1) ──→ 合并到 develop/v8.4
-            ├─ feature/api-unification      (阶段2) ──→ 合并到 develop/v8.4
-            ├─ feature/mcp-enhance          (阶段3) ──→ 合并到 develop/v8.4
-            ├─ feature/skill-optimize       (阶段4) ──→ 合并到 develop/v8.4
-            ├─ feature/cleanup-verify       (阶段5) ──→ 合并到 develop/v8.4
+            ├─ feature/version-interface   (阶段1) ──→ 合并到 develop/v8.5
+            ├─ feature/data-integration    (阶段2) ──→ 合并到 develop/v8.5
+            ├─ feature/skill-slim          (阶段3) ──→ 合并到 develop/v8.5
+            ├─ feature/perf-automation     (阶段4) ──→ 合并到 develop/v8.5
+            ├─ feature/cleanup-polish      (阶段5) ──→ 合并到 develop/v8.5
             │
-            ├─ feature/mcp-core             (MCP核心修复) ──→ 合并到 develop/v8.4
-            ├─ feature/progressive-loading  (渐进式加载) ──→ 合并到 develop/v8.4
+            ├─ feature/mcp-core             (MCP核心修复) ──→ 合并到 develop/v8.5
+            ├─ feature/progressive-loading  (渐进式加载) ──→ 合并到 develop/v8.5
             │
-            ├─ hotfix/*                     (紧急修复) ──→ 合并到 main + develop/v8.4
-            └─ release/v8.4.0               (发布准备) ──→ 合并到 main
+            ├─ hotfix/*                     (紧急修复) ──→ 合并到 main + develop/v8.5
+            └─ release/v8.5.1               (发布准备) ──→ 合并到 main
 ```
 
 ### 2.2 分支详细说明
@@ -132,71 +128,63 @@ main ─────────────────────────
 |--------|------|----------|----------|----------|----------|
 | `main` | — | 初始 | — | 永久 | 稳定发布版本 |
 | `develop` | main | 初始 | main | 永久 | 开发主线集成 |
-| `develop/v8.4` | develop | v8.4开发启动 | develop | 版本发布后归档 | v8.4.x 迭代基线 |
-| `feature/status-verify` | develop/v8.4 | 阶段0启动 | develop/v8.4 | 阶段0完成后删除 | PROBLEM.md状态校验+6个待验证问题审计 |
-| `feature/data-unification` | develop/v8.4 | 阶段1启动 | develop/v8.4 | 阶段1完成后删除 | 双SQLite合并+双写一致性修复 |
-| `feature/api-unification` | develop/v8.4 | 阶段2启动 | develop/v8.4 | 阶段2完成后删除 | 统一响应格式+降级映射对齐 |
-| `feature/mcp-enhance` | develop/v8.4 | 阶段3启动 | develop/v8.4 | 阶段3完成后删除 | Resource订阅暴露+审计查询Tool |
-| `feature/skill-optimize` | develop/v8.4 | 阶段4启动 | develop/v8.4 | 阶段4完成后删除 | 内嵌门禁补全+Token预算关联 |
-| `feature/cleanup-verify` | develop/v8.4 | 阶段5启动 | develop/v8.4 | 阶段5完成后删除 | v1归档+版本号统一+全量回归 |
-| `feature/mcp-core` | develop/v8.4 | 随时 | develop/v8.4 | 修复完成后删除 | MCP核心Bug修复（不依赖重构阶段） |
-| `feature/progressive-loading` | develop/v8.4 | 随时 | develop/v8.4 | 完成后删除 | 渐进式加载增强 |
-| `hotfix/*` | main | 紧急Bug发现 | main + develop/v8.4 | 修复后删除 | 生产环境紧急修复 |
-| `release/v8.4.0` | develop/v8.4 | 发布准备 | main + develop | 发布后删除 | 版本发布准备 |
+| `develop/v8.5` | develop | v8.5开发启动 | develop | 版本发布后归档 | v8.5.x 迭代基线 |
+| `feature/version-interface` | develop/v8.5 | 阶段1启动 | develop/v8.5 | 阶段1完成后删除 | 版本号统一+异步统一+Resource通知+URI去重 |
+| `feature/data-integration` | develop/v8.5 | 阶段2启动 | develop/v8.5 | 阶段2完成后删除 | workflow双表合并+decisions.db合并+状态统一+自动对账 |
+| `feature/skill-slim` | develop/v8.5 | 阶段3启动 | develop/v8.5 | 阶段3完成后删除 | SKILL.md外置+路由/注册表去重+两级加载+参数去重 |
+| `feature/perf-automation` | develop/v8.5 | 阶段4启动 | develop/v8.5 | 阶段4完成后删除 | 性能基准+自动Phase推进+Token降级验证+Agent粒度加载 |
+| `feature/cleanup-polish` | develop/v8.5 | 阶段5启动 | develop/v8.5 | 阶段5完成后删除 | v1归档+Hook动态配置+跨平台构建+全量回归 |
+| `feature/mcp-core` | develop/v8.5 | 随时 | develop/v8.5 | 修复完成后删除 | MCP核心Bug修复（不依赖重构阶段） |
+| `feature/progressive-loading` | develop/v8.5 | 随时 | develop/v8.5 | 完成后删除 | 渐进式加载增强 |
+| `hotfix/*` | main | 紧急Bug发现 | main + develop/v8.5 | 修复后删除 | 生产环境紧急修复 |
+| `release/v8.5.1` | develop/v8.5 | 发布准备 | main + develop | 发布后删除 | 版本发布准备 |
 
 ### 2.3 分支创建与合并时机
 
 #### 创建时机
 
 ```
-阶段0 启动 → git checkout -b feature/status-verify develop/v8.4
-阶段1 启动 → git checkout -b feature/data-unification develop/v8.4
-阶段2 启动 → git checkout -b feature/api-unification develop/v8.4
-阶段3 启动 → git checkout -b feature/mcp-enhance develop/v8.4
-阶段4 启动 → git checkout -b feature/skill-optimize develop/v8.4
-阶段5 启动 → git checkout -b feature/cleanup-verify develop/v8.4
+阶段1 启动 → git checkout -b feature/version-interface develop/v8.5
+阶段2 启动 → git checkout -b feature/data-integration develop/v8.5
+阶段3 启动 → git checkout -b feature/skill-slim develop/v8.5
+阶段4 启动 → git checkout -b feature/perf-automation develop/v8.5
+阶段5 启动 → git checkout -b feature/cleanup-polish develop/v8.5
 ```
 
 #### 合并时机（必须按顺序）
 
 ```
-阶段0 完成并通过CI → 合并 feature/status-verify → develop/v8.4
-阶段1 完成并通过CI → 合并 feature/data-unification → develop/v8.4
-阶段2 完成并通过CI → 合并 feature/api-unification → develop/v8.4
-阶段3 完成并通过CI → 合并 feature/mcp-enhance → develop/v8.4
-阶段4 完成并通过CI → 合并 feature/skill-optimize → develop/v8.4
-阶段5 完成并通过CI → 合并 feature/cleanup-verify → develop/v8.4
-全部完成 → 合并 develop/v8.4 → develop → main（打 tag v8.5.0）
+阶段1 完成并通过CI → 合并 feature/version-interface → develop/v8.5
+阶段2 完成并通过CI → 合并 feature/data-integration → develop/v8.5
+阶段3 完成并通过CI → 合并 feature/skill-slim → develop/v8.5
+阶段4 完成并通过CI → 合并 feature/perf-automation → develop/v8.5
+阶段5 完成并通过CI → 合并 feature/cleanup-polish → develop/v8.5
+全部完成 → 合并 develop/v8.5 → develop → main（打 tag v9.0.0）
 ```
 
 #### 合并策略
 
 | 场景 | 策略 | 命令 |
 |------|------|------|
-| Feature → develop/v8.4 | Squash Merge（保持主线整洁） | `git merge --squash feature/xxx` |
-| develop/v8.4 → develop | Merge Commit（保留版本里程碑） | `git merge --no-ff develop/v8.4` |
-| develop → main | Merge Commit + Tag | `git merge --no-ff develop && git tag -a v8.5.0` |
+| Feature → develop/v8.5 | Squash Merge（保持主线整洁） | `git merge --squash feature/xxx` |
+| develop/v8.5 → develop | Merge Commit（保留版本里程碑） | `git merge --no-ff develop/v8.5` |
+| develop → main | Merge Commit + Tag | `git merge --no-ff develop && git tag -a v9.0.0` |
 | hotfix → main | Merge Commit | `git merge --no-ff hotfix/xxx` |
-| hotfix → develop/v8.4 | Cherry-pick | `git cherry-pick <commit-hash>` |
+| hotfix → develop/v8.5 | Cherry-pick | `git cherry-pick <commit-hash>` |
 
 ### 2.4 版本路线图与分支对应
 
 ```
-v8.4.0 (基线) ─── develop/v8.4 创建
+v8.5.0 (基线) ─── develop/v8.5 创建
   │
-  ├─ v8.4.1 ─── feature/status-verify 合并后打 tag
+  ├─ v8.5.1 ─── feature/version-interface 合并后打 tag
   │
-  ├─ v8.5.0 ─── 阶段1~4全部合并后打 tag
-  │             develop/v8.5 创建
-  │
-  ├─ v8.6.0 ─── 阶段5合并后打 tag
+  ├─ v8.6.0 ─── 阶段2+3合并后打 tag
   │             develop/v8.6 创建
   │
-  ├─ v8.7.0 ─── 后续优化
+  ├─ v8.7.0 ─── 阶段4合并后打 tag
   │
-  ├─ v8.8.0 ─── 后续优化
-  │
-  └─ v9.0.0 ─── 重大版本升级（如有破坏性变更）
+  └─ v9.0.0 ─── 阶段5合并后打 tag（MAJOR版本）
 ```
 
 ---
@@ -557,7 +545,7 @@ benchmark_results/
 |------|--------|------|------|
 | Component | MCP Server / Skill / KB / Agent / Degradation | ✅ 完整 | 保持不变 |
 | Severity | P0-P3 四级 | ✅ 合理 | 保持不变 |
-| Version | v8.0.0-dev / v7.x / other | ⚠️ 版本列表过时 | 更新为 v8.4.x / v8.3.x / v7.x / other |
+| Version | v8.0.0-dev / v7.x / other | ⚠️ 版本列表过时 | 更新为 v8.5.x / v8.4.x / v7.x / other |
 | Bug Description | textarea | ✅ 正确 | 保持不变 |
 | Steps to Reproduce | textarea | ✅ 正确 | 保持不变 |
 | Expected/Actual Behavior | textarea | ✅ 正确 | 保持不变 |
@@ -574,7 +562,7 @@ benchmark_results/
   attributes:
     label: Version
     options:
-      - v8.4.x (current develop)
+      - v8.5.x (current develop)
       - v8.3.x
       - v7.x
       - other
@@ -643,7 +631,7 @@ benchmark_results/
 
 | 配置项 | 当前值 | 评估 | 建议 |
 |--------|--------|------|------|
-| 触发分支 | main, develop, develop/v8, refactor/** | ⚠️ 缺少 develop/v8.4 | 补充 develop/v8.4 |
+| 触发分支 | main, develop, develop/v8, refactor/** | ⚠️ 缺少 develop/v8.5 | 补充 develop/v8.5 |
 | 触发路径 | Skill + MCP Server + scripts | ✅ 合理 | 保持不变 |
 | PR 触发 | 同上 + .github/** | ✅ 合理 | 保持不变 |
 | 定时任务 | 每日 06:00 UTC | ✅ 合理 | 保持不变 |
@@ -654,14 +642,14 @@ benchmark_results/
 
 **关键优化建议**：
 
-1. **补充 develop/v8.4 到触发分支**：
+1. **补充 develop/v8.5 到触发分支**：
 
 ```yaml
 on:
   push:
-    branches: [main, develop, develop/v8, develop/v8.4, 'refactor/**', 'feature/**']
+    branches: [main, develop, develop/v8, develop/v8.5, 'refactor/**', 'feature/**']
   pull_request:
-    branches: [main, develop, develop/v8, develop/v8.4]
+    branches: [main, develop, develop/v8, develop/v8.5]
 ```
 
 2. **mypy 改为硬失败**（当前 `|| true` 会导致类型错误被忽略）：
@@ -822,33 +810,30 @@ if (-not $?) {
     git checkout -b develop main
 }
 
-# 创建 develop/v8.4 分支
-git checkout -b develop/v8.4 develop
+# 创建 develop/v8.5 分支
+git checkout -b develop/v8.5 develop
 
 # 推送到远程
-git push origin develop/v8.4
+git push origin develop/v8.5
 ```
 
 ### 7.2 创建阶段 Feature 分支和 Worktree
 
 ```powershell
-# 阶段0: 状态验证
-git worktree add "D:\Projects\TraeProjects\skiller\worktrees\phase0-status-verify" -b feature/status-verify develop/v8.4
+# 阶段1: 版本与接口统一
+git worktree add "D:\Projects\TraeProjects\skiller\worktrees\phase1-version-interface" -b feature/version-interface develop/v8.5
 
-# 阶段1: 数据层统一
-git worktree add "D:\Projects\TraeProjects\skiller\worktrees\phase1-data-unification" -b feature/data-unification develop/v8.4
+# 阶段2: 数据层整合
+git worktree add "D:\Projects\TraeProjects\skiller\worktrees\phase2-data-integration" -b feature/data-integration develop/v8.5
 
-# 阶段2: 接口层统一
-git worktree add "D:\Projects\TraeProjects\skiller\worktrees\phase2-api-unification" -b feature/api-unification develop/v8.4
+# 阶段3: Skill层瘦身
+git worktree add "D:\Projects\TraeProjects\skiller\worktrees\phase3-skill-slim" -b feature/skill-slim develop/v8.5
 
-# 阶段3: MCP层增强
-git worktree add "D:\Projects\TraeProjects\skiller\worktrees\phase3-mcp-enhance" -b feature/mcp-enhance develop/v8.4
+# 阶段4: 性能与自动化
+git worktree add "D:\Projects\TraeProjects\skiller\worktrees\phase4-perf-automation" -b feature/perf-automation develop/v8.5
 
-# 阶段4: Skill层优化
-git worktree add "D:\Projects\TraeProjects\skiller\worktrees\phase4-skill-optimize" -b feature/skill-optimize develop/v8.4
-
-# 阶段5: 清理与验证
-git worktree add "D:\Projects\TraeProjects\skiller\worktrees\phase5-cleanup-verify" -b feature/cleanup-verify develop/v8.4
+# 阶段5: 清理与完善
+git worktree add "D:\Projects\TraeProjects\skiller\worktrees\phase5-cleanup-polish" -b feature/cleanup-polish develop/v8.5
 
 # 验证所有 Worktree
 git worktree list
@@ -886,30 +871,30 @@ Copy-Item ".git-info-exclude-template" "D:\Projects\TraeProjects\skiller\.git\wo
 ### 7.6 阶段完成后的合并操作
 
 ```powershell
-# 以阶段0为例，其他阶段同理
+# 以阶段1为例，其他阶段同理
 Set-Location "D:\Projects\TraeProjects\skiller"
 
-# 切换到 develop/v8.4
-git checkout develop/v8.4
+# 切换到 develop/v8.5
+git checkout develop/v8.5
 
 # Squash Merge
-git merge --squash feature/status-verify
+git merge --squash feature/version-interface
 
 # 提交
 git commit -m "feat(phase0): 状态验证完成 - PROBLEM.md更新 + 6个待验证问题审计"
 
 # 推送
-git push origin develop/v8.4
+git push origin develop/v8.5
 
 # 删除已合并的 Feature 分支
-git branch -d feature/status-verify
+git branch -d feature/version-interface
 
 # 删除 Worktree
-git worktree remove "D:\Projects\TraeProjects\skiller\worktrees\phase0-status-verify"
+git worktree remove "D:\Projects\TraeProjects\skiller\worktrees\phase1-version-interface"
 
-# 打 tag（阶段0完成后）
-git tag -a v8.4.1 -m "v8.4.1: 状态验证+PROBLEM.md更新"
-git push origin v8.4.1
+# 打 tag（阶段1完成后）
+git tag -a v8.5.1 -m "v8.5.1: 版本号统一+异步统一+Resource通知+URI去重"
+git push origin v8.5.1
 ```
 
 ### 7.7 版本发布操作
@@ -918,14 +903,14 @@ git push origin v8.4.1
 # 全部阶段完成后，合并到 develop
 Set-Location "D:\Projects\TraeProjects\skiller"
 git checkout develop
-git merge --no-ff develop/v8.4 -m "release: v8.5.0 - 数据层统一+接口层统一+MCP增强+Skill优化"
+git merge --no-ff develop/v8.5 -m "release: v9.0.0 - 版本与接口统一+数据层整合+Skill层瘦身+性能与自动化+清理与完善"
 
 # 合并到 main
 git checkout main
 git merge --no-ff develop -m "release: v8.5.0"
 
 # 打 tag
-git tag -a v8.5.0 -m "v8.5.0: 重构阶段0-4完成"
+git tag -a v8.5.0 -m "v8.5.0: 基线版本（已发布）"
 
 # 推送
 git push origin main --tags
@@ -946,7 +931,7 @@ git worktree prune
 git remote prune origin
 
 # 查看可清理的本地分支
-git branch --merged develop/v8.4
+git branch --merged develop/v8.5
 ```
 
 ---
@@ -957,23 +942,23 @@ git branch --merged develop/v8.4
 
 | 重构阶段 | 分支 | 版本目标 | 涉及问题 | 关键文件变更 | 预计工期 |
 |----------|------|----------|----------|-------------|----------|
-| **阶段0: 状态验证** | `feature/status-verify` | v8.4.1 | NEW-11, ARCH-05/06/07/09/10验证, DB-03验证, MCP-03验证 | PROBLEM.md, 审计报告 | 5天 |
-| **阶段1: 数据层统一** | `feature/data-unification` | v8.5.0 | NEW-07, DB-01, DB-02 | database.py, db_engine.py, migration_v13.py | 14天 |
-| **阶段2: 接口层统一** | `feature/api-unification` | v8.5.0 | ARCH-11, API-01, NEW-01 | errors.py, degradation.py, constraints.yaml, api.py | 13天 |
-| **阶段3: MCP层增强** | `feature/mcp-enhance` | v8.5.0 | NEW-08, MCP-03/NEW-09, NEW-05 | skill_resources.py, audit_query.py(新), progressive_loader.py | 10天 |
-| **阶段4: Skill层优化** | `feature/skill-optimize` | v8.5.0 | NEW-06, SKILL-02, ARCH-08, ARCH-12 | _shared.py, constraints.yaml, token_budget.py | 8天 |
-| **阶段5: 清理与验证** | `feature/cleanup-verify` | v8.6.0 | P3-01, NEW-02, NEW-04, NEW-10, NEW-03 | v1归档, __init__.py, ci.yml | 6天 |
+| **阶段1: 版本与接口统一** | `feature/version-interface` | v8.5.1 | MCP-01, API-01, ARCH-01, ARCH-05, MCP-02 | server.py, pyproject.toml, config.py, skill_resources.py | 10天 |
+| **阶段2: 数据层整合** | `feature/data-integration` | v8.6.0 | DB-04, DB-05, DB-06, DB-07, DB-08 | database.py, decision_log.py, agent_manage.py, workflow_dispatch.py | 16天 |
+| **阶段3: Skill层瘦身** | `feature/skill-slim` | v8.6.0 | SKILL-03, SKILL-04, SKILL-05, SKILL-06, SKILL-07 | SKILL.md, routes.yaml, registry.yaml, references/summary/ | 16天 |
+| **阶段4: 性能与自动化** | `feature/perf-automation` | v8.7.0 | PERF-01, PERF-02, PERF-03, ARCH-02, SKILL-08 | resource_load_status.py, token_budget.py | 18天 |
+| **阶段5: 清理与完善** | `feature/cleanup-polish` | v9.0.0 | SKILL-01, ARCH-03, ARCH-04, ARCH-13, ARCH-14, ARCH-15, API-02 | v1归档, hook_engine.py, agent_manage.py, build-desktop.sh | 15天 |
 
 ### 8.2 阶段依赖与并行关系
 
 ```
-阶段0 ─────→ 阶段1 ─────→ 阶段2 ─────┬──→ 阶段3 ──→ 阶段4 ──→ 阶段5
-                                      │
-                                      └──→ 阶段4（可与阶段3并行）
+阶段1 ─────→ 阶段2 ─────┬──→ 阶段3 ──→ 阶段4 ──→ 阶段5
+                         │
+                         └──→ 阶段3（可与阶段2后期并行）
 ```
 
-- 阶段0→1→2 必须严格顺序执行
-- 阶段3和阶段4在阶段2完成后可并行开发（修改文件不重叠）
+- 阶段1→2 必须严格顺序执行
+- 阶段3在阶段2完成后可开始（修改文件不重叠）
+- 阶段4依赖阶段3完成
 - 阶段5必须在所有阶段完成后执行
 
 ### 8.3 文件修改冲突分析
@@ -989,16 +974,17 @@ git branch --merged develop/v8.4
 | `_shared.py` | — | — | — | ✏️ 补全门禁 | 无 |
 | `token_budget.py` | — | — | — | ✏️ 阶段关联 | 无 |
 
-**唯一冲突点**：`constraints.yaml` 在阶段2和阶段4都有修改。解决方案：阶段4开始前先 rebase 到阶段2合并后的 develop/v8.4。
+**唯一冲突点**：`constraints.yaml` 在阶段2和阶段4都有修改。解决方案：阶段4开始前先 rebase 到阶段2合并后的 develop/v8.5。
 
-### 8.4 版本 Tag 规划
+### 8.4 版本标签详细规划
 
 | Tag | 基于分支 | 打 tag 时机 | 包含内容 |
 |-----|----------|-------------|----------|
-| `v8.4.1` | develop/v8.4 | 阶段0合并后 | 状态验证+PROBLEM.md更新 |
-| `v8.5.0-rc.1` | develop/v8.4 | 阶段2合并后 | 数据层+接口层统一（Release Candidate） |
-| `v8.5.0` | develop→main | 阶段4合并后 | 全部重构内容 |
-| `v8.6.0` | develop→main | 阶段5合并后 | 清理归档+版本统一 |
+| `v8.5.0` | main | 已发布 | 基线版本 |
+| `v8.5.1` | develop/v8.5 | 阶段1完成+CI通过 | 版本号统一+异步统一+Resource通知+URI去重 |
+| `v8.6.0` | develop/v8.5 | 阶段2+3完成+CI通过 | 数据层整合+Skill层瘦身 |
+| `v8.7.0` | develop/v8.5 | 阶段4完成+CI通过 | 性能与自动化 |
+| `v9.0.0` | main | 阶段5完成+全量回归通过 | 清理归档+版本统一 |
 
 ### 8.5 CI 分支保护规则建议
 
@@ -1006,7 +992,7 @@ git branch --merged develop/v8.4
 |------|----------|
 | `main` | 禁止直接推送，必须通过 PR，至少1人 Review，CI 必须通过 |
 | `develop` | 禁止直接推送，必须通过 PR，CI 必须通过 |
-| `develop/v8.4` | 禁止直接推送，必须通过 PR，CI 必须通过 |
+| `develop/v8.5` | 禁止直接推送，必须通过 PR，CI 必须通过 |
 | `feature/*` | 无保护，开发者可直接推送 |
 | `hotfix/*` | 合并到 main 时需 Review |
 

@@ -303,7 +303,7 @@ def register(mcp: FastMCP) -> None:
                 script_path = SCRIPTS_DIR / "agentic-security-scanner.py"
                 used_inline = False
                 if script_path.exists():
-                    result = run_script(
+                    result = await run_script(
                         script_path,
                         args=["--target", target, "--severity-threshold", severity_threshold, "--format", "json"],
                         timeout=120,
@@ -327,7 +327,7 @@ def register(mcp: FastMCP) -> None:
                 script_path = SCRIPTS_DIR / "dependency-scan.py"
                 used_inline = False
                 if script_path.exists():
-                    result = run_script(
+                    result = await run_script(
                         script_path,
                         args=["--target", target, "--format", "json"],
                         timeout=60,

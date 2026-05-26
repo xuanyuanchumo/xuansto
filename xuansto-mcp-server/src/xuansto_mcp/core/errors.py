@@ -354,7 +354,7 @@ class DegradationCoordinator:
     def register_handler(self, error_code: str, handler: Callable[..., Any]) -> None:
         self._handlers[error_code] = handler
 
-    def handle(self, error: Exception, tool_name: str, **kwargs: Any) -> dict[str, Any]:
+    async def handle(self, error: Exception, tool_name: str, **kwargs: Any) -> dict[str, Any]:
         if isinstance(error, XuanstoMCPError):
             handler = self._handlers.get(error.code)
             if handler:
@@ -366,7 +366,7 @@ class DegradationCoordinator:
         fallback = get_fallback(tool_name)
         if fallback:
             try:
-                result = fallback(**kwargs)
+                result = await fallback(**kwargs)
                 if isinstance(result, dict):
                     result["degraded"] = True
                 return result

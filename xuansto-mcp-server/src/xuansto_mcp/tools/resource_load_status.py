@@ -798,6 +798,16 @@ def degrade_phase() -> dict[str, Any]:
         "to_phase": to_name,
     })
     notify(f"Phase degraded: {from_name} -> {to_name} (token budget)", "warning")
+    try:
+        from .resource_subscribe import notify_subscribers
+        notify_subscribers("xuansto://loading/status", {
+            "event": "phase_degradation",
+            "from_phase": from_name,
+            "to_phase": to_name,
+            "reason": "token_budget",
+        })
+    except Exception as sub_err:
+        logger.debug("resource_subscribe notification skipped: %s", sub_err)
     state_file = _get_state_file()
     try:
         state_data = json.loads(state_file.read_text(encoding="utf-8")) if state_file.exists() else {}
@@ -1060,6 +1070,17 @@ def register(mcp: FastMCP) -> None:
                     with _cache_lock:
                         _LOADED_PROGRESS["loading"] = False
                         _LOADED_PROGRESS["completed_at"] = datetime.now(timezone.utc).isoformat()
+                    if loaded_count > 0:
+                        try:
+                            from .resource_subscribe import notify_subscribers
+                            notify_subscribers("xuansto://loading/status", {
+                                "event": "preload",
+                                "loaded_count": loaded_count,
+                                "total_uris": len(resource_uris),
+                                "priority": priority,
+                            })
+                        except Exception as sub_err:
+                            logger.debug("resource_subscribe notification skipped: %s", sub_err)
                     return make_success_response({
                         "action": "preload",
                         "loaded_count": loaded_count,

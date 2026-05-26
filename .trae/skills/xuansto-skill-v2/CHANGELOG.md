@@ -5,6 +5,28 @@ All notable changes to xuansto-skill-v2 will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.5.1] - 2026-05-26
+
+### Added
+
+#### Phase变更通知
+- ARCH-05: degrade_phase和preload操作成功后发送subscriber通知
+
+### Changed
+
+#### 版本与接口统一
+- MCP-01: 统一版本号——server.py指令版本和__init__.__version__从8.4.0更新为8.5.0
+- ARCH-01: Skill-MCP异步统一——run_script改为async，subprocess.run用asyncio.to_thread包装
+- ARCH-01: 降级脚本异步化——degradation.py全部20个fallback函数改为async def，使用asyncio.create_subprocess_exec
+- MCP-02: Resource URI去重——移除5个重复URI（27→22），保留规范URI模式
+
+### Fixed
+- MCP-01: Server指令版本与pyproject.toml不一致
+- API-01: API版本号三源不一致
+- ARCH-01: Skill-MCP通信同步/异步混合
+- ARCH-05: MCP Resource变更通知不可达
+- MCP-02: Resource URI重复
+
 ## [8.5.0] - 2026-05-26
 
 ### Added

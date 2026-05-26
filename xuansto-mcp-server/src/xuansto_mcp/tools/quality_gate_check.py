@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import hashlib
 import json
@@ -1104,8 +1105,8 @@ def register(mcp: FastMCP) -> None:
                 return make_error_response(ValueError(path_err), error_code=ERR_VALIDATION)
             gates_to_check = _resolve_gates(gate_ids, phase)
 
-            current_hashes = _compute_file_hashes(project_path, force_refresh=force_refresh)
-            cache = _load_gate_cache(project_path)
+            current_hashes = await asyncio.to_thread(_compute_file_hashes, project_path, force_refresh=force_refresh)
+            cache = await asyncio.to_thread(_load_gate_cache, project_path)
             cache_hit = not force_refresh and _is_cache_valid(cache, current_hashes)
             cache_age = 0.0
             if cache_hit and "timestamp" in cache:
@@ -1161,7 +1162,7 @@ def register(mcp: FastMCP) -> None:
                     if not script_path.exists():
                         if gate_id in INLINE_CHECKS and INLINE_CHECKS[gate_id] is not None:
                             try:
-                                inline_result = INLINE_CHECKS[gate_id](project_path)
+                                inline_result = await asyncio.to_thread(INLINE_CHECKS[gate_id], project_path)
                                 check_entry: dict[str, Any] = {
                                     "gate_id": gate_id,
                                     "status": inline_result["status"],
@@ -1189,7 +1190,8 @@ def register(mcp: FastMCP) -> None:
                             checks.append({"gate_id": gate_id, "status": "SKIP", "source": "no_inline_check", "details": "检查脚本不存在且无内嵌检查"})
                         continue
                     try:
-                        result = subprocess.run(
+                        result = await asyncio.to_thread(
+                            subprocess.run,
                             [sys.executable, str(script_path), "--format", "json"],
                             capture_output=True,
                             text=True,
@@ -1214,7 +1216,7 @@ def register(mcp: FastMCP) -> None:
                         })
                     else:
                         try:
-                            inline_result = INLINE_CHECKS[gate_id](project_path)
+                            inline_result = await asyncio.to_thread(INLINE_CHECKS[gate_id], project_path)
                             check_entry = {
                                 "gate_id": gate_id,
                                 "status": inline_result["status"],
@@ -1245,7 +1247,7 @@ def register(mcp: FastMCP) -> None:
                 failed_ids = [c["gate_id"] for c in checks if c["status"] == "FAIL" or c.get("hard_gate")]
                 notify(f"Quality gates blocked: {failed_ids}", "warning")
 
-            _save_gate_cache(project_path, {
+            await asyncio.to_thread(_save_gate_cache, project_path, {
                 "file_hashes": current_hashes,
                 "checks": checks,
                 "timestamp": time.time(),

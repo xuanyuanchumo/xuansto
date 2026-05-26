@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import sqlite3
 import threading
@@ -678,24 +679,24 @@ def register(mcp: FastMCP) -> None:
             if action == "log":
                 if not title:
                     return make_error_response(ValueError("log操作需要title参数"), error_code=ERR_VALIDATION)
-                return make_success_response(_log_decision(title, description, context, alternatives, decision, rationale, impact, decided_by, status))
+                return make_success_response(await asyncio.to_thread(_log_decision, title, description, context, alternatives, decision, rationale, impact, decided_by, status))
             elif action == "list":
-                return make_success_response(_list_decisions(limit, offset, status, date_from, date_to))
+                return make_success_response(await asyncio.to_thread(_list_decisions, limit, offset, status, date_from, date_to))
             elif action == "query":
-                return make_success_response(_query_decisions(keyword, tag, date_from, date_to, limit, offset))
+                return make_success_response(await asyncio.to_thread(_query_decisions, keyword, tag, date_from, date_to, limit, offset))
             elif action == "update":
                 if not decision_id:
                     return make_error_response(ValueError("update操作需要decision_id参数"), error_code=ERR_VALIDATION)
-                result = _update_decision(decision_id, status)
+                result = await asyncio.to_thread(_update_decision, decision_id, status)
                 if result.get("status") == "error":
                     return result
                 return make_success_response(result)
             elif action == "export":
-                return make_success_response(_export_decisions(export_format, date_from, date_to))
+                return make_success_response(await asyncio.to_thread(_export_decisions, export_format, date_from, date_to))
             elif action == "stats":
-                return make_success_response(_stats_decisions(date_from, date_to))
+                return make_success_response(await asyncio.to_thread(_stats_decisions, date_from, date_to))
             elif action == "reconcile":
-                return make_success_response(_reconcile_decisions())
+                return make_success_response(await asyncio.to_thread(_reconcile_decisions))
             elif action == "configure":
                 config_result: dict[str, Any] = {"file_backup_enabled": _file_backup_enabled}
                 if file_backup is not None:

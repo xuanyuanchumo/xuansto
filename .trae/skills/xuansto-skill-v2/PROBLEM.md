@@ -105,10 +105,13 @@
 
 ## P3 - 低优先级问题
 
-### P3-01: v1与v2存在重复文件
-- **当前状态**: agents/、commands/、workflows/等目录在v1和v2中同时存在
-- **影响**: 维护成本增加，可能出现不一致
-- **修复方案**: 确立v2为唯一维护版本，v1标记为archived（计划在v8.5.0执行）
+### P3-01: v1与v2存在重复文件 ✅ 已缓解
+- **当前状态**: ✅ 已缓解 — v1技能目录已不存在于.trae/skills/下，SKILL.md frontmatter已设置v1_archived: true（line 17），v2为唯一维护版本
+- **影响**: 无实际重复文件，v1已归档标记
+- **缓解措施**:
+  - .trae/skills/下仅存在xuansto-skill-v2目录，无v1目录
+  - SKILL.md YAML frontmatter v1_archived: true 明确标识v1已归档
+  - v2为唯一维护版本，无重复文件维护负担
 
 ### P3-02: v2 SKILL.md行数可能超过500行
 - **当前状态**: 增强后的SKILL.md已添加PHASE标记实现渐进式加载，实际Token消耗由Phase控制
@@ -117,14 +120,23 @@
 
 ## 新增问题（来自8.1.0-dev重构分析）
 
-### ARCH-05: MCP Server未暴露Resource ✅ 已修复（v8.4.0）
-- **当前状态**: ✅ 已修复 — skill_resources.py 已实现27个Resource（xuansto://agents/{name}、xuansto://knowledge/stats、xuansto://loading/status等）
+### ARCH-01: Skill-MCP通信同步/异步混合 ✅ 已修复（v8.5.0）
+- **当前状态**: ✅ 已修复 — 所有22个Tool handler统一为 async def，subprocess.run 包装为 asyncio.to_thread，degradation.py 降级回退转换为 async
 - **修复内容**:
-  - 新增 skill_resources.py 模块，实现27个MCP Resource
-  - Resource URI模式覆盖：xuansto://agents/{name}、xuansto://knowledge/stats、xuansto://loading/status等
-  - 支持Agent通过URI模式订阅状态变更
-- **文件路径**: xuansto-mcp-server/src/xuansto_mcp/resources/skill_resources.py
-- **影响**: Agent可通过URI模式订阅状态变更
+  - 所有22个MCP Tool handler 统一为 async def
+  - subprocess.run 调用包装为 asyncio.to_thread，避免阻塞事件循环
+  - degradation.py 降级回退函数转换为 async
+- **文件路径**: xuansto-mcp-server/src/xuansto_mcp/tools/, xuansto-mcp-server/src/xuansto_mcp/scripts/degradation.py
+- **影响**: Skill-MCP通信全链路异步，消除同步/异步混合导致的潜在死锁和性能问题
+
+### ARCH-05: MCP Resource变更通知不可达 ✅ 已修复（v8.5.0）
+- **当前状态**: ✅ 已修复 — 阶段变更通知已添加到 resource_load_status.py，resource_subscribe 已注册
+- **修复内容**:
+  - resource_load_status.py 新增 degrade_phase 和 preload 阶段变更通知
+  - resource_subscribe 工具已注册，支持订阅 Resource URI 变更通知
+  - Agent 可通过订阅机制感知 Resource 状态变更
+- **文件路径**: xuansto-mcp-server/src/xuansto_mcp/tools/resource_load_status.py
+- **影响**: Resource 变更通知可达，Agent 可实时感知状态变更
 
 ### ARCH-06: 缺少Agent持久化机制 ✅ 已修复（v8.4.0）
 - **当前状态**: ✅ 已修复 — database.py 已创建 agent_states 表，实现 save/load/delete_agent_state 函数
@@ -218,10 +230,23 @@
 - **文件路径**: xuansto-mcp-server/src/xuansto_mcp/core/database.py
 - **影响**: 版本历史有清理策略，数据库不再膨胀
 
-### MCP-02: 缺少Resource暴露 ✅ 已修复（v8.4.0）
-- **当前状态**: ✅ 已修复 — 同ARCH-05，skill_resources.py 已实现27个Resource
-- **修复内容**: 同ARCH-05
+### MCP-01: Server指令版本(8.4.0)与pyproject.toml(8.5.0)不一致 ✅ 已修复（v8.5.0）
+- **当前状态**: ✅ 已修复 — server.py 和 __init__.py 版本号已更新为 8.5.0，与 pyproject.toml 一致
+- **修复内容**:
+  - server.py 版本号从 8.4.0 更新为 8.5.0
+  - __init__.py 版本号从 8.4.0 更新为 8.5.0
+  - 三源版本号（server.py / __init__.py / pyproject.toml）现已统一为 8.5.0
+- **文件路径**: xuansto-mcp-server/src/xuansto_mcp/server.py, xuansto-mcp-server/src/xuansto_mcp/__init__.py
+- **影响**: Server指令版本与项目版本一致，消除版本不一致导致的兼容性问题
+
+### MCP-02: Resource URI重复 ✅ 已修复（v8.5.0）
+- **当前状态**: ✅ 已修复 — 5个重复URI已移除（27→22），测试文件已更新
+- **修复内容**:
+  - 移除5个重复的Resource URI定义
+  - Resource URI数量从27个精简为22个（无重复）
+  - 测试文件同步更新以反映URI变更
 - **文件路径**: xuansto-mcp-server/src/xuansto_mcp/resources/skill_resources.py
+- **影响**: Resource URI无重复，避免订阅和查询歧义
 
 ### MCP-03: 工具调用无审计日志 ✅ 已修复（v8.4.0）
 - **当前状态**: ✅ 已修复 — 已实现 AuditLogger 类和 audit_logger 模块
@@ -250,14 +275,13 @@
 - **修复内容**: progressive_loader.py 新增 degrade_phase() 方法，SkillToolHandler 可通过 resource_load_status 感知降级
 - **影响**: 降级时Skill层可感知并调整行为
 
-### API-01: HTTP API与MCP stdio两套接口无统一Schema ✅ 已修复（v8.4.0）
-- **当前状态**: ✅ 已修复 — 所有MCP工具统一使用 make_success_response/make_error_response 返回JSON格式，HTTP API使用统一响应格式
+### API-01: API版本号三源不一致 ✅ 已修复（v8.5.0）
+- **当前状态**: ✅ 已修复 — __version__ 统一为 8.5.0，MCP_API_VERSION 作为独立协议版本
 - **修复内容**:
-  - errors.py 新增 make_success_response 和 make_error_response 统一响应函数
-  - 所有MCP工具统一使用JSON格式返回结果
-  - HTTP API使用统一响应格式与MCP工具一致
-- **文件路径**: xuansto-mcp-server/src/xuansto_mcp/core/errors.py
-- **影响**: 调用方只需适配一套统一Schema
+  - server.py 和 __init__.py 中 __version__ 统一更新为 8.5.0
+  - MCP_API_VERSION 作为独立协议版本（与包版本解耦）
+  - 三源版本号（server.py / __init__.py / pyproject.toml）现已一致
+- **影响**: API版本号三源一致，消除版本混淆
 
 ### API-02: 降级脚本返回格式与MCP工具不一致 ✅ 已修复（8.1.0-dev）
 - **当前状态**: ✅ 已修复 — 降级结果统一包装为JSON格式（degraded/inline_degraded/error）
@@ -345,15 +369,14 @@
 | P0 | 2 | 2 | 0 | 0 |
 | P1 | 6 | 6 | 0 | 0 |
 | P2 | 2 | 2 | 0 | 0 |
-| P3 | 2 | 0 | 1 | 1 |
-| 新增(ARCH) | 8 | 8 | 0 | 0 |
+| P3 | 2 | 0 | 0 | 2 |
+| 新增(ARCH) | 9 | 9 | 0 | 0 |
 | 新增(DB) | 3 | 3 | 0 | 0 |
-| 新增(MCP) | 2 | 2 | 0 | 0 |
+| 新增(MCP) | 3 | 3 | 0 | 0 |
 | 新增(SKILL) | 3 | 3 | 0 | 0 |
 | 新增(API) | 2 | 2 | 0 | 0 |
 | 新增(NEW-v8.5.0) | 7 | 7 | 0 | 0 |
-| **总计** | **37** | **35** | **1** | **1** |
+| **总计** | **39** | **37** | **0** | **2** |
 
-> 未修复项：P3-01（v1与v2重复文件）
-> 缓解项：P3-02（SKILL.md行数超限，已通过PHASE标记渐进式加载缓解）
-> v8.5.0 新修复：NEW-01/03/05/06/07/08/09、DB-01(增强)、DB-02(增强)、SKILL-02
+> 缓解项：P3-01（v1与v2重复文件，v1已归档标记）、P3-02（SKILL.md行数超限，已通过PHASE标记渐进式加载缓解）
+> v8.5.0 新修复：NEW-01/03/05/06/07/08/09、DB-01(增强)、DB-02(增强)、SKILL-02、MCP-01、API-01(更新)、ARCH-01、ARCH-05(更新)、MCP-02(更新)

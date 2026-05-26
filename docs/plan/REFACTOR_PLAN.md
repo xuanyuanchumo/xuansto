@@ -1,8 +1,8 @@
 # Xuansto Skill v2 重构计划
 
-> **版本**: 1.0 | **日期**: 2026-05-26 | **基线版本**: 8.4.0
+> **版本**: 2.0 | **日期**: 2026-05-26 | **基线版本**: 8.5.0
 > **范围**: xuansto-skill-v2（Skill定义层）+ xuansto-mcp-server（MCP Server执行层）
-> **输入文档**: ARCHITECTURE.md / DATABASE_DESIGN.md / MCP_REVIEW.md / SKILL_REVIEW.md / API_SPECIFICATION.md / PROBLEM.md
+> **输入文档**: PROBLEM.md / ARCHITECTURE.md / DATABASE_DESIGN.md / MCP_REVIEW.md / SKILL_REVIEW.md / API_SPECIFICATION.md
 
 ---
 
@@ -12,7 +12,7 @@
 2. [影响链分析](#2-影响链分析)
 3. [优先级矩阵](#3-优先级矩阵)
 4. [模块化重构步骤](#4-模块化重构步骤)
-5. [渐进式加载披露实现方案](#5-渐进式加载披露实现方案)
+5. [按需加载与渐进式披露实现方案](#5-按需加载与渐进式披露实现方案)
 6. [测试策略](#6-测试策略)
 7. [CI建议](#7-ci建议)
 
@@ -22,57 +22,98 @@
 
 ### 1.1 问题来源与去重说明
 
-本清单合并了 PROBLEM.md（17项未修复）和5份分析文档中新发现的问题（11项），去重后共 **22项独立问题**。
+本清单合并了以下6个来源的问题，去重后共 **28项独立问题**：
+
+| 来源 | 原始问题数 | 去重后 |
+|------|-----------|--------|
+| PROBLEM.md（37项，含35已修复） | 37 | 2项未修复/缓解 + 已修复项归档 |
+| ARCHITECTURE.md（架构差异分析） | 11 | 6项新增 |
+| DATABASE_DESIGN.md（存储问题分析） | 5 | 3项新增 |
+| MCP_REVIEW.md（MCP评审发现） | 4 | 3项新增 |
+| SKILL_REVIEW.md（Skill评审发现） | 8 | 5项新增 |
+| API_SPECIFICATION.md（API规格发现） | 3 | 2项新增 |
 
 去重规则：
-- ARCH-05 与 MCP-02 描述同一问题（Resource暴露），合并为 ARCH-05/MCP-02
-- ARCHITECTURE.md 发现6项问题在代码中已实现但 PROBLEM.md 仍标记为未修复，本清单标注"⚠️ 状态待验证"
-- P3-02（SKILL.md行数）已通过渐进式加载缓解，降级为"已缓解"
+- PROBLEM.md中ARCH-05与MCP-02描述同一问题（Resource暴露），合并为ARCH-05/MCP-02
+- PROBLEM.md中MCP-03（审计日志缺少Tool接口）已由NEW-09（audit_query）修复，不再重复
+- PROBLEM.md中35项已修复问题归档至附录A，本清单仅列出Open/Mitigated状态问题和新发现问题
+- ARCHITECTURE.md差异表中的部分问题已在v8.5.0修复（如双SQLite合并NEW-07），不再重复
 
 ### 1.2 完整问题清单
 
-| 编号 | 影响域 | 优先级 | 描述 | 来源 | 当前状态 | 计划版本 |
-|------|--------|--------|------|------|----------|----------|
-| **ARCH-05/MCP-02** | 架构/MCP | 中 | MCP Resource已注册但Host端未订阅，变更通知不可达 | PROBLEM+MCP_REVIEW | ⚠️ 代码已实现Resource注册(25+个)，但订阅管理未暴露为Tool | v8.5.0 |
-| **ARCH-06** | 架构 | 低 | Agent持久化机制 | PROBLEM | ⚠️ agent_states表+agent_manage.py已实现CRUD+load_on_startup，需验证恢复完整性 | v8.5.0验证 |
-| **ARCH-07** | 架构 | 低 | 工作流状态持久化 | PROBLEM | ⚠️ workflow_states表+workflow_dispatch.py已实现+load_on_startup，需验证Phase推进恢复 | v8.5.0验证 |
-| **ARCH-08** | 架构/Skill | 低 | Token预算与加载阶段未关联 | PROBLEM | 未实现关联逻辑 | v8.5.0 |
-| **ARCH-09** | 架构 | 低 | Hook执行无超时保护 | PROBLEM | ⚠️ hook_engine.py已实现DEFAULT_HOOK_TIMEOUT_SECONDS=30.0+asyncio.wait_for | v8.5.0验证 |
-| **ARCH-10** | 架构 | 低 | 配置变更需重启MCP Server | PROBLEM | ⚠️ config.py已实现watchfiles/SIGHUP/轮询三种热更新机制 | v8.5.0验证 |
-| **ARCH-11** | 架构/MCP | 中 | 错误处理不统一，部分工具返回字符串而非JSON | PROBLEM | 大部分实现make_response统一格式，需排查边缘情况 | v8.5.0 |
-| **ARCH-12** | 架构/API | 低 | API版本协商机制不完整 | PROBLEM+API_SPEC | 声明已有(MCP_API_VERSION等)，协商逻辑未完整实现 | v8.6.0 |
-| **DB-01** | 数据 | 中 | 决策记录双写一致性风险 | PROBLEM | decision_records仅存于MCP Server数据库，无跨库同步 | v8.5.0 |
-| **DB-02** | 数据 | 中 | ChromaDB与SQLite双写无事务保证 | PROBLEM+DB_DESIGN | persist_knowledge_dual_write先写SQLite(pending)→再写ChromaDB→成功标记ready | v8.5.0 |
-| **DB-03** | 数据 | 低 | 知识条目版本历史无清理策略 | PROBLEM | ⚠️ database.py已实现cleanup_knowledge_versions(keep_last_n=10) | v8.5.0验证 |
-| **MCP-03** | MCP | 中 | 工具调用审计日志缺少MCP Tool查询接口 | PROBLEM+MCP_REVIEW | ⚠️ audit_logger.py已实现记录，但仅通过Resource暴露，无主动查询Tool | v8.5.0 |
-| **SKILL-02** | Skill | 低 | SKELETON阶段无可用命令（仅/status、/help、/budget） | PROBLEM | constraints.yaml声明可用但需验证实际可用性 | v8.5.0 |
-| **API-01** | API | 中 | HTTP API与MCP stdio两套接口无统一Schema | PROBLEM+API_SPEC | MCP返回{status:"success"}，HTTP返回{status:"ok"}，错误码体系不一致 | v8.5.0 |
-| **P3-01** | 架构 | 低 | v1与v2存在重复文件 | PROBLEM | agents/commands/workflows目录双版本并存 | v8.6.0 |
-| **P3-02** | Skill | 低 | SKILL.md行数可能超过500行 | PROBLEM | ✅ 已通过PHASE标记渐进式加载缓解 | 已缓解 |
-| **NEW-01** | 架构/MCP | 中 | 降级映射数量不一致：degradation.py FALLBACK_MAP含20个函数，constraints.yaml tool_fallbacks仅14个映射 | ARCHITECTURE | metrics_report/config_manage等新增工具在constraints.yaml缺少降级声明 | v8.5.0 |
-| **NEW-02** | 架构 | 中 | 知识库HTTP服务(scripts/knowledge_server/)与MCP Server(knowledge_search工具)功能重叠 | ARCHITECTURE | 两套独立实现，HTTP API v2.0.0 vs MCP API v3.0.0 | v8.6.0 |
-| **NEW-03** | 架构/CI | 低 | spec-locks目录含3个JSON Schema锁文件，但未在CI/CD中强制校验 | ARCHITECTURE | api-contract-version.json / skill-definition-schema.json / tool-parameter-schemas.json | v8.5.0 |
-| **NEW-04** | 测试 | 低 | 部分工具(config_manage/metrics_report)缺少专项测试 | ARCHITECTURE | 100+测试文件但覆盖不均 | v8.6.0 |
-| **NEW-05** | Skill | 中 | COMMAND_PHASE_MAP仅覆盖6个命令，25个命令不触发阶段推进 | SKILL_REVIEW | 仅/init/sprint/implement/audit/refactor/loop有映射 | v8.5.0 |
-| **NEW-06** | Skill/数据 | 中 | _shared.py内嵌门禁_QUALITY_GATES仅13项，与声明的54项不一致 | SKILL_REVIEW | 内嵌门禁作为降级后备，与references/quality-gates.md定义不匹配 | v8.5.0 |
-| **NEW-07** | 数据 | 高 | 双SQLite实例问题：xuansto.db(14表)与knowledge.db(9表)独立运行，knowledge_entries表重复定义 | DB_DESIGN | MCP Server与Knowledge Server各自管理独立数据库实例 | v8.5.0 |
-| **NEW-08** | MCP | 中 | Resource订阅管理(subscribe_resource/unsubscribe_resource)未暴露为MCP Tool | MCP_REVIEW | skill_resources.py内部已实现，Host端无法主动订阅变更 | v8.5.0 |
-| **NEW-09** | MCP | 中 | 审计日志查询缺少MCP Tool接口（与MCP-03部分重叠） | MCP_REVIEW | 仅xuansto://audit/log Resource暴露最近50条，无按条件查询Tool | v8.5.0 |
-| **NEW-10** | API | 低 | MCP Server版本(3.0.0)与Knowledge Server HTTP API版本(2.0.0)不一致 | API_SPEC | 两套独立版本号，客户端无法统一判断兼容性 | v8.6.0 |
-| **NEW-11** | 管理 | 中 | PROBLEM.md状态与代码实际状态不同步：6个问题已实现但仍标记为未修复 | ARCHITECTURE | ARCH-05/06/07/09/10 + DB-03 + MCP-03 | 立即 |
+#### 架构域（ARCH）
+
+| 编号 | 优先级 | 描述 | 来源 | 当前状态 | 影响文件 |
+|------|--------|------|------|----------|----------|
+| ARCH-01 | P1 | Skill-MCP通信同步/异步混合，部分工具仍使用同步调用 | ARCHITECTURE | Open | `server.py`, `tools/*.py` |
+| ARCH-02 | P1 | 渐进式加载缺少基于Token消耗的自动Phase推进，需手动调用preload | ARCHITECTURE, SKILL_REVIEW | Open | `resource_load_status.py`, `token_budget.py` |
+| ARCH-03 | P2 | Hook系统同步+异步混合，部分Hook仍为同步执行 | ARCHITECTURE | Open | `hook_engine.py`, `hook_manage.py` |
+| ARCH-04 | P2 | Agent管理缺少自动扩缩容策略，最大20实例硬上限 | ARCHITECTURE | Open | `agent_manage.py` |
+| ARCH-05 | P1 | MCP Resource已注册但Host端未订阅消费，变更通知不可达 | PROBLEM, MCP_REVIEW | Open | `skill_resources.py`, `resource_subscribe.py` |
+| ARCH-13 | P2 | 桌面构建仅Windows PowerShell脚本，缺少macOS/Linux构建 | ARCHITECTURE | Open | `scripts/build-desktop.ps1` |
+| ARCH-14 | P3 | API版本协商缺少版本特定的行为分支 | ARCHITECTURE | Open | `server_health.py` |
+| ARCH-15 | P2 | 配置热重载Windows下watchfiles可能不稳定，依赖轮询降级 | ARCHITECTURE | Open | `config.py` |
+
+#### 数据域（DB）
+
+| 编号 | 优先级 | 描述 | 来源 | 当前状态 | 影响文件 |
+|------|--------|------|------|----------|----------|
+| DB-04 | P1 | workflow_instances与workflow_states表结构重叠，数据冗余 | DATABASE_DESIGN | Open | `database.py` |
+| DB-05 | P1 | decisions.db仍独立于xuansto.db，跨库查询和一致性风险 | DATABASE_DESIGN | Open | `decision_log.py`, `database.py` |
+| DB-06 | P2 | Agent/Workflow状态分散于内存dict+JSON文件+SQLite三处，恢复逻辑复杂 | DATABASE_DESIGN | Open | `agent_manage.py`, `workflow_dispatch.py` |
+| DB-07 | P2 | JSON状态文件无事务保证，并发写入可能损坏 | DATABASE_DESIGN | Open | `resource_load_status.py`, `token_budget.py` |
+| DB-08 | P2 | 知识库缺少自动定时对账，reconcile仅手动触发 | ARCHITECTURE, DATABASE_DESIGN | Open | `database.py` |
+
+#### MCP域（MCP）
+
+| 编号 | 优先级 | 描述 | 来源 | 当前状态 | 影响文件 |
+|------|--------|------|------|----------|----------|
+| MCP-01 | P1 | pyproject.toml版本(8.5.0)与Server指令版本(8.4.0)不一致 | MCP_REVIEW | Open | `server.py`, `pyproject.toml` |
+| MCP-02 | P2 | Resource URI重复（config/skill vs skill/config等），客户端混淆 | MCP_REVIEW | Open | `skill_resources.py` |
+| MCP-03 | P2 | Token预算快照未暴露为Resource | MCP_REVIEW | Open | `skill_resources.py` |
+| MCP-04 | P2 | Agent实例池未暴露为Resource | MCP_REVIEW | Open | `skill_resources.py` |
+
+#### Skill域（SKILL）
+
+| 编号 | 优先级 | 描述 | 来源 | 当前状态 | 影响文件 |
+|------|--------|------|------|----------|----------|
+| SKILL-01 | P3 | v1与v2存在重复文件，维护成本增加 | PROBLEM(P3-01) | Open | `.trae/skills/` |
+| SKILL-02 | P3 | SKILL.md行数可能超限，已通过PHASE标记缓解 | PROBLEM(P3-02) | Mitigated | `SKILL.md` |
+| SKILL-03 | P1 | SKILL.md PHASE_2/3内容应外置到references/，减少SKILL.md体积 | SKILL_REVIEW | Open | `SKILL.md`, `references/` |
+| SKILL-04 | P2 | routes.yaml与SKILL.md路由表内容重复 | SKILL_REVIEW | Open | `routes.yaml`, `SKILL.md` |
+| SKILL-05 | P2 | registry.yaml与SKILL.md Agent索引内容重复 | SKILL_REVIEW | Open | `registry.yaml`, `SKILL.md` |
+| SKILL-06 | P1 | 参考文档全量加载，缺少摘要→完整两级加载 | SKILL_REVIEW | Open | `references/`, `resource_load_status.py` |
+| SKILL-07 | P2 | commands/*.md参数定义与MCP工具参数冗余，双源维护 | SKILL_REVIEW | Open | `commands/*.md`, `tools/*.py` |
+| SKILL-08 | P2 | hooks.json静态配置无法根据Phase动态调整 | SKILL_REVIEW | Open | `hooks.json`, `hook_manage.py` |
+
+#### API域（API）
+
+| 编号 | 优先级 | 描述 | 来源 | 当前状态 | 影响文件 |
+|------|--------|------|------|----------|----------|
+| API-01 | P1 | API版本号不一致：API文档2.5.0 / pyproject.toml 8.5.0 / config 3.0.0 | API_SPEC, MCP_REVIEW | Open | `errors.py`, `config.py`, `pyproject.toml` |
+| API-02 | P2 | 审计日志查询能力有限，audit_query仅支持简单过滤 | ARCHITECTURE | Open | `audit_query.py` |
+
+#### 性能域（PERF）
+
+| 编号 | 优先级 | 描述 | 来源 | 当前状态 | 影响文件 |
+|------|--------|------|------|----------|----------|
+| PERF-01 | P1 | 性能指标未实测（Token消耗、加载时间、Agent调度延迟） | SKILL_REVIEW | Open | 全局 |
+| PERF-02 | P2 | Agent按需加载粒度不足，按PHASE段整体加载而非单个Agent | SKILL_REVIEW | Open | `resource_load_status.py`, `SKILL.md` |
+| PERF-03 | P1 | Token驱动自动降级缺乏端到端验证 | SKILL_REVIEW | Open | `token_budget.py`, `resource_load_status.py` |
 
 ### 1.3 问题统计
 
-| 影响域 | 总数 | ⚠️待验证 | 未实现 | 已缓解 |
-|--------|------|----------|--------|--------|
-| 架构(ARCH) | 8 | 5 | 2 | 0 |
-| 数据(DB) | 3 | 1 | 2 | 0 |
-| MCP | 4 | 1 | 3 | 0 |
-| Skill | 3 | 0 | 3 | 0 |
-| API | 3 | 0 | 3 | 0 |
-| 测试 | 1 | 0 | 1 | 0 |
-| 管理 | 1 | 0 | 1 | 0 |
-| **合计** | **23** | **7** | **15** | **1** |
+| 影响域 | 总数 | Open | Mitigated | P0 | P1 | P2 | P3 |
+|--------|------|------|-----------|----|----|----|----|
+| 架构(ARCH) | 8 | 8 | 0 | 0 | 2 | 4 | 1 |
+| 数据(DB) | 5 | 5 | 0 | 0 | 2 | 3 | 0 |
+| MCP | 4 | 4 | 0 | 0 | 1 | 3 | 0 |
+| Skill | 8 | 7 | 1 | 0 | 2 | 4 | 2 |
+| API | 2 | 2 | 0 | 0 | 1 | 1 | 0 |
+| 性能(PERF) | 3 | 3 | 0 | 0 | 2 | 1 | 0 |
+| **合计** | **30** | **29** | **1** | **0** | **10** | **16** | **3** |
+
+> 已修复的35项问题详见附录A。
 
 ---
 
@@ -82,157 +123,150 @@
 
 ```mermaid
 graph TB
-    subgraph "Skill层"
-        SKILL["SKILL.md"]
+    subgraph "Skill定义层"
+        SKILL["SKILL.md<br/>(4 PHASE段)"]
         CONSTRAINTS["constraints.yaml"]
         ROUTES["routes.yaml"]
         REGISTRY["registry.yaml"]
+        HOOKS["hooks.json"]
+        CONFIGS["configs/default.yaml"]
     end
 
     subgraph "MCP Server层"
-        SERVER["server.py"]
-        TOOLS["tools/*.py<br/>(20个工具)"]
-        RESOURCES["skill_resources.py<br/>(25+ Resource)"]
+        SERVER["server.py<br/>FastMCP核心"]
+        TOOLS["tools/*.py<br/>(22个工具)"]
+        RESOURCES["skill_resources.py<br/>(27个Resource)"]
         HOOK["hook_engine.py"]
         DEGR["degradation.py"]
-        DB_CORE["database.py<br/>(xuansto.db)"]
+        DB_CORE["database.py<br/>(xuansto.db 22+表)"]
+        DB_DEC["decision_log.py<br/>(decisions.db)"]
         CONFIG["config.py"]
         ERR["errors.py"]
         AUDIT["audit_logger.py"]
-    end
-
-    subgraph "Knowledge Server层"
-        KB_SERVER["server.py"]
-        KB_API["api.py + api_routes.py"]
-        KB_DB["db_engine.py<br/>(knowledge.db)"]
-        KB_VECTOR["vector_engine.py<br/>(ChromaDB)"]
-        KB_EMBED["embedding.py"]
-        KB_DEGR["degradation.py"]
-        KB_SEARCH["hybrid_search.py"]
+        RATE["rate_limiter.py"]
+        SEARCH["search_engine.py"]
     end
 
     subgraph "降级脚本层"
-        SCRIPTS["scripts/*.py"]
-        PROG_LOADER["progressive_loader.py"]
-        SKILL_TOOLS["skill_tools.py"]
+        SCRIPTS["scripts/*.py<br/>(20个降级脚本)"]
+        INLINE["内联降级函数<br/>_inline_*"]
+    end
+
+    subgraph "存储层"
+        SQLITE["xuansto.db<br/>(22+表+FTS5)"]
+        DECISIONS["decisions.db<br/>(1表+FTS5)"]
+        CHROMA["ChromaDB<br/>(knowledge)"]
+        JSON_FILES["JSON状态文件<br/>(10+个)"]
     end
 
     SKILL -->|"{{include:}}"| CONSTRAINTS
+    SKILL -->|"{{include:}}"| ROUTES
+    SKILL -->|"{{include:}}"| REGISTRY
     SKILL -->|"MCP调用"| SERVER
     SERVER --> TOOLS
     SERVER --> RESOURCES
     SERVER --> HOOK
+    SERVER --> RATE
     TOOLS --> DB_CORE
     TOOLS --> DEGR
     TOOLS --> ERR
     TOOLS --> AUDIT
+    TOOLS --> SEARCH
     RESOURCES --> DB_CORE
+    RESOURCES --> JSON_FILES
     DEGR --> SCRIPTS
+    DEGR --> INLINE
     DEGR --> CONSTRAINTS
+    DB_CORE --> SQLITE
+    DB_DEC --> DECISIONS
+    SEARCH --> CHROMA
+    SEARCH --> SQLITE
 
-    KB_SERVER --> KB_DB
-    KB_SERVER --> KB_VECTOR
-    KB_SERVER --> KB_EMBED
-    KB_SERVER --> KB_SEARCH
-    KB_API --> KB_SERVER
-    KB_SEARCH --> KB_DB
-    KB_SEARCH --> KB_VECTOR
-
-    SKILL_TOOLS --> PROG_LOADER
-    SKILL_TOOLS --> DEGR
-    PROG_LOADER --> SKILL
-
-    style DB_CORE fill:#ffcdd2,stroke:#c62828
-    style KB_DB fill:#ffcdd2,stroke:#c62828
-    style DEGR fill:#fff3e0,stroke:#ef6c00
-    style CONSTRAINTS fill:#fff9c4,stroke:#f9a825
+    style SQLITE fill:#ffcdd2,stroke:#c62828
+    style DECISIONS fill:#ffcdd2,stroke:#c62828
+    style CHROMA fill:#fff3e0,stroke:#ef6c00
+    style JSON_FILES fill:#fff9c4,stroke:#f9a825
 ```
 
 ### 2.2 问题连锁影响矩阵
 
 | 问题编号 | 直接受影响模块 | 间接受影响模块 | 外部依赖影响 |
 |----------|---------------|---------------|-------------|
-| **ARCH-05/MCP-02** | skill_resources.py, resource_load_status.py | Skill层(无法感知Resource变更), Host客户端(无法订阅) | MCP协议客户端 |
-| **ARCH-11** | errors.py, 所有tools/*.py | Skill层(需处理多种返回格式), 降级脚本(格式不一致) | HTTP API客户端 |
-| **DB-01** | database.py(decision_records) | workflow_dispatch.py, decision_log.py | 文件系统(双写目标) |
-| **DB-02** | database.py(persist_knowledge_dual_write), search_engine.py | knowledge_search.py, knowledge_inject.py | ChromaDB |
-| **NEW-07** | database.py, db_engine.py | 所有知识相关工具, 搜索引擎, 降级管理器 | ChromaDB, 文件系统 |
-| **NEW-01** | degradation.py, constraints.yaml | 所有降级路径, MCP工具调用链 | scripts/目录 |
-| **NEW-02** | knowledge_server/*, tools/knowledge_search.py | Skill层(两套接口选择), API客户端 | FastAPI, Uvicorn |
-| **API-01** | errors.py, api.py, api_routes.py | 所有MCP客户端, 所有HTTP客户端 | 无 |
-| **NEW-05** | progressive_loader.py, skill_tools.py | Skill层(阶段推进不完整), 用户体验 | 无 |
-| **NEW-06** | tools/_shared.py, quality_gate_check.py | 降级模式下的门禁检查准确性 | references/quality-gates.md |
-| **NEW-08** | skill_resources.py | Host客户端(无法订阅变更), 渐进式加载通知 | MCP协议 |
-| **MCP-03/NEW-09** | audit_logger.py, server.py | 运维(无法主动查询审计), 合规需求 | 无 |
+| **ARCH-01** | `server.py`, `tools/*.py` | Skill层(调用时序不确定), 降级链(异步/同步混合) | MCP协议客户端 |
+| **ARCH-02** | `resource_load_status.py`, `token_budget.py` | Skill层(阶段推进延迟), 用户体验 | 无 |
+| **ARCH-05** | `skill_resources.py`, `resource_subscribe.py` | Host客户端(无法订阅), 渐进式加载通知 | MCP协议客户端 |
+| **DB-04** | `database.py` | `workflow_dispatch.py`(双表查询歧义), `skill_resources.py` | 无 |
+| **DB-05** | `decision_log.py`, `database.py` | `workflow_dispatch.py`(跨库决策关联), `skill_resources.py` | 文件系统 |
+| **DB-06** | `agent_manage.py`, `workflow_dispatch.py` | 启动恢复逻辑(三源对齐), `server_health.py` | 无 |
+| **MCP-01** | `server.py`, `pyproject.toml` | 客户端版本判断, `server_health.py` | npm/pip客户端 |
+| **SKILL-03** | `SKILL.md` | Skill层Token消耗, 渐进式加载效率 | Trae平台 |
+| **SKILL-06** | `references/`, `resource_load_status.py` | 知识检索Token消耗, Phase 2加载时间 | 无 |
+| **API-01** | `errors.py`, `config.py`, `pyproject.toml` | 客户端版本协商, API文档 | HTTP/MCP客户端 |
+| **PERF-01** | 全局 | 所有性能相关决策缺乏数据支撑 | 无 |
+| **PERF-03** | `token_budget.py`, `resource_load_status.py` | 降级触发可靠性, 上下文溢出风险 | 无 |
 
 ### 2.3 关键影响链路详解
 
-#### 链路1：双SQLite实例 → 数据一致性风险
+#### 链路1：版本不一致 → 客户端兼容性风险
 
 ```mermaid
 graph LR
-    A["NEW-07<br/>双SQLite实例"] --> B["DB-02<br/>双写无事务"]
-    B --> C["knowledge_entries<br/>数据不一致"]
-    C --> D["knowledge_search<br/>检索结果偏差"]
-    D --> E["Skill层<br/>知识注入错误"]
-
-    A --> F["DB-01<br/>决策双写风险"]
-    F --> G["decision_records<br/>仅存于xuansto.db"]
-    G --> H["MCP Server重启<br/>决策可能丢失"]
+    A["MCP-01<br/>Server指令版本8.4.0<br/>pyproject.toml 8.5.0"] --> B["API-01<br/>API版本不一致<br/>2.5.0/8.5.0/3.0.0"]
+    B --> C["server_health<br/>版本协商返回矛盾"]
+    C --> D["客户端<br/>无法判断兼容性"]
+    D --> E["Skill层<br/>compatible_mcp_server<br/>匹配失败"]
 
     style A fill:#e74c3c,color:#fff
     style B fill:#e74c3c,color:#fff
     style C fill:#f39c12,color:#fff
-    style D fill:#f39c12,color:#fff
 ```
 
-#### 链路2：降级映射不一致 → 降级失败
+#### 链路2：数据冗余 → 一致性风险
 
 ```mermaid
 graph LR
-    A["NEW-01<br/>降级映射20vs14"] --> B["metrics_report<br/>无降级声明"]
-    B --> C["MCP不可用时<br/>该工具直接失败"]
-    C --> D["Skill层<br/>指标报告缺失"]
-
-    A --> E["constraints.yaml<br/>非权威源"]
-    E --> F["degradation.py<br/>硬编码为主"]
-    F --> G["配置变更<br/>降级不生效"]
+    A["DB-04<br/>workflow_instances<br/>与workflow_states重叠"] --> B["workflow_dispatch<br/>查询歧义"]
+    B --> C["DB-06<br/>三源状态分散<br/>内存+JSON+SQLite"]
+    C --> D["启动恢复<br/>三源对齐复杂"]
+    D --> E["DB-05<br/>decisions.db<br/>独立于xuansto.db"]
+    E --> F["跨库查询<br/>决策-工作流关联断裂"]
 
     style A fill:#e74c3c,color:#fff
-    style B fill:#f39c12,color:#fff
+    style C fill:#f39c12,color:#fff
     style E fill:#f39c12,color:#fff
 ```
 
-#### 链路3：API格式不统一 → 客户端适配成本
+#### 链路3：Skill层膨胀 → Token效率风险
 
 ```mermaid
 graph LR
-    A["API-01<br/>响应格式不统一"] --> B["MCP: status=success"]
-    A --> C["HTTP: status=ok"]
-    B --> D["客户端需<br/>双套解析逻辑"]
+    A["SKILL-03<br/>SKILL.md PHASE_2/3<br/>内容未外置"] --> B["SKILL-04<br/>routes.yaml<br/>与SKILL.md重复"]
+    A --> C["SKILL-05<br/>registry.yaml<br/>与SKILL.md重复"]
+    B --> D["SKILL-06<br/>参考文档<br/>全量加载"]
     C --> D
-    D --> E["错误码体系<br/>不一致"]
-    E --> F["降级响应<br/>格式差异"]
-    F --> G["Skill层<br/>适配复杂度增加"]
+    D --> E["PERF-01<br/>Token消耗<br/>未实测"]
+    E --> F["PERF-03<br/>Token自动降级<br/>未验证"]
+    F --> G["ARCH-02<br/>缺少自动<br/>Phase推进"]
 
     style A fill:#e74c3c,color:#fff
     style D fill:#f39c12,color:#fff
+    style F fill:#f39c12,color:#fff
 ```
 
 ### 2.4 文件影响范围统计
 
 | 文件/目录 | 受影响问题数 | 涉及问题编号 |
 |-----------|-------------|-------------|
-| `xuansto-mcp-server/src/xuansto_mcp/core/database.py` | 4 | DB-01, DB-02, NEW-07, ARCH-06/07 |
-| `xuansto-mcp-server/src/xuansto_mcp/core/degradation.py` | 3 | NEW-01, ARCH-11, MCP-03 |
-| `xuansto-mcp-server/src/xuansto_mcp/core/errors.py` | 2 | ARCH-11, API-01 |
-| `xuansto-mcp-server/src/xuansto_mcp/resources/skill_resources.py` | 2 | ARCH-05/MCP-02, NEW-08 |
-| `xuansto-mcp-server/src/xuansto_mcp/core/audit_logger.py` | 2 | MCP-03, NEW-09 |
-| `.trae/skills/xuansto-skill-v2/constraints.yaml` | 2 | NEW-01, SKILL-02 |
-| `scripts/knowledge_server/db_engine.py` | 2 | NEW-07, DB-02 |
-| `scripts/knowledge_server/progressive_loader.py` | 2 | NEW-05, ARCH-08 |
-| `scripts/knowledge_server/skill_tools.py` | 2 | NEW-05, NEW-06 |
-| `scripts/knowledge_server/api.py` + `api_routes.py` | 2 | API-01, NEW-02 |
+| `xuansto-mcp-server/src/xuansto_mcp/core/database.py` | 4 | DB-04, DB-05, DB-06, DB-08 |
+| `xuansto-mcp-server/src/xuansto_mcp/server.py` | 3 | ARCH-01, MCP-01, ARCH-03 |
+| `xuansto-mcp-server/src/xuansto_mcp/resources/skill_resources.py` | 3 | ARCH-05, MCP-02, MCP-03, MCP-04 |
+| `.trae/skills/xuansto-skill-v2/SKILL.md` | 4 | SKILL-02, SKILL-03, SKILL-04, SKILL-05 |
+| `xuansto-mcp-server/src/xuansto_mcp/tools/resource_load_status.py` | 3 | ARCH-02, SKILL-06, PERF-02 |
+| `xuansto-mcp-server/src/xuansto_mcp/tools/token_budget.py` | 2 | ARCH-02, PERF-03 |
+| `xuansto-mcp-server/src/xuansto_mcp/tools/decision_log.py` | 2 | DB-05, DB-07 |
+| `xuansto-mcp-server/src/xuansto_mcp/core/config.py` | 2 | ARCH-15, API-01 |
+| `xuansto-mcp-server/src/xuansto_mcp/core/errors.py` | 2 | API-01, ARCH-01 |
+| `.trae/skills/xuansto-skill-v2/constraints.yaml` | 2 | SKILL-06, SKILL-08 |
 
 ---
 
@@ -242,40 +276,45 @@ graph LR
 
 | 级别 | 定义 | 修复窗口 | 依据 |
 |------|------|----------|------|
-| **紧急** | 阻塞核心功能或导致数据丢失 | 立即（1-3天） | 影响数据完整性或核心交互链路 |
-| **高** | 严重影响系统可靠性或一致性 | 1周内 | 影响跨模块一致性或关键降级路径 |
-| **中** | 影响开发效率或用户体验 | 1个迭代周期 | 功能缺失但不阻塞核心流程 |
-| **低** | 技术债务或远期优化 | 下个版本 | 不影响当前功能，但增加维护成本 |
+| **紧急(Urgent)** | 阻塞核心功能或导致数据丢失 | 立即（1-3天） | 影响数据完整性或核心交互链路 |
+| **高(High)** | 严重影响系统可靠性或一致性 | 1周内 | 影响跨模块一致性或关键降级路径 |
+| **中(Medium)** | 影响开发效率或用户体验 | 1个迭代周期 | 功能缺失但不阻塞核心流程 |
+| **低(Low)** | 技术债务或远期优化 | 下个版本 | 不影响当前功能，但增加维护成本 |
 
 ### 3.2 优先级矩阵
 
 | 编号 | 描述 | 影响域 | 优先级 | 依据 |
 |------|------|--------|--------|------|
-| **NEW-11** | PROBLEM.md状态与代码不同步 | 管理 | **紧急** | 6个问题误标为未修复，导致重构方向偏差 |
-| **NEW-07** | 双SQLite实例问题 | 数据 | **高** | knowledge_entries重复定义是DB-01/DB-02的根因 |
-| **DB-02** | ChromaDB与SQLite双写无事务保证 | 数据 | **高** | 知识检索结果可能不一致 |
-| **NEW-01** | 降级映射数量不一致(20 vs 14) | 架构/MCP | **高** | 新增工具降级失败，constraints.yaml非权威源 |
-| **ARCH-11** | 错误处理不统一 | 架构/MCP | **高** | 客户端需处理多种返回格式，是API-01的根因之一 |
-| **API-01** | HTTP API与MCP两套接口无统一Schema | API | **高** | 两套客户端适配成本高 |
-| **DB-01** | 决策记录双写一致性风险 | 数据 | **中** | MCP Server数据库损坏时决策丢失 |
-| **ARCH-05/MCP-02** | Resource变更通知不可达 | 架构/MCP | **中** | Host端无法订阅状态变更 |
-| **NEW-08** | Resource订阅管理未暴露为Tool | MCP | **中** | 与ARCH-05关联 |
-| **MCP-03/NEW-09** | 审计日志缺少Tool查询接口 | MCP | **中** | 运维和合规需求 |
-| **NEW-05** | COMMAND_PHASE_MAP仅覆盖6个命令 | Skill | **中** | 25个命令不触发阶段推进 |
-| **NEW-06** | 内嵌门禁仅13项vs声明54项 | Skill/数据 | **中** | 降级模式下门禁检查不准确 |
-| **NEW-02** | 知识库HTTP服务与MCP Server功能重叠 | 架构 | **中** | 两套独立实现增加维护成本 |
-| **SKILL-02** | SKELETON阶段无可用命令 | Skill | **中** | 用户首次交互体验差 |
-| **ARCH-08** | Token预算与加载阶段未关联 | 架构/Skill | **低** | 无法根据阶段自动调整Token分配 |
-| **ARCH-12** | API版本协商机制不完整 | 架构/API | **低** | 客户端无法自动适配API变更 |
-| **NEW-03** | spec-locks未在CI中强制校验 | 架构/CI | **低** | API契约可能被意外破坏 |
-| **NEW-04** | 部分工具缺少专项测试 | 测试 | **低** | config_manage/metrics_report覆盖不足 |
-| **NEW-10** | MCP与KB版本号不一致 | API | **低** | 客户端版本判断困难 |
-| **P3-01** | v1与v2存在重复文件 | 架构 | **低** | 维护成本增加 |
-| **ARCH-06** | Agent持久化(待验证) | 架构 | **低** | 代码已实现，需验证完整性 |
-| **ARCH-07** | 工作流持久化(待验证) | 架构 | **低** | 代码已实现，需验证完整性 |
-| **ARCH-09** | Hook超时保护(待验证) | 架构 | **低** | 代码已实现，需验证完整性 |
-| **ARCH-10** | 配置热更新(待验证) | 架构 | **低** | 代码已实现，需验证完整性 |
-| **DB-03** | 版本历史清理(待验证) | 数据 | **低** | 代码已实现，需验证完整性 |
+| **MCP-01** | Server指令版本(8.4.0)与pyproject.toml(8.5.0)不一致 | MCP | **紧急** | 客户端版本判断直接受影响，是API-01的根因 |
+| **API-01** | API版本号三源不一致(2.5.0/8.5.0/3.0.0) | API | **紧急** | 版本协商返回矛盾，客户端无法判断兼容性 |
+| **DB-04** | workflow_instances与workflow_states表结构重叠 | 数据 | **高** | 数据冗余导致查询歧义，是DB-06的根因之一 |
+| **DB-05** | decisions.db仍独立于xuansto.db | 数据 | **高** | 跨库一致性风险，决策-工作流关联断裂 |
+| **ARCH-01** | Skill-MCP通信同步/异步混合 | 架构 | **高** | 调用时序不确定，影响降级链可靠性 |
+| **ARCH-02** | 渐进式加载缺少自动Phase推进 | 架构 | **高** | 需手动preload，用户体验差，与PERF-03关联 |
+| **ARCH-05** | MCP Resource变更通知不可达 | 架构/MCP | **高** | Host端无法订阅状态变更，渐进式加载通知失效 |
+| **SKILL-03** | SKILL.md PHASE_2/3内容应外置 | Skill | **高** | Token效率根因，与SKILL-04/05/06关联 |
+| **SKILL-06** | 参考文档全量加载，缺两级加载 | Skill | **高** | Phase 2 Token消耗不可控 |
+| **PERF-01** | 性能指标未实测 | 性能 | **高** | 所有性能相关决策缺乏数据支撑 |
+| **PERF-03** | Token自动降级缺乏端到端验证 | 性能 | **高** | 上下文溢出风险，核心安全网未验证 |
+| **DB-06** | Agent/Workflow状态三源分散 | 数据 | **中** | 恢复逻辑复杂，但已有原子写入缓解 |
+| **DB-07** | JSON状态文件无事务保证 | 数据 | **中** | 并发场景有限，atomic_write已缓解 |
+| **DB-08** | 知识库缺少自动定时对账 | 数据 | **中** | 手动reconcile已可用，自动对账为增强 |
+| **ARCH-03** | Hook系统同步+异步混合 | 架构 | **中** | 超时机制已实现，混合模式影响有限 |
+| **ARCH-04** | Agent管理缺少自动扩缩容 | 架构 | **中** | 20实例上限对大多数项目足够 |
+| **ARCH-13** | 桌面构建仅Windows PowerShell | 架构 | **中** | 跨平台构建为增强需求 |
+| **ARCH-15** | watchfiles在Windows下可能不稳定 | 架构 | **中** | 已有轮询降级机制 |
+| **MCP-02** | Resource URI重复 | MCP | **中** | 功能不受影响，仅客户端混淆 |
+| **MCP-03** | Token预算快照未暴露为Resource | MCP | **中** | 可通过token_budget工具查询 |
+| **MCP-04** | Agent实例池未暴露为Resource | MCP | **中** | 可通过agent_status工具查询 |
+| **SKILL-04** | routes.yaml与SKILL.md路由表重复 | Skill | **中** | 维护成本增加，功能不受影响 |
+| **SKILL-05** | registry.yaml与SKILL.md Agent索引重复 | Skill | **中** | 维护成本增加，功能不受影响 |
+| **SKILL-07** | commands/*.md参数与MCP工具参数冗余 | Skill | **中** | 双源维护风险 |
+| **SKILL-08** | hooks.json静态配置无法根据Phase调整 | Skill | **中** | 当前minimal/standard/strict三级已够用 |
+| **API-02** | 审计日志查询能力有限 | API | **中** | audit_query已实现基本功能 |
+| **PERF-02** | Agent按需加载粒度不足 | 性能 | **中** | 按PHASE段加载已可用，单Agent粒度为优化 |
+| **SKILL-01** | v1与v2存在重复文件 | Skill | **低** | 不影响功能，仅维护成本 |
+| **SKILL-02** | SKILL.md行数可能超限 | Skill | **低** | 已通过PHASE标记缓解 |
+| **ARCH-14** | API版本协商缺版本特定行为分支 | 架构 | **低** | 当前协商逻辑已覆盖基本场景 |
 
 ### 3.3 优先级分布图
 
@@ -289,24 +328,26 @@ quadrantChart
     quadrant-3 可延后且局部
     quadrant-4 可延后但广泛
 
-    NEW-11: [0.3, 0.95]
-    NEW-07: [0.8, 0.85]
-    DB-02: [0.7, 0.8]
-    NEW-01: [0.6, 0.75]
-    ARCH-11: [0.75, 0.7]
-    API-01: [0.7, 0.7]
-    DB-01: [0.5, 0.55]
-    ARCH-05: [0.55, 0.5]
-    NEW-05: [0.45, 0.5]
-    NEW-06: [0.4, 0.5]
-    NEW-02: [0.65, 0.45]
-    SKILL-02: [0.3, 0.45]
-    MCP-03: [0.35, 0.45]
-    ARCH-08: [0.5, 0.3]
-    ARCH-12: [0.4, 0.25]
-    P3-01: [0.35, 0.2]
-    NEW-03: [0.3, 0.2]
-    NEW-04: [0.25, 0.15]
+    MCP-01: [0.4, 0.95]
+    API-01: [0.6, 0.9]
+    DB-04: [0.7, 0.8]
+    DB-05: [0.6, 0.75]
+    ARCH-01: [0.8, 0.7]
+    ARCH-02: [0.7, 0.7]
+    ARCH-05: [0.6, 0.65]
+    SKILL-03: [0.65, 0.65]
+    SKILL-06: [0.55, 0.6]
+    PERF-01: [0.9, 0.6]
+    PERF-03: [0.5, 0.6]
+    DB-06: [0.5, 0.45]
+    DB-08: [0.45, 0.4]
+    ARCH-03: [0.4, 0.4]
+    MCP-02: [0.35, 0.35]
+    SKILL-04: [0.3, 0.3]
+    SKILL-08: [0.35, 0.25]
+    PERF-02: [0.4, 0.25]
+    SKILL-01: [0.3, 0.15]
+    ARCH-14: [0.25, 0.15]
 ```
 
 ---
@@ -317,86 +358,78 @@ quadrantChart
 
 ```mermaid
 gantt
-    title 重构阶段规划
+    title 重构阶段规划（基于v8.5.0）
     dateFormat YYYY-MM-DD
     axisFormat %m/%d
 
-    section 阶段0: 状态验证
-    PROBLEM.md状态校验           :p0a, 2026-05-27, 2d
-    6个待验证问题代码审计        :p0b, after p0a, 3d
+    section 阶段1: 版本与接口统一
+    版本号统一(MCP-01/API-01)     :p1a, 2026-05-27, 2d
+    Skill-MCP异步统一(ARCH-01)    :p1b, after p1a, 5d
+    Resource通知可达(ARCH-05)      :p1c, after p1a, 3d
 
-    section 阶段1: 数据层统一
-    双SQLite合并设计            :p1a, after p0b, 3d
-    统一knowledge_entries Schema :p1b, after p1a, 5d
-    数据迁移脚本实现            :p1c, after p1b, 3d
-    双写一致性修复              :p1d, after p1c, 3d
+    section 阶段2: 数据层整合
+    workflow双表合并(DB-04)        :p2a, after p1b, 3d
+    decisions.db合并(DB-05)        :p2b, after p2a, 5d
+    状态存储统一(DB-06/07)         :p2c, after p2b, 5d
+    自动对账(DB-08)                :p2d, after p2c, 3d
 
-    section 阶段2: 接口层统一
-    统一响应格式(ARCH-11)       :p2a, after p1d, 3d
-    API Schema统一(API-01)      :p2b, after p2a, 5d
-    降级映射对齐(NEW-01)        :p2c, after p2a, 2d
+    section 阶段3: Skill层瘦身
+    SKILL.md内容外置(SKILL-03)     :p3a, after p1b, 5d
+    路由/注册表去重(SKILL-04/05)   :p3b, after p3a, 3d
+    参考文档两级加载(SKILL-06)      :p3c, after p3b, 5d
+    命令参数去重(SKILL-07)          :p3d, after p3c, 3d
 
-    section 阶段3: MCP层增强
-    Resource订阅暴露(NEW-08)    :p3a, after p2b, 3d
-    审计日志Tool接口(MCP-03)    :p3b, after p2b, 2d
-    COMMAND_PHASE_MAP扩展(NEW-05):p3c, after p3a, 2d
+    section 阶段4: 性能与自动化
+    性能基准测试(PERF-01)          :p4a, after p3c, 5d
+    自动Phase推进(ARCH-02)         :p4b, after p4a, 5d
+    Token降级验证(PERF-03)         :p4c, after p4b, 3d
+    Agent粒度加载(PERF-02)         :p4d, after p4c, 5d
 
-    section 阶段4: Skill层优化
-    内嵌门禁补全(NEW-06)        :p4a, after p3c, 3d
-    SKELETON命令增强(SKILL-02)  :p4b, after p4a, 2d
-    Token预算关联(ARCH-08)      :p4c, after p4b, 3d
-
-    section 阶段5: 清理与验证
-    v1归档(P3-01)               :p5a, after p4c, 2d
-    版本号统一(NEW-10)          :p5b, after p5a, 1d
-    全量回归测试                :p5c, after p5b, 3d
+    section 阶段5: 清理与完善
+    v1归档(SKILL-01)               :p5a, after p4d, 2d
+    Hook动态配置(SKILL-08)         :p5b, after p5a, 3d
+    跨平台构建(ARCH-13)            :p5c, after p5b, 5d
+    全量回归测试                   :p5d, after p5c, 3d
 ```
 
-### 4.2 阶段0：状态验证（紧急）
+### 4.2 阶段1：版本与接口统一（紧急/高优先级）
 
-**目标**：确认6个"待验证"问题的实际代码状态，更新PROBLEM.md
-
-| 步骤 | 输入 | 输出 | 验收标准 | 依赖 |
-|------|------|------|----------|------|
-| 0.1 审计ARCH-05代码 | skill_resources.py | Resource注册清单+订阅机制状态 | 25+ Resource已注册，subscribe/unsubscribe函数存在 | 无 |
-| 0.2 审计ARCH-06/07代码 | database.py, agent_manage.py, workflow_dispatch.py | 持久化+恢复逻辑完整性报告 | agent_states/workflow_states表存在，load_on_startup函数存在 | 无 |
-| 0.3 审计ARCH-09/10代码 | hook_engine.py, config.py | 超时保护+热更新机制报告 | DEFAULT_HOOK_TIMEOUT_SECONDS=30.0存在，watchfiles/SIGHUP机制存在 | 无 |
-| 0.4 审计DB-03/MCP-03代码 | database.py, audit_logger.py | 版本清理+审计日志报告 | cleanup_knowledge_versions函数存在，audit记录逻辑存在 | 无 |
-| 0.5 更新PROBLEM.md | 审计结果 | 更新后的PROBLEM.md | 6个问题状态与代码实际一致 | 0.1-0.4 |
-
-### 4.3 阶段1：数据层统一（高优先级）
-
-**目标**：合并双SQLite实例，修复双写一致性
+**目标**：统一版本号，修复Skill-MCP通信一致性，实现Resource通知可达
 
 | 步骤 | 输入 | 输出 | 验收标准 | 依赖 |
 |------|------|------|----------|------|
-| 1.1 设计统一Schema | xuansto.db(14表) + knowledge.db(9表) | 统一DDL脚本 | knowledge_entries合并字段完整，FTS5触发器正确 | 阶段0 |
-| 1.2 实现Schema迁移 | 统一DDL | migration_v13.py | xuansto.db包含所有22+表，旧表保留为_legacy | 1.1 |
-| 1.3 实现数据迁移 | knowledge.db数据 | 迁移后xuansto.db | 源库条目数=目标库条目数，FTS5索引完整 | 1.2 |
-| 1.4 更新代码引用 | db_engine.py, database.py | 统一数据库连接 | 所有知识操作指向xuansto.db，knowledge.db可删除 | 1.3 |
-| 1.5 修复DB-02双写一致性 | persist_knowledge_dual_write | 对账+自动重试机制 | ChromaDB写入失败自动重试3次，sync_status='failed'可追踪 | 1.4 |
-| 1.6 修复DB-01决策双写 | decision_records | 决策记录持久化保证 | 决策写入SQLite后确认，文件系统备份可选 | 1.4 |
+| 1.1 统一版本号 | `server.py`(指令v8.4.0), `pyproject.toml`(v8.5.0), `config.py`(API 3.0.0) | 所有版本号统一为8.5.0/API 3.0.0 | `server_health(version)`返回一致版本；`pyproject.toml` version=8.5.0；Server指令描述更新 | 无 |
+| 1.2 Skill-MCP异步统一 | `server.py`同步调用点, `tools/*.py`同步函数 | 所有Tool调用统一为async | 20个Tool全部使用async def；`_with_hook_interception`统一async包装；同步降级脚本用`asyncio.to_thread`包装 | 1.1 |
+| 1.3 Resource通知可达 | `resource_subscribe.py`(已实现subscribe/unsubscribe/list) | Host端可订阅Resource变更 | `resource_subscribe` Tool在server.py注册；Phase变更时调用`notify_subscribers`；Host端收到`resource_updated`通知 | 1.1 |
+| 1.4 Resource URI去重 | `skill_resources.py`(27个Resource，含重复URI) | 合并重复URI，保留规范URI | `xuansto://config/skill`与`xuansto://skill/config`合并为一个；`xuansto://references/quality-gates`与`xuansto://gates/definitions`统一 | 1.3 |
+
+### 4.3 阶段2：数据层整合（高优先级）
+
+**目标**：消除数据冗余，合并独立数据库，统一状态存储
+
+| 步骤 | 输入 | 输出 | 验收标准 | 依赖 |
+|------|------|------|----------|------|
+| 2.1 合并workflow双表 | `workflow_instances`(旧) + `workflow_states`(新) | 统一`workflow_states`表，迁移旧表数据 | `workflow_instances`数据迁移完成；旧表标记`_legacy`；所有查询指向`workflow_states` | 阶段1 |
+| 2.2 合并decisions.db | `decisions.db`(独立) → `xuansto.db` | `decisions`表和`decisions_fts`迁移到xuansto.db | `decision_log.py`连接统一为xuansto.db；FTS5索引重建；旧decisions.db保留为备份 | 2.1 |
+| 2.3 统一状态存储 | Agent/Workflow/Session三处状态(内存+JSON+SQLite) | SQLite为唯一权威源，JSON仅备份 | `agent_manage.py`启动从SQLite恢复；`workflow_dispatch.py`启动从SQLite恢复；JSON文件写入为可选备份 | 2.2 |
+| 2.4 实现自动对账 | `reconcile_knowledge_stores`(手动) | 定时自动对账(默认每小时) | `DegradationManager`健康检查线程增加对账触发；对账结果写入`kb_reconciliation_log`；失败条目自动重试 | 2.3 |
 
 **数据迁移风险控制**：
 
 ```mermaid
 graph TB
-    START[开始迁移] --> BACKUP[备份knowledge.db]
-    BACKUP --> SCHEMA[执行Schema迁移v13]
+    START[开始迁移] --> BACKUP[备份xuansto.db + decisions.db]
+    BACKUP --> SCHEMA[执行Schema迁移v14]
     SCHEMA --> CHECK1{Schema验证通过?}
     CHECK1 -->|否| ROLLBACK1[回滚Schema]
-    CHECK1 -->|是| DATA[执行数据迁移]
-    DATA --> CHECK2{数据条目数一致?}
+    CHECK1 -->|是| DATA[迁移decisions.db数据]
+    DATA --> CHECK2{决策条目数一致?}
     CHECK2 -->|否| ROLLBACK2[回滚数据]
-    CHECK2 -->|是| FTS[重建FTS5索引]
+    CHECK2 -->|是| FTS[重建decisions_fts索引]
     FTS --> CHECK3{FTS5搜索正常?}
     CHECK3 -->|否| REBUILD[重建索引]
-    CHECK3 -->|是| CHROMA[验证ChromaDB向量ID一致性]
-    CHROMA --> CHECK4{向量ID一致?}
-    CHECK4 -->|否| RECONCILE[执行对账reconcile_knowledge_stores]
-    CHECK4 -->|是| SWITCH[切换代码引用]
-    RECONCILE --> SWITCH
-    SWITCH --> VERIFY[运行全量验证测试]
+    CHECK3 -->|是| CODE[更新decision_log.py连接]
+    CODE --> VERIFY[运行全量验证测试]
     VERIFY --> DONE[迁移完成]
 
     style START fill:#27ae60,color:#fff
@@ -405,66 +438,57 @@ graph TB
     style ROLLBACK2 fill:#e74c3c,color:#fff
 ```
 
-### 4.4 阶段2：接口层统一（高优先级）
+### 4.4 阶段3：Skill层瘦身（高/中优先级）
 
-**目标**：统一响应格式，对齐降级映射
-
-| 步骤 | 输入 | 输出 | 验收标准 | 依赖 |
-|------|------|------|----------|------|
-| 2.1 统一MCP Tool响应格式 | errors.py make_response | 所有Tool返回{status,data,metadata} | 排查20个Tool，修复返回字符串的边缘情况 | 阶段1 |
-| 2.2 统一HTTP API响应格式 | api.py make_response | HTTP API返回{status,data,error,metadata} | 与MCP格式对齐，status值统一为ok/error | 2.1 |
-| 2.3 对齐降级映射 | degradation.py FALLBACK_MAP(20) + constraints.yaml(14) | constraints.yaml补全6个映射 | 20个工具全部有降级声明，constraints.yaml为唯一权威源 | 2.1 |
-| 2.4 移除硬编码降级映射 | degradation.py TOOL_SCRIPT_MAP | 仅从constraints.yaml读取 | YAML读取失败时回退到硬编码（向后兼容） | 2.3 |
-| 2.5 统一错误码体系 | errors.py + api_routes.py | 合并错误码枚举 | MCP:ERR_VALIDATION与HTTP:BAD_REQUEST映射明确 | 2.2 |
-
-### 4.5 阶段3：MCP层增强（中优先级）
-
-**目标**：暴露Resource订阅，增加审计查询Tool
+**目标**：减少SKILL.md体积，消除内容重复，实现参考文档两级加载
 
 | 步骤 | 输入 | 输出 | 验收标准 | 依赖 |
 |------|------|------|----------|------|
-| 3.1 暴露Resource订阅管理 | skill_resources.py内部函数 | resource_subscribe Tool | Host端可调用subscribe/unsubscribe action | 阶段2 |
-| 3.2 增加审计日志查询Tool | audit_logger.py | audit_query Tool | 支持按tool_name/date/limit条件查询 | 阶段2 |
-| 3.3 扩展COMMAND_PHASE_MAP | progressive_loader.py(6个映射) | 覆盖全部31个命令 | 每个命令都有明确的阶段推进映射 | 3.1 |
-| 3.4 实现阶段变更通知 | Resource订阅 + notifications.py | 阶段变更MCP通知推送 | Phase变更时Host端收到通知 | 3.1 |
+| 3.1 SKILL.md内容外置 | `SKILL.md` PHASE_2/3段(含`{{include:routes.yaml}}`和`{{include:registry.yaml}}`) | PHASE_2/3仅保留引用URI，内容通过MCP Resource按需加载 | SKILL.md总行数≤150行；PHASE_2仅含"完整路由见xuansto://commands/routes"；PHASE_3仅含"Hook系统见xuansto://hooks/definitions" | 阶段1 |
+| 3.2 路由/注册表去重 | `SKILL.md`精简路由表 + `routes.yaml`完整路由 | SKILL.md仅保留路由入口说明，完整路由统一由routes.yaml提供 | SKILL.md PHASE_1路由表仅含命令名→Phase映射(≤10行)；详细路由通过`xuansto://commands/routes` Resource获取 | 3.1 |
+| 3.3 参考文档两级加载 | `references/`(79+文件，全量加载) | 摘要(≤200 Token)→完整(≤5000 Token)两级加载 | 每个参考文档生成摘要版(`references/summary/*.md`)；Phase 2加载摘要，按需加载完整；`resource_load_status`支持`detail_level`参数 | 3.2 |
+| 3.4 命令参数去重 | `commands/*.md`参数定义 + `tools/*.py` Pydantic Schema | 命令参数直接引用MCP工具Schema | `commands/*.md`参数表替换为"参数同MCP工具xxx的Schema"；消除双源维护 | 3.3 |
 
-### 4.6 阶段4：Skill层优化（中优先级）
+### 4.5 阶段4：性能与自动化（高/中优先级）
 
-**目标**：补全内嵌门禁，增强SKELETON阶段，关联Token预算
-
-| 步骤 | 输入 | 输出 | 验收标准 | 依赖 |
-|------|------|------|----------|------|
-| 4.1 补全_QUALITY_GATES | _shared.py(13项) + references/quality-gates.md(54项) | 54项完整内嵌门禁 | 降级模式下所有54项门禁可检查 | 阶段3 |
-| 4.2 SKELETON命令增强 | constraints.yaml + SKILL.md | /status, /help, /budget在Phase 0可用 | Phase 0用户可执行这3个命令 | 4.1 |
-| 4.3 Token预算与阶段关联 | token_budget.py + progressive_loader.py | 阶段推进自动调整预算分配 | Phase推进时token_budget自动更新phase_allocations | 4.2 |
-| 4.4 API版本协商完善 | server_health.py _negotiate_api_version | 完整协商逻辑+客户端自动适配 | 客户端首次连接时自动协商，不兼容时优雅降级 | 4.3 |
-
-### 4.7 阶段5：清理与验证（低优先级）
-
-**目标**：归档v1，统一版本号，全量回归
+**目标**：建立性能基准，实现自动Phase推进，验证Token降级
 
 | 步骤 | 输入 | 输出 | 验收标准 | 依赖 |
 |------|------|------|----------|------|
-| 5.1 v1文件归档 | agents/commands/workflows目录 | v1标记archived，v2为唯一版本 | v1文件移至archived/目录或添加.deprecated标记 | 阶段4 |
-| 5.2 统一版本号 | __init__.py(3.0.0) + KB_VERSION(2.0.0) | 统一为单一版本号 | MCP Server和KB HTTP API使用同一版本 | 5.1 |
-| 5.3 spec-locks CI校验 | spec-locks/*.json | CI步骤强制校验Schema | PR提交时自动校验API契约一致性 | 5.2 |
-| 5.4 全量回归测试 | 全部测试套件 | 测试报告 | 100%通过率，新增测试覆盖新功能 | 5.3 |
+| 4.1 性能基准测试 | 各Phase Token消耗目标值(未实测) | 实测基准数据报告 | Phase 0≤2K/Phase 1≤5K/Phase 2≤10K/Phase 3≤20K实测确认；加载时间Phase 0≤500ms/Phase推进≤3s实测确认 | 阶段3 |
+| 4.2 自动Phase推进 | `resource_load_status.py`(手动preload) | 基于Token消耗和命令执行的自动推进 | 命令执行后自动检查是否需要推进；Token使用率<60%时自动推进到命令所需Phase；无需手动调用preload | 4.1 |
+| 4.3 Token降级端到端验证 | `token_budget.py`(enforce逻辑) + `resource_load_status.py`(degrade_phase) | 端到端降级验证通过 | Token≥80%触发context_compress；Token≥95%触发degrade_phase；降级后功能正确受限；恢复后功能正确恢复 | 4.2 |
+| 4.4 Agent粒度加载 | 当前按PHASE段整体加载57个Agent | 按需加载单个Agent定义 | Phase 2仅加载当前Phase所需Agent(≤15个)；其他Agent通过`xuansto://agents/{name}`按需加载；Agent定义加载≤300ms/个 | 4.3 |
+
+### 4.6 阶段5：清理与完善（低优先级）
+
+**目标**：归档v1，Hook动态化，跨平台构建，全量回归
+
+| 步骤 | 输入 | 输出 | 验收标准 | 依赖 |
+|------|------|------|----------|------|
+| 5.1 v1文件归档 | `.trae/skills/xuansto-skill/`(v1目录) | v1标记archived | v1目录移至`archived/xuansto-skill-v1/`；v2为唯一维护版本 | 阶段4 |
+| 5.2 Hook动态配置 | `hooks.json`(静态) + Phase信息 | Hook配置与加载阶段联动 | SKELETON阶段自动启用minimal；FUNCTIONAL启用standard；FULL启用strict；`hook_manage(list)`返回当前Phase对应配置 | 5.1 |
+| 5.3 跨平台构建 | `scripts/build-desktop.ps1`(仅Windows) | 新增macOS/Linux构建脚本 | `scripts/build-desktop.sh`支持macOS/Linux；CI矩阵覆盖3平台 | 5.2 |
+| 5.4 全量回归测试 | 全部测试套件 | 测试报告 | 100%通过率；新增测试覆盖新功能；性能基准在目标范围内 | 5.3 |
 
 ---
 
-## 5. 渐进式加载披露实现方案
+## 5. 按需加载与渐进式披露实现方案
 
 ### 5.1 当前状态与目标差距
 
-| 维度 | 当前状态 | 目标状态 | 差距 |
-|------|----------|----------|------|
+| 维度 | 当前状态(v8.5.0) | 目标状态 | 差距 |
+|------|-----------------|----------|------|
 | SKILL.md分段加载 | ✅ 4段PHASE标记已实现 | 保持不变 | 无 |
-| 命令驱动阶段推进 | ⚠️ 仅6个命令有映射 | 全部31个命令有映射 | NEW-05 |
-| SKELETON阶段可用性 | ⚠️ 仅/status/help/budget声明可用 | 核心查询命令可用 | SKILL-02 |
+| 命令驱动阶段推进 | ✅ 32个命令完整映射(COMMAND_PHASE_MAP) | 保持不变 | 无 |
+| SKELETON阶段可用性 | ✅ /status, /help, /budget可用 | 保持不变 | 无 |
 | 阶段降级自动恢复 | ✅ degrade_phase()已实现 | 保持不变 | 无 |
-| 降级事件通知 | ⚠️ resource_load_status返回降级信息 | 主动推送MCP通知 | ARCH-05/NEW-08 |
-| Token预算关联 | ❌ 独立管理 | 阶段推进自动调整 | ARCH-08 |
-| 披露过渡动画 | ❌ 无 | 阶段转换时提供用户提示 | 新增 |
+| 降级事件通知 | ⚠️ resource_subscribe已实现但Host端未消费 | Host端可订阅变更 | ARCH-05 |
+| Token预算关联 | ✅ PHASE_TOKEN_BUDGET_MAP已实现 | 自动Phase推进 | ARCH-02 |
+| 参考文档两级加载 | ❌ 全量加载 | 摘要→完整两级 | SKILL-06 |
+| Agent粒度加载 | ❌ 按PHASE段整体加载 | 单Agent按需加载 | PERF-02 |
+| SKILL.md内容外置 | ❌ PHASE_2/3内联完整内容 | 仅保留引用URI | SKILL-03 |
+| 披露过渡提示 | ⚠️ phase_transition_templates已定义 | 实际推送给用户 | 需验证 |
 
 ### 5.2 四阶段设计详解
 
@@ -472,86 +496,100 @@ graph TB
 stateDiagram-v2
     [*] --> SKELETON: Skill首次触发
 
-    SKELETON: Phase 0 - 骨架\n≤2K Token\n命令路由 + 基础状态查询
-    FUNCTIONAL: Phase 1 - 功能\n≤5K Token\n+命令执行 + 工作流 + 门禁 + 核心Agent
-    ENHANCED: Phase 2 - 增强\n≤10K Token\n+知识检索 + 参考文档 + 完整Agent注册表
-    FULL: Phase 3 - 完整\n≤20K Token\n+Hook系统 + 模型路由 + 完整脚本集
+    state SKELETON {
+        [*] --> P0_Loaded
+        P0_Loaded: Phase 0 - 骨架
+        P0_Loaded: Token预算 ≤2K
+        P0_Loaded: 可用: 命令列表, /status, /help, /budget
+        P0_Loaded: 不可用: 命令执行, Agent, 知识检索
+    }
 
-    SKELETON --> FUNCTIONAL: 用户执行任意命令\n(31个命令均可触发)
-    FUNCTIONAL --> ENHANCED: 需要参考文档/知识检索\n或resource_load_status(preload,phase=2)
-    ENHANCED --> FULL: 深度分析/桌面构建\n或resource_load_status(preload,phase=3)
+    state FUNCTIONAL {
+        [*] --> P1_Loaded
+        P1_Loaded: Phase 1 - 功能
+        P1_Loaded: Token预算 ≤5K
+        P1_Loaded: 可用: 命令执行, 工作流, 门禁, 13核心Agent
+        P1_Loaded: 不可用: 完整Agent注册表, 参考文档, 知识检索
+    }
 
-    FULL --> ENHANCED: Token使用率≥80%\n或空闲>300s
-    ENHANCED --> FUNCTIONAL: Token使用率≥80%\n或空闲>300s
+    state ENHANCED {
+        [*] --> P2_Loaded
+        P2_Loaded: Phase 2 - 增强
+        P2_Loaded: Token预算 ≤10K
+        P2_Loaded: 可用: 57Agent注册表, 参考文档(摘要), 知识检索
+        P2_Loaded: 不可用: 参考文档(完整), Hook详情, 模型路由
+    }
+
+    state FULL {
+        [*] --> P3_Loaded
+        P3_Loaded: Phase 3 - 完整
+        P3_Loaded: Token预算 ≤20K
+        P3_Loaded: 可用: 全部功能
+        P3_Loaded: 不可用: 无
+    }
+
+    SKELETON --> FUNCTIONAL: 用户执行任意命令\n(自动推进)
+    FUNCTIONAL --> ENHANCED: 参考文档/知识检索请求\n(自动推进)
+    ENHANCED --> FULL: 深度分析/桌面构建\n(自动推进)
+
+    FULL --> ENHANCED: Token使用率≥80%\ncontext_compress
+    ENHANCED --> FUNCTIONAL: Token使用率≥95%\n释放参考文档
     FUNCTIONAL --> SKELETON: Token使用率≥95%\n且无活动工作流
 ```
 
-### 5.3 状态机设计
+### 5.3 状态机实现
 
-```python
-class LoadPhase(str, Enum):
-    SKELETON = "skeleton"
-    FUNCTIONAL = "functional"
-    ENHANCED = "enhanced"
-    FULL = "full"
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
 
-class PhaseTransition:
-    TRANSITION_CONDITIONS = {
-        (LoadPhase.SKELETON, LoadPhase.FUNCTIONAL): {
-            "min_tools": 5,
-            "min_resources": 3,
-            "trigger": "command_execution"
-        },
-        (LoadPhase.FUNCTIONAL, LoadPhase.ENHANCED): {
-            "min_tools": 12,
-            "min_resources": 10,
-            "trigger": "knowledge_or_reference_request"
-        },
-        (LoadPhase.ENHANCED, LoadPhase.FULL): {
-            "min_tools": 20,
-            "min_resources": 18,
-            "trigger": "deep_analysis_or_desktop_build"
-        }
-    }
+    Idle --> Advancing: 触发Phase推进
+    Advancing --> LoadingResources: 条件检查通过
+    Advancing --> Idle: 条件不满足
 
-    DEGRADATION_CONDITIONS = {
-        (LoadPhase.FULL, LoadPhase.ENHANCED): {
-            "token_usage_ratio": 0.80,
-            "idle_seconds": 300
-        },
-        (LoadPhase.ENHANCED, LoadPhase.FUNCTIONAL): {
-            "token_usage_ratio": 0.80,
-            "idle_seconds": 300
-        },
-        (LoadPhase.FUNCTIONAL, LoadPhase.SKELETON): {
-            "token_usage_ratio": 0.95,
-            "idle_seconds": 300,
-            "no_active_workflow": True
-        }
-    }
+    LoadingResources --> Notifying: 资源加载完成
+    LoadingResources --> Rollback: 加载失败
+
+    Notifying --> Completed: 通知发送完成
+    Notifying --> Completed: 通知发送超时(不阻塞)
+
+    Rollback --> Idle: 回滚完成
+
+    Completed --> Idle: 状态更新完成
+
+    note right of Advancing
+        检查条件:
+        - min_tools_available
+        - min_resources_loaded
+        - token_budget_remaining
+    end note
+
+    note right of LoadingResources
+        加载内容:
+        - SKILL.md PHASE段
+        - 参考文档(摘要/完整)
+        - Agent定义(按需)
+    end note
 ```
 
-### 5.4 完整COMMAND_PHASE_MAP（目标）
+### 5.4 参考文档两级加载设计
 
-| 命令 | 推进到 | 依据 |
-|------|--------|------|
-| /init, /sprint, /sdd-tdd-medium | FUNCTIONAL | 初始化需要命令执行和工作流 |
-| /implement, /fix | FUNCTIONAL | 代码实现需要门禁检查 |
-| /plan, /spec, /design, /design-system | ENHANCED | 设计需要参考文档和知识检索 |
-| /brainstorm, /clarify | ENHANCED | 需求分析需要知识检索 |
-| /test, /review, /audit | ENHANCED | 测试审查需要参考文档 |
-| /accept, /deploy | ENHANCED | 验收部署需要完整信息 |
-| /refactor, /simplify | ENHANCED | 重构需要知识检索 |
-| /build, /build-desktop, /release-desktop | FULL | 构建需要完整脚本集 |
-| /loop, /cancel-loop | FUNCTIONAL | 循环模式需要工作流 |
-| /learn | ENHANCED | 学习需要知识检索 |
-| /status, /agent-status, /budget, /decision | SKELETON(不推进) | 查询类命令无需推进 |
-| /rollback, /execute-plan | FUNCTIONAL | 操作类命令 |
-| /sdd-tdd-fast | FUNCTIONAL | 快速模式跳过初始化 |
+| 加载级别 | Token预算 | 内容 | 触发条件 |
+|----------|----------|------|----------|
+| 摘要(Summary) | ≤200 Token/文档 | 标题+核心要点+适用场景 | Phase 2自动加载 |
+| 完整(Full) | ≤5000 Token/文档 | 完整定义+示例+参数 | 用户明确请求或命令需要 |
+
+**摘要生成规则**：
+
+| 参考文档 | 摘要内容 | 完整内容 |
+|----------|----------|----------|
+| quality-gates.md | 54项门禁ID+级别+Phase列表 | 每项门禁的完整判定标准和修复建议 |
+| agent-registry.md | 13层57个Agent名称+Phase列表 | 每个Agent的完整能力描述和模型路由 |
+| mcp-tools.md | 20个工具名+核心action列表 | 每个工具的完整参数Schema和返回值 |
+| workflow-phases.md | 9阶段名称+关键门禁列表 | 每个阶段的完整输入/输出/验收标准 |
+| security-guidelines.md | OWASP Top 10类别列表 | 每个类别的完整检测规则和修复方案 |
 
 ### 5.5 过渡动画与用户提示
-
-阶段转换时向用户提供清晰的提示信息：
 
 ```mermaid
 sequenceDiagram
@@ -568,15 +606,13 @@ sequenceDiagram
     RLS-->>Skill: {can_advance: true, estimated_tokens: 3000}
 
     Skill->>User: 🔄 正在加载增强阶段资源...
-    Note over Skill: 披露提示：即将解锁知识检索和参考文档
 
     Skill->>RLS: preload(phase=2)
-    RLS->>RLS: 加载参考文档+Agent注册表+知识检索
-    RLS->>Notify: 发送阶段变更通知
+    RLS->>RLS: 加载参考文档摘要+Agent注册表+知识检索
+    RLS->>Notify: 发送phase_transition通知
     RLS-->>Skill: {preloaded: [...], transition_result: "success"}
 
-    Skill->>User: ✅ 增强阶段已就绪
-    Note over Skill: 披露提示：知识检索、参考文档、完整Agent注册表已可用
+    Skill->>User: ✅ 增强阶段就绪：知识检索、参考文档(摘要)、完整Agent注册表已可用
 
     Skill->>Skill: 执行/design命令逻辑
 ```
@@ -586,25 +622,25 @@ sequenceDiagram
 | 转换 | 加载中提示 | 就绪提示 |
 |------|-----------|---------|
 | SKELETON→FUNCTIONAL | 🔄 正在加载功能阶段... | ✅ 功能阶段就绪：命令执行、工作流推进、质量门禁已可用 |
-| FUNCTIONAL→ENHANCED | 🔄 正在加载增强阶段... | ✅ 增强阶段就绪：知识检索、参考文档、完整Agent注册表已可用 |
-| ENHANCED→FULL | 🔄 正在加载完整阶段... | ✅ 完整阶段就绪：Hook系统、模型路由、完整脚本集已可用 |
-| FULL→ENHANCED | ⚠️ Token预算紧张，降级到增强阶段 | 增强阶段运行中：完整脚本集和Hook系统已卸载 |
+| FUNCTIONAL→ENHANCED | 🔄 正在加载增强阶段... | ✅ 增强阶段就绪：知识检索、参考文档(摘要)、完整Agent注册表已可用 |
+| ENHANCED→FULL | 🔄 正在加载完整阶段... | ✅ 完整阶段就绪：Hook系统、模型路由、参考文档(完整)已可用 |
+| FULL→ENHANCED | ⚠️ Token预算紧张，降级到增强阶段 | 增强阶段运行中：完整参考文档和Hook系统已卸载 |
 | ENHANCED→FUNCTIONAL | ⚠️ Token预算紧张，降级到功能阶段 | 功能阶段运行中：知识检索和参考文档已卸载 |
 
 ### 5.6 性能指标
 
-| 指标 | 目标值 | 测量方式 |
-|------|--------|----------|
-| Phase 0加载时间 | ≤500ms | resource_load_status(action="status")首次调用耗时 |
-| Phase 0→1推进时间 | ≤2s | preload(phase=1)调用耗时 |
-| Phase 1→2推进时间 | ≤3s | preload(phase=2)调用耗时 |
-| Phase 2→3推进时间 | ≤5s | preload(phase=3)调用耗时 |
-| Phase 0 Token消耗 | ≤2K | SKILL.md PHASE_0段Token计数 |
-| Phase 1 Token消耗 | ≤5K | SKILL.md PHASE_0+1段Token计数 |
-| Phase 2 Token消耗 | ≤10K | SKILL.md PHASE_0+1+2段Token计数 |
-| Phase 3 Token消耗 | ≤20K | SKILL.md PHASE_0+1+2+3段Token计数 |
-| 降级恢复延迟 | ≤30s | degrade_phase()→自动恢复检测间隔 |
-| 阶段转换通知延迟 | ≤1s | Phase变更→MCP通知到达时间 |
+| 指标 | 目标值 | 当前状态 | 测量方式 |
+|------|--------|----------|----------|
+| Phase 0 Token消耗 | ≤2K | ✅ 理论达标 | SKILL.md PHASE_0段Token计数 |
+| Phase 1 Token消耗 | ≤5K | ✅ 理论达标 | SKILL.md PHASE_0+1段Token计数 |
+| Phase 2 Token消耗 | ≤10K | ⚠️ 含`{{include:}}`后可能超限 | 实际加载后Token计数 |
+| Phase 3 Token消耗 | ≤20K | ⚠️ 含完整参考文档后可能超限 | 实际加载后Token计数 |
+| Phase 0 加载时间 | ≤500ms | ❌ 未实测 | resource_load_status首次调用耗时 |
+| Phase 推进时间 | ≤3s/Phase | ❌ 未实测 | preload(phase=N)调用耗时 |
+| Agent定义加载 | ≤300ms/个 | ❌ 未实测 | xuansto://agents/{name}读取耗时 |
+| 知识检索响应 | ≤3s(hybrid) | ❌ 未实测 | knowledge_search(retrieve)耗时 |
+| 降级恢复延迟 | ≤30s | ❌ 未实测 | degrade_phase()→自动恢复检测间隔 |
+| 阶段转换通知延迟 | ≤1s | ❌ 未实测 | Phase变更→MCP通知到达时间 |
 
 ---
 
@@ -622,13 +658,13 @@ graph TB
 
     subgraph "集成测试(Integration)"
         INT1["Skill-MCP联动<br/>命令→MCP Tool→结果"]
-        INT2["特效加载流程<br/>Phase推进+资源加载+通知"]
+        INT2["渐进式加载流程<br/>Phase推进+资源加载+通知"]
         INT3["双写一致性<br/>SQLite↔ChromaDB对账"]
         INT4["降级链路<br/>MCP失败→脚本→内联"]
     end
 
     subgraph "单元测试(Unit)"
-        UNIT1["MCP Tool<br/>20个工具独立测试"]
+        UNIT1["MCP Tool<br/>22个工具独立测试"]
         UNIT2["状态管理<br/>LoadingState/PhaseTransition"]
         UNIT3["数据层<br/>database.py CRUD"]
         UNIT4["搜索引擎<br/>4后端降级"]
@@ -663,33 +699,37 @@ graph TB
 
 | 工具 | 测试场景 | 预期结果 | 优先级 |
 |------|----------|----------|--------|
-| knowledge_search | retrieve with hybrid | 返回{status:"success",data:{results, strategy}} | 高 |
-| knowledge_search | ChromaDB不可用降级 | strategy降级为sqlite_fts5_bm25 | 高 |
-| knowledge_search | 全部不可用降级 | 返回keyword_tfidf结果 | 中 |
+| knowledge_search | retrieve with hybrid | 返回{status:"success",data:{results,strategy}} | 高 |
+| knowledge_search | ChromaDB不可用降级 | strategy降级为sqlite_fts5 | 高 |
+| knowledge_search | 全部不可用降级 | 返回keyword_fallback结果 | 中 |
 | quality_gate_check | 指定gate_ids检查 | 返回checks数组，每项含status | 高 |
-| quality_gate_check | 脚本不存在降级 | 使用INLINE_CHECKS | 中 |
+| quality_gate_check | 全部54项检查 | 返回54项结果，BLOCK/WARN/INFO分级 | 高 |
 | resource_load_status | status查询 | 返回current_phase, resources, available_functions | 高 |
 | resource_load_status | preload推进 | 返回preloaded列表和transition_result | 高 |
-| resource_load_status | token_report | 返回各工具Token使用统计 | 中 |
+| resource_load_status | disclosure_transition | 返回阶段转换所需资源估算 | 高 |
 | workflow_dispatch | start工作流 | 返回workflow_id和status="running" | 高 |
-| workflow_dispatch | phase推进 | current_phase递增 | 高 |
-| agent_manage | create/assign/release | 状态正确转换 | 中 |
+| workflow_dispatch | phase推进 | current_phase递增，门禁检查触发 | 高 |
+| token_budget | set_from_phase | 根据阶段自动调整预算分配 | 高 |
+| token_budget | enforce(80%/95%) | 触发压缩/降级 | 高 |
+| decision_log | log+reconcile | 决策写入SQLite，对账一致 | 高 |
+| agent_manage | create/assign/release | 状态正确转换，SQLite持久化 | 中 |
+| server_health | negotiate_version | 兼容性判断正确 | 中 |
+| audit_query | 按条件查询 | 返回匹配审计记录 | 中 |
 | config_manage | reload配置 | 配置热更新生效 | 中 |
-| metrics_report | query指标 | 返回tool_name对应指标 | 低 |
-| server_health | 版本协商 | 兼容性判断正确 | 中 |
+| resource_subscribe | subscribe/unsubscribe | 订阅状态正确，通知可达 | 中 |
 
 #### 6.2.2 状态管理单元测试
 
 | 组件 | 测试场景 | 预期结果 |
 |------|----------|----------|
-| LoadPhase | 枚举值正确 | SKELETON="skeleton", FUNCTIONAL="functional"等 |
+| LoadPhase | 枚举值正确 | SKELETON/FUNCTIONAL/ENHANCED/FULL |
 | LoadingState | 初始化 | current_phase=SKELETON, degraded=False |
 | LoadingState | degrade_phase() | degraded=True, degraded_from记录原阶段 |
 | PhaseTransition | SKELETON→FUNCTIONAL条件 | min_tools=5, min_resources=3 |
 | PhaseTransition | 降级条件检查 | token_usage_ratio≥0.80触发降级 |
-| ProgressiveLoader | advance_phase() | 阶段正确推进，资源列表更新 |
-| ProgressiveLoader | sync_from_skill_phase() | PHASE_SKILL_MAP映射正确 |
-| COMMAND_PHASE_MAP | 31个命令映射 | 每个命令都有明确的目标阶段 |
+| COMMAND_PHASE_MAP | 32个命令映射 | 每个命令都有明确的目标阶段 |
+| PHASE_SKILL_MAP | PHASE_0→SKELETON等4映射 | 映射正确 |
+| PHASE_TOKEN_BUDGET_MAP | 4阶段Token预算 | SKELETON=2000, FUNCTIONAL=5000, ENHANCED=10000, FULL=20000 |
 
 ### 6.3 集成测试
 
@@ -702,7 +742,7 @@ graph TB
 | /loop循环模式 | 1.workflow_dispatch(start) 2.循环执行Phase 0-8 3.session_manage(save) | 循环完成或达到max_iterations，状态持久化 |
 | 降级链路测试 | 1.模拟MCP不可用 2.触发脚本降级 3.模拟脚本失败 4.触发内联降级 | 降级结果格式与MCP一致，degraded=True |
 
-#### 6.3.2 特效加载流程测试
+#### 6.3.2 渐进式加载流程测试
 
 | 测试场景 | 步骤 | 预期结果 |
 |----------|------|----------|
@@ -711,15 +751,16 @@ graph TB
 | 命令驱动推进 | 在SKELETON执行/init | 自动推进到FUNCTIONAL |
 | 知识检索门控 | 在SKELETON调用knowledge_search | 返回不可用提示，建议升级到ENHANCED |
 | 通知推送 | Phase变更 | MCP通知到达Host端 |
+| 参考文档两级加载 | Phase 2加载摘要→按需加载完整 | 摘要≤200 Token，完整≤5000 Token |
 
 #### 6.3.3 双写一致性测试
 
 | 测试场景 | 步骤 | 预期结果 |
 |----------|------|----------|
 | 正常双写 | knowledge_inject → SQLite → ChromaDB | sync_status='ready'，两存储一致 |
-| ChromaDB写入失败 | 模拟ChromaDB异常 | sync_status='pending'，reconciliation_log记录 |
-| 自动对账 | 触发reconcile_knowledge_stores | pending条目重试，成功标记ready |
-| 过期清理 | cleanup_stale_pending_entries(24h) | 超时pending条目标记failed |
+| ChromaDB写入失败 | 模拟ChromaDB异常 | sync_status='failed'，3次重试后标记 |
+| 自动对账 | 触发reconcile_knowledge_stores | failed条目重试，成功标记ready |
+| 自动定时对账 | 等待对账周期触发 | 自动检测并修复不一致 |
 
 ### 6.4 端到端测试
 
@@ -730,18 +771,20 @@ graph TB
 | 降级容错全链路 | 模拟MCP不可用→脚本降级→内联降级→恢复 | 降级链路完整，恢复后功能正常 |
 | 渐进式加载全流程 | SKELETON→各命令触发推进→FULL→Token超限降级→恢复 | 阶段转换正确，Token预算联动 |
 | 长时间工作流 | /loop模式执行50次迭代 | 状态持久化正确，无内存泄漏 |
+| 版本协商 | 不同版本客户端连接 | 协商结果正确，不兼容时优雅降级 |
 
 ### 6.5 回归验证方案
 
 | 验证项 | 方法 | 通过标准 |
 |--------|------|----------|
-| 已修复问题不回退 | 针对P0/P1/P2已修复的10个问题运行专项测试 | 全部通过 |
-| MCP Tool功能完整性 | 20个Tool各执行1次标准调用 | 全部返回success |
-| Resource可访问性 | 25+个Resource各读取1次 | 全部返回有效内容 |
-| 降级链路完整性 | 每个Tool模拟MCP不可用 | 降级结果格式一致 |
+| 已修复问题不回退 | 针对PROBLEM.md中35项已修复问题运行专项测试 | 全部通过 |
+| MCP Tool功能完整性 | 22个Tool各执行1次标准调用 | 全部返回success |
+| Resource可访问性 | 27个Resource各读取1次 | 全部返回有效内容 |
+| 降级链路完整性 | 每个Tool模拟MCP不可用 | 降级结果格式一致(20/20) |
 | 数据迁移完整性 | 迁移前后条目数对比 | 100%一致 |
 | Token预算准确性 | 各Phase Token消耗测量 | 在预算±10%范围内 |
 | 渐进式加载正确性 | 4阶段推进+降级+恢复 | 状态转换正确 |
+| 版本号一致性 | server_health + pyproject.toml + config.py | 三源版本一致 |
 
 ---
 
@@ -758,21 +801,22 @@ graph LR
 
     subgraph "阶段1: 静态检查"
         LINT[Python Lint<br/>ruff check]
-        TYPE[类型检查<br/>mypy]
+        TYPE[类型检查<br/>mypy --strict]
         YAML[YAML校验<br/>constraints.yaml<br/>routes.yaml<br/>registry.yaml]
     end
 
     subgraph "阶段2: Schema校验"
-        TOOL_SCHEMA[Tool参数Schema<br/>vs spec-locks/]
-        API_CONTRACT[API契约校验<br/>vs spec-locks/]
-        SKILL_DEF[Skill定义Schema<br/>vs spec-locks/]
+        TOOL_SCHEMA[Tool参数Schema<br/>validate_schemas.py]
+        API_CONTRACT[API契约校验<br/>spec-locks/]
+        SKILL_DEF[Skill定义校验<br/>SKILL.md PHASE标记]
     end
 
     subgraph "阶段3: MCP定义验证"
-        TOOL_REG[Tool注册验证<br/>20个Tool全部注册]
-        RES_REG[Resource注册验证<br/>25+个Resource可访问]
+        TOOL_REG[Tool注册验证<br/>22个Tool全部注册]
+        RES_REG[Resource注册验证<br/>27个Resource可访问]
         DEGR_MAP[降级映射验证<br/>constraints.yaml=degradation.py]
-        PHASE_MAP[阶段映射验证<br/>COMMAND_PHASE_MAP完整]
+        PHASE_MAP[阶段映射验证<br/>COMMAND_PHASE_MAP=32]
+        VERSION[版本一致性<br/>server.py=pyproject.toml]
     end
 
     subgraph "阶段4: 测试"
@@ -794,6 +838,7 @@ graph LR
     TOOL_REG --> RES_REG
     TOOL_REG --> DEGR_MAP
     TOOL_REG --> PHASE_MAP
+    TOOL_REG --> VERSION
     UNIT --> INT --> E2E
     BUILD --> SMOKE
 
@@ -802,10 +847,9 @@ graph LR
 
 ### 7.2 具体CI步骤
 
-#### 7.2.1 Lint检查
+#### 7.2.1 Lint检查（ruff）
 
 ```yaml
-# .github/workflows/ci.yml
 lint:
   runs-on: ubuntu-latest
   steps:
@@ -816,7 +860,16 @@ lint:
     - run: ruff format --check xuansto-mcp-server/src/
 ```
 
-#### 7.2.2 Schema校验
+ruff配置（已在`pyproject.toml`中定义）：
+
+| 规则 | 设置 |
+|------|------|
+| line-length | 120 |
+| target-version | py310 |
+| select | E, F, W, I, N, UP, B, A, SIM |
+| ignore | E501 |
+
+#### 7.2.2 Schema校验（validate_schemas.py）
 
 ```yaml
 schema-validate:
@@ -825,17 +878,17 @@ schema-validate:
     - uses: actions/checkout@v4
     - name: Validate Tool Parameter Schemas
       run: |
-        python scripts/validate_schemas.py \
+        python xuansto-mcp-server/scripts/validate_schemas.py \
           --tools xuansto-mcp-server/src/xuansto_mcp/tools/ \
           --lock xuansto-mcp-server/spec-locks/tool-parameter-schemas.json
     - name: Validate API Contract
       run: |
-        python scripts/validate_schemas.py \
+        python xuansto-mcp-server/scripts/validate_schemas.py \
           --api xuansto-mcp-server/src/xuansto_mcp/api_routes.py \
           --lock xuansto-mcp-server/spec-locks/api-contract-version.json
     - name: Validate Skill Definition
       run: |
-        python scripts/validate_schemas.py \
+        python xuansto-mcp-server/scripts/validate_schemas.py \
           --skill .trae/skills/xuansto-skill-v2/SKILL.md \
           --lock xuansto-mcp-server/spec-locks/skill-definition-schema.json
 ```
@@ -847,7 +900,7 @@ mcp-validate:
   runs-on: ubuntu-latest
   steps:
     - uses: actions/checkout@v4
-    - name: Verify Tool Registration
+    - name: Verify Tool Registration (22 tools)
       run: |
         python -c "
         from xuansto_mcp.tools import TOOL_REGISTRY
@@ -855,22 +908,34 @@ mcp-validate:
                     'quality_gate_check','spec_drift_detect','security_scan',
                     'code_simplify','session_manage','workflow_dispatch',
                     'agent_status','agent_manage','hook_manage',
-                    'resource_load_status','context_compress','server_health',
+                    'resource_load_status','resource_subscribe',
+                    'context_compress','server_health',
                     'decision_log','token_budget','project_init',
-                    'metrics_report','config_manage'}
+                    'metrics_report','config_manage','audit_query'}
         actual = set(TOOL_REGISTRY.keys())
         assert actual == expected, f'Missing: {expected-actual}, Extra: {actual-expected}'
         "
-    - name: Verify Degradation Mapping Consistency
+    - name: Verify Version Consistency
       run: |
-        python scripts/verify_degradation_consistency.py \
+        python -c "
+        import tomllib
+        from xuansto_mcp.core.config import MCP_API_VERSION
+        with open('xuansto-mcp-server/pyproject.toml','rb') as f:
+            pyproject = tomllib.load(f)
+        pyproject_version = pyproject['project']['version']
+        # Server指令版本应与pyproject.toml一致
+        assert pyproject_version == '8.5.0', f'Version mismatch: {pyproject_version}'
+        "
+    - name: Verify Degradation Mapping (20/20)
+      run: |
+        python xuansto-mcp-server/scripts/verify_degradation_consistency.py \
           --degradation xuansto-mcp-server/src/xuansto_mcp/core/degradation.py \
           --constraints .trae/skills/xuansto-skill-v2/constraints.yaml
-    - name: Verify COMMAND_PHASE_MAP Completeness
+    - name: Verify COMMAND_PHASE_MAP (32/32)
       run: |
-        python scripts/verify_phase_map.py \
+        python xuansto-mcp-server/scripts/verify_phase_map.py \
           --routes .trae/skills/xuansto-skill-v2/commands/routes.yaml \
-          --loader scripts/knowledge_server/progressive_loader.py
+          --loader xuansto-mcp-server/src/xuansto_mcp/tools/resource_load_status.py
 ```
 
 #### 7.2.4 测试执行
@@ -928,9 +993,14 @@ scheduled:
         uv run pytest tests/ -v --timeout=300
     - name: Data Consistency Check
       run: |
-        python scripts/check_db_consistency.py \
+        python xuansto-mcp-server/scripts/check_db_consistency.py \
           --db .xuansto/xuansto.db \
           --chroma .knowledge/index/chroma_db
+    - name: Performance Baseline
+      run: |
+        python xuansto-mcp-server/scripts/performance_baseline.py \
+          --phases 4 \
+          --iterations 10
 ```
 
 ### 7.4 CI质量门禁
@@ -938,9 +1008,12 @@ scheduled:
 | 门禁 | 条件 | 失败处理 |
 |------|------|----------|
 | Lint通过 | ruff check 0 errors | 阻止合并 |
+| 类型检查通过 | mypy --strict 0 errors | 警告（初期） |
 | Schema一致 | Tool/API/Skill Schema与spec-locks一致 | 阻止合并 |
-| Tool注册完整 | 20个Tool全部注册 | 阻止合并 |
-| 降级映射一致 | constraints.yaml = degradation.py | 阻止合并 |
+| Tool注册完整 | 22个Tool全部注册 | 阻止合并 |
+| 版本号一致 | server.py = pyproject.toml = config.py | 阻止合并 |
+| 降级映射一致 | constraints.yaml = degradation.py (20/20) | 阻止合并 |
+| 阶段映射完整 | COMMAND_PHASE_MAP = 32个命令 | 阻止合并 |
 | 单元测试通过 | 100%通过率 | 阻止合并 |
 | 覆盖率达标 | ≥80% | 警告 |
 | 构建成功 | uv build无错误 | 阻止合并 |
@@ -948,28 +1021,72 @@ scheduled:
 
 ---
 
-## 附录A：版本规划摘要
+## 附录A：已修复问题归档（PROBLEM.md v8.5.0）
+
+| 编号 | 优先级 | 描述 | 修复版本 | 影响域 |
+|------|--------|------|----------|--------|
+| P0-01 | P0 | v2降级模式不可用 | v8.0.0 | 架构 |
+| P0-02 | P0 | v2缺少references/完整参考文档 | v8.0.0 | Skill |
+| P1-01 | P1 | MCP Server版本与Skill版本不一致 | v8.0.0 | MCP |
+| P1-02 | P1 | server_health工具未在v2 mcp-tools.md中列出 | v8.0.0 | MCP |
+| P1-03 | P1 | knowledge_search缺少inject/precipitate action文档 | v8.0.0 | MCP |
+| P1-04 | P1 | skill_tools.py单文件过大(2300+行) | v8.1.0 | 架构 |
+| P1-05 | P1 | 降级映射硬编码 | v8.1.0 | 架构 |
+| P1-06 | P1 | Skill层与MCP层加载状态缺乏双向同步 | v8.1.0 | Skill |
+| P2-01 | P2 | v2缺少评估配置文件 | v8.1.0 | Skill |
+| P2-02 | P2 | v2缺少CHANGELOG.md | v8.1.0 | Skill |
+| ARCH-05 | P1 | MCP Server未暴露Resource | v8.4.0 | MCP |
+| ARCH-06 | P1 | 缺少Agent持久化机制 | v8.4.0 | 架构 |
+| ARCH-07 | P1 | 工作流状态仅内存存储 | v8.4.0 | 架构 |
+| ARCH-08 | P1 | Token预算与加载阶段未关联 | v8.4.0 | 架构 |
+| ARCH-09 | P1 | Hook执行无超时保护 | v8.4.0 | 架构 |
+| ARCH-10 | P1 | 配置变更需重启MCP Server | v8.4.0 | 架构 |
+| ARCH-11 | P1 | 错误处理不统一 | v8.4.0 | 架构 |
+| ARCH-12 | P1 | 缺少API版本协商机制 | v8.4.0 | 架构 |
+| DB-01 | P1 | 决策记录双写一致性风险 | v8.5.0 | 数据 |
+| DB-02 | P1 | ChromaDB与SQLite双写无事务保证 | v8.5.0 | 数据 |
+| DB-03 | P2 | 知识条目版本历史无清理策略 | v8.4.0 | 数据 |
+| MCP-02 | P1 | 缺少Resource暴露 | v8.4.0 | MCP |
+| MCP-03 | P1 | 工具调用无审计日志 | v8.4.0 | MCP |
+| SKILL-01 | P1 | PHASE标记与LoadPhase枚举值不对应 | v8.1.0 | Skill |
+| SKILL-02 | P2 | SKELETON阶段无可用命令 | v8.5.0 | Skill |
+| SKILL-03 | P1 | 降级时Skill层不感知MCP层状态 | v8.1.0 | Skill |
+| API-01 | P1 | HTTP API与MCP stdio两套接口无统一Schema | v8.4.0 | API |
+| API-02 | P1 | 降级脚本返回格式与MCP工具不一致 | v8.1.0 | API |
+| NEW-01 | P1 | 降级映射不完整(14/20) | v8.5.0 | 架构 |
+| NEW-03 | P1 | Schema验证缺失 | v8.5.0 | 架构 |
+| NEW-05 | P1 | COMMAND_PHASE_MAP不完整(6/32) | v8.5.0 | Skill |
+| NEW-06 | P1 | 质量门禁不完整(13/54) | v8.5.0 | Skill |
+| NEW-07 | P1 | 双SQLite数据库分裂 | v8.5.0 | 数据 |
+| NEW-08 | P1 | 缺少Resource订阅机制 | v8.5.0 | MCP |
+| NEW-09 | P1 | 缺少审计日志查询 | v8.5.0 | MCP |
+
+> **统计**：已修复35项，未修复1项(P3-01→SKILL-01)，缓解1项(P3-02→SKILL-02)
+
+## 附录B：版本规划摘要
 
 | 版本 | 目标日期 | 主要内容 | 涉及问题 |
 |------|----------|----------|----------|
-| v8.4.1 | 2026-05-30 | 状态验证+PROBLEM.md更新 | NEW-11, ARCH-05/06/07/09/10验证, DB-03验证, MCP-03验证 |
-| v8.5.0 | 2026-06-30 | 数据层统一+接口层统一+MCP增强+Skill优化 | NEW-07, DB-01/02, ARCH-11, API-01, NEW-01, NEW-05/06/08/09, SKILL-02, ARCH-08, NEW-03 |
-| v8.6.0 | 2026-08-31 | 清理归档+版本统一+测试补全 | P3-01, NEW-02, NEW-04, NEW-10, ARCH-12 |
+| v8.5.1 | 2026-06-02 | 版本统一+接口统一 | MCP-01, API-01, ARCH-01, ARCH-05, MCP-02 |
+| v8.6.0 | 2026-07-15 | 数据层整合+Skill瘦身 | DB-04, DB-05, DB-06/07/08, SKILL-03/04/05/06/07 |
+| v8.7.0 | 2026-08-31 | 性能自动化+清理完善 | PERF-01/02/03, ARCH-02, SKILL-01/08, ARCH-13 |
 
-## 附录B：关键文件变更清单
+## 附录C：关键文件变更清单
 
 | 文件 | 变更类型 | 涉及阶段 |
 |------|----------|----------|
-| `PROBLEM.md` | 更新状态 | 阶段0 |
-| `xuansto-mcp-server/src/xuansto_mcp/core/database.py` | Schema合并+迁移 | 阶段1 |
-| `scripts/knowledge_server/db_engine.py` | 废弃(合并到database.py) | 阶段1 |
-| `xuansto-mcp-server/src/xuansto_mcp/core/degradation.py` | 降级映射对齐 | 阶段2 |
-| `.trae/skills/xuansto-skill-v2/constraints.yaml` | 补全6个降级映射 | 阶段2 |
-| `xuansto-mcp-server/src/xuansto_mcp/core/errors.py` | 统一错误码 | 阶段2 |
-| `scripts/knowledge_server/api.py` | 响应格式统一 | 阶段2 |
-| `xuansto-mcp-server/src/xuansto_mcp/resources/skill_resources.py` | 暴露订阅管理 | 阶段3 |
-| `xuansto-mcp-server/src/xuansto_mcp/tools/audit_query.py` | 新增Tool | 阶段3 |
-| `scripts/knowledge_server/progressive_loader.py` | 扩展COMMAND_PHASE_MAP | 阶段3 |
-| `scripts/knowledge_server/tools/_shared.py` | 补全54项门禁 | 阶段4 |
-| `xuansto-mcp-server/src/xuansto_mcp/tools/token_budget.py` | 阶段关联 | 阶段4 |
+| `xuansto-mcp-server/src/xuansto_mcp/server.py` | 版本号统一+异步统一 | 阶段1 |
+| `xuansto-mcp-server/pyproject.toml` | 版本号确认 | 阶段1 |
+| `xuansto-mcp-server/src/xuansto_mcp/core/config.py` | API版本统一 | 阶段1 |
+| `xuansto-mcp-server/src/xuansto_mcp/resources/skill_resources.py` | Resource URI去重+通知 | 阶段1 |
+| `xuansto-mcp-server/src/xuansto_mcp/core/database.py` | workflow双表合并+decisions合并 | 阶段2 |
+| `xuansto-mcp-server/src/xuansto_mcp/tools/decision_log.py` | 连接统一xuansto.db | 阶段2 |
+| `xuansto-mcp-server/src/xuansto_mcp/tools/agent_manage.py` | SQLite权威源 | 阶段2 |
+| `xuansto-mcp-server/src/xuansto_mcp/tools/workflow_dispatch.py` | SQLite权威源 | 阶段2 |
+| `.trae/skills/xuansto-skill-v2/SKILL.md` | 内容外置+瘦身 | 阶段3 |
+| `.trae/skills/xuansto-skill-v2/commands/routes.yaml` | 去重 | 阶段3 |
+| `.trae/skills/xuansto-skill-v2/agents/registry.yaml` | 去重 | 阶段3 |
+| `.trae/skills/xuansto-skill-v2/references/summary/` | 新增摘要目录 | 阶段3 |
+| `xuansto-mcp-server/src/xuansto_mcp/tools/resource_load_status.py` | 自动推进+两级加载 | 阶段4 |
+| `xuansto-mcp-server/src/xuansto_mcp/tools/token_budget.py` | 自动降级验证 | 阶段4 |
 | `.github/workflows/ci.yml` | 新增CI步骤 | 阶段5 |

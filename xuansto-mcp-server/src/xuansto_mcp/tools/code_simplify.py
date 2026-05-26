@@ -433,7 +433,7 @@ def register(mcp: FastMCP) -> None:
 
             simplifier_path = SCRIPTS_DIR / "code-simplifier.py"
             if simplifier_path.exists():
-                result = run_script(
+                result = await run_script(
                     simplifier_path,
                     args=["--target", target, "--scope", scope, "--format", "json"],
                     timeout=60,
@@ -456,7 +456,7 @@ def register(mcp: FastMCP) -> None:
             if include_dedup:
                 dedup_path = SCRIPTS_DIR / "deduplication-detector.py"
                 if dedup_path.exists():
-                    result = run_script(
+                    result = await run_script(
                         dedup_path,
                         args=["--target", target, "--format", "json"],
                         timeout=60,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 import threading
@@ -391,7 +392,7 @@ def register(mcp: FastMCP) -> None:
                         "latency_p99_ms": _calculate_percentile(latencies, 99),
                     }
                 degradation_snapshot = dict(_DEGRADATION_COUNTS)
-            chromadb_health = _check_chromadb_health()
+            chromadb_health = await asyncio.to_thread(_check_chromadb_health)
             tools_count = len(_REGISTERED_TOOL_NAMES) if _REGISTERED_TOOL_NAMES else 13
             resources_count = len(_REGISTERED_RESOURCE_NAMES) if _REGISTERED_RESOURCE_NAMES else 7
             return make_success_response({

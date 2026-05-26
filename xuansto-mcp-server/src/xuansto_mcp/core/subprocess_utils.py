@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import subprocess
@@ -9,7 +10,7 @@ from typing import Any
 logger = logging.getLogger("xuansto-mcp")
 
 
-def run_script(
+async def run_script(
     script_path: Path,
     args: list[str] | None = None,
     cwd: str = ".",
@@ -28,7 +29,8 @@ def run_script(
         cmd.extend(args)
 
     try:
-        result = subprocess.run(
+        result = await asyncio.to_thread(
+            subprocess.run,
             cmd,
             capture_output=True,
             text=True,

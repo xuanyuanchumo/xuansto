@@ -174,10 +174,10 @@ uvx --from . xuansto-mcp
 
 | URI | 描述 |
 |-----|------|
-| `xuansto://skill/config` | Skill配置信息 |
-| `xuansto://quality/gates` | 质量门禁定义 |
+| `xuansto://config/skill` | Skill配置信息 |
+| `xuansto://gates/definitions` | 质量门禁定义 |
 | `xuansto://agents/registry` | Agent注册表 |
-| `xuansto://workflow/phases` | 工作流阶段定义 |
+| `xuansto://workflows/definitions` | 工作流阶段定义 |
 | `xuansto://templates/{name}` | 模板文件 |
 | `xuansto://session/history` | 会话历史 |
 | `xuansto://loading/status` | 渐进式加载状态 |

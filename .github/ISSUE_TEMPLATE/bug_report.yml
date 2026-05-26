@@ -29,7 +29,9 @@ body:
     attributes:
       label: Version
       options:
-        - v8.0.0-dev
+        - v8.5.x (current develop)
+        - v8.4.x
+        - v8.3.x
         - v7.x
         - other
     validations:
