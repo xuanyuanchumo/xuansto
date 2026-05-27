@@ -1,6 +1,6 @@
 # Xuansto Skill v2 — Git/GitHub 管理方案
 
-> **版本**: 4.0 | **日期**: 2026-05-27 | **基线版本**: 8.5.0
+> **版本**: 5.0 | **日期**: 2026-05-27 | **基线版本**: 9.0.0
 > **适用范围**: xuansto-skill-v2（Skill定义层）+ xuansto-mcp-server（MCP Server执行层）
 > **Worktree 路径**: `c:\Users\86156\.trae-cn\worktrees\skiller\feat-develop-main-branch-60SHTK`
 > **主仓库路径**: `D:\Projects\TraeProjects\skiller`
@@ -232,6 +232,11 @@ v8.0.0 (已发布) ─── tag: v8.0.0
 
 ### 3.5 优化建议
 
+> **v9.0.0 更新**：以下部分建议已在 v9.0.0 中实施：
+> - ✅ 子目录 .gitignore 已精简（Skill层和MCP Server层仅保留特有规则）
+> - ✅ 根级 .gitignore 已补充 `.zed/`、`.trae-cn/` 等规则
+> - ✅ `.knowledge/index/knowledge.db` 重复规则已移除
+
 #### 建议1：精简子目录 .gitignore
 
 **Skill 层 `.gitignore` 优化后**（仅保留特有规则）：
@@ -320,6 +325,11 @@ uv.lock.bak
 
 ### 4.5 优化建议
 
+> **v9.0.0 更新**：以下部分建议已在 v9.0.0 中实施：
+> - ✅ 子目录 .gitattributes 已精简（Skill层仅保留 `constraints.yaml merge=union`）
+> - ✅ MCP Server 层 .gitattributes 已精简
+> - ✅ 根级 .gitattributes 已补充 `*.toml merge=union`、`constraints.yaml merge=union`、`registry.yaml merge=union` 等规则
+
 #### 建议1：精简子目录 .gitattributes
 
 **Skill 层 `.gitattributes` 优化后**：
@@ -391,6 +401,7 @@ spec-locks/ linguist-generated
 | Degradation Test | 仅定时触发 | ✅ 合理 | 保持不变 |
 | Skill Validate | YAML/JSON 校验 | ✅ 正确 | 保持不变 |
 | Schema Validate | MCP Tool Schemas + spec-locks | ✅ 已实现 | 保持不变 |
+| 版本一致性检查 | — | ✅ v9.0.0新增 | CI新增版本号一致性检查步骤 |
 
 **关键优化**：mypy 改为硬失败（当前 `|| true` 会导致类型错误被忽略）：
 
@@ -473,6 +484,8 @@ commit-message:
 | custom | `['https://github.com/xuanyuanchumo/xuansto']` | ✅ 正确 |
 
 ### 5.8 .editorconfig 审查
+
+> **v9.0.0 更新**：.editorconfig 已补充 YAML 和 TOML 的缩进规则。
 
 | 配置项 | 当前值 | 评估 | 建议 |
 |--------|--------|------|------|
@@ -585,7 +598,7 @@ git pull origin main
 git merge --no-ff develop -m "release: v9.0.0"
 
 # Step 5: 打 tag
-git tag -a v9.0.0 -m "v9.0.0: 安全修复+数据整合+MCP合规+Skill瘦身+清理完善"
+git tag -a v9.0.0 -m "v9.0.0: Token动态调整+架构一致性+指标合并+Git优化"
 
 # Step 6: 推送（触发 Release workflow）
 git push origin main --tags

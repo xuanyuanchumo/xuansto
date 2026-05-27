@@ -13,8 +13,8 @@ from ..core.config import (
     KNOWLEDGE_DB_PATH,
     KNOWLEDGE_EXPERIENCE_DIR,
     KNOWLEDGE_GENERAL_DIR,
+    KNOWLEDGE_REFERENCES_DIR,
     KNOWLEDGE_WORKSPACE_DIR,
-    REFERENCES_DIR,
 )
 from ..core.database import get_db
 from ..core.errors import ERR_VALIDATION, make_error_response, make_success_response
@@ -137,7 +137,7 @@ def _keyword_fallback_search(query: str, top_k: int, scope: str | None) -> dict[
     results: list[dict[str, Any]] = []
     search_dirs = []
     if scope in (None, "general"):
-        search_dirs.extend([KNOWLEDGE_GENERAL_DIR, REFERENCES_DIR])
+        search_dirs.extend([KNOWLEDGE_GENERAL_DIR, KNOWLEDGE_REFERENCES_DIR])
     if scope in (None, "workspace"):
         search_dirs.append(KNOWLEDGE_WORKSPACE_DIR)
     if scope in (None, "experience"):

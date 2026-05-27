@@ -205,18 +205,17 @@ def _load_active_workflows() -> None:
         logger.warning("Failed to parse workflow states from %s", path)
 
 def load_on_startup() -> None:
-    sqlite_workflows = _load_all_workflows_from_sqlite()
     restored_from_sqlite = 0
     with _workflows_lock:
-        for wid, data in sqlite_workflows.items():
+        for wid, data in _load_all_workflows_from_sqlite().items():
             status = data.get("status", "")
-            if status == "aborted":
+            if status in ("aborted", "completed"):
                 continue
             if wid not in _ACTIVE_WORKFLOWS:
                 _ACTIVE_WORKFLOWS[wid] = data
                 restored_from_sqlite += 1
     if restored_from_sqlite > 0:
-        logger.info("Restored %d workflow instances from SQLite (workflow_instances)", restored_from_sqlite)
+        logger.info("Restored %d active workflow instances from SQLite (workflow_instances)", restored_from_sqlite)
 
     restored_from_db = 0
     try:
@@ -224,7 +223,15 @@ def load_on_startup() -> None:
         with _workflows_lock:
             for db_wf in db_workflows:
                 wid = db_wf.get("workflow_id", "")
-                if wid and wid not in _ACTIVE_WORKFLOWS:
+                if not wid or wid in _ACTIVE_WORKFLOWS:
+                    continue
+                full_data = _load_workflow_from_sqlite(wid)
+                if full_data is not None:
+                    full_status = full_data.get("status", "")
+                    if full_status in ("aborted", "completed"):
+                        continue
+                    _ACTIVE_WORKFLOWS[wid] = full_data
+                else:
                     entry = {
                         "workflow_id": wid,
                         "workflow": db_wf.get("workflow_type", ""),
@@ -233,10 +240,17 @@ def load_on_startup() -> None:
                         "current_phase": db_wf.get("current_phase", 0),
                         "completed_phases": db_wf.get("completed_phases_json", []) or [],
                     }
+                    tasks = db_wf.get("tasks_json")
+                    if tasks:
+                        entry["tasks"] = tasks
+                    decisions = db_wf.get("decisions_json")
+                    if decisions:
+                        entry["decisions"] = decisions
                     _ACTIVE_WORKFLOWS[wid] = entry
-                    restored_from_db += 1
+                    _persist_workflow_to_sqlite(wid, entry)
+                restored_from_db += 1
         if restored_from_db > 0:
-            logger.info("Restored %d workflow instances from SQLite (workflow_states)", restored_from_db)
+            logger.info("Restored %d active workflow instances from SQLite (workflow_states)", restored_from_db)
     except Exception as exc:
         logger.warning("Failed to restore workflow instances from SQLite: %s", exc)
 
@@ -253,7 +267,7 @@ def load_on_startup() -> None:
             continue
         wid = data.get("workflow_id", f.stem)
         status = data.get("status", "")
-        if status == "aborted":
+        if status in ("aborted", "completed"):
             skipped_aborted += 1
             continue
         with _workflows_lock:
@@ -265,6 +279,10 @@ def load_on_startup() -> None:
             "Startup file fallback: %d recovered, %d aborted skipped, %d corrupt skipped",
             recovered_from_file, skipped_aborted, skipped_corrupt,
         )
+
+    with _workflows_lock:
+        total_active = len(_ACTIVE_WORKFLOWS)
+    logger.info("Startup complete: %d total active workflows in memory", total_active)
     _persist_active_workflows()
 
 def _list_workflows() -> list[dict[str, Any]]:

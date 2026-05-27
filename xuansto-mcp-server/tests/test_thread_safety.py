@@ -3,14 +3,15 @@ from __future__ import annotations
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from unittest.mock import patch
 
 from xuansto_mcp.tools.server_health import (
     _DEGRADATION_COUNTS,
-    _TOOL_METRICS,
     _metrics_lock,
     record_tool_call,
     track_degradation,
 )
+from xuansto_mcp.core.metrics import get_metrics_collector
 from xuansto_mcp.tools.workflow_dispatch import (
     _ACTIVE_WORKFLOWS,
     _workflows_lock,
@@ -28,8 +29,9 @@ from xuansto_mcp.tools.resource_load_status import (
 
 class TestServerHealthThreadSafety:
     def test_record_tool_call_concurrent(self):
-        with _metrics_lock:
-            _TOOL_METRICS.clear()
+        mc = get_metrics_collector()
+        with mc._lock:
+            mc._tool_metrics.clear()
         n_threads = 20
         calls_per_thread = 50
         with ThreadPoolExecutor(max_workers=n_threads) as pool:
@@ -39,8 +41,8 @@ class TestServerHealthThreadSafety:
             ]
             for f in as_completed(futures):
                 f.result()
-        with _metrics_lock:
-            metrics = _TOOL_METRICS.get("test_tool", {})
+        with mc._lock:
+            metrics = mc._tool_metrics.get("test_tool", {})
             assert metrics.get("call_count", 0) == n_threads * calls_per_thread
 
     def test_track_degradation_concurrent(self):
@@ -48,19 +50,22 @@ class TestServerHealthThreadSafety:
             _DEGRADATION_COUNTS.clear()
         n_threads = 20
         calls_per_thread = 50
-        with ThreadPoolExecutor(max_workers=n_threads) as pool:
-            futures = [
-                pool.submit(track_degradation, "test_degr")
-                for _ in range(n_threads * calls_per_thread)
-            ]
-            for f in as_completed(futures):
-                f.result()
+        with patch("xuansto_mcp.tools.server_health._persist_degradation"):
+            with ThreadPoolExecutor(max_workers=n_threads) as pool:
+                futures = [
+                    pool.submit(track_degradation, "test_degr")
+                    for _ in range(n_threads * calls_per_thread)
+                ]
+                for f in as_completed(futures):
+                    f.result()
         with _metrics_lock:
             assert _DEGRADATION_COUNTS.get("test_degr", 0) == n_threads * calls_per_thread
 
     def test_mixed_read_write_metrics(self):
+        mc = get_metrics_collector()
+        with mc._lock:
+            mc._tool_metrics.clear()
         with _metrics_lock:
-            _TOOL_METRICS.clear()
             _DEGRADATION_COUNTS.clear()
         errors = []
 
@@ -75,20 +80,22 @@ class TestServerHealthThreadSafety:
         def reader():
             try:
                 for _ in range(100):
+                    with mc._lock:
+                        _ = dict(mc._tool_metrics)
                     with _metrics_lock:
-                        _ = dict(_TOOL_METRICS)
                         _ = dict(_DEGRADATION_COUNTS)
             except Exception as e:
                 errors.append(e)
 
-        with ThreadPoolExecutor(max_workers=10) as pool:
-            futures = []
-            for _ in range(5):
-                futures.append(pool.submit(writer))
-            for _ in range(5):
-                futures.append(pool.submit(reader))
-            for f in as_completed(futures):
-                f.result()
+        with patch("xuansto_mcp.tools.server_health._persist_degradation"):
+            with ThreadPoolExecutor(max_workers=10) as pool:
+                futures = []
+                for _ in range(5):
+                    futures.append(pool.submit(writer))
+                for _ in range(5):
+                    futures.append(pool.submit(reader))
+                for f in as_completed(futures):
+                    f.result()
         assert not errors
 
 

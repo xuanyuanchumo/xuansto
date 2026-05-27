@@ -60,17 +60,17 @@ _TIME_RANGE_SECONDS: dict[str, float] = {
 
 def _query_metrics(tool_name: str | None, time_range: str, metric_type: str) -> dict[str, Any]:
     try:
-        from .server_health import _TOOL_METRICS
-        from .server_health import _metrics_lock as health_lock
-        with health_lock:
-            metrics_snapshot = {
-                name: {
-                    "call_count": m["call_count"],
-                    "error_count": m["error_count"],
-                    "latencies": list(m.get("latencies", [])),
-                }
-                for name, m in _TOOL_METRICS.items()
+        from ..core.metrics import get_metrics_collector
+        collector = get_metrics_collector()
+        tool_summary = collector.get_tool_summary()
+        metrics_snapshot = {
+            name: {
+                "call_count": m["call_count"],
+                "error_count": m["failure_count"],
+                "latencies": m.get("latency_samples", []),
             }
+            for name, m in tool_summary.items()
+        }
     except ImportError:
         metrics_snapshot = _load_persisted_metrics()
 
@@ -107,10 +107,20 @@ def _query_metrics(tool_name: str | None, time_range: str, metric_type: str) -> 
 
 def _summary_metrics(time_range: str) -> dict[str, Any]:
     try:
-        from .server_health import _DEGRADATION_COUNTS, _TOOL_METRICS
+        from ..core.metrics import get_metrics_collector
+        from .server_health import _DEGRADATION_COUNTS
         from .server_health import _metrics_lock as health_lock
+        collector = get_metrics_collector()
+        tool_summary = collector.get_tool_summary()
+        metrics_snapshot = {
+            name: {
+                "call_count": m["call_count"],
+                "error_count": m["failure_count"],
+                "latencies": m.get("latency_samples", []),
+            }
+            for name, m in tool_summary.items()
+        }
         with health_lock:
-            metrics_snapshot = dict(_TOOL_METRICS)
             degradation_snapshot = dict(_DEGRADATION_COUNTS)
     except ImportError:
         metrics_snapshot = _load_persisted_metrics()
@@ -183,10 +193,20 @@ def _inline_metrics_report(action: str, **kwargs: Any) -> dict[str, Any]:
 
 def _evaluate_metrics(criterion: str = "all") -> dict[str, Any]:
     try:
-        from .server_health import _DEGRADATION_COUNTS, _TOOL_METRICS
+        from ..core.metrics import get_metrics_collector
+        from .server_health import _DEGRADATION_COUNTS
         from .server_health import _metrics_lock as health_lock
+        collector = get_metrics_collector()
+        tool_summary = collector.get_tool_summary()
+        metrics_snapshot = {
+            name: {
+                "call_count": m["call_count"],
+                "error_count": m["failure_count"],
+                "latencies": m.get("latency_samples", []),
+            }
+            for name, m in tool_summary.items()
+        }
         with health_lock:
-            metrics_snapshot = dict(_TOOL_METRICS)
             degradation_snapshot = dict(_DEGRADATION_COUNTS)
     except ImportError:
         metrics_snapshot = _load_persisted_metrics()

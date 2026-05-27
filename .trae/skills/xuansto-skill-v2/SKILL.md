@@ -2,7 +2,7 @@
 name: xuansto-skill-v2
 version: 9.0.0
 description: |
-  多Agent自主开发编排引擎，通过xuansto-mcp-server的20个MCP原子工具驱动9阶段全生命周期开发流程。务必在以下场景使用本技能：用户要求从零搭建项目、端到端开发功能、TDD/SDD驱动开发、多步骤结构化任务、代码审查+安全审计、规格驱动开发、桌面应用构建，即使用户没有明确说出"多Agent"或"全流程"。支持57个Agent/13层编排、54项质量门禁、32个命令，MCP工具优先不可用时自动降级到脚本调用。
+  多Agent自主开发编排引擎，通过xuansto-mcp-server的22个MCP原子工具驱动9阶段全生命周期开发流程。务必在以下场景使用本技能：用户要求从零搭建项目、端到端开发功能、TDD/SDD驱动开发、多步骤结构化任务、代码审查+安全审计、规格驱动开发、桌面应用构建，即使用户没有明确说出"多Agent"或"全流程"。支持57个Agent/13层编排、54项质量门禁、32个命令，MCP工具优先不可用时自动降级到脚本调用。
 agents_summary: "13 layers / 57 agents (via MCP v2)"
 triggers:
   phrases: ["build this properly", "write tests first", "plan my sprint", "review architecture", "implement properly", "build a full feature", "start a new project", "refactor this module", "set up a project", "create a new app", "build from scratch", "develop a feature end-to-end", "plan development", "write specs first", "develop feature", "create project", "add feature", "build app", "code quality", "quality check", "write code", "develop app", "帮我搭建项目", "先写测试再写代码", "做个代码审查", "安全审计一下", "重构这段代码", "帮我规划一下", "完整开发一个功能", "从需求到部署", "多agent协作", "TDD开发", "SDD驱动", "桌面打包", "渗透测试", "规格驱动开发", "搭建项目", "从零开发", "端到端开发", "开发一个功能", "先写规格", "做需求分析", "帮我开发", "写个功能", "添加功能", "新建项目", "创建项目", "代码质量", "质量检查", "写代码", "开发应用", "test-first", "spec-first", "full-stack feature", "multi-step task", "structured workflow", "全流程开发", "规格驱动", "测试先行", "brainstorm", "design system", "simplify code", "loop task", "security review", "vulnerability scan", "penetration test", "桌面应用", "desktop build", "app packaging", "pentest"]
@@ -22,7 +22,7 @@ license: MIT
 
 # Xuansto Skill v8.7.0-dev (MCP Edition)
 
-> 57 Agents/13层 | 54 Gates | 32 Cmds | 9 Phase | 20 MCP工具驱动
+> 57 Agents/13层 | 54 Gates | 32 Cmds | 9 Phase | 22 MCP工具驱动
 
 ## 命令列表
 

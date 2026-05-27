@@ -5,6 +5,7 @@
 !.trae/skills/
 .trae/skills/*
 !.trae/skills/xuansto-skill-v2/
+.trae-cn/
 
 .trae/skills/xuansto-skill-v2/.knowledge/temp-scripts/*
 !.trae/skills/xuansto-skill-v2/.knowledge/temp-scripts/.gitkeep
@@ -70,6 +71,7 @@ venv/
 .claude/
 .cursor/
 .windsurf/
+.zed/
 *.swp
 *.swo
 *~
@@ -128,5 +130,4 @@ node_modules/
 # =============================================================================
 # Python Tool Files
 # =============================================================================
-.python-version
 pip-log.txt

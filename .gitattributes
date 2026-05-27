@@ -15,6 +15,7 @@
 # =============================================================================
 *.md text eol=lf diff=markdown
 *.rst text eol=lf
+*.ipynb text eol=lf diff=jupyter
 
 # =============================================================================
 # Config & Data (with merge strategies)
@@ -160,6 +161,9 @@ LICENSE text eol=lf
 # =============================================================================
 resource_state.json merge=union
 spec-locks/*.json merge=union
+constraints.yaml merge=union
+routes.yaml merge=union
+registry.yaml merge=union
 
 # =============================================================================
 # Linguist: generated files

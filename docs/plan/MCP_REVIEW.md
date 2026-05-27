@@ -1,6 +1,6 @@
 # Xuansto MCP Server 全面审查报告
 
-> 版本: 8.9.0-dev | 审查日期: 2026-05-27 | 编码: UTF-8 | 行尾: LF
+> 版本: 9.0.0 | 审查日期: 2026-05-27 | 编码: UTF-8 | 行尾: LF
 
 ## 目录
 
@@ -16,6 +16,8 @@
 ---
 
 ## 1. 当前 MCP Tool 清单（22 Tools + ToolAnnotations）
+
+**工具总数**: 22个 (v9.0.0: 原20个 + audit_query + agent_manage + resource_subscribe + config_manage + metrics_report + project_init，合并后净22个)
 
 > 源码位置: `xuansto-mcp-server/src/xuansto_mcp/server.py` L173-L197 (工具注册循环)
 > 所有 22 个 Tool 均已声明 `ToolAnnotations`（v8.9.0-dev 新增），客户端可据此做安全决策。
@@ -37,9 +39,9 @@
 | 13 | `resource_load_status` | 渐进式加载状态管理：查询Phase资源加载状态、预加载、阶段转换 | R:true D:false I:true O:false | `action`("status"/"preload"/"cache"/"clear_cache"/"loading_progress"/"disclosure_transition"), `phase`(0-3), `resource_ids`, `resource_uris`, `priority`, `batch_mode`, `auto_upgrade`, `target_phase` | `tools/resource_load_status.py` |
 | 14 | `resource_subscribe` | 资源订阅管理：订阅/取消订阅/列出资源变更通知 | R:false D:false I:true O:false | `action`("subscribe"/"unsubscribe"/"list"), `uri`, `client_id` | `tools/resource_subscribe.py` |
 | 15 | `context_compress` | 上下文压缩：支持semantic/selective/lossless三种策略 | R:false D:false I:true O:false | `content`(必填), `strategy`("semantic"/"selective"/"lossless"), `target_tokens`(100-50000), `preserve_sections` | `tools/context_compress.py` |
-| 16 | `server_health` | MCP Server 健康检查：返回服务器状态、版本、运行时间、配置路径和工具统计 | R:true D:false I:true O:false | `action`("check"/"version"/"status"), `client_version`, `client_api_version` | `tools/server_health.py` |
+| 16 | `server_health` | MCP Server 健康检查：返回服务器状态、版本、运行时间、配置路径和工具统计（v9.0.0: 指标系统合并为MetricsCollector唯一来源，版本协商统一到此Tool） | R:true D:false I:true O:false | `action`("check"/"version"/"status"), `client_version`, `client_api_version` | `tools/server_health.py` |
 | 17 | `decision_log` | 决策日志管理：记录/搜索/导出决策记录 | R:false D:false I:false O:false | `action`("log"/"list"/"query"/"update"/"export"/"stats"/"configure"), `title`, `description`, `context`, `alternatives`, `decision`, `rationale`, `impact`, `decided_by`, `keyword`, `tag`, `date_from`, `date_to`, `limit`, `offset`, `format`, `decision_id`, `status`, `file_backup` | `tools/decision_log.py` |
-| 18 | `token_budget` | Token预算管理：查询/设置/推荐/报告/强制执行/阶段设置 | R:false D:false I:false O:false | `action`("status"/"set_budget"/"set_from_phase"/"recommend"/"report"/"enforce"), `total_budget`, `phase_allocations`, `project_size`, `complexity`, `team_size`, `period`, `phase` | `tools/token_budget.py` |
+| 18 | `token_budget` | Token预算管理：查询/设置/推荐/报告/强制执行/阶段设置（v9.0.0: 新增recommend action动态调整建议，dynamic_scaling配置支持） | R:false D:false I:false O:false | `action`("status"/"set_budget"/"set_from_phase"/"recommend"/"report"/"enforce"), `total_budget`, `phase_allocations`, `project_size`, `complexity`, `team_size`, `period`, `phase` | `tools/token_budget.py` |
 | 19 | `project_init` | 项目初始化管理：创建/验证/检测技术栈/配置项目 | R:false D:false I:true O:false | `action`("create"/"init"/"validate"/"detect_stack"/"detect"/"configure"), `name`, `description`, `stack`, `template`, `directory`, `project_path` | `tools/project_init.py` |
 | 20 | `metrics_report` | 指标报告：查询/汇总/评估工具调用指标 | R:true D:false I:true O:false | `action`("query"/"summary"/"evaluate"), `tool_name`, `time_range`("1h"/"6h"/"24h"/"7d"/"all"), `metric_type`("calls"/"errors"/"latency"/"all"), `criterion` | `tools/metrics_report.py` |
 | 21 | `config_manage` | 配置管理：重载/查询状态/校验/获取YAML配置文件 | R:false D:false I:false O:false | `action`("reload"/"status"/"validate"/"get") | `tools/config_manage.py` |

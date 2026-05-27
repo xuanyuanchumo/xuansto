@@ -5,6 +5,36 @@ All notable changes to xuansto-skill-v2 will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.0.0] - 2025-05-27
+
+### Added
+- Token 预算动态调整：根据项目规模(small/medium/large)动态计算 Token 预算 (ARCH-21)
+- 跨会话 Token 持久化：Token 使用历史持久化到 SQLite token_budget_states 表 (ARCH-02, SKILL-11)
+- 会话恢复增强：进程重启后自动恢复活跃工作流和 Token 预算 (ARCH-22)
+- token_budget 新增 recommend action：根据项目规模推荐预算
+- token_budget 新增 report action：持久化当前会话 Token 使用数据
+- CI 版本一致性检查步骤 (ARCH-10, SKILL-01)
+- constraints.yaml 新增 dynamic_scaling 配置段
+- .editorconfig 新增 YAML/TOML 缩进规则
+
+### Changed
+- Agent 定义统一为 agents/ 目录唯一源，删除 references/agent-details/ 57 个重复文件 (ARCH-03)
+- 知识库路径统一为 MCP Server data/knowledge/，新增 KNOWLEDGE_REFERENCES_DIR (ARCH-07, ARCH-13)
+- 会话持久化统一：SQLite session_states 表为唯一权威源，文件导出可选 (ARCH-08)
+- 指标系统合并：MetricsCollector 为唯一来源，移除 _TOOL_METRICS 独立字典 (DATA-10)
+- 模型路由对齐：registry.yaml 为唯一源，更新 model-routing.md (SKILL-03)
+- 版本协商去重：统一到 server_health.py (API-14)
+- 版本号统一为 9.0.0 (ARCH-10, SKILL-01)
+- SKILL.md 工具数修正：20→22 个 (SKILL-08, SKILL-14)
+- .gitignore/.gitattributes 精简：子目录仅保留特有规则
+- dependabot.yml 补充 commit-message 前缀
+
+### Removed
+- references/agent-details/ 目录下 57 个重复 .md 文件
+- server_health._TOOL_METRICS 独立字典
+- default.yaml 中已迁移到 constraints.yaml 的空段引用 (SKILL-10)
+- xuansto-mcp-server/.gitattributes（与根级重复）
+
 ## [8.5.1] - 2026-05-26
 
 ### Added

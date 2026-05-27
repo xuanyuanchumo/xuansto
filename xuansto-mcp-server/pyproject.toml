@@ -1,7 +1,7 @@
 [project]
 name = "xuansto-mcp-server"
 version = "9.0.0"
-description = "Xuansto Skill MCP Server - 20 atomic tools + 25+ resources for autonomous development orchestration"
+description = "Xuansto Skill MCP Server - 22 atomic tools + 25+ resources for autonomous development orchestration"
 requires-python = ">=3.10"
 license = "MIT"
 authors = [

@@ -33,6 +33,21 @@ token_budgets:
     load: "完整参考+模板+知识库访问+全部Agent定义+所有详情"
     estimate: "≤20K"
     budget: 20000
+  dynamic_scaling:
+    enabled: true
+    project_sizes:
+      small:
+        file_count_max: 50
+        agent_count_max: 10
+        budget_multiplier: 0.7
+      medium:
+        file_count_max: 500
+        agent_count_max: 30
+        budget_multiplier: 1.0
+      large:
+        file_count_max: 99999
+        agent_count_max: 999
+        budget_multiplier: 1.5
 
 resource_priority:
   P0_must:
@@ -145,7 +160,7 @@ disclosure:
         - "完整Agent注册表(13层57个, MCP Resource xuansto://agents/registry)"
         - "MCP Resource URI索引表(8个资源)"
         - "外部参考文件表(核心约束内联，其余MCP Resource)"
-        - "MCP工具摘要表(20个工具)"
+        - "MCP工具摘要表(22个工具)"
     P3_optional:
       loaded_from: "Phase 3"
       items:
@@ -237,10 +252,12 @@ degradation:
     knowledge_inject:
       script: scripts/knowledge_inject.py
       args: ["--format", "json"]
+      knowledge_dir: "data/knowledge"
     knowledge_search:
       script: scripts/knowledge_search.py
       args: ["--format", "json"]
       inline: _inline_knowledge_search
+      knowledge_dir: "data/knowledge"
     resource_load_status:
       inline: _inline_resource_load_status
     project_init:

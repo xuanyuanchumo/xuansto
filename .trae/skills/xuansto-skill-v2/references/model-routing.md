@@ -20,7 +20,7 @@
 
 > 权威来源：`agents/registry.yaml`，本文档保持同步。
 
-### fast（8个）
+### fast（10个）
 
 | Agent | model |
 |-------|-------|
@@ -35,46 +35,47 @@
 | Monitor Specialist | fast |
 | Unit Tester | fast |
 
-### standard（33个）
+### standard（37个）
 
 | Agent | model |
 |-------|-------|
+| Subagent Dispatcher | standard |
+| Task Coordinator | standard |
+| Product Manager | standard |
+| Brainstorming Facilitator | standard |
+| Technical Writer | standard |
+| UX Designer | standard |
+| Frontend Stylist | standard |
+| UI Designer | standard |
 | Backend Developer | standard |
+| Database Engineer | standard |
+| DevOps Engineer | standard |
 | Frontend Developer | standard |
 | Fullstack Engineer | standard |
 | Mobile Developer | standard |
-| Code Reviewer | standard |
-| Integration Tester | standard |
-| QA Engineer | standard |
-| E2E Tester | standard |
-| Desktop Tester | standard |
-| Performance Tester | standard |
-| Test Maintainer | standard |
-| Refactoring Specialist | standard |
-| CI/CD Specialist | standard |
-| Build-Release Engineer | standard |
-| Data Modeler | standard |
-| DBA | standard |
-| Compliance Officer | standard |
-| UX Designer | standard |
-| Frontend Stylist | standard |
 | Desktop Developer | standard |
 | Desktop UI Adapter | standard |
 | Auto-Update Engineer | standard |
-| Technical Writer | standard |
-| Product Manager | standard |
-| Brainstorming Facilitator | standard |
-| Subagent Dispatcher | standard |
-| Task Coordinator | standard |
-| Database Engineer | standard |
-| DevOps Engineer | standard |
+| Data Modeler | standard |
+| DBA | standard |
+| Desktop Tester | standard |
+| E2E Tester | standard |
+| Integration Tester | standard |
+| Performance Tester | standard |
+| QA Engineer | standard |
+| Test Maintainer | standard |
+| Compliance Officer | standard |
+| Build-Release Engineer | standard |
+| CI/CD Specialist | standard |
+| Runtime Supervisor | standard |
+| Code Reviewer | standard |
+| Compliance Reviewer | standard |
+| History Analyzer | standard |
+| Refactoring Specialist | standard |
 | Documentation Engineer | standard |
 | Specification Keeper | standard |
 | Knowledge Manager | standard |
 | Learning Specialist | standard |
-| History Analyzer | standard |
-| Compliance Reviewer | standard |
-| Runtime Supervisor | standard |
 
 ### deep（10个）
 

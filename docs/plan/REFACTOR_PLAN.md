@@ -1,6 +1,6 @@
-# Xuansto Skill v8.9.0-dev 综合重构计划
+# Xuansto Skill v9.0.0 综合重构计划
 
-> **版本**: 4.0 | **日期**: 2026-05-27 | **基线版本**: 8.9.0-dev
+> **版本**: 5.0 | **日期**: 2026-05-27 | **基线版本**: 9.0.0
 > **范围**: xuansto-skill-v2（Skill定义层）+ xuansto-mcp-server（MCP Server执行层）
 > **输入文档**: ARCHITECTURE.md / DATABASE_DESIGN.md / MCP_REVIEW.md / SKILL_REVIEW.md / API_SPECIFICATION.md
 
@@ -21,7 +21,7 @@
 
 ### 1.1 问题来源与去重说明
 
-本清单合并了以下5个来源的全部问题，基于v8.9.0-dev代码实际状态重新评估，去重后共 **64项独立问题**（其中22项已关闭，42项待处理）：
+本清单合并了以下5个来源的全部问题，基于v9.0.0代码实际状态重新评估，去重后共 **64项独立问题**（其中35项已关闭，29项待处理）：
 
 | 来源 | 原始编号范围 | 原始问题数 | 去重后独立项 | 已关闭 | 待处理 |
 |------|-------------|-----------|-------------|--------|--------|
@@ -53,18 +53,18 @@
 | 编号 | 严重度 | 状态 | 描述 | 影响域标签 | 来源 | 位置 |
 |------|--------|------|------|-----------|------|------|
 | ARCH-01/MCP-02 | 高 | ✅ 已关闭 | SKILL.md内容外置为Resource URI引用，Tool/Resource职责分离完成 | 架构/MCP | ARCH-01, MCP-02 | SKILL.md, tools/*.py |
-| ARCH-02/SKILL-11 | 高 | ⏳ 部分关闭 | Token预算实测与自动Phase推进已实现；跨会话持久化待v9.0.0 | 架构/特效 | ARCH-02, SKILL-11 | resource_load_status.py, SKILL.md |
-| ARCH-03 | 中 | ⏳ 待处理 | Agent定义分散在agents/目录(57个.md) + references/agent-details/(57个.md)，存在重复 | 架构 | ARCH-03 | agents/, references/ |
+| ARCH-02/SKILL-11 | 高 | ✅ 已关闭 | Token预算实测与自动Phase推进已实现；跨会话持久化已完成(v9.0.0) | 架构/特效 | ARCH-02, SKILL-11 | resource_load_status.py, SKILL.md |
+| ARCH-03 | 中 | ✅ 已关闭 | Agent定义去重完成：references/agent-details/已删除，agents/为唯一源(v9.0.0) | 架构 | ARCH-03 | agents/ |
 | ARCH-04 | 中 | ✅ 已关闭 | 命令路由已通过MCP Resource `xuansto://commands/routes` 按需获取 | 架构 | ARCH-04 | commands/routes.yaml |
 | ARCH-05 | 中 | ✅ 已关闭 | 配置统一由config_manage管理，constraints.yaml为唯一声明源 | 架构 | ARCH-05 | constraints.yaml, degradation.py |
 | ARCH-06 | 中 | ✅ 已关闭 | Token配置合并到统一位置，消除三处配置重叠 | 架构 | ARCH-06 | configs/, config.py |
-| ARCH-07 | 中 | ⏳ 待处理 | 知识库双份存储：Skill scripts/knowledge_server/ + MCP Server data/knowledge/ | 架构/数据 | ARCH-07 | scripts/, data/knowledge/ |
-| ARCH-08 | 中 | ⏳ 待处理 | 会话持久化多路径：MCP session_manage + SQLite + 文件系统 | 架构/数据 | ARCH-08 | session_manage.py, .xuansto/sessions/ |
+| ARCH-07 | 中 | ✅ 已关闭 | 知识库路径统一为data/knowledge/，新增KNOWLEDGE_REFERENCES_DIR配置(v9.0.0) | 架构/数据 | ARCH-07 | data/knowledge/ |
+| ARCH-08 | 中 | ✅ 已关闭 | 会话持久化统一：SQLite session_states为唯一权威源，文件导出可选(v9.0.0) | 架构/数据 | ARCH-08 | session_manage.py |
 | ARCH-09 | 低 | ⏳ 待处理 | Hook系统配置与引擎分离：Skill hooks/hooks.json + MCP hook_engine.py | 架构 | ARCH-09 | hooks.json, hook_engine.py |
-| ARCH-10/SKILL-01 | 中 | ⏳ 待处理 | 版本号不一致：SKILL.md v8.9.0-dev vs 其他配置文件 | 架构/Skill | ARCH-10, SKILL-01 | 多文件 |
+| ARCH-10/SKILL-01 | 中 | ✅ 已关闭 | 版本号统一为9.0.0，CI新增版本一致性检查(v9.0.0) | 架构/Skill | ARCH-10, SKILL-01 | 多文件 |
 | ARCH-11 | 中 | ✅ 已关闭 | Agent定义获取已走MCP Resource `xuansto://agents/registry` | 架构 | ARCH-11 | SKILL.md |
 | ARCH-12 | 中 | ✅ 已关闭 | 命令路由获取已走MCP Resource `xuansto://commands/routes` | 架构 | ARCH-12 | routes.yaml |
-| ARCH-13 | 中 | ⏳ 待处理 | 知识检索路径不统一：Skill脚本降级或MCP工具，降级由Skill层控制 | 架构 | ARCH-13 | constraints.yaml |
+| ARCH-13 | 中 | ✅ 已关闭 | 知识检索路径统一，KNOWLEDGE_REFERENCES_DIR配置(v9.0.0，与ARCH-07一并解决) | 架构 | ARCH-13 | constraints.yaml |
 | ARCH-14 | 低 | ⏳ 待处理 | 质量门禁降级链未内化到MCP Server | 架构 | ARCH-14 | tools/quality_gate_check.py |
 | ARCH-15 | 低 | ⏳ 待处理 | 加载状态由Resource+Tool两处维护 | 架构 | ARCH-15 | skill_resources.py, resource_load_status.py |
 | ARCH-16 | 低 | ⏳ 待处理 | 22个工具+降级脚本+内联降级，降级逻辑应进一步内化 | 架构 | ARCH-16 | tools/, scripts/ |
@@ -72,8 +72,8 @@
 | ARCH-18 | 低 | ⏳ 待处理 | 传输层双模式缺少连接健康检查和自动重连 | 架构 | ARCH-18 | server.py |
 | ARCH-19 | 低 | ⏳ 待处理 | 错误处理需统一错误码体系，增加MCP协议级错误传播 | 架构 | ARCH-19 | errors.py |
 | ARCH-20 | 高 | ⏳ 待处理 | Trae平台Skill加载机制限制：SKILL.md Phase标记由平台执行，MCP Server无法控制加载时机 | 架构/特效 | ARCH-20 | SKILL.md |
-| ARCH-21 | 中 | ⏳ 待处理 | Token预算硬编码(2K/5K/10K/20K)，无法根据项目规模动态调整 | 架构/特效 | ARCH-21 | constraints.yaml |
-| ARCH-22 | 高 | ⏳ 待处理 | MCP stdio模式下服务器进程生命周期由Trae管理，无法保证持久运行 | 架构 | ARCH-22 | server.py |
+| ARCH-21 | 中 | ✅ 已关闭 | Token预算动态调整实现：constraints.yaml新增dynamic_scaling配置，token_budget新增recommend action(v9.0.0) | 架构/特效 | ARCH-21 | constraints.yaml |
+| ARCH-22 | 高 | ✅ 已关闭 | 会话恢复增强：workflow_dispatch/session_manage启动时从SQLite恢复(v9.0.0) | 架构 | ARCH-22 | server.py |
 | ARCH-23 | 中 | ⏳ 待处理 | ChromaDB可选依赖未安装时语义检索能力丧失 | 架构/数据 | ARCH-23 | pyproject.toml |
 | ARCH-24/SKILL-04 | 高 | ✅ 已关闭 | 降级链22/22全覆盖，脚本引用与FALLBACK_MAP一致 | 架构/Skill | ARCH-24, SKILL-04 | degradation.py FALLBACK_MAP |
 | ARCH-30 | 高 | ✅ 已关闭 | {{include:}}指令已完全消除，SKILL.md内容外置为Resource URI引用 | 架构 | ARCH-30 | SKILL.md |
@@ -92,7 +92,7 @@
 | DATA-05 | 中 | ✅ 已关闭 | JSON文件Schema版本控制实现，CURRENT_SCHEMA_VERSION="1.0" | 数据 | DATA-05 | config.py |
 | DATA-07 | 高 | ✅ 已关闭 | 内存状态持久化完成，MetricsCollector/DegradationManager双写SQLite+JSON | 数据/特效 | DATA-07 | metrics.py, degradation.py |
 | DATA-09 | 低 | ⏳ 待处理 | 降级状态双重持久化：degradation_state.json + degradation_stats.json语义重叠 | 数据 | DATA-09 | degradation.py, server_health.py |
-| DATA-10 | 中 | ⏳ 待处理 | 指标数据双轨并行：MetricsCollector单例 + server_health._TOOL_METRICS | 数据 | DATA-10 | metrics.py, server_health.py |
+| DATA-10 | 中 | ✅ 已关闭 | 指标系统合并：MetricsCollector为唯一来源，_TOOL_METRICS已移除(v9.0.0) | 数据 | DATA-10 | metrics.py |
 | DATA-11 | 低 | ⏳ 待处理 | 文件哈希校验不一致：部分JSON文件有_hash字段，部分无 | 数据 | DATA-11 | 多处 |
 
 #### MCP域（MCP）— 9项
@@ -114,17 +114,17 @@
 | 编号 | 严重度 | 状态 | 描述 | 影响域标签 | 来源 | 位置 |
 |------|--------|------|------|-----------|------|------|
 | SKILL-02 | 中 | ✅ 已关闭 | Hook动态配置与Phase联动，命名统一为minimal/standard/strict | Skill | SKILL-02 | hook_manage.py, hooks.json |
-| SKILL-03 | 中 | ⏳ 待处理 | 模型路由与Agent注册表不一致：多处Agent的model_routing字段两文件不同 | Skill | SKILL-03 | registry.yaml, model-routing.md |
+| SKILL-03 | 中 | ✅ 已关闭 | 模型路由对齐：registry.yaml为唯一源，model-routing.md已更新(v9.0.0) | Skill | SKILL-03 | registry.yaml |
 | SKILL-05 | 中 | ✅ 已关闭 | 评估覆盖扩展至22个Tool各≥2个QA对，not_for场景全覆盖 | Skill | SKILL-05 | evals/ |
 | SKILL-06 | 低 | ⏳ 待处理 | SKILL.md Phase 3关键规则过于精简，缺乏可执行定义 | Skill | SKILL-06 | SKILL.md L159-L165 |
 | SKILL-07 | 低 | ⏳ 待处理 | 命令路由表三处重复定义(SKILL.md P1, P2 MCP Resource, routes.yaml) | Skill | SKILL-07 | SKILL.md, routes.yaml |
-| SKILL-08 | 低 | ⏳ 待处理 | MCP工具数量声明模糊：SKILL.md称20个，实际22个 | Skill | SKILL-08 | SKILL.md |
+| SKILL-08 | 低 | ✅ 已关闭 | MCP工具数修正：SKILL.md工具数从20更新为22(v9.0.0) | Skill | SKILL-08 | SKILL.md |
 | SKILL-09 | 低 | ⏳ 待处理 | Agent注册表phase字段语义不清(与phases字段混淆) | Skill | SKILL-09 | registry.yaml |
-| SKILL-10 | 低 | ⏳ 待处理 | default.yaml存在多处已迁移空段(如token_optimization) | Skill | SKILL-10 | configs/default.yaml |
-| SKILL-11 | 中 | ✅ 已关闭 | 参考文档两级加载实现(81个summary + 完整版)，部分关闭：跨会话Token持久化待v9.0.0 | Skill | SKILL-11 | references/summary/ |
+| SKILL-10 | 低 | ✅ 已关闭 | default.yaml空段清理完成(v9.0.0) | Skill | SKILL-10 | configs/default.yaml |
+| SKILL-11 | 中 | ✅ 已关闭 | 参考文档两级加载实现(81个summary + 完整版)，跨会话Token持久化已完成(v9.0.0) | Skill | SKILL-11 | references/summary/ |
 | SKILL-12 | 低 | ⏳ 待处理 | 工作流YAML与Markdown双重维护(15个workflow) | Skill | SKILL-12 | workflows/ |
 | SKILL-13 | 低 | ⏳ 待处理 | 知识库健康检查硬编码localhost:8765 | Skill | SKILL-13 | hooks.json |
-| SKILL-14 | 低 | ⏳ 待处理 | SKILL.md描述中MCP工具数与摘要表不匹配 | Skill | SKILL-14 | SKILL.md |
+| SKILL-14 | 低 | ✅ 已关闭 | SKILL.md工具数与摘要表已对齐为22个(v9.0.0) | Skill | SKILL-14 | SKILL.md |
 | SKILL-16 | 低 | ⏳ 待处理 | 质量门禁别名映射存在循环引用风险 | Skill | SKILL-16 | references/quality-gates.md |
 | SKILL-17 | 低 | ⏳ 待处理 | references/目录81个文件缺乏索引 | Skill | SKILL-17 | references/ |
 | SKILL-18 | 中 | ✅ 已关闭 | 安全断点默认值改为true，需人工确认才可跳过 | Skill | SKILL-18 | configs/default.yaml |
@@ -142,7 +142,7 @@
 | API-07/API-10 | 高 | ✅ 已关闭 | HTTP API复用MCP Tool的Hook拦截和速率限制(_run_hooks_and_rate_limit) | API | API-07, API-10 | api/api_routes.py L28-L78 |
 | API-11 | 低 | ⏳ 待处理 | resource_load_status职责过重(10+种action) | API | API-11 | models/schemas.py |
 | API-13 | 低 | ⏳ 待处理 | knowledge_search遗留inject/precipitate防护代码 | API | API-13 | knowledge_search.py |
-| API-14 | 中 | ⏳ 待处理 | 版本协商逻辑在Tool和HTTP API中重复实现 | API | API-14 | api_routes.py, server_health.py |
+| API-14 | 中 | ✅ 已关闭 | 版本协商去重：统一到server_health.py，api_routes调用server_health(v9.0.0) | API | API-14 | server_health.py |
 | API-16 | 高 | ✅ 已关闭 | DegradationExecutor超时统一为30s | API | API-16 | degradation.py |
 | API-17 | 中 | ✅ 已关闭 | 速率限制差异化配置：quality_gate 120/2s, config 10/6min, security 30/0.5s | API | API-17 | rate_limiter.py |
 
@@ -189,30 +189,30 @@
 
 > v8.9.0-dev已修复所有P0安全紧急问题（HTTP认证、Hook拦截复用、路径验证统一、降级链补齐、降级超时统一）。
 
-#### P1 — 高优先级（3项）
+#### P1 — 高优先级（1项，v9.0.0已关闭2项）
 
-| 编号 | 描述 | 影响域 | 依据 | v8.9.0-dev状态 |
-|------|------|--------|------|---------------|
-| ARCH-02/SKILL-11 | Token预算跨会话持久化未实现；Token预算硬编码无法动态调整 | 架构/特效 | 自动Phase推进已实现但跨会话状态丢失；硬编码预算无法适应不同项目规模 | ⏳ 部分完成 |
+| 编号 | 描述 | 影响域 | 依据 | v9.0.0状态 |
+|------|------|--------|------|------------|
+| ARCH-02/SKILL-11 | Token预算跨会话持久化+动态调整 | 架构/特效 | constraints.yaml dynamic_scaling + token_budget recommend action | ✅ 已关闭 |
 | ARCH-20 | Trae平台Skill加载机制限制，MCP Server无法控制加载时机 | 架构/特效 | 渐进加载可控性受限，Phase推进依赖Skill侧触发 | ⏳ 待处理 |
-| ARCH-22 | stdio模式服务器生命周期由Trae管理 | 架构 | 会话连续性无法保证，进程重启后工作流状态需恢复 | ⏳ 待处理 |
+| ARCH-22 | 会话恢复增强 | 架构 | workflow_dispatch/session_manage启动时从SQLite恢复 | ✅ 已关闭 |
 
-#### P2 — 中优先级（10项）
+#### P2 — 中优先级（2项，v9.0.0已关闭8项）
 
-| 编号 | 描述 | 影响域 |
-|------|------|--------|
-| ARCH-03 | Agent定义分散重复(agents/ + references/agent-details/) | 架构 |
-| ARCH-07 | 知识库双份存储(Skill scripts/ + MCP Server data/) | 架构/数据 |
-| ARCH-08 | 会话持久化多路径(MCP + SQLite + 文件系统) | 架构/数据 |
-| ARCH-10/SKILL-01 | 版本号不一致(多文件版本号不同步) | 架构/Skill |
-| ARCH-13 | 知识检索路径不统一 | 架构 |
-| ARCH-21 | Token预算硬编码，无法根据项目规模动态调整 | 架构/特效 |
-| ARCH-23 | ChromaDB可选依赖未安装时语义检索丧失 | 架构/数据 |
-| SKILL-03 | 模型路由与Agent注册表不一致 | Skill |
-| DATA-10 | 指标数据双轨并行(MetricsCollector + server_health) | 数据 |
-| API-14 | 版本协商逻辑重复实现 | API |
+| 编号 | 描述 | 影响域 | v9.0.0状态 |
+|------|------|--------|------------|
+| ARCH-03 | Agent定义去重 | 架构 | ✅ 已关闭 |
+| ARCH-07 | 知识库路径统一 | 架构/数据 | ✅ 已关闭 |
+| ARCH-08 | 会话持久化统一 | 架构/数据 | ✅ 已关闭 |
+| ARCH-10/SKILL-01 | 版本号统一+CI检查 | 架构/Skill | ✅ 已关闭 |
+| ARCH-13 | 知识检索路径统一 | 架构 | ✅ 已关闭 |
+| ARCH-21 | Token预算动态调整 | 架构/特效 | ✅ 已关闭 |
+| ARCH-23 | ChromaDB可选依赖未安装时语义检索丧失 | 架构/数据 | ⏳ 待处理 |
+| SKILL-03 | 模型路由对齐 | Skill | ✅ 已关闭 |
+| DATA-10 | 指标系统合并 | 数据 | ✅ 已关闭 |
+| API-14 | 版本协商去重 | API | ✅ 已关闭 |
 
-#### P3 — 低优先级（18项）
+#### P3 — 低优先级（15项，v9.0.0已关闭3项）
 
 | 编号 | 描述 | 影响域 |
 |------|------|--------|
@@ -231,12 +231,12 @@
 | MCP-10 | Resource订阅重启后丢失 | MCP |
 | SKILL-06 | Phase 3关键规则过于精简 | Skill |
 | SKILL-07 | 命令路由表三处重复定义 | Skill |
-| SKILL-08 | MCP工具数量声明模糊 | Skill |
-| SKILL-09 | Agent注册表phase字段语义不清 | Skill |
-| SKILL-10 | default.yaml存在已迁移空段 | Skill |
-| SKILL-12 | 工作流YAML与Markdown双重维护 | Skill |
-| SKILL-13 | 知识库健康检查硬编码localhost | Skill |
-| SKILL-14 | SKILL.md工具数与摘要表不匹配 | Skill |
+| SKILL-08 | MCP工具数量声明模糊 | Skill | ✅ 已关闭(v9.0.0) |
+| SKILL-09 | Agent注册表phase字段语义不清 | Skill | |
+| SKILL-10 | default.yaml存在已迁移空段 | Skill | ✅ 已关闭(v9.0.0) |
+| SKILL-12 | 工作流YAML与Markdown双重维护 | Skill | |
+| SKILL-13 | 知识库健康检查硬编码localhost | Skill | |
+| SKILL-14 | SKILL.md工具数与摘要表不匹配 | Skill | ✅ 已关闭(v9.0.0) |
 | SKILL-16 | 质量门禁别名映射循环引用风险 | Skill |
 | SKILL-17 | references/目录缺乏索引 | Skill |
 | API-01 | resource_subscribe/audit_query未在spec-locks锁定 | API |
@@ -278,7 +278,7 @@ quadrantChart
 
 ### 3.1 阶段总览
 
-Phase 0-4已完成核心安全修复、数据层整合、MCP规范合规、Skill层瘦身和清理完善。Phase 5聚焦于剩余P1/P2问题的最终集成，推动v8.9.0-dev→v9.0.0。
+Phase 0-4已完成核心安全修复、数据层整合、MCP规范合规、Skill层瘦身和清理完善。Phase 5已完成最终集成，v8.9.0-dev→v9.0.0已完成。
 
 ```mermaid
 gantt
@@ -854,10 +854,10 @@ scheduled:
 | v8.5.1 | 2026-06-03 | 安全紧急修复+降级链补全 | API-06/07/08, ARCH-38, API-05/SKILL-04, API-16 | ✅ 已完成 |
 | v8.6.0 | 2026-07-15 | 数据层整合+MCP规范合规 | DATA-01~12, MCP-01~11, ARCH-10/SKILL-01 | ✅ 已完成 |
 | v8.7.0 | 2026-09-01 | Skill瘦身+渐进加载优化 | ARCH-01/02/20/30/31, SKILL-02/11, ARCH-36 | ✅ 已完成 |
-| v8.9.0 | 2026-05-27 | 当前开发版(Phase 0-4合并交付) | 全部已关闭问题 | ✅ 当前版本 |
-| v9.0.0 | 2026-10-15 | 最终集成+Token动态化+架构一致性 | ARCH-02/03/07/08/10/21/22, SKILL-03, DATA-10, API-14 | 🔄 规划中 |
+| v8.9.0 | 2026-05-27 | 当前开发版(Phase 0-4合并交付) | 全部已关闭问题 | ✅ 已完成 |
+| v9.0.0 | 2026-05-27 | 最终集成+Token动态化+架构一致性 | ARCH-02/03/07/08/10/21/22, SKILL-03/08/10/14, DATA-10, API-14 | ✅ 已完成 |
 
-## 附录B：已关闭问题汇总（22项）
+## 附录B：已关闭问题汇总（35项）
 
 | 编号 | 关闭原因 | 关闭版本 |
 |------|----------|----------|
@@ -885,8 +885,22 @@ scheduled:
 | MCP-11 | Hook差异化超时 | v8.7.0 |
 | SKILL-02 | Hook动态配置与Phase联动 | v8.7.0 |
 | SKILL-05 | 评估覆盖22个Tool | v8.7.0 |
-| SKILL-11 | 参考文档两级加载(部分关闭) | v8.7.0 |
+| SKILL-11 | 参考文档两级加载+跨会话Token持久化 | v8.7.0/v9.0.0 |
 | SKILL-18 | 安全断点默认true | v8.7.0 |
+| ARCH-02/SKILL-11 | Token预算跨会话持久化+动态调整 | v9.0.0 |
+| ARCH-03 | Agent定义去重(references/agent-details/已删除) | v9.0.0 |
+| ARCH-07 | 知识库路径统一(data/knowledge/) | v9.0.0 |
+| ARCH-08 | 会话持久化统一(SQLite唯一权威源) | v9.0.0 |
+| ARCH-10/SKILL-01 | 版本号统一9.0.0+CI检查 | v9.0.0 |
+| ARCH-13 | 知识检索路径统一(KNOWLEDGE_REFERENCES_DIR) | v9.0.0 |
+| ARCH-21 | Token预算动态调整(dynamic_scaling+recommend) | v9.0.0 |
+| ARCH-22 | 会话恢复增强(从SQLite恢复) | v9.0.0 |
+| DATA-10 | 指标系统合并(MetricsCollector唯一) | v9.0.0 |
+| SKILL-03 | 模型路由对齐(registry.yaml唯一源) | v9.0.0 |
+| SKILL-08 | MCP工具数修正(20→22) | v9.0.0 |
+| SKILL-10 | default.yaml空段清理 | v9.0.0 |
+| SKILL-14 | SKILL.md工具数与摘要表对齐 | v9.0.0 |
+| API-14 | 版本协商去重(统一server_health.py) | v9.0.0 |
 | SKILL-20 | Token配置统一 | v8.7.0 |
 | API-04 | Hook差异化超时 | v8.7.0 |
 | API-05/SKILL-04 | 降级链补齐 | v8.5.1 |

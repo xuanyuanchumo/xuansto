@@ -12,8 +12,8 @@ from .config import (
     KNOWLEDGE_DB_PATH,
     KNOWLEDGE_EXPERIENCE_DIR,
     KNOWLEDGE_GENERAL_DIR,
+    KNOWLEDGE_REFERENCES_DIR,
     KNOWLEDGE_WORKSPACE_DIR,
-    REFERENCES_DIR,
 )
 from .logging_config import get_logger
 
@@ -122,7 +122,7 @@ class SimpleSearchEngine:
             KNOWLEDGE_GENERAL_DIR,
             KNOWLEDGE_WORKSPACE_DIR,
             KNOWLEDGE_EXPERIENCE_DIR,
-            REFERENCES_DIR,
+            KNOWLEDGE_REFERENCES_DIR,
         ]
 
     @staticmethod
@@ -173,7 +173,7 @@ class SimpleSearchEngine:
 
         search_dirs = self._search_dirs
         if scope == "general":
-            search_dirs = [KNOWLEDGE_GENERAL_DIR, REFERENCES_DIR]
+            search_dirs = [KNOWLEDGE_GENERAL_DIR, KNOWLEDGE_REFERENCES_DIR]
         elif scope == "workspace":
             search_dirs = [KNOWLEDGE_WORKSPACE_DIR]
         elif scope == "experience":

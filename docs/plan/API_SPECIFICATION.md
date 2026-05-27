@@ -1,6 +1,6 @@
 # Xuansto Skill V2 API 接口规格说明书
 
-> 版本: v8.9.0-dev | API Contract: v3.0.0 | 最低兼容: v2.0.0
+> 版本: v9.0.0 | API Contract: v3.0.0 | 最低兼容: v2.0.0
 > 生成日期: 2026-05-27
 
 ## 目录
@@ -654,6 +654,8 @@ graph TB
 
 #### 5.2.6 session_manage
 
+> **v9.0.0**: SQLite `session_states` 为唯一权威源，文件导出可选。workflow_dispatch/session_manage 启动时从 SQLite 恢复会话状态。
+
 **Request** (`SessionManageInput`):
 
 | 参数 | 类型 | 必填 | 默认值 | 约束 | 描述 |
@@ -703,10 +705,10 @@ graph TB
 | `hook_manage` | `action` | `list, execute, get_active_profile` |
 | `resource_load_status` | `action` | `status, preload, cache, clear_cache, loading_progress, token_report, disclosure_transition, transition_check, features, metrics, get_requirements, rollback, get_hook_profile` |
 | `resource_subscribe` | `action` | `subscribe, unsubscribe, list` |
-| `server_health` | `action` | `check, negotiate_version, capabilities, version` |
+| `server_health` | `action` | `check, negotiate_version, capabilities, version` | v9.0.0: 版本协商统一到此Tool，api_routes调用server_health |
 | `context_compress` | `content` | — (无action) |
 | `decision_log` | `action` | `log, list, query, update, export, stats, reconcile, configure` |
-| `token_budget` | `action` | `status, set_budget, recommend, report, enforce, set_from_phase` |
+| `token_budget` | `action` | `status, set_budget, recommend, report, enforce, set_from_phase` | v9.0.0: 新增recommend action（动态调整建议），dynamic_scaling配置 |
 | `project_init` | `action` | `create, validate, detect_stack, init, detect, configure` |
 | `metrics_report` | `action` | `query, summary, evaluate` |
 | `config_manage` | `action` | `reload, status, validate` |

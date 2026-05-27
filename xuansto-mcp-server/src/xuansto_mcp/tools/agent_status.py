@@ -92,12 +92,6 @@ def _get_agent_detail(agent_name: str, agents_dir: Path) -> dict[str, Any]:
             if agent_file.exists():
                 content = agent_file.read_text(encoding="utf-8")
                 return {"name": agent_name, "file": str(agent_file), "content_length": len(content)}
-    detail_dir = REFERENCES_DIR / "agent-details"
-    if detail_dir.exists():
-        for f in detail_dir.glob("*.md"):
-            if agent_name.lower().replace(" ", "-") in f.stem.lower():
-                content = f.read_text(encoding="utf-8")
-                return {"name": agent_name, "file": str(f), "content_length": len(content)}
     return {"name": agent_name, "detail": "未找到详细定义文件"}
 
 

@@ -1,6 +1,6 @@
 # Xuansto Skill v2 — 技能审查文档
 
-> 版本: 8.9.0-dev | 审查日期: 2026-05-27 | 基于代码实际状态生成
+> 版本: 9.0.0 | 审查日期: 2026-05-27 | 基于代码实际状态生成
 
 ---
 
@@ -86,9 +86,9 @@ mcp_server_min_version: "4.0.0"
 | ENHANCED | /design-system, /implement, /test, /review, /fix, /accept, /simplify, /refactor, /build, /sdd-tdd-medium, /sdd-tdd-fast, /decision | 12 |
 | FULL | /audit, /deploy, /build-desktop, /release-desktop, /loop, /cancel-loop, /rollback | 7 |
 
-### 2.4 MCP工具清单 (20+2个)
+### 2.4 MCP工具清单 (22个)
 
-SKILL.md 命令路由表中引用的 20 个核心 MCP 工具：
+SKILL.md 命令路由表中引用的 22 个 MCP 工具（v9.0.0: 原20→22，修正工具数）：
 
 | # | 工具名 | 类型 | 降级方式 |
 |---|--------|------|----------|
@@ -151,10 +151,7 @@ references/
 │   ├── acceptance-criteria.md
 │   ├── ... (与上层一一对应)
 │   └── workflows.md
-└── agent-details/          # 57个Agent详细定义
-    ├── orchestrator.md
-    ├── ...
-    └── ai-penetration-tester.md
+└── (v9.0.0: agent-details/ 已删除，Agent定义统一从 agents/ 目录获取)
 ```
 
 ### 3.2 两级加载策略
@@ -479,6 +476,8 @@ v8.9.0-dev 将所有 Token 预算配置统一到 `constraints.yaml`：
 ```yaml
 "See constraints.yaml for token budget configuration (unified authority source)"
 ```
+
+> **v9.0.0**: default.yaml 中迁移后的空段已清理完毕。模型路由统一到 `registry.yaml` 为唯一源，`model-routing.md` 已更新对齐。
 
 ### 7.4 评估覆盖
 

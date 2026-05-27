@@ -8,11 +8,10 @@ import pytest
 
 from xuansto_mcp.tools.server_health import (
     _negotiate_api_version,
-    _calculate_percentile,
     record_tool_call,
-    _TOOL_METRICS,
     _metrics_lock,
 )
+from xuansto_mcp.core.metrics import get_metrics_collector, MetricsCollector
 from xuansto_mcp.core.config import MCP_API_VERSION, MCP_MIN_SUPPORTED_VERSION, API_CHANGELOG
 from xuansto_mcp.core.errors import make_success_response, ERR_VALIDATION
 
@@ -107,7 +106,7 @@ class TestServerHealthActions:
         with patch("xuansto_mcp.server._REGISTERED_TOOL_NAMES", []):
             with patch("xuansto_mcp.server._REGISTERED_RESOURCE_NAMES", []):
                 result = await captured["fn"](action="negotiate_version", client_version="2.0.0")
-                assert result["error"] is False
+                assert result["status"] == "success"
                 assert "compatible" in result["data"]
 
     @pytest.mark.asyncio
@@ -125,8 +124,8 @@ class TestServerHealthActions:
         from xuansto_mcp.tools.server_health import register
         register(mcp_mock)
         result = await captured["fn"](action="negotiate_version")
-        assert result["error"] is True
-        assert result["error_code"] == ERR_VALIDATION
+        assert result["status"] == "error"
+        assert result["error"]["code"] == ERR_VALIDATION
 
     @pytest.mark.asyncio
     async def test_capabilities_action(self):
@@ -146,57 +145,60 @@ class TestServerHealthActions:
             with patch("xuansto_mcp.server._REGISTERED_RESOURCE_NAMES", ["res_a"]):
                 with patch("xuansto_mcp.server._TOOL_REGISTRY", {}):
                     result = await captured["fn"](action="capabilities")
-                    assert result["error"] is False
+                    assert result["status"] == "success"
                     assert "tools" in result["data"]
                     assert "api_version" in result["data"]
 
 
 class TestPercentileCalculation:
     def test_empty_values(self):
-        assert _calculate_percentile([], 50) == 0.0
+        assert MetricsCollector._percentile([], 50) == 0.0
 
     def test_single_value(self):
-        assert _calculate_percentile([100.0], 50) == 100.0
+        assert MetricsCollector._percentile([100.0], 50) == 100.0
 
     def test_median(self):
-        result = _calculate_percentile([10.0, 20.0, 30.0, 40.0, 50.0], 50)
+        result = MetricsCollector._percentile([10.0, 20.0, 30.0, 40.0, 50.0], 50)
         assert result == 30.0
 
     def test_p95(self):
         values = [float(i) for i in range(1, 101)]
-        result = _calculate_percentile(values, 95)
+        result = MetricsCollector._percentile(values, 95)
         assert 94.0 <= result <= 96.0
 
     def test_p99(self):
         values = [float(i) for i in range(1, 101)]
-        result = _calculate_percentile(values, 99)
+        result = MetricsCollector._percentile(values, 99)
         assert 98.0 <= result <= 100.0
 
 
 class TestToolMetrics:
     def test_record_tool_call(self):
-        with _metrics_lock:
-            _TOOL_METRICS.clear()
+        mc = get_metrics_collector()
+        with mc._lock:
+            mc._tool_metrics.clear()
         record_tool_call("test_tool", 50.0, True)
-        with _metrics_lock:
-            assert "test_tool" in _TOOL_METRICS
-            assert _TOOL_METRICS["test_tool"]["call_count"] == 1
-            assert _TOOL_METRICS["test_tool"]["error_count"] == 0
+        with mc._lock:
+            assert "test_tool" in mc._tool_metrics
+            assert mc._tool_metrics["test_tool"]["call_count"] == 1
+            assert mc._tool_metrics["test_tool"]["failure_count"] == 0
 
     def test_record_failed_tool_call(self):
-        with _metrics_lock:
-            _TOOL_METRICS.clear()
+        mc = get_metrics_collector()
+        with mc._lock:
+            mc._tool_metrics.clear()
         record_tool_call("failing_tool", 100.0, False)
-        with _metrics_lock:
-            assert _TOOL_METRICS["failing_tool"]["error_count"] == 1
+        with mc._lock:
+            assert mc._tool_metrics["failing_tool"]["failure_count"] == 1
 
     def test_latency_tracking(self):
-        with _metrics_lock:
-            _TOOL_METRICS.clear()
+        mc = get_metrics_collector()
+        with mc._lock:
+            mc._tool_metrics.clear()
         record_tool_call("lat_tool", 10.0, True)
         record_tool_call("lat_tool", 20.0, True)
-        with _metrics_lock:
-            assert len(_TOOL_METRICS["lat_tool"]["latencies"]) == 2
+        with mc._lock:
+            assert len(mc._tool_metrics["lat_tool"]["latency_samples"]) == 2
 
 
 class TestApiChangelog:

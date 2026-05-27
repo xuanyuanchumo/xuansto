@@ -1,6 +1,6 @@
 # xuansto-skill-v2 数据存储设计文档
 
-> **版本**: v8.9.0-dev | **日期**: 2026-05-27 | **状态**: 当前架构
+> **版本**: v9.0.0 | **日期**: 2026-05-27 | **状态**: 当前架构
 
 ---
 
@@ -77,7 +77,7 @@
 │   ├── templates/                         # 模板文件
 │   └── scripts/                           # 脚本工具
 │
-└── xuansto-mcp-server/src/xuansto_mcp/data/knowledge/  # KNOWLEDGE_DIR
+└── xuansto-mcp-server/src/xuansto_mcp/data/knowledge/  # KNOWLEDGE_DIR（v9.0.0: 统一知识库路径，KNOWLEDGE_REFERENCES_DIR配置）
     ├── general/                           # 通用知识(Markdown)
     ├── workspace/                         # 工作区知识(Markdown)
     ├── experience/                        # 经验知识(Markdown)
@@ -114,7 +114,7 @@
 |------|------|---------|------|
 | `workflow_instances` | id (TEXT) | 百级 | 工作流实例(含`data_json`存储完整状态) |
 | `workflow_states` | workflow_id (TEXT) | 百级 | 工作流状态(含`tasks_json`/`decisions_json`/`completed_phases_json`) |
-| `session_states` | id (TEXT) | 十级 | 会话状态 |
+| `session_states` | id (TEXT) | 十级 | 会话状态（v9.0.0: SQLite为唯一权威源，文件导出可选） |
 | `decisions` | id (TEXT, ADR格式) | 百级 | 决策条目(从`decisions.db`合并) |
 | `decision_tags` | (decision_id, tag) | 千级 | 决策标签(多对多，FK→decisions) |
 | `decision_records` | id (TEXT) | 百级 | 决策记录(工作流关联) |
@@ -139,7 +139,7 @@
 |------|------|---------|------|
 | `agent_states` | agent_id (TEXT) | 十级 | Agent状态(含`config_json`) |
 | `resource_load_states` | id (TEXT) | 个级 | 资源加载状态 |
-| `token_budget_states` | id (TEXT) | 个级 | Token预算状态(含`phase_allocations_json`/`usage_by_phase_json`) |
+| `token_budget_states` | id (TEXT) | 个级 | Token预算状态（v9.0.0新增: 跨会话持久化，含`phase_allocations_json`/`usage_by_phase_json`/`dynamic_scaling_json`） |
 
 #### 2.1.4 降级与指标表
 
@@ -393,7 +393,7 @@ END;
 |------|------|------|-----------|
 | `_ACTIVE_WORKFLOWS` | `workflow_dispatch.py` | `dict[str, dict]` | → SQLite `workflow_instances` + `workflow_states` |
 | `_AGENT_INSTANCES` | `agent_manage.py` | `dict[str, _AgentInstance]` | → SQLite `agent_states` |
-| `_TOOL_METRICS` | `server_health.py` | `dict[str, dict]` | → SQLite `tool_metrics` + JSON缓存 |
+| `_TOOL_METRICS` | `server_health.py` | `dict[str, dict]` | v9.0.0: 已移除，统一使用MetricsCollector |
 | `_DEGRADATION_COUNTS` | `server_health.py` | `dict[str, int]` | → SQLite `degradation_stats` + JSON缓存 |
 | `_tool_metrics` | `metrics.py` (MetricsCollector) | `dict[str, dict]` | → SQLite `tool_metrics` + JSON快照 |
 | `_degradation_events` | `metrics.py` (MetricsCollector) | `list[dict]` (上限200) | → JSON快照 |
@@ -856,6 +856,15 @@ erDiagram
 
 ### 5.1 已完成迁移 (v8.5.0→v8.9.0)
 
+#### v9.0.0 新增变更
+
+| 编号 | 变更 | 状态 | 说明 |
+|------|------|------|------|
+| MIG-09 | token_budget_states表跨会话持久化 | ✅ 已完成 | 新增dynamic_scaling_json字段，支持Token预算动态调整 |
+| MIG-10 | session_states为唯一权威源 | ✅ 已完成 | 文件导出为可选，SQLite为会话状态唯一源 |
+| MIG-11 | 知识库路径统一 | ✅ 已完成 | 统一为data/knowledge/，新增KNOWLEDGE_REFERENCES_DIR配置 |
+| MIG-12 | 指标系统合并 | ✅ 已完成 | MetricsCollector为唯一来源，server_health._TOOL_METRICS已移除 |
+
 #### MIG-01: 数据库合并 (3→1)
 
 **迁移前**: `xuansto.db` + `decisions.db` + `knowledge.db` 三个独立SQLite数据库
@@ -1001,4 +1010,4 @@ VALUES (13, datetime('now'), 'Unified xuansto.db schema - merged knowledge.db ta
 
 ---
 
-> **文档维护说明**: 本文档基于 xuansto-skill-v2 v8.9.0-dev 代码库分析生成，所有代码位置引用均指向实际源文件。当数据模型发生变更时，需同步更新本文档。
+> **文档维护说明**: 本文档基于 xuansto-skill-v2 v9.0.0 代码库分析生成，所有代码位置引用均指向实际源文件。当数据模型发生变更时，需同步更新本文档。

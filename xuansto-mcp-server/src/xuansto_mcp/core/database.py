@@ -119,11 +119,12 @@ CREATE TABLE IF NOT EXISTS reconciliation_log (
 
 CREATE TABLE IF NOT EXISTS token_budget_states (
     id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL DEFAULT '',
     total_budget INTEGER NOT NULL DEFAULT 0,
     used INTEGER NOT NULL DEFAULT 0,
     phase_allocations_json TEXT NOT NULL DEFAULT '{}',
     usage_by_phase_json TEXT NOT NULL DEFAULT '{}',
-    session_id TEXT NOT NULL DEFAULT '',
+    project_size TEXT NOT NULL DEFAULT 'medium',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -295,6 +296,7 @@ CREATE INDEX IF NOT EXISTS idx_knowledge_entries_embedding_status ON knowledge_e
 CREATE INDEX IF NOT EXISTS idx_reconciliation_log_resolved ON reconciliation_log(resolved);
 CREATE INDEX IF NOT EXISTS idx_reconciliation_log_entry_id ON reconciliation_log(entry_id);
 CREATE INDEX IF NOT EXISTS idx_token_budget_states_session ON token_budget_states(session_id);
+CREATE INDEX IF NOT EXISTS idx_token_budget_states_updated_at ON token_budget_states(updated_at);
 CREATE INDEX IF NOT EXISTS idx_experience_patterns_error_type ON experience_patterns(error_type);
 CREATE INDEX IF NOT EXISTS idx_experience_patterns_status ON experience_patterns(status);
 CREATE INDEX IF NOT EXISTS idx_agent_states_status ON agent_states(status);
@@ -1130,3 +1132,49 @@ def delete_workflow_state(workflow_id: str) -> None:
             logger.error("Failed to delete workflow state for %s: %s", workflow_id, exc)
         finally:
             conn.close()
+
+
+def save_token_budget_state(
+    session_id: str,
+    total_budget: int,
+    used: int,
+    phase_allocations: dict[str, Any],
+    usage_by_phase: dict[str, Any],
+    project_size: str = "medium",
+) -> dict[str, Any]:
+    now = datetime.now(timezone.utc).isoformat()
+    row_id = f"budget_{session_id}"
+    data = {
+        "id": row_id,
+        "session_id": session_id,
+        "total_budget": total_budget,
+        "used": used,
+        "phase_allocations_json": phase_allocations,
+        "usage_by_phase_json": usage_by_phase,
+        "project_size": project_size,
+        "created_at": now,
+        "updated_at": now,
+    }
+    try:
+        persist_state("token_budget_states", data)
+        logger.info("Saved token budget state for session %s", session_id)
+        return {"status": "saved", "session_id": session_id, "id": row_id}
+    except Exception as exc:
+        logger.error("Failed to save token budget state for session %s: %s", session_id, exc)
+        return {"status": "error", "session_id": session_id, "error": str(exc)}
+
+
+def load_token_budget_states(
+    session_id: str | None = None,
+    limit: int = 10,
+) -> list[dict[str, Any]]:
+    try:
+        if session_id:
+            results = load_state("token_budget_states", {"session_id": session_id})
+        else:
+            results = load_state("token_budget_states")
+        results.sort(key=lambda r: r.get("updated_at", ""), reverse=True)
+        return results[:limit]
+    except Exception as exc:
+        logger.error("Failed to load token budget states: %s", exc)
+        return []

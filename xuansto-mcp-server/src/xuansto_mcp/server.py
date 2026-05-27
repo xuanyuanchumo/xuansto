@@ -20,7 +20,7 @@ _TOOL_FUNCTIONS: dict[str, Callable[..., Any]] = {}
 
 mcp = FastMCP(
     "xuansto-mcp-server",
-    instructions="Xuansto Skill MCP服务器 v8.5.0",
+    instructions="Xuansto Skill MCP服务器 v9.0.0",
 )
 
 from .tools import (

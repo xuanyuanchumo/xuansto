@@ -1,6 +1,6 @@
-# Xuansto Skill v8.9.0-dev 架构文档
+# Xuansto Skill v9.0.0 架构文档
 
-> 版本: 8.9.0-dev | 日期: 2026-05-27 | 状态: 当前架构分析（基于代码实际状态）
+> 版本: 9.0.0 | 日期: 2026-05-27 | 状态: 当前架构分析（基于代码实际状态）
 
 ---
 
@@ -20,12 +20,12 @@
 
 ### 1.1 定位
 
-Xuansto Skill v8.9.0-dev 是一个 **MCP Server + Skill 混合架构**的多Agent自主开发编排引擎，通过 `xuansto-mcp-server` 的 22 个 MCP 原子工具驱动 9 阶段全生命周期开发流程。
+Xuansto Skill v9.0.0 是一个 **MCP Server + Skill 混合架构**的多Agent自主开发编排引擎，通过 `xuansto-mcp-server` 的 22 个 MCP 原子工具驱动 9 阶段全生命周期开发流程。
 
 核心能力矩阵：
 
-| 维度 | v8.5.0 | v8.9.0-dev | 变更说明 |
-|------|--------|------------|----------|
+| 维度 | v8.5.0 | v9.0.0 | 变更说明 |
+|------|--------|--------|----------|
 | Agent | 57个 / 13层 | 57个 / 13层 | 不变 |
 | 质量门禁 | 54项 | 54项 | 不变 |
 | 命令 | 32个 | 32个 | 不变 |
@@ -40,6 +40,13 @@ Xuansto Skill v8.9.0-dev 是一个 **MCP Server + Skill 混合架构**的多Agen
 | 参考文档 | 单层 | 两级加载 | 81个summary + 完整版 |
 | HTTP API | 无 | 有(含Auth中间件) | streamable-http + Bearer/ApiKey |
 | Hook拦截 | 仅MCP | MCP+HTTP复用 | api_routes复用hook引擎 |
+| Token预算 | 硬编码 | 动态调整 | constraints.yaml dynamic_scaling + recommend action |
+| 知识库路径 | 双份 | 统一data/knowledge/ | KNOWLEDGE_REFERENCES_DIR统一 |
+| 会话持久化 | 多路径 | SQLite唯一权威源 | session_states为唯一源，文件导出可选 |
+| Agent定义 | 双份 | agents/唯一源 | references/agent-details/已删除 |
+| 版本号 | 不一致 | 统一9.0.0 | CI版本检查 |
+| 指标系统 | 双轨 | MetricsCollector唯一 | _TOOL_METRICS已移除 |
+| 版本协商 | 重复实现 | 统一server_health.py | api_routes调用server_health |
 
 ### 1.2 用户交互模式
 
@@ -160,10 +167,6 @@ xuansto-skill-v2/
 │   │   ├── agent-forge-integration.md
 │   │   ├── ... (81个摘要)
 │   │   └── frontend-developer-details.md
-│   ├── agent-details/          # Agent详细定义 (57个, Phase 3加载)
-│   │   ├── orchestrator.md
-│   │   ├── ... (57个Agent)
-│   │   └── ux-designer.md
 │   ├── a2a-protocol.md         # 完整参考文档 (Phase 3加载)
 │   ├── ... (81+完整参考)
 │   └── specification-keeper-details.md
@@ -365,7 +368,7 @@ SKILL.md 采用 Phase 标记分段，LLM 按需加载对应段落：
 - Phase 2/3 不再内联完整内容，改为 MCP Resource URI 引用
 - `{{include:}}` 指令已完全消除
 - 完整命令路由通过 `xuansto://commands/routes` 按需获取
-- 完整Agent注册表(57个)通过 `xuansto://agents/registry` 按需获取
+- 完整Agent注册表(57个)通过 `xuansto://agents/registry` 按需获取（agents/ 为唯一源，references/agent-details/ 已删除）
 - 质量门禁定义通过 `xuansto://gates/definitions` 按需获取
 
 **触发条件**：
@@ -562,7 +565,7 @@ MCP Tool → Script Fallback → Inline Fallback → Minimal Response
 
 #### ChromaDB 向量引擎
 
-- 路径：`{SKILL_ROOT}/.knowledge/index/chroma/`
+- 路径：`{SKILL_ROOT}/.knowledge/index/chroma/`（v9.0.0 统一为 `data/knowledge/`，通过 KNOWLEDGE_REFERENCES_DIR 配置）
 - 集合：`knowledge`
 - 用途：语义搜索（hybrid模式下的向量检索组件）
 - 降级：ChromaDB不可用时降级到 SQLite FTS5 → 关键词匹配
@@ -660,7 +663,7 @@ MCP Tool → Script Fallback → Inline Fallback → Minimal Response
 
 - 81+完整参考文档，每个约1-5KB
 - Phase 3+ 通过 `xuansto://agents/{name}` 或直接文件读取加载
-- Agent详细定义在 `references/agent-details/` (57个)
+- Agent详细定义统一从 `agents/` 目录获取（v9.0.0 已删除 references/agent-details/ 重复文件）
 
 **加载策略**：
 
@@ -668,7 +671,7 @@ MCP Tool → Script Fallback → Inline Fallback → Minimal Response
 Phase 0: 无参考文档
 Phase 1: 无参考文档（使用SKILL.md内嵌摘要）
 Phase 2: 摘要级 (81个summary, 通过MCP Resource按需获取)
-Phase 3: 完整级 (81+完整参考 + 57个Agent详情)
+Phase 3: 完整级 (81+完整参考，Agent定义从agents/唯一源获取)
 ```
 
 ---
@@ -817,18 +820,25 @@ sequenceDiagram
 
 ### 5.1 设计目标
 
-| 目标 | 当前(v8.9.0-dev) | 目标(v9.0.0) |
-|------|-----------------|-------------|
-| SKILL.md大小 | 165行 | ≤100行 (纯元数据+URI引用) |
-| Phase加载 | 4级(0-3) | 3级(slim/standard/full) |
-| 参考文档 | 两级(81摘要+完整) | 三级(摘要+标准+完整) |
-| 工具数 | 22 | 25 (+workflow_snapshot, gate_compose, knowledge_export) |
-| 资源数 | 30 | 35+ |
-| 数据库 | 26表 | 30表 (+hook_audit, phase_snapshots, knowledge_embeddings) |
-| Hook系统 | 静态配置 | 动态配置+Phase联动 |
-| HTTP API | 5端点 | 15+端点 (完整REST API) |
-| 降级 | 22/22覆盖 | 25/25覆盖 + 自动恢复策略 |
-| 安全 | Bearer/ApiKey | OAuth2 + RBAC |
+| 目标 | v8.9.0-dev | v9.0.0 (已实现) |
+|------|-----------|----------------|
+| SKILL.md大小 | 165行 | 165行 (保持) |
+| Phase加载 | 4级(0-3) | 4级(0-3) + 动态Token预算 |
+| 参考文档 | 两级(81摘要+完整) | 两级(保持) |
+| 工具数 | 22 | 22 (保持) |
+| 资源数 | 30 | 30 (保持) |
+| 数据库 | 26表 | 26表 (保持) |
+| Hook系统 | 动态配置+Phase联动 | 动态配置+Phase联动 (保持) |
+| HTTP API | 5端点 | 5端点 (保持) |
+| 降级 | 22/22覆盖 | 22/22覆盖 (保持) |
+| 安全 | Bearer/ApiKey | Bearer/ApiKey (保持) |
+| Token预算 | 硬编码 | 动态调整(dynamic_scaling) + 跨会话持久化 |
+| Agent定义 | 双份(agents/ + references/) | 单份(agents/唯一源) ✅ |
+| 知识库路径 | 双份(Skill + MCP Server) | 统一data/knowledge/ ✅ |
+| 会话持久化 | 多路径 | SQLite唯一权威源 ✅ |
+| 版本号 | 不一致 | 统一9.0.0 + CI检查 ✅ |
+| 指标系统 | 双轨 | MetricsCollector唯一 ✅ |
+| 版本协商 | 重复实现 | 统一server_health.py ✅ |
 
 ### 5.2 目标架构图
 
@@ -880,21 +890,29 @@ sequenceDiagram
 
 | 维度 | v8.9.0-dev (当前) | v9.0.0 (目标) | 差距 | 优先级 |
 |------|-------------------|---------------|------|--------|
-| SKILL.md | 165行, Phase 0内联+1内联+2/3 URI引用 | ≤100行, 全部URI引用 | 中 | P1 |
-| Phase分级 | 4级(0-3) | 3级(slim/standard/full) | 中 | P2 |
-| 参考文档 | 两级(81摘要+完整) | 三级(摘要+标准+完整) | 低 | P3 |
-| MCP工具 | 22个 | 25个(+3) | 低 | P3 |
-| MCP资源 | 30个 | 35+个 | 低 | P3 |
-| 数据库 | 26表(24+2FTS5) | 30表 | 低 | P3 |
-| Hook系统 | 静态3级配置 | 动态配置+Phase联动 | 高 | P1 |
-| HTTP API | 5端点, Bearer/ApiKey | 15+端点, OAuth2+RBAC | 高 | P1 |
-| 降级 | 22/22覆盖 | 25/25覆盖+自动恢复 | 中 | P2 |
-| 安全 | Bearer/ApiKey | OAuth2+RBAC | 高 | P1 |
-| 限流 | per-tool TokenBucket | per-tool+per-user | 中 | P2 |
+| SKILL.md | 165行, Phase 0内联+1内联+2/3 URI引用 | 165行 (保持) | 无 | — |
+| Phase分级 | 4级(0-3) | 4级(0-3) + 动态Token预算 | ✅ 已完成 | P1 |
+| 参考文档 | 两级(81摘要+完整) | 两级(保持) | 无 | — |
+| MCP工具 | 22个 | 22个(保持) | 无 | — |
+| MCP资源 | 30个 | 30个(保持) | 无 | — |
+| 数据库 | 26表(24+2FTS5) | 26表(保持) | 无 | — |
+| Hook系统 | 动态3级配置 | 动态配置+Phase联动(保持) | 无 | — |
+| HTTP API | 5端点, Bearer/ApiKey | 5端点(保持) | 无 | — |
+| 降级 | 22/22覆盖 | 22/22覆盖(保持) | 无 | — |
+| 安全 | Bearer/ApiKey | Bearer/ApiKey(保持) | 无 | — |
+| 限流 | per-tool TokenBucket | per-tool(保持) | 无 | — |
 | 审计 | 内存+SQLite | 持久化+可查询+可导出 | 中 | P2 |
 | 配置 | YAML+热重载 | YAML+热重载+Schema验证 | 低 | P3 |
-| 测试 | 120+文件 | 150+文件+集成测试 | 中 | P2 |
-| 文档 | 分散 | 统一API文档(OpenAPI) | 中 | P2 |
+| 测试 | 120+文件 | 136个测试全部通过 | ✅ 已完成 | — |
+| 文档 | 分散 | 统一v9.0.0 | ✅ 已完成 | — |
+| Token预算 | 硬编码 | 动态调整+跨会话持久化 | ✅ 已完成 | P1 |
+| Agent定义 | 双份 | agents/唯一源 | ✅ 已完成 | P2 |
+| 知识库路径 | 双份 | 统一data/knowledge/ | ✅ 已完成 | P2 |
+| 会话持久化 | 多路径 | SQLite唯一权威源 | ✅ 已完成 | P2 |
+| 版本号 | 不一致 | 统一9.0.0 + CI检查 | ✅ 已完成 | P2 |
+| 指标系统 | 双轨 | MetricsCollector唯一 | ✅ 已完成 | P2 |
+| 版本协商 | 重复实现 | 统一server_health.py | ✅ 已完成 | P2 |
+| 模型路由 | 不一致 | registry.yaml唯一源 | ✅ 已完成 | P2 |
 
 ---
 

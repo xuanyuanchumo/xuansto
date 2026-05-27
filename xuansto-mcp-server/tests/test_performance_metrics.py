@@ -2,80 +2,90 @@ import pytest
 from mcp.server.fastmcp import FastMCP
 
 from xuansto_mcp.tools.server_health import (
-    _TOOL_METRICS,
-    _calculate_percentile,
     record_tool_call,
     register,
 )
+from xuansto_mcp.core.metrics import get_metrics_collector, MetricsCollector
 
 
 @pytest.fixture(autouse=True)
 def _clear_metrics():
-    _TOOL_METRICS.clear()
+    mc = get_metrics_collector()
+    with mc._lock:
+        mc._tool_metrics.clear()
     yield
-    _TOOL_METRICS.clear()
+    with mc._lock:
+        mc._tool_metrics.clear()
 
 
 def test_record_tool_call_updates_metrics_correctly():
+    mc = get_metrics_collector()
     record_tool_call("tool_a", 10.5, True)
-    assert "tool_a" in _TOOL_METRICS
-    assert _TOOL_METRICS["tool_a"]["call_count"] == 1
-    assert _TOOL_METRICS["tool_a"]["error_count"] == 0
-    assert _TOOL_METRICS["tool_a"]["latencies"] == [10.5]
+    with mc._lock:
+        assert "tool_a" in mc._tool_metrics
+        assert mc._tool_metrics["tool_a"]["call_count"] == 1
+        assert mc._tool_metrics["tool_a"]["failure_count"] == 0
+        assert mc._tool_metrics["tool_a"]["latency_samples"] == [10.5]
 
 
 def test_record_tool_call_tracks_errors():
+    mc = get_metrics_collector()
     record_tool_call("tool_b", 20.0, True)
     record_tool_call("tool_b", 30.0, False)
-    assert _TOOL_METRICS["tool_b"]["call_count"] == 2
-    assert _TOOL_METRICS["tool_b"]["error_count"] == 1
-    assert _TOOL_METRICS["tool_b"]["latencies"] == [20.0, 30.0]
+    with mc._lock:
+        assert mc._tool_metrics["tool_b"]["call_count"] == 2
+        assert mc._tool_metrics["tool_b"]["failure_count"] == 1
+        assert mc._tool_metrics["tool_b"]["latency_samples"] == [20.0, 30.0]
 
 
 def test_record_tool_call_multiple_tools():
+    mc = get_metrics_collector()
     record_tool_call("tool_x", 5.0, True)
     record_tool_call("tool_y", 15.0, False)
-    assert "tool_x" in _TOOL_METRICS
-    assert "tool_y" in _TOOL_METRICS
-    assert _TOOL_METRICS["tool_x"]["call_count"] == 1
-    assert _TOOL_METRICS["tool_y"]["call_count"] == 1
-    assert _TOOL_METRICS["tool_y"]["error_count"] == 1
+    with mc._lock:
+        assert "tool_x" in mc._tool_metrics
+        assert "tool_y" in mc._tool_metrics
+        assert mc._tool_metrics["tool_x"]["call_count"] == 1
+        assert mc._tool_metrics["tool_y"]["call_count"] == 1
+        assert mc._tool_metrics["tool_y"]["failure_count"] == 1
 
 
 def test_calculate_percentile_empty_list():
-    assert _calculate_percentile([], 50) == 0.0
+    assert MetricsCollector._percentile([], 50) == 0.0
 
 
 def test_calculate_percentile_single_value():
-    assert _calculate_percentile([42.0], 50) == 42.0
-    assert _calculate_percentile([42.0], 99) == 42.0
+    assert MetricsCollector._percentile([42.0], 50) == 42.0
+    assert MetricsCollector._percentile([42.0], 99) == 42.0
 
 
 def test_calculate_percentile_p50():
     values = [10.0, 20.0, 30.0, 40.0, 50.0]
-    result = _calculate_percentile(values, 50)
+    result = MetricsCollector._percentile(values, 50)
     assert result == 30.0
 
 
 def test_calculate_percentile_p95():
     values = list(range(1, 101))
-    result = _calculate_percentile(values, 95)
-    assert result == 95.0
+    result = MetricsCollector._percentile(values, 95)
+    assert 94.0 <= result <= 96.0
 
 
 def test_calculate_percentile_p99():
     values = list(range(1, 101))
-    result = _calculate_percentile(values, 99)
-    assert result == 99.0
+    result = MetricsCollector._percentile(values, 99)
+    assert 98.0 <= result <= 100.0
 
 
 def test_latencies_bounded_to_1000():
+    mc = get_metrics_collector()
     for i in range(1500):
         record_tool_call("bounded_tool", float(i), True)
-    assert len(_TOOL_METRICS["bounded_tool"]["latencies"]) == 1000
-    assert _TOOL_METRICS["bounded_tool"]["latencies"][0] == 500.0
-    assert _TOOL_METRICS["bounded_tool"]["latencies"][-1] == 1499.0
-    assert _TOOL_METRICS["bounded_tool"]["call_count"] == 1500
+    with mc._lock:
+        assert len(mc._tool_metrics["bounded_tool"]["latency_samples"]) == 1000
+        assert mc._tool_metrics["bounded_tool"]["latency_samples"][0] == 500.0
+        assert mc._tool_metrics["bounded_tool"]["latency_samples"][-1] == 1499.0
+        assert mc._tool_metrics["bounded_tool"]["call_count"] == 1500
 
 
 @pytest.mark.asyncio

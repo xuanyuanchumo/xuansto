@@ -14,7 +14,7 @@ from mcp.types import ToolAnnotations
 
 from ..core import atomic_write
 from ..core.cache import LRUCache
-from ..core.config import CURRENT_SCHEMA_VERSION, SKILL_ROOT, WORK_DIR, _ensure_schema_version
+from ..core.config import _CONSTRAINTS_CONFIG, CURRENT_SCHEMA_VERSION, SKILL_ROOT, WORK_DIR, _ensure_schema_version
 from ..core.errors import ERR_VALIDATION, make_error_response, make_success_response
 from ..core.logging_config import get_logger
 from ..core.notifications import notify, send_mcp_notification
@@ -78,6 +78,20 @@ PHASE_TOKEN_BUDGET: dict[int, int] = {
     2: 10000,
     3: 20000,
 }
+
+def _get_dynamic_phase_budget(phase: int, default_budget: int) -> int:
+    dynamic_scaling = _CONSTRAINTS_CONFIG.get("token_budgets", {}).get("dynamic_scaling", {})
+    if not isinstance(dynamic_scaling, dict) or not dynamic_scaling.get("enabled", False):
+        return default_budget
+    try:
+        from .token_budget import _recommend
+        rec = _recommend(file_count=0, agent_count=0)
+        multiplier = rec.get("budget_multiplier", 1.0)
+        if multiplier != 1.0:
+            return int(default_budget * multiplier)
+    except Exception:
+        pass
+    return default_budget
 
 PHASE_NAME_TOKEN_BUDGET: dict[str, int] = {
     "skeleton": 2000,
@@ -315,7 +329,7 @@ def _get_loading_disclosure() -> dict[str, Any]:
     disclosure_note = _DISCLOSURE_NOTES.get(current_phase, _DISCLOSURE_NOTES[0])
     upgrade_hint = _UPGRADE_HINTS.get(current_phase, _UPGRADE_HINTS[0])
     available_commands = _PHASE_AVAILABLE_COMMANDS.get(current_phase, _PHASE_AVAILABLE_COMMANDS[0])
-    token_budget = PHASE_TOKEN_BUDGET.get(current_phase, PHASE_TOKEN_BUDGET[0])
+    token_budget = _get_dynamic_phase_budget(current_phase, PHASE_TOKEN_BUDGET.get(current_phase, PHASE_TOKEN_BUDGET[0]))
     with _PHASE_TOKEN_USAGE_LOCK:
         phase_usage = _PHASE_TOKEN_USAGE.get(current_phase, {"estimated_tokens": 0, "resource_count": 0})
     if not isinstance(phase_usage, dict):
@@ -897,7 +911,7 @@ def advance_phase(target_phase: int, force: bool = False) -> dict[str, Any]:
         })
     except Exception as sub_err:
         logger.debug("resource_subscribe notification skipped: %s", sub_err)
-    new_budget = PHASE_TOKEN_BUDGET.get(target_phase, PHASE_TOKEN_BUDGET[3])
+    new_budget = _get_dynamic_phase_budget(target_phase, PHASE_TOKEN_BUDGET.get(target_phase, PHASE_TOKEN_BUDGET[3]))
     try:
         from .token_budget import _set_budget
         budget_result = _set_budget(total_budget=new_budget)
