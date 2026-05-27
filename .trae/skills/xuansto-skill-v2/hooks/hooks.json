@@ -1,4 +1,6 @@
 {
+  "_deprecated": true,
+  "_migration_note": "Hook configuration is now managed by MCP Server hook_manage tool. This file is kept for backward compatibility only.",
   "version": "1.0.0",
   "profiles": {
     "minimal": {

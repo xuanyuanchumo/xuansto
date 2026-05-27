@@ -39,6 +39,12 @@ class TokenBucket:
 _DEFAULT_MAX_TOKENS = 60.0
 _DEFAULT_REFILL_RATE = 1.0
 
+_TOOL_RATE_LIMITS: dict[str, tuple[float, float]] = {
+    "quality_gate_check": (120.0, 2.0),
+    "config_manage": (10.0, 1.0 / 6.0),
+    "security_scan": (30.0, 0.5),
+}
+
 _bucket_lock = threading.Lock()
 _buckets: dict[str, TokenBucket] = {}
 
@@ -46,9 +52,12 @@ _buckets: dict[str, TokenBucket] = {}
 def _get_bucket(tool_name: str) -> TokenBucket:
     with _bucket_lock:
         if tool_name not in _buckets:
+            max_tokens, refill_rate = _TOOL_RATE_LIMITS.get(
+                tool_name, (_DEFAULT_MAX_TOKENS, _DEFAULT_REFILL_RATE)
+            )
             _buckets[tool_name] = TokenBucket(
-                max_tokens=_DEFAULT_MAX_TOKENS,
-                refill_rate=_DEFAULT_REFILL_RATE,
+                max_tokens=max_tokens,
+                refill_rate=refill_rate,
             )
         return _buckets[tool_name]
 
@@ -58,11 +67,18 @@ def check_rate_limit(tool_name: str) -> tuple[bool, dict[str, Any]]:
     allowed = bucket.consume()
     if allowed:
         return True, {}
+    max_tokens, refill_rate = _TOOL_RATE_LIMITS.get(
+        tool_name, (_DEFAULT_MAX_TOKENS, _DEFAULT_REFILL_RATE)
+    )
     return False, {
         "error_code": "ERR_RATE_LIMITED",
         "message": f"Rate limit exceeded for tool: {tool_name}",
-        "retry_after_seconds": 60.0 / _DEFAULT_REFILL_RATE,
+        "retry_after_seconds": 1.0 / refill_rate,
         "available_tokens": 0,
+        "rate_limit": {
+            "max_tokens": max_tokens,
+            "refill_rate": refill_rate,
+        },
     }
 
 

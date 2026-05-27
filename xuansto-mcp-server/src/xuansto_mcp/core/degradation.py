@@ -12,12 +12,13 @@ import sys
 import threading
 import time
 from collections.abc import Callable
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, cast
 
 from . import atomic_write
-from .config import DATA_DIR, SCRIPTS_DIR
+from .config import CURRENT_SCHEMA_VERSION, DATA_DIR, SCRIPTS_DIR, _ensure_schema_version
 from .errors import ERR_INTERNAL, XuanstoMCPError, make_error_response, make_success_response
 from .logging_config import get_logger
 
@@ -111,6 +112,7 @@ class DegradationManager:
     def __init__(self, health_interval: float | None = None) -> None:
         self._lock = threading.RLock()
         self._components: dict[str, _ComponentState] = {}
+        self._db_loaded_components: set[str] = set()
         self._subscribers: list[Callable[[str, str, str], None]] = []
         self._health_interval = health_interval or self._DEFAULT_HEALTH_INTERVAL
         self._health_thread: threading.Thread | None = None
@@ -259,6 +261,7 @@ class DegradationManager:
         logger.info("Degradation health monitor stopped")
 
     def load_state(self) -> None:
+        self._load_stats_from_db()
         try:
             from .config import WORK_DIR
             state_path = WORK_DIR / self._STATE_FILENAME
@@ -271,6 +274,8 @@ class DegradationManager:
         except (json.JSONDecodeError, OSError) as exc:
             logger.warning("Failed to load degradation state: %s", exc)
             return
+        if isinstance(data, dict):
+            data = _ensure_schema_version(data)
         components_data = data.get("components", {})
         stored_hash = data.get("_hash")
         if stored_hash is not None:
@@ -283,7 +288,7 @@ class DegradationManager:
         with self._lock:
             for name, comp_data in components_data.items():
                 state = self._components.get(name)
-                if state is not None:
+                if state is not None and name not in self._db_loaded_components:
                     state.level = comp_data.get("level", state.levels[0])
                     state.last_check_time = comp_data.get("last_check_time", 0.0)
                     state.last_check_healthy = comp_data.get("last_check_healthy", True)
@@ -351,16 +356,81 @@ class DegradationManager:
             from .config import WORK_DIR
             state_path = WORK_DIR / self._STATE_FILENAME
         except Exception:
+            self._persist_stats_to_db()
             return
         with self._lock:
             try:
                 data = self.get_status()
+                data["schema_version"] = CURRENT_SCHEMA_VERSION
                 components_data = data.get("components", {})
-                data["_timestamp"] = time.time()
+                data["_timestamp"] = datetime.now(timezone.utc).isoformat()
                 data["_hash"] = hashlib.sha256(json.dumps(components_data, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
                 atomic_write(state_path, json.dumps(data, ensure_ascii=False, indent=2))
             except Exception as exc:
                 logger.warning("Failed to persist degradation state: %s", exc)
+        self._persist_stats_to_db()
+
+    def _persist_stats_to_db(self) -> None:
+        with self._lock:
+            snapshot = {}
+            for name, state in self._components.items():
+                snapshot[name] = state.to_dict()
+        try:
+            from .database import get_db
+            conn = get_db()
+            try:
+                now = datetime.now(timezone.utc).isoformat()
+                for name, state_data in snapshot.items():
+                    data_json = json.dumps(state_data, ensure_ascii=False)
+                    conn.execute(
+                        "INSERT INTO degradation_stats "
+                        "(component, level, reason, timestamp, recovery_count, data_json) "
+                        "VALUES (?, ?, ?, ?, ?, ?) "
+                        "ON CONFLICT(component) DO UPDATE SET "
+                        "level=excluded.level, reason=excluded.reason, "
+                        "timestamp=excluded.timestamp, "
+                        "recovery_count=excluded.recovery_count, "
+                        "data_json=excluded.data_json",
+                        (name, state_data.get("level", ""), "", now, state_data.get("recovery_attempts", 0), data_json),
+                    )
+                conn.commit()
+                logger.debug("Persisted degradation stats to SQLite (%d components)", len(snapshot))
+            finally:
+                conn.close()
+        except Exception as exc:
+            logger.warning("Failed to persist degradation stats to SQLite: %s", exc)
+
+    def _load_stats_from_db(self) -> None:
+        try:
+            from .database import get_db
+            conn = get_db()
+            try:
+                cursor = conn.execute("SELECT component, data_json FROM degradation_stats")
+                rows = cursor.fetchall()
+            finally:
+                conn.close()
+        except Exception as exc:
+            logger.warning("Failed to load degradation stats from SQLite: %s", exc)
+            return
+        if not rows:
+            return
+        with self._lock:
+            for row in rows:
+                component_name = row[0]
+                try:
+                    d = json.loads(row[1])
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                state = self._components.get(component_name)
+                if state is not None:
+                    state.level = d.get("level", state.levels[0])
+                    state.last_check_time = d.get("last_check_time", 0.0)
+                    state.last_check_healthy = d.get("last_check_healthy", True)
+                    state.recovery_attempts = d.get("recovery_attempts", 0)
+                    state.next_recovery_time = d.get("next_recovery_time", 0.0)
+                    state.degraded_since = d.get("degraded_since")
+                    self._db_loaded_components.add(component_name)
+        logger.info("Loaded degradation stats from SQLite (%d components)", len(rows))
 
     def _health_loop(self) -> None:
         while not self._stop_event.is_set():
@@ -1013,6 +1083,39 @@ async def config_manage_fallback(action: str, **kwargs: Any) -> dict[str, Any]:
     return _fallback_success("config_manage", {"action": action, "config": {}}, degradation_level="minimal")
 
 
+async def resource_subscribe_fallback(action: str, uri: str | None = None, client_id: str | None = None, **kwargs: Any) -> dict[str, Any]:
+    logger.warning("Tool %s using fallback", "resource_subscribe")
+    inline_result = _try_inline_fallback("resource_subscribe", "_inline_resource_subscribe", action, uri, client_id, **kwargs)
+    if inline_result is not None:
+        return _fallback_success("resource_subscribe", inline_result, degradation_level="inline")
+    if action == "list":
+        return _fallback_success("resource_subscribe", {"action": "list", "subscriptions": {}, "note": "降级模式：仅返回空订阅列表"}, degradation_level="minimal")
+    if action == "subscribe":
+        return _fallback_success("resource_subscribe", {"action": "subscribe", "uri": uri, "subscribed": False, "note": "降级模式：订阅不可用"}, degradation_level="minimal")
+    if action == "unsubscribe":
+        return _fallback_success("resource_subscribe", {"action": "unsubscribe", "uri": uri, "unsubscribed": True, "note": "降级模式：已忽略"}, degradation_level="minimal")
+    return _fallback_success("resource_subscribe", {"action": action, "status": "unavailable"}, degradation_level="minimal")
+
+
+async def audit_query_fallback(tool_name: str | None = None, date_range: str | None = None, limit: int = 50, **kwargs: Any) -> dict[str, Any]:
+    logger.warning("Tool %s using fallback", "audit_query")
+    inline_result = _try_inline_fallback("audit_query", "_inline_audit_query", tool_name, date_range, limit, **kwargs)
+    if inline_result is not None:
+        return _fallback_success("audit_query", inline_result, degradation_level="inline")
+    try:
+        from .audit_logger import get_audit_logger
+        audit = get_audit_logger()
+        entries = audit.query(tool_name=tool_name, limit=min(limit, 500))
+        return _fallback_success("audit_query", {
+            "entries": entries,
+            "total_returned": len(entries),
+            "filters": {"tool_name": tool_name, "date_range": date_range, "limit": limit},
+            "note": "降级模式：仅返回内存中审计记录",
+        }, degradation_level="minimal")
+    except Exception:
+        return _fallback_success("audit_query", {"entries": [], "total_returned": 0, "note": "降级模式：审计日志不可用"}, degradation_level="minimal")
+
+
 FALLBACK_MAP = {
     "skill_analyze": skill_analyze_fallback,
     "knowledge_search": knowledge_search_fallback,
@@ -1026,6 +1129,7 @@ FALLBACK_MAP = {
     "agent_status": agent_status_fallback,
     "hook_manage": hook_manage_fallback,
     "resource_load_status": resource_load_status_fallback,
+    "resource_subscribe": resource_subscribe_fallback,
     "context_compress": context_compress_fallback,
     "server_health": server_health_fallback,
     "decision_log": fallback_decision_log,
@@ -1034,11 +1138,12 @@ FALLBACK_MAP = {
     "agent_manage": agent_manage_fallback,
     "metrics_report": metrics_report_fallback,
     "config_manage": config_manage_fallback,
+    "audit_query": audit_query_fallback,
 }
 
 
 class DegradationExecutor:
-    def __init__(self, scripts_dir: Path | None = None, timeout: int = 5) -> None:
+    def __init__(self, scripts_dir: Path | None = None, timeout: int = 30) -> None:
         self._scripts_dir = scripts_dir or SCRIPTS_DIR
         self._timeout = timeout
         self._fallback_map = FALLBACK_MAP
@@ -1118,6 +1223,7 @@ _INLINE_FALLBACK_MAP = {
     "agent_status_fallback": agent_status_fallback,
     "hook_manage_fallback": hook_manage_fallback,
     "resource_load_status_fallback": resource_load_status_fallback,
+    "resource_subscribe_fallback": resource_subscribe_fallback,
     "context_compress_fallback": context_compress_fallback,
     "server_health_fallback": server_health_fallback,
     "decision_log_fallback": fallback_decision_log,
@@ -1126,6 +1232,7 @@ _INLINE_FALLBACK_MAP = {
     "agent_manage_fallback": agent_manage_fallback,
     "metrics_report_fallback": metrics_report_fallback,
     "config_manage_fallback": config_manage_fallback,
+    "audit_query_fallback": audit_query_fallback,
 }
 
 

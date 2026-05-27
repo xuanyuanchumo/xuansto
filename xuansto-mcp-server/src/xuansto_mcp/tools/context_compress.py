@@ -188,7 +188,7 @@ def _compress_lossless(content: str, target_tokens: int, preserve_sections: list
 def register(mcp: FastMCP) -> None:
     @mcp.tool(
         annotations=ToolAnnotations(
-            readOnlyHint=True,
+            readOnlyHint=False,
             destructiveHint=False,
             idempotentHint=True,
             openWorldHint=False,

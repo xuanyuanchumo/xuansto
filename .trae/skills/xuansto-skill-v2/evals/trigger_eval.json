@@ -18,6 +18,90 @@
       "prompt": "spec-driven development for a REST API with authentication",
       "expected_output": "触发SDD开发流程，从规格定义开始",
       "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "把main.py第42行的变量名从data改成responseData",
+      "expected_output": "不触发xuansto-skill-v2，这是简单的单文件编辑",
+      "files": [],
+      "not_for": "simple single-file edits"
+    },
+    {
+      "id": 5,
+      "prompt": "帮我重启Kubernetes集群中的pod并检查服务状态",
+      "expected_output": "不触发xuansto-skill-v2，这是纯基础设施/DevOps操作，不涉及代码变更",
+      "files": [],
+      "not_for": "pure infrastructure/DevOps without code changes"
+    },
+    {
+      "id": 6,
+      "prompt": "帮我写一个README.md说明项目的安装步骤",
+      "expected_output": "不触发xuansto-skill-v2，这是纯文档任务",
+      "files": [],
+      "not_for": "documentation-only tasks"
+    },
+    {
+      "id": 7,
+      "prompt": "JavaScript中Promise和async/await有什么区别？",
+      "expected_output": "不触发xuansto-skill-v2，这是简单的问答",
+      "files": [],
+      "not_for": "simple Q&A"
+    },
+    {
+      "id": 8,
+      "prompt": "设计一个登录页面的交互流程和视觉方案",
+      "expected_output": "不触发xuansto-skill-v2，这是纯UI/UX设计任务",
+      "files": [],
+      "not_for": "pure UI/UX design"
+    },
+    {
+      "id": 9,
+      "prompt": "分析这份CSV销售数据，找出月度趋势",
+      "expected_output": "不触发xuansto-skill-v2，这是纯数据分析任务",
+      "files": [],
+      "not_for": "pure data analysis"
+    },
+    {
+      "id": 10,
+      "prompt": "把tsconfig.json中的strict改为false",
+      "expected_output": "不触发xuansto-skill-v2，这是简单的配置变更",
+      "files": [],
+      "not_for": "simple config changes"
+    },
+    {
+      "id": 11,
+      "prompt": "在utils.py的add函数里加上类型注解",
+      "expected_output": "不触发xuansto-skill-v2，这是一行级别的简单修复",
+      "files": [],
+      "not_for": "one-line fixes"
+    },
+    {
+      "id": 12,
+      "prompt": "扫描这个仓库有没有SQL注入漏洞",
+      "expected_output": "不触发xuansto-skill-v2，这是简单的安全扫描，不涉及修复",
+      "files": [],
+      "not_for": "simple security scans without remediation"
+    },
+    {
+      "id": 13,
+      "prompt": "生成一份OWASP Top 10合规性文档报告",
+      "expected_output": "不触发xuansto-skill-v2，这是纯文档类安全报告",
+      "files": [],
+      "not_for": "documentation-only security reports"
+    },
+    {
+      "id": 14,
+      "prompt": "设计一个桌面应用的窗口布局和导航栏样式",
+      "expected_output": "不触发xuansto-skill-v2，这是桌面应用纯UI设计",
+      "files": [],
+      "not_for": "desktop app UI design only"
+    },
+    {
+      "id": 15,
+      "prompt": "修复app.py中第10行的拼写错误，把recieve改成receive",
+      "expected_output": "不触发xuansto-skill-v2，这是5行以内的快速热修复",
+      "files": [],
+      "not_for": "quick hotfixes under 5 lines"
     }
   ]
 }

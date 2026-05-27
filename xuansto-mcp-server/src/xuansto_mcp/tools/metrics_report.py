@@ -256,7 +256,7 @@ def register(mcp: FastMCP) -> None:
         metric_type: str = "all",
         criterion: str = "all",
     ) -> dict[str, Any]:
-        """指标报告：查询工具调用指标(按工具名/时间/类型)，汇总统计(总调用/错误率/延迟分布/降级计数)，评估(evaluate)按错误率/可用性/延迟标准评估系统健康度。"""
+        """指标报告：查询工具调用指标(按工具名/时间/类型)，汇总统计(总调用/错误率/延迟分布/降级计数)，评估(evaluate)按错误率/可用性/延迟标准评估系统健康度。Prefer using Resource xuansto://metrics/summary for read-only access."""
         validated, err = validate_input(MetricsReportInput, action=action, tool_name=tool_name, time_range=time_range, metric_type=metric_type, criterion=criterion)
         if err:
             return err

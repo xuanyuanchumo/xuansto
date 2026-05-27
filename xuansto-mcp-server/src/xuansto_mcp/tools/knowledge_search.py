@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import math
 import sqlite3
-from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -17,6 +16,7 @@ from ..core.config import (
     KNOWLEDGE_WORKSPACE_DIR,
     REFERENCES_DIR,
 )
+from ..core.database import get_db
 from ..core.errors import ERR_VALIDATION, make_error_response, make_success_response
 from ..core.logging_config import get_logger
 from ..core.search_engine import get_search_engine
@@ -30,62 +30,6 @@ _knowledge_index_initialized_paths: set[str] = set()
 
 _MAX_KEYWORD_FILE_BYTES = 1 * 1024 * 1024
 
-_MCP_STANDARD_COLUMNS = {"id", "title", "content", "type", "metadata_json", "created_at", "updated_at"}
-
-_MCP_COLUMN_DEFAULTS: dict[str, str] = {
-    "type": "'general'",
-    "metadata_json": "'{}'",
-}
-
-
-def _get_db_connection(db_path: Path) -> sqlite3.Connection:
-    conn = sqlite3.connect(str(db_path))
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=5000")
-    return conn
-
-
-def _migrate_fts5_to_unicode61(conn) -> None:
-    cursor = conn.cursor()
-    cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='knowledge_fts'")
-    row = cursor.fetchone()
-
-    if row is not None:
-        create_sql = row[0] or ""
-        if "unicode61" in create_sql:
-            return
-        logger.warning("Migrating FTS5 table to unicode61 tokenizer")
-        for trigger_name in ('knowledge_ai', 'knowledge_ad', 'knowledge_au'):
-            conn.execute(f"DROP TRIGGER IF EXISTS {trigger_name}")
-        conn.execute("DROP TABLE IF EXISTS knowledge_fts")
-
-    conn.execute("""
-        CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts
-        USING fts5(content, title, type, content=knowledge_entries, content_rowid=rowid, tokenize='unicode61')
-    """)
-    conn.execute("""
-        CREATE TRIGGER IF NOT EXISTS knowledge_ai AFTER INSERT ON knowledge_entries BEGIN
-            INSERT INTO knowledge_fts(rowid, content, title, type) VALUES (new.rowid, new.content, new.title, new.type);
-        END
-    """)
-    conn.execute("""
-        CREATE TRIGGER IF NOT EXISTS knowledge_ad AFTER DELETE ON knowledge_entries BEGIN
-            INSERT INTO knowledge_fts(knowledge_fts, rowid, content, title, type) VALUES('delete', old.rowid, old.content, old.title, old.type);
-        END
-    """)
-    conn.execute("""
-        CREATE TRIGGER IF NOT EXISTS knowledge_au AFTER UPDATE ON knowledge_entries BEGIN
-            INSERT INTO knowledge_fts(knowledge_fts, rowid, content, title, type) VALUES('delete', old.rowid, old.content, old.title, old.type);
-            INSERT INTO knowledge_fts(rowid, content, title, type) VALUES (new.rowid, new.content, new.title, new.type);
-        END
-    """)
-    conn.execute("INSERT INTO knowledge_fts(knowledge_fts) VALUES('rebuild')")
-    conn.commit()
-    if row is not None:
-        logger.info("FTS5 migration to unicode61 complete, index rebuilt")
-    else:
-        logger.info("Created FTS5 index with unicode61 tokenizer")
-
 
 def _ensure_knowledge_index() -> None:
     global _knowledge_index_initialized_paths
@@ -93,62 +37,6 @@ def _ensure_knowledge_index() -> None:
     _db_key = str(KNOWLEDGE_DIR.resolve())
     if _db_key in _knowledge_index_initialized_paths:
         return
-    index_dir = KNOWLEDGE_DIR / "index"
-    index_dir.mkdir(parents=True, exist_ok=True)
-
-    db_path = index_dir / "knowledge.db"
-    conn = _get_db_connection(db_path)
-    try:
-        need_create = not db_path.exists() or db_path.stat().st_size == 0
-
-        if not need_create:
-            try:
-                cursor = conn.cursor()
-                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='knowledge_entries'")
-                if cursor.fetchone() is None:
-                    need_create = True
-                else:
-                    cursor.execute("PRAGMA table_info(knowledge_entries)")
-                    existing_cols = {row[1] for row in cursor.fetchall()}
-                    missing = _MCP_STANDARD_COLUMNS - existing_cols
-                    if missing:
-                        for col in sorted(missing):
-                            default = _MCP_COLUMN_DEFAULTS.get(col, "NULL")
-                            logger.warning(
-                                "Schema migration: adding missing column '%s' with default %s",
-                                col, default,
-                            )
-                            col_type = "TEXT"
-                            if col == "id":
-                                col_type = "TEXT PRIMARY KEY"
-                            elif col in ("title", "content"):
-                                col_type = "TEXT NOT NULL"
-                            conn.execute(
-                                f"ALTER TABLE knowledge_entries ADD COLUMN {col} {col_type} DEFAULT {default}"
-                            )
-                        conn.commit()
-                        logger.info("Schema migration complete: added %d missing columns", len(missing))
-            except Exception as exc:
-                logger.warning("Schema migration failed, will create table: %s", exc)
-                need_create = True
-
-        if need_create:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS knowledge_entries (
-                    id TEXT PRIMARY KEY,
-                    title TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    type TEXT NOT NULL DEFAULT 'general',
-                    metadata_json TEXT DEFAULT '{}',
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                )
-            """)
-            conn.commit()
-
-        _migrate_fts5_to_unicode61(conn)
-    finally:
-        conn.close()
 
     try:
         import chromadb
@@ -197,9 +85,8 @@ def _sqlite_search(query: str, top_k: int, scope: str | None, min_confidence: fl
     if not KNOWLEDGE_DB_PATH.exists():
         return None
     try:
-        conn = _get_db_connection(KNOWLEDGE_DB_PATH)
+        conn = get_db()
         try:
-            conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             try:
                 cursor.execute(

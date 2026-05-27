@@ -277,8 +277,8 @@ def register(mcp: FastMCP) -> None:
         annotations=ToolAnnotations(
             readOnlyHint=True,
             destructiveHint=False,
-            idempotentHint=False,
-            openWorldHint=True,
+            idempotentHint=True,
+            openWorldHint=False,
         )
     )
     async def security_scan(

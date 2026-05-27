@@ -1,5 +1,5 @@
 name: xuansto-skill-v2
-version: "8.4.0"
+version: "9.0.0"
 runtime:
   loop:
     max_iterations: 50
@@ -18,3 +18,4 @@ runtime:
     host: "127.0.0.1"
     port: 8765
     fallback: filesystem
+token_budget: "See constraints.yaml for token budget configuration (unified authority source)"

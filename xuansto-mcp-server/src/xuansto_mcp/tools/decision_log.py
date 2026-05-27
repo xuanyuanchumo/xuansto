@@ -4,7 +4,7 @@ import asyncio
 import json
 import sqlite3
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -12,7 +12,7 @@ from mcp.types import ToolAnnotations
 
 from ..core import atomic_write
 from ..core.config import WORK_DIR
-from ..core.database import is_fts5_available, persist_state
+from ..core.database import get_db, is_fts5_available
 from ..core.errors import ERR_NOT_FOUND, ERR_VALIDATION, make_error_response, make_success_response
 from ..core.logging_config import get_logger
 from ..core.notifications import notify
@@ -21,71 +21,17 @@ from ..models.schemas import DecisionLogInput
 
 logger = get_logger("decision_log")
 
-DECISIONS_DB = WORK_DIR / "decisions.db"
 DECISIONS_JSON_FILE = WORK_DIR / "decisions.json"
 DECISIONS_FILE = DECISIONS_JSON_FILE
 
 _cache: dict[str, dict[str, Any]] = {}
 _cache_lock = threading.Lock()
 _db_lock = threading.Lock()
-_file_backup_enabled: bool = True
-
-_CREATE_TABLE_SQL = """
-CREATE TABLE IF NOT EXISTS decisions (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL DEFAULT '',
-    context TEXT NOT NULL DEFAULT '',
-    decision TEXT NOT NULL DEFAULT '',
-    rationale TEXT NOT NULL DEFAULT '',
-    alternatives TEXT NOT NULL DEFAULT '[]',
-    status TEXT NOT NULL DEFAULT 'proposed',
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-)
-"""
-
-_CREATE_FTS_SQL = """
-CREATE VIRTUAL TABLE IF NOT EXISTS decisions_fts USING fts5(
-    id UNINDEXED,
-    title,
-    context,
-    decision,
-    content='decisions',
-    content_rowid='rowid'
-)
-"""
-
-_CREATE_FTS_TRIGGERS_SQL = """
-CREATE TRIGGER IF NOT EXISTS decisions_fts_ai AFTER INSERT ON decisions BEGIN
-    INSERT INTO decisions_fts(rowid, id, title, context, decision)
-    VALUES (new.rowid, new.id, new.title, new.context, new.decision);
-END;
-
-CREATE TRIGGER IF NOT EXISTS decisions_fts_ad AFTER DELETE ON decisions BEGIN
-    INSERT INTO decisions_fts(decisions_fts, rowid, id, title, context, decision)
-    VALUES ('delete', old.rowid, old.id, old.title, old.context, old.decision);
-END;
-
-CREATE TRIGGER IF NOT EXISTS decisions_fts_au AFTER UPDATE ON decisions BEGIN
-    INSERT INTO decisions_fts(decisions_fts, rowid, id, title, context, decision)
-    VALUES ('delete', old.rowid, old.id, old.title, old.context, old.decision);
-    INSERT INTO decisions_fts(rowid, id, title, context, decision)
-    VALUES (new.rowid, new.id, new.title, new.context, new.decision);
-END;
-"""
-
-_CREATE_INDEX_SQL = """
-CREATE INDEX IF NOT EXISTS idx_decisions_status ON decisions(status);
-CREATE INDEX IF NOT EXISTS idx_decisions_created_at ON decisions(created_at);
-"""
+_file_backup_enabled: bool = False
 
 
 def _get_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(str(DECISIONS_DB))
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=5000")
-    conn.execute("PRAGMA foreign_keys=ON")
-    return conn
+    return get_db()
 
 
 def _write_decision_file(entry: dict[str, Any]) -> None:
@@ -100,23 +46,6 @@ def _write_decision_file(entry: dict[str, Any]) -> None:
             existing = []
     existing.append(entry)
     atomic_write(DECISIONS_JSON_FILE, json.dumps(existing, ensure_ascii=False, indent=2))
-
-
-def _ensure_db() -> None:
-    WORK_DIR.mkdir(parents=True, exist_ok=True)
-    with _db_lock:
-        conn = _get_connection()
-        try:
-            conn.executescript(_CREATE_TABLE_SQL)
-            try:
-                conn.executescript(_CREATE_FTS_SQL)
-                conn.executescript(_CREATE_FTS_TRIGGERS_SQL)
-            except sqlite3.OperationalError:
-                logger.debug("FTS5 not available for decisions, falling back to LIKE search")
-            conn.executescript(_CREATE_INDEX_SQL)
-            conn.commit()
-        finally:
-            conn.close()
 
 
 def _migrate_json_to_sqlite() -> None:
@@ -163,7 +92,6 @@ def _migrate_json_to_sqlite() -> None:
             conn.close()
 
 
-_ensure_db()
 _migrate_json_to_sqlite()
 
 
@@ -187,7 +115,7 @@ def _log_decision(
     decided_by: str | None = None,
     status: str | None = None,
 ) -> dict[str, Any]:
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     entry_id = ""
     now_iso = now.isoformat()
     valid_status = status if status in ("proposed", "accepted", "deprecated", "superseded") else "proposed"
@@ -235,22 +163,6 @@ def _log_decision(
             conn.close()
 
     notify(f"Decision logged: {entry_id} - {title or 'untitled'}", "info")
-    try:
-        persist_state("decision_records", {
-            "id": entry_id,
-            "workflow_id": "",
-            "decision_data_json": {
-                "title": title or "",
-                "context": context or "",
-                "decision": decision or "",
-                "rationale": rationale or "",
-                "alternatives": alternatives or [],
-                "status": valid_status,
-            },
-            "created_at": now_iso,
-        })
-    except Exception:
-        logger.debug("Failed to dual-write decision_record for %s", entry_id)
     return {"id": entry_id, "entry": entry, "total_decisions": _get_total_count()}
 
 
@@ -273,7 +185,6 @@ def _list_decisions(
 ) -> dict[str, Any]:
     conn = _get_connection()
     try:
-        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         conditions: list[str] = []
         params: list[Any] = []
@@ -310,7 +221,6 @@ def _query_decisions(
 ) -> dict[str, Any]:
     conn = _get_connection()
     try:
-        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
         if keyword and is_fts5_available():
@@ -430,14 +340,13 @@ def _update_decision(
     with _db_lock:
         conn = _get_connection()
         try:
-            conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM decisions WHERE id = ?", (decision_id,))
             row = cursor.fetchone()
             if not row:
                 return make_error_response(ValueError(f"决策未找到: {decision_id}"), error_code=ERR_NOT_FOUND)
 
-            now_iso = datetime.now().isoformat()
+            now_iso = datetime.now(timezone.utc).isoformat()
             if status:
                 cursor.execute(
                     "UPDATE decisions SET status = ?, updated_at = ? WHERE id = ?",
@@ -462,7 +371,6 @@ def _export_decisions(
 ) -> dict[str, Any]:
     conn = _get_connection()
     try:
-        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         conditions: list[str] = []
         params: list[Any] = []
@@ -574,7 +482,6 @@ def _reconcile_decisions() -> dict[str, Any]:
         with _db_lock:
             conn = _get_connection()
             try:
-                conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
                 cursor.execute("SELECT * FROM decisions WHERE id = ?", (entry_id,))
                 row = cursor.fetchone()
@@ -670,7 +577,7 @@ def register(mcp: FastMCP) -> None:
         status: str | None = None,
         file_backup: bool | None = None,
     ) -> dict[str, Any]:
-        """决策日志管理：记录决策条目、搜索决策、导出决策记录。log操作记录一条决策(含标题/描述/上下文/备选方案/最终决策/理由/影响/决策者)，list操作分页列出决策，query操作按关键词/标签/日期范围搜索决策，update操作更新决策状态，export操作导出决策为JSON或Markdown ADR格式，stats操作返回决策统计信息，configure操作配置选项(如file_backup控制是否启用文件系统备份)。"""
+        """决策日志管理：记录决策条目、搜索决策、导出决策记录。log操作记录一条决策(含标题/描述/上下文/备选方案/最终决策/理由/影响/决策者)，list操作分页列出决策，query操作按关键词/标签/日期范围搜索决策，update操作更新决策状态，export操作导出决策为JSON或Markdown ADR格式，stats操作返回决策统计信息，configure操作配置选项(如file_backup控制是否启用文件系统备份)。Prefer using Resource xuansto://decisions/recent for read-only access."""
         validated, err = validate_input(DecisionLogInput, action=action, title=title, description=description, context=context, alternatives=alternatives, decision=decision, rationale=rationale, impact=impact, decided_by=decided_by, keyword=keyword, tag=tag, date_from=date_from, date_to=date_to, limit=limit, offset=offset, format=export_format, decision_id=decision_id, status=status, file_backup=file_backup)
         if err:
             return err

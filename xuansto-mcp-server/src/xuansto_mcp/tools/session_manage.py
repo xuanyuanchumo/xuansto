@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -39,7 +39,7 @@ def _save_session(
     experience: list[str] | None = None,
 ) -> dict[str, Any]:
     SESSION_DIR.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     filename = f"session-{timestamp}.md"
     filepath = SESSION_DIR / filename
 
@@ -88,13 +88,13 @@ def _detect_patterns(error_log: list[str] | None = None) -> dict[str, Any]:
     patterns = []
     for error, count in error_counts.items():
         if count >= 2:
-            pattern_file = PATTERNS_DIR / f"pattern-{datetime.now().strftime('%Y%m%d-%H%M%S')}.json"
+            pattern_file = PATTERNS_DIR / f"pattern-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.json"
             pattern_data = {
                 "error": error,
                 "count": count,
                 "confidence": 0.40,
                 "status": "draft",
-                "created_at": datetime.now().isoformat(),
+                "created_at": datetime.now(timezone.utc).isoformat(),
                 "verified": False,
             }
             pattern_file.write_text(
@@ -130,6 +130,9 @@ def _track_session(
 ) -> dict[str, Any]:
     SESSION_DIR.mkdir(parents=True, exist_ok=True)
     current_path = SESSION_DIR / "current.json"
+    logger.warning(
+        "JSON session persistence (current.json) is deprecated; use SQLite session_states via database.load_state()"
+    )
     existing: dict[str, Any] = {}
     if current_path.exists():
         try:
@@ -137,7 +140,7 @@ def _track_session(
         except (json.JSONDecodeError, OSError):
             existing = {}
 
-    now = datetime.now().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     existing_decisions: list[str] = existing.get("decisions", [])
     if decisions:
         existing_decisions.extend(decisions)
@@ -167,6 +170,9 @@ def _track_session(
 
 
 def _restore_session() -> dict[str, Any]:
+    logger.warning(
+        "JSON session restore (current.json) is deprecated; use SQLite session_states via database.load_state()"
+    )
     if _RESTORED_STATE is not None:
         state = _RESTORED_STATE.copy()
     else:
@@ -231,7 +237,7 @@ def register(mcp: FastMCP) -> None:
         current_phase: int | None = None,
         current_task: str | None = None,
     ) -> dict[str, Any]:
-        """会话状态管理：保存/加载/列出会话记录，检测重复错误模式，验证经验模式，追踪/恢复会话状态。save操作持久化当前进度，detect操作从错误日志中提取模式，verify操作提升模式置信度，track操作追踪当前阶段状态，restore操作恢复上次追踪状态。"""
+        """会话状态管理：保存/加载/列出会话记录，检测重复错误模式，验证经验模式，追踪/恢复会话状态。save操作持久化当前进度，detect操作从错误日志中提取模式，verify操作提升模式置信度，track操作追踪当前阶段状态，restore操作恢复上次追踪状态。Prefer using Resource xuansto://sessions/list for read-only access."""
         validated, err = validate_input(SessionManageInput, action=action, completed_tasks=completed_tasks, pending_tasks=pending_tasks, decisions=decisions, experience=experience, error_log=error_log, pattern_path=pattern_path, success=success, current_phase=current_phase, current_task=current_task)
         if err:
             return err

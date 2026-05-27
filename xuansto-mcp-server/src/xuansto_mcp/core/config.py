@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sys
 import threading
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -403,6 +404,34 @@ KNOWLEDGE_EXPERIENCE_DIR = KNOWLEDGE_DIR / "experience"
 KNOWLEDGE_DB_PATH = WORK_DIR / "xuansto.db"
 KNOWLEDGE_CHROMA_PATH = KNOWLEDGE_DIR / "index" / "chroma_db"
 
+DECISIONS_DB_PATH = WORK_DIR / "xuansto.db"
+LEGACY_DECISIONS_DB_PATH = WORK_DIR / "decisions.db"
+LEGACY_KNOWLEDGE_DB_PATH = KNOWLEDGE_DIR / "index" / "knowledge.db"
+
+
+def get_db_path() -> Path:
+    return WORK_DIR / "xuansto.db"
+
+
+def get_decisions_db_path() -> Path:
+    warnings.warn(
+        "get_decisions_db_path() is deprecated: all databases are unified into xuansto.db. "
+        "Use get_db_path() instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return get_db_path()
+
+
+def get_knowledge_db_path() -> Path:
+    warnings.warn(
+        "get_knowledge_db_path() is deprecated: all databases are unified into xuansto.db. "
+        "Use get_db_path() instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return get_db_path()
+
 if not KNOWLEDGE_CHROMA_PATH.exists():
     logger.warning("KNOWLEDGE_CHROMA_PATH does not exist: %s", KNOWLEDGE_CHROMA_PATH)
 
@@ -478,6 +507,42 @@ def parse_version(version_str: str) -> tuple[int, int, int]:
     minor = int(parts[1]) if len(parts) > 1 else 0
     patch = int(parts[2]) if len(parts) > 2 else 0
     return (major, minor, patch)
+
+
+CURRENT_SCHEMA_VERSION = "1.0"
+
+_SCHEMA_MIGRATIONS: list[tuple[str, Any]] = []
+
+
+def _ensure_schema_version(data: dict) -> dict:
+    if not isinstance(data, dict):
+        return data
+    file_version = data.get("schema_version", "0.0")
+    if file_version == CURRENT_SCHEMA_VERSION:
+        return data
+    parsed_file = parse_version(str(file_version))
+    parsed_current = parse_version(CURRENT_SCHEMA_VERSION)
+    if parsed_file >= parsed_current:
+        return data
+    for target_version, migrate_fn in _SCHEMA_MIGRATIONS:
+        if parse_version(target_version) > parsed_file and parse_version(target_version) <= parsed_current:
+            data = migrate_fn(data)
+    data["schema_version"] = CURRENT_SCHEMA_VERSION
+    return data
+
+
+def get_token_budget_config() -> dict[str, int]:
+    token_budgets = _CONSTRAINTS_CONFIG.get("token_budgets", {})
+    if not isinstance(token_budgets, dict) or not token_budgets:
+        return {}
+    result: dict[str, int] = {}
+    for phase_key, phase_data in token_budgets.items():
+        if isinstance(phase_data, dict) and "budget" in phase_data:
+            name = phase_key.split("_")[-1]
+            result[name] = int(phase_data["budget"])
+        elif isinstance(phase_data, (int, float)):
+            result[phase_key] = int(phase_data)
+    return result
 
 
 def _merge_configs(user_config: dict[str, Any], defaults: dict[str, Any]) -> dict[str, Any]:

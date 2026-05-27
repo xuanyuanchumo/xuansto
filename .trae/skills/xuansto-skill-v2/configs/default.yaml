@@ -197,7 +197,7 @@ platform_detection:
 # -----------------------------------------------------------
 human_collaboration:
   # 验收失败时是否触发断点（false=自动重试修复，true=等待人工介入）
-  breakpoint_on_acceptance_failure: false
+  breakpoint_on_acceptance_failure: true
   # 验收失败自动重试最大次数（仅当breakpoint_on_acceptance_failure=false时生效）
   acceptance_auto_retry_max: 3
   # 规格漂移严重时是否触发断点（false=自动处理，true=等待人工介入）
@@ -207,7 +207,7 @@ human_collaboration:
   spec_drift_high_auto_strategy: adapt
   # 安全关键操作时是否触发断点（false=自动执行+记录审计日志，true=等待人工介入）
   # 注意：生产环境部署和密钥操作仍需人工确认（security_hard_gate）
-  breakpoint_on_security_critical: false
+  breakpoint_on_security_critical: true
   # 安全操作自动执行时的审计日志级别
   security_auto_audit_level: verbose
   # 迭代卡住时是否触发断点（false=自动重启迭代，true=等待人工介入）
@@ -312,20 +312,6 @@ encoding:
   check_on_commit: true
 
 # -----------------------------------------------------------
-# Token优化配置
-# Token预算门禁、压缩策略及消耗日志
-# -----------------------------------------------------------
-token_optimization:
-  budget: 100000                    # 默认Token预算上限
-  warn_threshold: 0.8               # 警告阈值：Token使用率达80%时触发压缩
-  block_threshold: 1.0              # 阻断阈值：Token使用率达100%时强制降级
-  compression_level: semantic       # 压缩级别：lossless/semantic/selective
-  logging:
-    enabled: true                   # 是否启用Token消耗日志
-    output: ".knowledge/token-usage" # 日志输出目录
-    granularity: task               # 日志粒度：task/phase/agent
-
-# -----------------------------------------------------------
 # 循环控制配置 (v3.0)
 # 迭代循环上限、停滞检测、完成承诺及自动归档
 # -----------------------------------------------------------
@@ -370,10 +356,6 @@ webapp_testing:
   server_timeout: 30
   visual_regression_threshold: 0.001
   console_error_level: error
-
-# on_demand_loading 配置已移至 .skill-config.yaml（运行时配置优先）
-
-# knowledge_service 配置已移至 .skill-config.yaml（运行时配置优先）
 
 # 知识库搜索降级策略（Token降级策略见 .skill-config.yaml）
 degradation:

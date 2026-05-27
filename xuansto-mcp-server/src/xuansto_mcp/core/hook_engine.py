@@ -43,6 +43,20 @@ _HOOK_FAILURE_THRESHOLD = 5
 
 DEFAULT_HOOK_TIMEOUT_SECONDS = 30.0
 
+HOOK_TIMEOUT_MAP: dict[str, float] = {
+    "security-block": 5.0,
+    "dangerous-cmd-confirm": 5.0,
+    "auto-format": 10.0,
+    "encoding-check": 10.0,
+    "console-log-detect": 10.0,
+    "type-check": 10.0,
+}
+
+
+def get_hook_timeout(hook_name: str) -> float:
+    return HOOK_TIMEOUT_MAP.get(hook_name, DEFAULT_HOOK_TIMEOUT_SECONDS)
+
+
 _hook_failure_counts: dict[str, int] = {}
 
 
@@ -155,11 +169,12 @@ class HookEngine:
 
         for handler in handlers:
             handler_name = getattr(handler, "__name__", str(handler))
+            timeout = get_hook_timeout(handler_name)
             try:
                 if asyncio.iscoroutinefunction(handler):
-                    result = await asyncio.wait_for(handler(tool_name, kwargs), timeout=self._hook_timeout)
+                    result = await asyncio.wait_for(handler(tool_name, kwargs), timeout=timeout)
                 else:
-                    result = await asyncio.wait_for(asyncio.to_thread(handler, tool_name, kwargs), timeout=self._hook_timeout)
+                    result = await asyncio.wait_for(asyncio.to_thread(handler, tool_name, kwargs), timeout=timeout)
 
                 if isinstance(result, tuple) and len(result) == 2:
                     hook_results, hook_errors = result
@@ -173,8 +188,8 @@ class HookEngine:
                     all_results.extend(result)
                 _reset_hook_failure_count(handler_name)
             except asyncio.TimeoutError:
-                logger.warning("Hook %s timed out after %.1fs, skipping", handler_name, self._hook_timeout)
-                all_errors.append({"hook": handler_name, "error": f"timeout after {self._hook_timeout:.1f}s"})
+                logger.warning("Hook %s timed out after %.1fs, skipping", handler_name, timeout)
+                all_errors.append({"hook": handler_name, "error": f"timeout after {timeout:.1f}s"})
             except Exception as e:
                 all_errors.append({"hook": handler_name, "error": str(e)})
                 logger.error("Pre-hook %s failed: %s", handler_name, e)
@@ -190,18 +205,19 @@ class HookEngine:
 
         for handler in handlers:
             handler_name = getattr(handler, "__name__", str(handler))
+            timeout = get_hook_timeout(handler_name)
             try:
                 if asyncio.iscoroutinefunction(handler):
-                    hook_errors = await asyncio.wait_for(handler(tool_name, kwargs, result), timeout=self._hook_timeout)
+                    hook_errors = await asyncio.wait_for(handler(tool_name, kwargs, result), timeout=timeout)
                 else:
-                    hook_errors = await asyncio.wait_for(asyncio.to_thread(handler, tool_name, kwargs, result), timeout=self._hook_timeout)
+                    hook_errors = await asyncio.wait_for(asyncio.to_thread(handler, tool_name, kwargs, result), timeout=timeout)
 
                 if isinstance(hook_errors, list):
                     all_errors.extend(hook_errors)
                 _reset_hook_failure_count(handler_name)
             except asyncio.TimeoutError:
-                logger.warning("Hook %s timed out after %.1fs, skipping", handler_name, self._hook_timeout)
-                all_errors.append({"hook": handler_name, "error": f"timeout after {self._hook_timeout:.1f}s"})
+                logger.warning("Hook %s timed out after %.1fs, skipping", handler_name, timeout)
+                all_errors.append({"hook": handler_name, "error": f"timeout after {timeout:.1f}s"})
             except Exception as e:
                 all_errors.append({"hook": handler_name, "error": str(e)})
                 logger.error("Post-hook %s failed: %s", handler_name, e)

@@ -230,6 +230,7 @@ class SchemaValidator:
                 AgentManageInput,
                 HookManageInput,
                 ResourceLoadStatusInput,
+                ResourceSubscribeInput,
                 ServerHealthInput,
                 ContextCompressInput,
                 DecisionLogInput,
@@ -238,6 +239,7 @@ class SchemaValidator:
                 KnowledgeInjectInput,
                 MetricsReportInput,
                 ConfigManageInput,
+                AuditQueryInput,
             )
 
             pydantic_models = {
@@ -253,6 +255,7 @@ class SchemaValidator:
                 "AgentManageInput": AgentManageInput,
                 "HookManageInput": HookManageInput,
                 "ResourceLoadStatusInput": ResourceLoadStatusInput,
+                "ResourceSubscribeInput": ResourceSubscribeInput,
                 "ServerHealthInput": ServerHealthInput,
                 "ContextCompressInput": ContextCompressInput,
                 "DecisionLogInput": DecisionLogInput,
@@ -261,6 +264,7 @@ class SchemaValidator:
                 "KnowledgeInjectInput": KnowledgeInjectInput,
                 "MetricsReportInput": MetricsReportInput,
                 "ConfigManageInput": ConfigManageInput,
+                "AuditQueryInput": AuditQueryInput,
             }
 
             mismatches = []

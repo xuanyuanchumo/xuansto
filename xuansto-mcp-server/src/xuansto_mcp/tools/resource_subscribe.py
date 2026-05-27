@@ -36,7 +36,7 @@ def register(mcp: FastMCP) -> None:
         annotations=ToolAnnotations(
             readOnlyHint=False,
             destructiveHint=False,
-            idempotentHint=False,
+            idempotentHint=True,
             openWorldHint=False,
         )
     )

@@ -29,7 +29,7 @@ def register(mcp: FastMCP) -> None:
         date_range: str | None = None,
         limit: int = 50,
     ) -> dict[str, Any]:
-        """审计日志查询：查询MCP工具调用审计记录，支持按工具名和日期范围过滤。"""
+        """审计日志查询：查询MCP工具调用审计记录，支持按工具名和日期范围过滤。Prefer using Resource xuansto://audit/recent for read-only access."""
         validated, val_err = validate_input(
             AuditQueryInput, tool_name=tool_name, date_range=date_range, limit=limit
         )

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -58,7 +58,7 @@ def _create_project(
         description=description or "",
         stack_items=stack_items or "  []",
         template=template or "default",
-        created_at=datetime.now().isoformat(),
+        created_at=datetime.now(timezone.utc).isoformat(),
     )
     config_path.write_text(content, encoding="utf-8")
     notify(f"Project initialized: {name} at {project_dir}", "info")
@@ -156,8 +156,8 @@ def _configure_project(
     if not existing.get("name"):
         existing["name"] = path.name
     if "created_at" not in existing:
-        existing["created_at"] = datetime.now().isoformat()
-    existing["updated_at"] = datetime.now().isoformat()
+        existing["created_at"] = datetime.now(timezone.utc).isoformat()
+    existing["updated_at"] = datetime.now(timezone.utc).isoformat()
     stack_items = "\n".join(f"  - {s}" for s in existing.get("stack", []))
     content = CONFIG_TEMPLATE.format(
         name=existing.get("name", ""),
@@ -192,7 +192,7 @@ def register(mcp: FastMCP) -> None:
         annotations=ToolAnnotations(
             readOnlyHint=False,
             destructiveHint=False,
-            idempotentHint=False,
+            idempotentHint=True,
             openWorldHint=False,
         )
     )

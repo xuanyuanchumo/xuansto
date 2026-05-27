@@ -10,6 +10,7 @@ import sys
 import threading
 import time
 from collections.abc import Callable
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -1081,7 +1082,7 @@ def _is_cache_valid(cache: dict[str, Any], current_hashes: dict[str, str]) -> bo
 def register(mcp: FastMCP) -> None:
     @mcp.tool(
         annotations=ToolAnnotations(
-            readOnlyHint=True,
+            readOnlyHint=False,
             destructiveHint=False,
             idempotentHint=True,
             openWorldHint=False,
@@ -1094,7 +1095,7 @@ def register(mcp: FastMCP) -> None:
         severity_filter: str = "all",
         force_refresh: bool = False,
     ) -> dict[str, Any]:
-        """执行54项质量门禁检查，支持按门禁ID或开发阶段(0-8)过滤。自动映射门禁到检查脚本，返回PASS/FAIL/SKIP状态和详细结果。"""
+        """执行54项质量门禁检查，支持按门禁ID或开发阶段(0-8)过滤。自动映射门禁到检查脚本，返回PASS/FAIL/SKIP状态和详细结果。Prefer using Resource xuansto://gates/list for read-only access."""
         validated, err = validate_input(QualityGateCheckInput, gate_ids=gate_ids, phase=phase, project_path=project_path, severity_filter=severity_filter, force_refresh=force_refresh)
         if err:
             return err
@@ -1110,7 +1111,14 @@ def register(mcp: FastMCP) -> None:
             cache_hit = not force_refresh and _is_cache_valid(cache, current_hashes)
             cache_age = 0.0
             if cache_hit and "timestamp" in cache:
-                cache_age = time.time() - cache["timestamp"]
+                ts = cache["timestamp"]
+                if isinstance(ts, (int, float)):
+                    cache_age = time.time() - ts
+                else:
+                    try:
+                        cache_age = (datetime.now(timezone.utc) - datetime.fromisoformat(ts)).total_seconds()
+                    except (ValueError, OSError):
+                        cache_age = 0.0
 
             if cache_hit and "checks" in cache:
                 cached_checks = cache["checks"]
@@ -1250,7 +1258,7 @@ def register(mcp: FastMCP) -> None:
             await asyncio.to_thread(_save_gate_cache, project_path, {
                 "file_hashes": current_hashes,
                 "checks": checks,
-                "timestamp": time.time(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             })
 
             cache_hit_count = 0

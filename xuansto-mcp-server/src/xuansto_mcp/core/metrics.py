@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from . import atomic_write
-from .config import WORK_DIR
+from .config import CURRENT_SCHEMA_VERSION, WORK_DIR, _ensure_schema_version
 from .logging_config import get_logger
 
 logger = get_logger("metrics")
@@ -240,6 +240,7 @@ class MetricsCollector:
                     "total_output_tokens": m["total_output_tokens"],
                 }
             data = {
+                "schema_version": CURRENT_SCHEMA_VERSION,
                 "persisted_at": datetime.now(timezone.utc).isoformat(),
                 "tool_metrics": tool_summary,
                 "degradation_events": list(self._degradation_events[-50:]),
@@ -255,12 +256,13 @@ class MetricsCollector:
             logger.info("Persisted metrics to %s", metrics_path)
         except Exception as exc:
             logger.warning("Failed to persist metrics: %s", exc)
-            return
+        self._persist_metrics_to_db()
         with self._lock:
             self._last_persist_time = time.time()
             self._persist_count = 0
 
     def load(self) -> None:
+        self._load_metrics_from_db()
         persist_dir = WORK_DIR
         if not persist_dir.exists():
             logger.debug("No metrics directory found at %s", persist_dir)
@@ -275,19 +277,22 @@ class MetricsCollector:
         except (json.JSONDecodeError, OSError) as exc:
             logger.warning("Failed to load metrics from %s: %s", metrics_path, exc)
             return
+        if isinstance(raw, dict):
+            raw = _ensure_schema_version(raw)
         with self._lock:
             for tool_name, d in raw.get("tool_metrics", {}).items():
-                self._tool_metrics[tool_name] = {
-                    "call_count": d.get("call_count", 0),
-                    "success_count": d.get("success_count", 0),
-                    "failure_count": d.get("failure_count", 0),
-                    "total_latency_ms": d.get("total_latency_ms", 0.0),
-                    "min_latency_ms": d.get("min_latency_ms", 0.0),
-                    "max_latency_ms": d.get("max_latency_ms", 0.0),
-                    "latency_samples": d.get("latency_samples", []),
-                    "total_input_tokens": d.get("total_input_tokens", 0),
-                    "total_output_tokens": d.get("total_output_tokens", 0),
-                }
+                if tool_name not in self._tool_metrics:
+                    self._tool_metrics[tool_name] = {
+                        "call_count": d.get("call_count", 0),
+                        "success_count": d.get("success_count", 0),
+                        "failure_count": d.get("failure_count", 0),
+                        "total_latency_ms": d.get("total_latency_ms", 0.0),
+                        "min_latency_ms": d.get("min_latency_ms", 0.0),
+                        "max_latency_ms": d.get("max_latency_ms", 0.0),
+                        "latency_samples": d.get("latency_samples", []),
+                        "total_input_tokens": d.get("total_input_tokens", 0),
+                        "total_output_tokens": d.get("total_output_tokens", 0),
+                    }
             for evt in raw.get("degradation_events", []):
                 self._degradation_events.append(evt)
             if len(self._degradation_events) > _MAX_DEGRADATION_EVENTS:
@@ -301,6 +306,79 @@ class MetricsCollector:
             if len(self._phase_transitions) > _MAX_PHASE_TRANSITIONS:
                 self._phase_transitions = self._phase_transitions[-_MAX_PHASE_TRANSITIONS:]
         logger.info("Loaded metrics from %s", metrics_path)
+
+    def _persist_metrics_to_db(self) -> None:
+        with self._lock:
+            snapshot = {}
+            for tool_name, m in self._tool_metrics.items():
+                snapshot[tool_name] = {
+                    "call_count": m["call_count"],
+                    "success_count": m["success_count"],
+                    "failure_count": m["failure_count"],
+                    "total_latency_ms": m["total_latency_ms"],
+                    "min_latency_ms": m["min_latency_ms"] if m["min_latency_ms"] != float("inf") else 0.0,
+                    "max_latency_ms": m["max_latency_ms"],
+                    "latency_samples": m["latency_samples"][-100:],
+                    "total_input_tokens": m["total_input_tokens"],
+                    "total_output_tokens": m["total_output_tokens"],
+                }
+        try:
+            from .database import get_db
+            conn = get_db()
+            try:
+                now = datetime.now(timezone.utc).isoformat()
+                for tool_name, m in snapshot.items():
+                    data_json = json.dumps(m, ensure_ascii=False)
+                    conn.execute(
+                        "INSERT INTO tool_metrics "
+                        "(tool_name, call_count, error_count, total_duration_ms, last_called, data_json) "
+                        "VALUES (?, ?, ?, ?, ?, ?) "
+                        "ON CONFLICT(tool_name) DO UPDATE SET "
+                        "call_count=excluded.call_count, error_count=excluded.error_count, "
+                        "total_duration_ms=excluded.total_duration_ms, "
+                        "last_called=excluded.last_called, data_json=excluded.data_json",
+                        (tool_name, m["call_count"], m["failure_count"], m["total_latency_ms"], now, data_json),
+                    )
+                conn.commit()
+                logger.debug("Persisted tool metrics to SQLite (%d tools)", len(snapshot))
+            finally:
+                conn.close()
+        except Exception as exc:
+            logger.warning("Failed to persist tool metrics to SQLite: %s", exc)
+
+    def _load_metrics_from_db(self) -> None:
+        try:
+            from .database import get_db
+            conn = get_db()
+            try:
+                cursor = conn.execute("SELECT tool_name, data_json FROM tool_metrics")
+                rows = cursor.fetchall()
+            finally:
+                conn.close()
+        except Exception as exc:
+            logger.warning("Failed to load tool metrics from SQLite: %s", exc)
+            return
+        if not rows:
+            return
+        with self._lock:
+            for row in rows:
+                tool_name = row[0]
+                try:
+                    d = json.loads(row[1])
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                self._tool_metrics[tool_name] = {
+                    "call_count": d.get("call_count", 0),
+                    "success_count": d.get("success_count", 0),
+                    "failure_count": d.get("failure_count", 0),
+                    "total_latency_ms": d.get("total_latency_ms", 0.0),
+                    "min_latency_ms": d.get("min_latency_ms", 0.0),
+                    "max_latency_ms": d.get("max_latency_ms", 0.0),
+                    "latency_samples": d.get("latency_samples", []),
+                    "total_input_tokens": d.get("total_input_tokens", 0),
+                    "total_output_tokens": d.get("total_output_tokens", 0),
+                }
+        logger.info("Loaded tool metrics from SQLite (%d tools)", len(rows))
 
     def reset(self) -> None:
         with self._lock:
