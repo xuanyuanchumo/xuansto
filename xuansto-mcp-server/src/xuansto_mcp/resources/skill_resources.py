@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import contextlib
 import json
-import sqlite3
 import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +23,7 @@ from ..core.config import (
     WORK_DIR,
     _resolve_skill_file,
 )
+from ..core.database import get_db
 from ..core.logging_config import get_logger
 from ..core.validator import validate_path_safety
 
@@ -67,15 +68,15 @@ def _is_safe_path(path_component: str, allowed_base_dirs: list[Path]) -> tuple[P
     return validate_path_safety(path_component, allowed_base_dirs)
 
 
-def _degraded_resource(uri: str, error: str) -> str:
+def _degraded_resource(uri: str, error: str) -> dict[str, Any]:
     logger.warning("Resource degraded: %s - %s", uri, error)
-    return json.dumps({
+    return {
         "status": "degraded",
         "uri": uri,
         "message": f"Resource unavailable: {uri}",
         "error": error,
-        "timestamp": time.time(),
-    }, ensure_ascii=False, indent=2)
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 def register(mcp: FastMCP) -> None:
@@ -167,7 +168,7 @@ def register(mcp: FastMCP) -> None:
             return _degraded_resource(f"xuansto://agents/{layer}/{name}", str(e))
 
     @mcp.resource("xuansto://loading/status")
-    def loading_status() -> str:
+    def loading_status() -> dict[str, Any]:
         try:
             state_file = WORK_DIR / "resource_state.json"
             loaded_resources: list[str] = []
@@ -255,6 +256,94 @@ def register(mcp: FastMCP) -> None:
                 current_phase, disclosure_notes["skeleton"]
             )
 
+            phase_capability_matrix: dict[str, dict[str, Any]] = {}
+            for pname, pidx in phase_map.items():
+                pfn = available_functions_map.get(pname, {})
+                phase_capability_matrix[pname] = {
+                    "phase_index": pidx,
+                    "available_functions": pfn,
+                    "enabled_count": sum(1 for v in pfn.values() if v),
+                    "disabled_count": sum(1 for v in pfn.values() if not v),
+                }
+
+            phase_token_budget_map = {
+                "skeleton": 2000,
+                "functional": 5000,
+                "enhanced": 10000,
+                "full": 20000,
+            }
+
+            token_budget_status: dict[str, dict[str, Any]] = {}
+            try:
+                from ..tools.resource_load_status import (  # noqa: I001
+                    PHASE_TOKEN_BUDGET as _PHASE_TOK_BUDGET,
+                    _PHASE_TOKEN_USAGE as _PHASE_TOK_USAGE,
+                    _PHASE_TOKEN_USAGE_LOCK as _PHASE_TOK_USAGE_LOCK,
+                    _safe_int as _rsrc_safe_int,
+                    _phase_lock as _rsrc_phase_lock,
+                    _current_phase as _rsrc_current_phase,
+                    _check_transition_conditions as _rsrc_check_transition,
+                    _check_resource_file_availability as _rsrc_check_avail,
+                    _VALID_TRANSITIONS as _rsrc_valid_trans,
+                )
+                with _PHASE_TOK_USAGE_LOCK:
+                    usage_snapshot = dict(_PHASE_TOK_USAGE)
+                for pname, pidx in phase_map.items():
+                    budget = _PHASE_TOK_BUDGET.get(pidx, 2000)
+                    usage_data = usage_snapshot.get(pidx, {"estimated_tokens": 0, "resource_count": 0})
+                    if not isinstance(usage_data, dict):
+                        usage_data = {"estimated_tokens": 0, "resource_count": 0}
+                    est_tokens = _rsrc_safe_int(usage_data.get("estimated_tokens"))
+                    res_count = _rsrc_safe_int(usage_data.get("resource_count"))
+                    token_budget_status[pname] = {
+                        "budget": budget,
+                        "estimated_tokens": est_tokens,
+                        "resource_count": res_count,
+                        "usage_ratio": round(est_tokens / budget, 4) if budget > 0 else 0,
+                        "budget_remaining": max(0, budget - est_tokens),
+                    }
+            except Exception:
+                for pname in phase_map:
+                    token_budget_status[pname] = {
+                        "budget": phase_token_budget_map.get(pname, 0),
+                        "estimated_tokens": 0,
+                        "resource_count": 0,
+                        "usage_ratio": 0,
+                        "budget_remaining": phase_token_budget_map.get(pname, 0),
+                    }
+
+            transition_validation: dict[str, Any] = {}
+            try:
+                with _rsrc_phase_lock:
+                    cur_phase = _rsrc_current_phase
+                transition_check = _rsrc_check_transition(cur_phase)
+                allowed_targets = _rsrc_valid_trans.get(cur_phase, [])
+                transition_validation = {
+                    "current_phase": PHASE_NAMES.get(cur_phase, "skeleton") if 'PHASE_NAMES' in dir() else current_phase,
+                    "current_phase_index": cur_phase,
+                    "allowed_next_phases": [PHASE_NAMES.get(t, str(t)) if 'PHASE_NAMES' in dir() else str(t) for t in allowed_targets],
+                    "can_advance": transition_check.get("can_transition", False),
+                    "conditions_met": transition_check.get("conditions_met", False),
+                    "missing": transition_check.get("missing", []),
+                    "description": transition_check.get("description", ""),
+                }
+            except Exception:
+                transition_validation = {
+                    "current_phase": current_phase,
+                    "current_phase_index": phase_index,
+                    "allowed_next_phases": [],
+                    "can_advance": False,
+                    "conditions_met": False,
+                    "missing": [],
+                    "description": "",
+                }
+
+            resource_availability: dict[str, Any] = {}
+            try:
+                resource_availability = _rsrc_check_avail()
+            except Exception:
+                pass
+
             phase_transition_history: list[dict[str, Any]] = []
             performance_metrics: dict[str, Any] = {
                 "total_tokens_consumed": 0,
@@ -315,46 +404,100 @@ def register(mcp: FastMCP) -> None:
                 "disclosure_note": disclosure_note,
                 "phase_transition_history": phase_transition_history,
                 "performance_metrics": performance_metrics,
-                "timestamp": time.time(),
+                "phase_capability_matrix": phase_capability_matrix,
+                "token_budget_status": token_budget_status,
+                "transition_validation": transition_validation,
+                "resource_availability": resource_availability,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
-            return json.dumps(status, ensure_ascii=False, indent=2)
+            return status
         except Exception as e:
             return _degraded_resource("xuansto://loading/status", str(e))
 
-    @mcp.resource("xuansto://metrics/summary")
-    def metrics_summary() -> str:
+    @mcp.resource("xuansto://loading/requirements")
+    def loading_requirements() -> dict[str, Any]:
         try:
-            metrics_path = WORK_DIR / "tool_metrics.json"
-            degr_path = WORK_DIR / "degradation_stats.json"
-            tool_metrics: dict[str, Any] = {}
-            degradation_stats: dict[str, int] = {}
-            if metrics_path.exists():
-                with contextlib.suppress(json.JSONDecodeError, OSError):
-                    tool_metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
-            if degr_path.exists():
-                with contextlib.suppress(json.JSONDecodeError, OSError):
-                    degradation_stats = json.loads(degr_path.read_text(encoding="utf-8"))
-            total_calls = sum(m.get("call_count", 0) for m in tool_metrics.values())
-            total_errors = sum(m.get("error_count", 0) for m in tool_metrics.values())
-            summary = {
-                "total_tools": len(tool_metrics),
-                "total_calls": total_calls,
-                "total_errors": total_errors,
-                "overall_error_rate": round(total_errors / max(total_calls, 1), 4),
-                "degradation_counts": degradation_stats,
-                "timestamp": time.time(),
+            from ..tools.resource_load_status import (  # noqa: I001
+                PHASE_RESOURCE_MAP as _PHASE_RES_MAP,
+                PHASE_TOKEN_BUDGET as _PHASE_TOK_BUDGET,
+                PHASE_NAMES as _PHASE_NAMES,
+                PHASE_AVAILABLE_FUNCTIONS as _PHASE_AVAIL_FN,
+                _estimate_resource_tokens as _est_res_tokens,
+                _DISCLOSURE_NOTES as _DISC_NOTES,
+                _UPGRADE_HINTS as _UPG_HINTS,
+                _PHASE_TRANSITION_KEYS as _PHASE_TRANS_KEYS,
+                PHASE_TRANSITION_CONDITIONS as _PHASE_TRANS_CONDS,
+            )
+            from ..core.config import SKILL_ROOT as _SKILL_ROOT
+
+            phases: dict[str, dict[str, Any]] = {}
+            for pidx in range(4):
+                pname = _PHASE_NAMES.get(pidx, str(pidx))
+                resources = _PHASE_RES_MAP.get(pidx, [])
+                resource_details = []
+                total_estimated = 0
+                for r in resources:
+                    full_path = _SKILL_ROOT / r["path"]
+                    est = _est_res_tokens(r)
+                    total_estimated += est
+                    resource_details.append({
+                        "id": r["id"],
+                        "type": r["type"],
+                        "path": r["path"],
+                        "estimated_tokens": est,
+                        "file_exists": full_path.exists(),
+                    })
+                budget = _PHASE_TOK_BUDGET.get(pidx, 0)
+                transition_key = _PHASE_TRANS_KEYS.get(pidx)
+                transition_conditions = _PHASE_TRANS_CONDS.get(transition_key, {}) if transition_key else {}
+                phases[pname] = {
+                    "phase_index": pidx,
+                    "token_budget": budget,
+                    "estimated_tokens": total_estimated,
+                    "budget_sufficient": total_estimated <= budget,
+                    "resource_count": len(resources),
+                    "resources": resource_details,
+                    "available_functions": _PHASE_AVAIL_FN.get(pidx, {}),
+                    "disclosure_note": _DISC_NOTES.get(pidx, ""),
+                    "upgrade_hint": _UPG_HINTS.get(pidx, ""),
+                    "transition_conditions": transition_conditions,
+                }
+
+            requirements = {
+                "phases": phases,
+                "valid_transitions": {
+                    "skeleton": ["functional"],
+                    "functional": ["enhanced"],
+                    "enhanced": ["full"],
+                    "full": [],
+                },
+                "token_budget_summary": {
+                    pname: _PHASE_TOK_BUDGET.get(pidx, 0)
+                    for pname, pidx in {"skeleton": 0, "functional": 1, "enhanced": 2, "full": 3}.items()
+                },
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
-            return json.dumps(summary, ensure_ascii=False, indent=2)
+            return requirements
+        except Exception as e:
+            return _degraded_resource("xuansto://loading/requirements", str(e))
+
+    @mcp.resource("xuansto://metrics/summary")
+    def metrics_summary() -> dict[str, Any]:
+        try:
+            from ..tools.metrics_report import _summary_metrics
+            summary = _summary_metrics("all")
+            summary["timestamp"] = datetime.now(timezone.utc).isoformat()
+            return summary
         except Exception as e:
             return _degraded_resource("xuansto://metrics/summary", str(e))
 
     @mcp.resource("xuansto://degradation/status")
-    def degradation_status() -> str:
+    def degradation_status() -> dict[str, Any]:
         try:
             from ..core.degradation import get_degradation_manager
             manager = get_degradation_manager()
             status = manager.get_status()
-            return json.dumps(status, ensure_ascii=False, indent=2)
+            return status
         except Exception as e:
             return _degraded_resource("xuansto://degradation/status", str(e))
 
@@ -430,7 +573,7 @@ def register(mcp: FastMCP) -> None:
             return _degraded_resource("xuansto://hooks/definitions", str(e))
 
     @mcp.resource("xuansto://knowledge/stats")
-    def knowledge_stats() -> str:
+    def knowledge_stats() -> dict[str, Any]:
         try:
             stats: dict[str, Any] = {
                 "knowledge_dir_exists": KNOWLEDGE_DIR.exists(),
@@ -439,8 +582,7 @@ def register(mcp: FastMCP) -> None:
             }
             if KNOWLEDGE_DB_PATH.exists():
                 try:
-                    import sqlite3
-                    conn = sqlite3.connect(str(KNOWLEDGE_DB_PATH))
+                    conn = get_db()
                     cursor = conn.cursor()
                     cursor.execute("SELECT COUNT(*) FROM knowledge_entries WHERE deleted_at IS NULL")
                     stats["db_entry_count"] = cursor.fetchone()[0]
@@ -457,24 +599,24 @@ def register(mcp: FastMCP) -> None:
                     stats["chroma_entry_count"] = collection.count()
                 except Exception:
                     stats["chroma_entry_count"] = -1
-            stats["timestamp"] = time.time()
-            return json.dumps(stats, ensure_ascii=False, indent=2)
+            stats["timestamp"] = datetime.now(timezone.utc).isoformat()
+            return stats
         except Exception as e:
             return _degraded_resource("xuansto://knowledge/stats", str(e))
 
     @mcp.resource("xuansto://templates/index")
-    def templates_index() -> str:
+    def templates_index() -> dict[str, Any]:
         try:
             templates: list[dict[str, Any]] = []
             if TEMPLATES_DIR.exists():
                 for tmpl_file in sorted(TEMPLATES_DIR.glob("*.md")):
                     templates.append({"name": tmpl_file.stem, "filename": tmpl_file.name})
-            return json.dumps({"templates": templates, "total": len(templates)}, ensure_ascii=False, indent=2)
+            return {"templates": templates, "total": len(templates)}
         except Exception as e:
             return _degraded_resource("xuansto://templates/index", str(e))
 
     @mcp.resource("xuansto://commands/routes")
-    def commands_routes() -> str:
+    def commands_routes() -> dict[str, Any]:
         try:
             routes: list[dict[str, Any]] = []
             if COMMANDS_DIR.exists():
@@ -483,7 +625,7 @@ def register(mcp: FastMCP) -> None:
                         "name": cmd_file.stem,
                         "path": str(cmd_file.relative_to(COMMANDS_DIR)),
                     })
-            return json.dumps({"routes": routes, "total": len(routes)}, ensure_ascii=False, indent=2)
+            return {"routes": routes, "total": len(routes)}
         except Exception as e:
             return _degraded_resource("xuansto://commands/routes", str(e))
 
@@ -504,7 +646,7 @@ def register(mcp: FastMCP) -> None:
             return _degraded_resource("xuansto://session/state", str(e))
 
     @mcp.resource("xuansto://health/status")
-    def health_status() -> str:
+    def health_status() -> dict[str, Any]:
         try:
             from ..core.degradation import get_degradation_manager
             manager = get_degradation_manager()
@@ -513,24 +655,24 @@ def register(mcp: FastMCP) -> None:
                 "status": "healthy" if degr_status.get("overall_level") == "L1_NORMAL" else "degraded",
                 "degradation_level": degr_status.get("overall_level", "unknown"),
                 "components": {},
-                "timestamp": time.time(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
             for comp_name, comp_data in degr_status.get("components", {}).items():
                 health["components"][comp_name] = {
                     "level": comp_data.get("level", "unknown"),
                     "healthy": comp_data.get("last_check_healthy", False),
                 }
-            return json.dumps(health, ensure_ascii=False, indent=2)
+            return health
         except Exception as e:
             return _degraded_resource("xuansto://health/status", str(e))
 
     @mcp.resource("xuansto://audit/log")
-    def audit_log() -> str:
+    def audit_log() -> dict[str, Any]:
         try:
             from ..core.audit_logger import get_audit_logger
             logger = get_audit_logger()
             entries = logger.query(limit=50)
-            return json.dumps({"entries": entries, "count": len(entries)}, ensure_ascii=False, indent=2)
+            return {"entries": entries, "count": len(entries)}
         except Exception as e:
             return _degraded_resource("xuansto://audit/log", str(e))
 
@@ -540,7 +682,6 @@ def register(mcp: FastMCP) -> None:
             from ..tools.decision_log import _get_connection, _row_to_dict
             conn = _get_connection()
             try:
-                conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
                 cursor.execute(
                     "SELECT * FROM decisions ORDER BY created_at DESC LIMIT 10"
@@ -612,3 +753,116 @@ def register(mcp: FastMCP) -> None:
             return "\n".join(lines)
         except Exception as e:
             return _degraded_resource("xuansto://workflows/active", str(e))
+
+    @mcp.resource("xuansto://agents/list")
+    def agents_list() -> dict[str, Any]:
+        try:
+            from ..tools.agent_status import _parse_agent_registry, _get_agent_phase_map
+            registry = REFERENCES_DIR / "agent-registry.md"
+            agents = _parse_agent_registry(registry)
+            phase_map = _get_agent_phase_map()
+            for agent in agents:
+                agent["phase"] = phase_map.get(agent.get("name", ""), agent.get("phase", 2))
+            return {
+                "agents": agents,
+                "total": len(agents),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        except Exception as e:
+            return _degraded_resource("xuansto://agents/list", str(e))
+
+    @mcp.resource("xuansto://sessions/list")
+    def sessions_list() -> dict[str, Any]:
+        try:
+            from ..tools.session_manage import _list_sessions
+            result = _list_sessions()
+            result["timestamp"] = datetime.now(timezone.utc).isoformat()
+            return result
+        except Exception as e:
+            return _degraded_resource("xuansto://sessions/list", str(e))
+
+    @mcp.resource("xuansto://gates/list")
+    def gates_list() -> dict[str, Any]:
+        try:
+            from ..tools.quality_gate_check import DECLARED_GATE_IDS, INLINE_CHECKS
+            from ..core.config import GATE_SCRIPTS_MAP, QUALITY_GATES_PHASE_MAP
+            gates: list[dict[str, Any]] = []
+            for gate_id in DECLARED_GATE_IDS:
+                gate_info: dict[str, Any] = {"gate_id": gate_id}
+                script = GATE_SCRIPTS_MAP.get(gate_id)
+                if script:
+                    gate_info["script"] = script
+                if gate_id in INLINE_CHECKS:
+                    gate_info["has_inline_check"] = INLINE_CHECKS[gate_id] is not None
+                else:
+                    gate_info["has_inline_check"] = False
+                for phase_key, phase_gates in QUALITY_GATES_PHASE_MAP.items():
+                    if gate_id in phase_gates:
+                        gate_info.setdefault("phases", []).append(phase_key)
+                gates.append(gate_info)
+            return {
+                "gates": gates,
+                "total": len(gates),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        except Exception as e:
+            return _degraded_resource("xuansto://gates/list", str(e))
+
+    @mcp.resource("xuansto://workflows/list")
+    def workflows_list() -> dict[str, Any]:
+        try:
+            from ..tools.workflow_dispatch import _list_workflows
+            workflows = _list_workflows()
+            return {
+                "workflows": workflows,
+                "total": len(workflows),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        except Exception as e:
+            return _degraded_resource("xuansto://workflows/list", str(e))
+
+    @mcp.resource("xuansto://audit/recent")
+    def audit_recent() -> dict[str, Any]:
+        try:
+            from ..core.audit_logger import get_audit_logger
+            audit = get_audit_logger()
+            entries = audit.query(limit=50)
+            success_count = sum(1 for e in entries if e.get("success") is True)
+            error_count = sum(1 for e in entries if e.get("success") is False)
+            tool_names = sorted({e.get("tool", "") for e in entries if e.get("tool")})
+            return {
+                "entries": entries,
+                "total_returned": len(entries),
+                "summary": {
+                    "success_count": success_count,
+                    "error_count": error_count,
+                    "unique_tools": len(tool_names),
+                    "tool_names": tool_names,
+                },
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        except Exception as e:
+            return _degraded_resource("xuansto://audit/recent", str(e))
+
+    @mcp.resource("xuansto://decisions/recent")
+    def decisions_recent() -> dict[str, Any]:
+        try:
+            from ..tools.decision_log import _list_decisions
+            data = _list_decisions(limit=10)
+            data["timestamp"] = datetime.now(timezone.utc).isoformat()
+            return data
+        except Exception as e:
+            return _degraded_resource("xuansto://decisions/recent", str(e))
+
+    @mcp.resource("xuansto://references/summary/{name}")
+    def reference_summary(name: str) -> str:
+        try:
+            summary_dir = REFERENCES_DIR / "summary"
+            safe_path, err = _is_safe_path(f"{name}.md", [summary_dir])
+            if err or safe_path is None:
+                return f"Error: invalid summary name '{name}' ({err})"
+            if safe_path.resolve().is_relative_to(summary_dir.resolve()) and safe_path.exists():
+                return safe_path.read_text(encoding="utf-8")
+            return f"Summary '{name}' not found"
+        except Exception as e:
+            return _degraded_resource(f"xuansto://references/summary/{name}", str(e))

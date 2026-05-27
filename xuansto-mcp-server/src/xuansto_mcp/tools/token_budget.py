@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from ..core.config import WORK_DIR
+from ..core.config import WORK_DIR, get_token_budget_config
 from ..core.errors import ERR_VALIDATION, make_error_response, make_success_response
 from ..core.logging_config import get_logger
 from ..core.notifications import notify
@@ -16,12 +16,23 @@ from ..models.schemas import TokenBudgetInput
 
 logger = get_logger("token_budget")
 
-PHASE_TOKEN_BUDGET_MAP: dict[str, int] = {
+_FALLBACK_PHASE_TOKEN_BUDGET_MAP: dict[str, int] = {
     "skeleton": 2000,
     "functional": 5000,
     "enhanced": 10000,
     "full": 20000,
 }
+
+def _load_phase_token_budget_map() -> dict[str, int]:
+    try:
+        config_map = get_token_budget_config()
+        if config_map:
+            return config_map
+    except Exception:
+        pass
+    return _FALLBACK_PHASE_TOKEN_BUDGET_MAP
+
+PHASE_TOKEN_BUDGET_MAP: dict[str, int] = _load_phase_token_budget_map()
 
 BUDGET_FILE = WORK_DIR / "token_budget.json"
 
@@ -138,7 +149,7 @@ def _set_budget(
         budget["total_budget"] = total_budget
     if phase_allocations is not None:
         budget["phase_allocations"] = phase_allocations
-    budget["updated_at"] = datetime.now().isoformat()
+    budget["updated_at"] = datetime.now(timezone.utc).isoformat()
     if "used" not in budget:
         budget["used"] = 0
     if "usage_by_phase" not in budget:
@@ -195,7 +206,7 @@ def _report(period: str = "session") -> dict[str, Any]:
     usage_by_phase = budget.get("usage_by_phase", {})
     total_used = budget.get("used", 0)
     total_budget = budget.get("total_budget", 0)
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     report: dict[str, Any] = {
         "period": period,
         "total_budget": total_budget,

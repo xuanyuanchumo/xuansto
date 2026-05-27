@@ -216,18 +216,61 @@ from .resources import skill_resources
 skill_resources.register(mcp)
 
 @mcp.prompt("xuansto_workflow")
-def xuansto_workflow_prompt(task_description: str) -> str:
-    return f"Execute xuansto workflow for: {task_description}"
+def xuansto_workflow_prompt(task_description: str) -> list[dict[str, str]]:
+    return [
+        {"role": "user", "content": "You are an expert workflow orchestrator for the xuansto development system. Follow the xuansto workflow phases and quality gates to ensure structured, high-quality development output."},
+        {"role": "user", "content": f"Execute xuansto workflow for: {task_description}"},
+    ]
 
 @mcp.prompt("xuansto_analysis")
-def xuansto_analysis_prompt(skill_path: str) -> str:
-    return f"Analyze skill at: {skill_path}"
+def xuansto_analysis_prompt(skill_path: str) -> list[dict[str, str]]:
+    return [
+        {"role": "user", "content": "You are an expert code and architecture analyst. Provide thorough analysis of skill definitions, code quality, and architectural patterns."},
+        {"role": "user", "content": f"Analyze skill at: {skill_path}"},
+    ]
 
 try:
     _REGISTERED_RESOURCE_NAMES = list(mcp._resource_manager._resources.keys())
     _REGISTERED_RESOURCE_NAMES.extend(mcp._resource_manager._templates.keys())
 except AttributeError:
     _REGISTERED_RESOURCE_NAMES = []
+
+
+def _verify_api_key(auth_header: str | None, api_key: str) -> bool:
+    if not auth_header:
+        return False
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:].strip()
+        return token == api_key
+    if auth_header.startswith("ApiKey "):
+        token = auth_header[7:].strip()
+        return token == api_key
+    return auth_header.strip() == api_key
+
+
+def _create_auth_middleware(app: Any, api_key: str) -> None:
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse
+
+    class AuthMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next: Any) -> Any:
+            if request.url.path == "/health":
+                return await call_next(request)
+            auth_header = request.headers.get("Authorization") or request.headers.get("X-API-Key")
+            if not auth_header:
+                return JSONResponse(
+                    status_code=401,
+                    content={"status": "error", "error": {"code": "ERR_UNAUTHORIZED", "message": "Authentication required. Provide Authorization: Bearer <key> or X-API-Key header"}},
+                )
+            if not _verify_api_key(auth_header, api_key):
+                return JSONResponse(
+                    status_code=401,
+                    content={"status": "error", "error": {"code": "ERR_UNAUTHORIZED", "message": "Invalid API key"}},
+                )
+            return await call_next(request)
+
+    app.add_middleware(AuthMiddleware)
 
 
 def main() -> None:
@@ -255,7 +298,18 @@ def main() -> None:
     if transport == "streamable-http":
         host = os.environ.get("XUANSTO_HOST", "127.0.0.1")
         port = int(os.environ.get("XUANSTO_PORT", "8000"))
-        mcp.run(transport="streamable-http", host=host, port=port)
+        api_key = os.environ.get("XUANSTO_API_KEY", "")
+        if api_key:
+            try:
+                from .api.api_routes import create_api_app
+                http_app = create_api_app()
+                _create_auth_middleware(http_app, api_key)
+                import uvicorn
+                uvicorn.run(http_app, host=host, port=port)
+            except ImportError:
+                mcp.run(transport="streamable-http", host=host, port=port)
+        else:
+            mcp.run(transport="streamable-http", host=host, port=port)
     else:
         mcp.run(transport="stdio")
 

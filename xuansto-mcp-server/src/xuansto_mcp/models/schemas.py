@@ -114,22 +114,23 @@ class AgentManageInput(BaseModel):
 
 class HookManageInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["list", "execute"] = Field(description="操作类型: list, execute")
+    action: Literal["list", "execute", "get_active_profile"] = Field(description="操作类型: list, execute, get_active_profile")
     profile: Literal["minimal", "standard", "strict"] = Field(default="standard", description="Hook配置级别: minimal, standard, strict")
     hook_name: str | None = Field(default=None, description="Hook名称(execute时使用)")
     context: dict[str, Any] | None = Field(default=None, description="执行上下文(execute时使用)")
+    phase: int | None = Field(default=None, ge=0, le=3, description="Phase索引(0-3, get_active_profile时使用)")
 
 
 class ResourceLoadStatusInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["status", "preload", "cache", "clear_cache", "loading_progress", "token_report", "disclosure_transition", "transition_check", "features", "metrics"] = Field(description="操作类型: status, preload, cache, clear_cache, loading_progress, token_report, disclosure_transition, transition_check, features, metrics")
+    action: Literal["status", "preload", "cache", "clear_cache", "loading_progress", "token_report", "disclosure_transition", "transition_check", "features", "metrics", "get_requirements", "rollback", "get_hook_profile"] = Field(description="操作类型: status, preload, cache, clear_cache, loading_progress, token_report, disclosure_transition, transition_check, features, metrics, get_requirements, rollback, get_hook_profile")
     phase: int | None = Field(default=None, ge=0, le=3, description="目标加载阶段(0-3): 0=骨架, 1=功能, 2=增强, 3=完整")
     resource_ids: list[str] | None = Field(default=None, description="指定资源ID列表")
     resource_uris: list[str] | None = Field(default=None, description="资源URI列表(preload时使用)")
     priority: Literal["critical", "normal", "background"] = Field(default="normal", description="预加载优先级(preload时使用): critical, normal, background")
     batch_mode: bool = Field(default=False, description="是否批量预加载模式(preload时使用)，批量模式并发加载多个资源")
     auto_upgrade: bool = Field(default=False, description="自动升级阶段(preload时使用)，当Token预算超限时自动推进到下一阶段")
-    target_phase: str | None = Field(default=None, description="目标阶段名称(disclosure_transition时使用): skeleton, functional, enhanced, full")
+    target_phase: str | None = Field(default=None, description="目标阶段名称(disclosure_transition/rollback时使用): skeleton, functional, enhanced, full")
 
 
 class ServerHealthInput(BaseModel):

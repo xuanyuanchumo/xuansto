@@ -4,7 +4,15 @@
     <answer>results</answer>
   </qa_pair>
   <qa_pair>
+    <question>使用 knowledge_search 查找项目中关于认证流程的最佳实践</question>
+    <answer>results</answer>
+  </qa_pair>
+  <qa_pair>
     <question>使用 quality_gate_check 检查项目质量门禁状态</question>
+    <answer>passed</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 quality_gate_check 验证代码覆盖率是否达到门禁阈值</question>
     <answer>passed</answer>
   </qa_pair>
   <qa_pair>
@@ -12,11 +20,159 @@
     <answer>healthy</answer>
   </qa_pair>
   <qa_pair>
+    <question>使用 server_health 获取MCP服务器连接延迟和可用性信息</question>
+    <answer>healthy</answer>
+  </qa_pair>
+  <qa_pair>
     <question>使用 resource_load_status 查询渐进式加载状态</question>
     <answer>SKELETON</answer>
   </qa_pair>
   <qa_pair>
+    <question>使用 resource_load_status 检查资源是否已完全加载到DETAIL级别</question>
+    <answer>DETAIL</answer>
+  </qa_pair>
+  <qa_pair>
     <question>使用 skill_analyze 分析项目结构</question>
     <answer>analysis</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 skill_analyze 识别项目中的技术栈和依赖关系</question>
+    <answer>analysis</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 knowledge_inject 将设计模式知识注入到当前会话上下文</question>
+    <answer>injected</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 knowledge_inject 导入领域特定知识到项目知识库</question>
+    <answer>injected</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 spec_drift_detect 检测实现代码与规格文档的偏移</question>
+    <answer>drift_report</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 spec_drift_detect 分析API实现是否偏离了原始规格定义</question>
+    <answer>drift_report</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 security_scan 对项目源码进行安全漏洞扫描</question>
+    <answer>vulnerabilities</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 security_scan 检测依赖包中的已知CVE漏洞</question>
+    <answer>vulnerabilities</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 code_simplify 分析并简化复杂度过高的函数</question>
+    <answer>simplified</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 code_simplify 对冗长的条件逻辑进行重构建议</question>
+    <answer>simplified</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 session_manage 创建新的开发会话</question>
+    <answer>session_created</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 session_manage 恢复之前中断的开发会话</question>
+    <answer>session_resumed</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 workflow_dispatch 启动9阶段全生命周期开发工作流</question>
+    <answer>dispatched</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 workflow_dispatch 分派特定阶段的工作流任务</question>
+    <answer>dispatched</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 agent_status 查询所有Agent的当前运行状态</question>
+    <answer>status_report</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 agent_status 检查特定Agent是否已完成分配的任务</question>
+    <answer>status_report</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 agent_manage 启用一个新的代码审查Agent</question>
+    <answer>managed</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 agent_manage 调整Agent的并发执行数量</question>
+    <answer>managed</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 hook_manage 注册代码提交前的pre-commit钩子</question>
+    <answer>hook_registered</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 hook_manage 移除不再需要的post-build钩子</question>
+    <answer>hook_removed</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 resource_subscribe 订阅项目文件变更通知</question>
+    <answer>subscribed</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 resource_subscribe 监听特定目录下的资源更新事件</question>
+    <answer>subscribed</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 context_compress 压缩当前会话的上下文以释放token空间</question>
+    <answer>compressed</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 context_compress 对长对话历史进行摘要压缩</question>
+    <answer>compressed</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 decision_log 记录架构决策及其理由</question>
+    <answer>logged</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 decision_log 查询历史决策记录以了解技术选型原因</question>
+    <answer>logged</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 token_budget 查询当前会话的token使用预算</question>
+    <answer>budget_report</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 token_budget 设置不同开发阶段的token分配策略</question>
+    <answer>budget_updated</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 project_init 初始化一个新的全栈项目</question>
+    <answer>initialized</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 project_init 配置项目的基础架构和开发规范</question>
+    <answer>initialized</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 metrics_report 生成项目质量指标报告</question>
+    <answer>report</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 metrics_report 导出代码复杂度和测试覆盖率趋势数据</question>
+    <answer>report</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 config_manage 更新项目的构建配置参数</question>
+    <answer>config_updated</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 config_manage 读取当前工作流的配置项列表</question>
+    <answer>config_list</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 audit_query 查询项目的审计日志记录</question>
+    <answer>audit_results</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 audit_query 检索特定时间范围内的代码变更审计轨迹</question>
+    <answer>audit_results</answer>
   </qa_pair>
 </evaluation>

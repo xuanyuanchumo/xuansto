@@ -51,8 +51,12 @@ _agents_lock = threading.Lock()
 
 _MAX_AGENT_INSTANCES = 20
 
+_file_backup_enabled: bool = False
+
 
 def _persist_agent_instances() -> None:
+    if not _file_backup_enabled:
+        return
     persist_dir = WORK_DIR
     persist_dir.mkdir(parents=True, exist_ok=True)
     with _agents_lock:
@@ -82,19 +86,21 @@ def _load_agent_instances() -> None:
         raw = json.loads(path.read_text(encoding="utf-8"))
         with _agents_lock:
             for aid, d in raw.items():
+                if aid in _AGENT_INSTANCES:
+                    continue
                 _AGENT_INSTANCES[aid] = _AgentInstance(
                     agent_id=d["agent_id"],
                     agent_type=d["agent_type"],
                     capabilities=d["capabilities"],
                     status=d.get("status", "idle"),
                     task=d.get("task", ""),
-                    created_at=d.get("created_at", time.time()),
+                    created_at=d.get("created_at", datetime.now(timezone.utc).isoformat()),
                     history=d.get("history", []),
                     last_active_at=d.get("last_active_at", datetime.now(timezone.utc).isoformat()),
                     task_count=d.get("task_count", 0),
                     total_duration_ms=d.get("total_duration_ms", 0),
                 )
-        logger.info("Loaded %d agent instances from %s", len(raw), path)
+        logger.info("Loaded %d agent instances from %s (file fallback)", len(raw), path)
     except FileNotFoundError:
         pass
     except (json.JSONDecodeError, KeyError):
@@ -102,7 +108,6 @@ def _load_agent_instances() -> None:
 
 
 def load_on_startup() -> None:
-    _load_agent_instances()
     restored_from_db = 0
     try:
         db_agents = load_agent_states(status="active")
@@ -118,15 +123,16 @@ def load_on_startup() -> None:
                         capabilities=caps,
                         status=config.get("status", "idle") if isinstance(config, dict) else "idle",
                         task=config.get("task", "") if isinstance(config, dict) else "",
-                        created_at=db_agent.get("created_at", time.time()),
+                        created_at=db_agent.get("created_at", datetime.now(timezone.utc).isoformat()),
                         last_active_at=datetime.now(timezone.utc).isoformat(),
                     )
                     restored_from_db += 1
         if restored_from_db > 0:
             logger.info("Restored %d agent instances from SQLite", restored_from_db)
-            _persist_agent_instances()
     except Exception as exc:
         logger.warning("Failed to restore agent instances from SQLite: %s", exc)
+
+    _load_agent_instances()
 
 
 def _inline_agent_manage(action: str, **kwargs: Any) -> dict[str, Any]:
@@ -210,7 +216,6 @@ def register(mcp: FastMCP) -> None:
                     if len(_AGENT_INSTANCES) >= _MAX_AGENT_INSTANCES:
                         return make_error_response(RuntimeError(f"Agent实例数量已达上限({_MAX_AGENT_INSTANCES})"), error_code=ERR_RATE_LIMIT)
                     _AGENT_INSTANCES[new_id] = instance
-                _persist_agent_instances()
                 try:
                     save_agent_state(
                         agent_id=new_id,
@@ -220,7 +225,8 @@ def register(mcp: FastMCP) -> None:
                         config={"capabilities": caps, "status": "idle", "task": ""},
                     )
                 except Exception:
-                    logger.debug("Failed to persist agent state to SQLite for %s", new_id)
+                    logger.warning("Failed to persist agent state to SQLite for %s", new_id)
+                _persist_agent_instances()
                 return make_success_response({
                     "action": "create",
                     "agent_id": new_id,
@@ -246,8 +252,7 @@ def register(mcp: FastMCP) -> None:
                     inst.task_count += 1
                     inst.last_active_at = datetime.now(timezone.utc).isoformat()
                     inst._task_start = time.time()
-                    inst.history.append({"action": "assign", "task": task, "timestamp": time.time()})
-                _persist_agent_instances()
+                    inst.history.append({"action": "assign", "task": task, "timestamp": datetime.now(timezone.utc).isoformat()})
                 try:
                     save_agent_state(
                         agent_id=agent_id,
@@ -257,7 +262,8 @@ def register(mcp: FastMCP) -> None:
                         config={"capabilities": inst.capabilities, "status": "busy", "task": task},
                     )
                 except Exception:
-                    logger.debug("Failed to update agent state in SQLite for %s", agent_id)
+                    logger.warning("Failed to update agent state in SQLite for %s", agent_id)
+                _persist_agent_instances()
                 return make_success_response({
                     "action": "assign",
                     "agent_id": agent_id,
@@ -282,8 +288,7 @@ def register(mcp: FastMCP) -> None:
                     inst.task = ""
                     inst._task_start = 0
                     inst.last_active_at = datetime.now(timezone.utc).isoformat()
-                    inst.history.append({"action": "release", "task": completed_task, "duration_ms": duration_ms, "timestamp": time.time()})
-                _persist_agent_instances()
+                    inst.history.append({"action": "release", "task": completed_task, "duration_ms": duration_ms, "timestamp": datetime.now(timezone.utc).isoformat()})
                 try:
                     save_agent_state(
                         agent_id=agent_id,
@@ -293,7 +298,8 @@ def register(mcp: FastMCP) -> None:
                         config={"capabilities": inst.capabilities, "status": "idle", "task": ""},
                     )
                 except Exception:
-                    logger.debug("Failed to update agent state in SQLite for %s", agent_id)
+                    logger.warning("Failed to update agent state in SQLite for %s", agent_id)
+                _persist_agent_instances()
                 return make_success_response({
                     "action": "release",
                     "agent_id": agent_id,
@@ -334,11 +340,11 @@ def register(mcp: FastMCP) -> None:
                     inst = _AGENT_INSTANCES.pop(agent_id)
                     if inst.status == "busy" and inst._task_start > 0:
                         inst.total_duration_ms += int((time.time() - inst._task_start) * 1000)
-                _persist_agent_instances()
                 try:
                     delete_agent_state(agent_id)
                 except Exception:
-                    logger.debug("Failed to delete agent state from SQLite for %s", agent_id)
+                    logger.warning("Failed to delete agent state from SQLite for %s", agent_id)
+                _persist_agent_instances()
                 return make_success_response({
                     "action": "destroy",
                     "agent_id": agent_id,

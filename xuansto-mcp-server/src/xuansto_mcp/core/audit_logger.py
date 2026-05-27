@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +23,7 @@ class AuditLogger:
         success: bool,
     ) -> None:
         entry = {
-            "timestamp": time.time(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "tool": tool_name,
             "params_summary": self._summarize_params(params),
             "success": success,

@@ -163,6 +163,25 @@ CREATE TABLE IF NOT EXISTS workflow_states (
     updated_at REAL
 );
 
+CREATE TABLE IF NOT EXISTS decisions (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL DEFAULT '',
+    context TEXT NOT NULL DEFAULT '',
+    decision TEXT NOT NULL DEFAULT '',
+    rationale TEXT NOT NULL DEFAULT '',
+    alternatives TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'proposed',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS decision_tags (
+    decision_id TEXT NOT NULL,
+    tag TEXT NOT NULL,
+    PRIMARY KEY (decision_id, tag),
+    FOREIGN KEY (decision_id) REFERENCES decisions(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER PRIMARY KEY,
     applied_at TEXT DEFAULT (datetime('now')),
@@ -233,6 +252,24 @@ CREATE TABLE IF NOT EXISTS kb_reconciliation_log (
     fixed_count INTEGER DEFAULT 0,
     details TEXT
 );
+
+CREATE TABLE IF NOT EXISTS tool_metrics (
+    tool_name TEXT PRIMARY KEY,
+    call_count INTEGER NOT NULL DEFAULT 0,
+    error_count INTEGER NOT NULL DEFAULT 0,
+    total_duration_ms REAL NOT NULL DEFAULT 0.0,
+    last_called TEXT,
+    data_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE TABLE IF NOT EXISTS degradation_stats (
+    component TEXT PRIMARY KEY,
+    level TEXT NOT NULL DEFAULT '',
+    reason TEXT NOT NULL DEFAULT '',
+    timestamp TEXT,
+    recovery_count INTEGER NOT NULL DEFAULT 0,
+    data_json TEXT NOT NULL DEFAULT '{}'
+);
 """
 
 _CREATE_INDEXES_SQL = """
@@ -270,6 +307,12 @@ CREATE INDEX IF NOT EXISTS idx_version_entry ON version_history(entry_id, versio
 CREATE INDEX IF NOT EXISTS idx_usage_entry ON usage_logs(entry_id);
 CREATE INDEX IF NOT EXISTS idx_usage_agent ON usage_logs(agent_role);
 CREATE INDEX IF NOT EXISTS idx_usage_timestamp ON usage_logs(timestamp);
+CREATE INDEX IF NOT EXISTS idx_decisions_status ON decisions(status);
+CREATE INDEX IF NOT EXISTS idx_decisions_created_at ON decisions(created_at);
+CREATE INDEX IF NOT EXISTS idx_decision_tags_tag ON decision_tags(tag);
+CREATE INDEX IF NOT EXISTS idx_tool_metrics_call_count ON tool_metrics(call_count);
+CREATE INDEX IF NOT EXISTS idx_tool_metrics_last_called ON tool_metrics(last_called);
+CREATE INDEX IF NOT EXISTS idx_degradation_stats_level ON degradation_stats(level);
 """
 
 _FTS5_SQL = """
@@ -298,6 +341,33 @@ CREATE TRIGGER IF NOT EXISTS knowledge_entries_au AFTER UPDATE ON knowledge_entr
     VALUES ('delete', old.rowid, old.id, old.summary, old.type, old.category);
     INSERT INTO knowledge_fts(rowid, id, summary, type, category)
     VALUES (new.rowid, new.id, new.summary, new.type, new.category);
+END;
+
+CREATE VIRTUAL TABLE IF NOT EXISTS decisions_fts USING fts5(
+    id UNINDEXED,
+    title,
+    context,
+    decision,
+    content='decisions',
+    content_rowid='rowid',
+    tokenize='unicode61'
+);
+
+CREATE TRIGGER IF NOT EXISTS decisions_fts_ai AFTER INSERT ON decisions BEGIN
+    INSERT INTO decisions_fts(rowid, id, title, context, decision)
+    VALUES (new.rowid, new.id, new.title, new.context, new.decision);
+END;
+
+CREATE TRIGGER IF NOT EXISTS decisions_fts_ad AFTER DELETE ON decisions BEGIN
+    INSERT INTO decisions_fts(decisions_fts, rowid, id, title, context, decision)
+    VALUES ('delete', old.rowid, old.id, old.title, old.context, old.decision);
+END;
+
+CREATE TRIGGER IF NOT EXISTS decisions_fts_au AFTER UPDATE ON decisions BEGIN
+    INSERT INTO decisions_fts(decisions_fts, rowid, id, title, context, decision)
+    VALUES ('delete', old.rowid, old.id, old.title, old.context, old.decision);
+    INSERT INTO decisions_fts(rowid, id, title, context, decision)
+    VALUES (new.rowid, new.id, new.title, new.context, new.decision);
 END;
 """
 
@@ -356,6 +426,50 @@ def _copy_v13_legacy_data(conn: sqlite3.Connection) -> None:
         logger.warning("v13 migration: legacy data copy failed: %s", exc)
 
 
+def _migrate_legacy_databases(conn: sqlite3.Connection) -> None:
+    decisions_db_path = WORK_DIR / "decisions.db"
+    if decisions_db_path.exists() and not (WORK_DIR / "decisions.db.bak").exists():
+        try:
+            conn.execute(f"ATTACH DATABASE ? AS decisions_db", (str(decisions_db_path),))
+            cur = conn.execute("SELECT name FROM decisions_db.sqlite_master WHERE type='table' AND name='decisions'")
+            if cur.fetchone() is not None:
+                conn.execute("""
+                    INSERT OR IGNORE INTO decisions (id, title, context, decision, rationale, alternatives, status, created_at, updated_at)
+                    SELECT id, title, context, decision, rationale, alternatives, status, created_at, updated_at
+                    FROM decisions_db.decisions
+                """)
+                migrated = conn.total_changes
+                logger.info("Migrated decisions from legacy decisions.db (total_changes=%d)", migrated)
+            conn.execute("DETACH DATABASE decisions_db")
+            decisions_db_path.rename(WORK_DIR / "decisions.db.bak")
+            logger.info("Renamed legacy decisions.db to decisions.db.bak")
+        except Exception as exc:
+            logger.warning("Failed to migrate legacy decisions.db: %s", exc)
+            with contextlib.suppress(Exception):
+                conn.execute("DETACH DATABASE decisions_db")
+
+    knowledge_db_path = KNOWLEDGE_DIR / "index" / "knowledge.db"
+    if knowledge_db_path.exists() and not (KNOWLEDGE_DIR / "index" / "knowledge.db.bak").exists():
+        try:
+            conn.execute(f"ATTACH DATABASE ? AS knowledge_db", (str(knowledge_db_path),))
+            cur = conn.execute("SELECT name FROM knowledge_db.sqlite_master WHERE type='table' AND name='knowledge_entries'")
+            if cur.fetchone() is not None:
+                conn.execute("""
+                    INSERT OR IGNORE INTO knowledge_entries (id, title, content, type, metadata_json, created_at, updated_at)
+                    SELECT id, title, content, type, metadata_json, created_at, updated_at
+                    FROM knowledge_db.knowledge_entries
+                """)
+                migrated = conn.total_changes
+                logger.info("Migrated knowledge_entries from legacy knowledge.db (total_changes=%d)", migrated)
+            conn.execute("DETACH DATABASE knowledge_db")
+            knowledge_db_path.rename(KNOWLEDGE_DIR / "index" / "knowledge.db.bak")
+            logger.info("Renamed legacy knowledge.db to knowledge.db.bak")
+        except Exception as exc:
+            logger.warning("Failed to migrate legacy knowledge.db: %s", exc)
+            with contextlib.suppress(Exception):
+                conn.execute("DETACH DATABASE knowledge_db")
+
+
 def get_db() -> sqlite3.Connection:
     WORK_DIR.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(DB_PATH))
@@ -373,11 +487,13 @@ def init_db() -> None:
         try:
             _run_v13_migration(conn)
             conn.executescript(_CREATE_TABLES_SQL)
+            _migrate_legacy_databases(conn)
             _copy_v13_legacy_data(conn)
             if is_fts5_available():
                 with contextlib.suppress(Exception):
                     conn.executescript(_FTS5_SQL)
                     conn.execute("INSERT INTO knowledge_fts(knowledge_fts) VALUES ('rebuild')")
+                    conn.execute("INSERT INTO decisions_fts(decisions_fts) VALUES ('rebuild')")
             conn.executescript(_CREATE_INDEXES_SQL)
             with contextlib.suppress(Exception):
                 conn.execute("ALTER TABLE knowledge_entries ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'ready'")
@@ -415,7 +531,8 @@ def persist_state(table: str, data: dict[str, Any]) -> None:
         "token_budget_states", "experience_patterns",
         "schema_version", "knowledge_tags", "dedup_log",
         "version_history", "usage_logs", "backup_history",
-        "kb_reconciliation_log",
+        "kb_reconciliation_log", "decisions", "decision_tags",
+        "tool_metrics", "degradation_stats",
     }
     _AUTO_INCREMENT_TABLES = {
         "metrics", "reconciliation_log", "dedup_log",
@@ -485,7 +602,8 @@ def load_state(table: str, query: dict[str, Any] | None = None) -> list[dict[str
         "token_budget_states", "experience_patterns",
         "schema_version", "knowledge_tags", "dedup_log",
         "version_history", "usage_logs", "backup_history",
-        "kb_reconciliation_log",
+        "kb_reconciliation_log", "decisions", "decision_tags",
+        "tool_metrics", "degradation_stats",
     }
     if table not in _VALID_TABLES:
         logger.warning("Attempted to load from invalid table: %s", table)
@@ -864,7 +982,7 @@ def save_agent_state(
     status: str = "active",
     config: dict[str, Any] | None = None,
 ) -> None:
-    now = time.time()
+    now = datetime.now(timezone.utc).isoformat()
     config_json = json.dumps(config, ensure_ascii=False) if config else None
     with _db_lock:
         conn = get_db()
@@ -940,7 +1058,7 @@ def save_workflow_state(
     decisions: dict[str, Any] | None = None,
     status: str = "active",
 ) -> None:
-    now = time.time()
+    now = datetime.now(timezone.utc).isoformat()
     completed_phases_json = json.dumps(completed_phases, ensure_ascii=False) if completed_phases is not None else None
     tasks_json = json.dumps(tasks, ensure_ascii=False) if tasks is not None else None
     decisions_json = json.dumps(decisions, ensure_ascii=False) if decisions is not None else None

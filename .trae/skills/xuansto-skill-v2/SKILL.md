@@ -1,6 +1,6 @@
 ---
 name: xuansto-skill-v2
-version: 8.5.0
+version: 9.0.0
 description: |
   多Agent自主开发编排引擎，通过xuansto-mcp-server的20个MCP原子工具驱动9阶段全生命周期开发流程。务必在以下场景使用本技能：用户要求从零搭建项目、端到端开发功能、TDD/SDD驱动开发、多步骤结构化任务、代码审查+安全审计、规格驱动开发、桌面应用构建，即使用户没有明确说出"多Agent"或"全流程"。支持57个Agent/13层编排、54项质量门禁、32个命令，MCP工具优先不可用时自动降级到脚本调用。
 agents_summary: "13 layers / 57 agents (via MCP v2)"
@@ -20,7 +20,7 @@ license: MIT
 
 <!-- PHASE_0_START -->
 
-# Xuansto Skill v8.5.0 (MCP Edition)
+# Xuansto Skill v8.7.0-dev (MCP Edition)
 
 > 57 Agents/13层 | 54 Gates | 32 Cmds | 9 Phase | 20 MCP工具驱动
 
@@ -43,7 +43,7 @@ license: MIT
 ## MCP依赖
 
 最低兼容: xuansto-mcp-server >= 4.0.0 | API版本: 3.0.0
-MCP不可用时自动降级到 scripts/ 目录Python脚本，详见 {{include:constraints.yaml}}
+MCP不可用时自动降级到 scripts/ 目录Python脚本，核心约束见 xuansto://config/constraints
 
 ## 核心约束
 
@@ -118,6 +118,8 @@ MCP不可用时自动降级到 scripts/ 目录Python脚本，详见 {{include:co
 
 ## 核心Agent索引（编排+产品+工程层）
 
+> ⚠️ **DEPRECATED**: Inline agent definitions in SKILL.md are deprecated. Use MCP Resource `xuansto://agents/list` and `xuansto://agents/{name}` for agent discovery and details. The inline table below is kept for backward compatibility only.
+
 | 层级 | Agent | Phase | 模型路由 |
 |------|-------|-------|----------|
 | 编排 | Orchestrator | 0,1,2 | deep |
@@ -138,125 +140,28 @@ MCP不可用时自动降级到 scripts/ 目录Python脚本，详见 {{include:co
 
 <!-- PHASE_2_START -->
 
-## 完整命令路由表
+## MCP Resource URI 索引
 
-{{include:commands/routes.yaml}}
+| 数据 | MCP Resource URI | 加载阶段 |
+|------|-----------------|----------|
+| 命令路由表 | xuansto://commands/routes | Phase 2+ |
+| Agent注册表 | xuansto://agents/registry | Phase 2+ |
+| 技能配置 | xuansto://config/skill | Phase 1+ |
+| 质量门禁定义 | xuansto://gates/definitions | Phase 2+ |
+| 工作流定义 | xuansto://workflows/definitions | Phase 2+ |
+| Hook定义 | xuansto://hooks/definitions | Phase 3+ |
+| 加载状态 | xuansto://loading/status | Phase 1+ |
+| 知识库统计 | xuansto://knowledge/stats | Phase 2+ |
+| 核心约束 | xuansto://config/constraints | Phase 0+ |
 
-## 完整Agent注册表
-
-{{include:agents/registry.yaml}}
-
-## 外部参考文件
-
-### 配置文件（{{include:}}内联加载）
-
-| 文件 | 内容 |
-|------|------|
-| {{include:triggers.yaml}} | 触发条件完整定义 |
-| {{include:constraints.yaml}} | 核心约束与降级规则 |
-| {{include:commands/routes.yaml}} | 完整命令路由表(含降级策略) |
-| {{include:agents/registry.yaml}} | 完整Agent角色索引(13层57个) |
-
-### 核心参考文档索引
-
-| 文档 | 路径 | 内容摘要 |
-|------|------|----------|
-| 质量门禁 | references/quality-gates.md | 54项质量门禁详细定义与判定标准 |
-| Agent注册表 | references/agent-registry.md | 完整Agent注册表(57个Agent/13层)与角色详情 |
-| MCP工具 | references/mcp-tools.md | 20个MCP工具完整参数与返回值 |
-| 工作流 | references/workflows.md | 9阶段工作流目标、步骤、门禁和命令路由详情 |
-| 约束规则 | {{include:constraints.yaml}} | 核心约束与降级规则 |
-
-### 核心工作流参考（P0 — Phase 0+加载）
-
-| 文件 | 内容 |
-|------|------|
-| references/mcp-tools.md | 20个MCP工具完整参数与返回值 |
-| references/workflow-phases.md | 9阶段工作流目标、步骤、门禁和命令路由详情 |
-| references/quality-gates.md | 54项质量门禁详细定义与判定标准 |
-| references/agent-registry.md | 完整Agent注册表(57个Agent/13层)与角色详情 |
-| references/progressive-loading.md | 渐进式加载策略、Phase映射与资源预算 |
-
-### 集成与基础设施参考（P1 — Phase 2+加载）
-
-| 文件 | 内容 |
-|------|------|
-| references/mcp-integration-strategy.md | MCP集成策略：上下文预算、懒加载、降级链、健康检查 |
-| references/session-persistence.md | 会话持久化、状态恢复与跨会话连续性 |
-| references/token-optimization.md | Token优化策略、上下文压缩与预算管理 |
-| references/hook-system.md | Hook系统完整定义：三级配置与事件触发 |
-| references/model-routing.md | 模型路由规则：fast/standard/deep分配策略 |
-
-### 工作流与质量参考（P1 — Phase 2+加载）
-
-| 文件 | 内容 |
-|------|------|
-| references/workflow-checkpoints.md | 工作流检查点、Phase转换规则与回退策略 |
-| references/spec-drift-handling.md | 规格偏差检测、处理策略与对齐流程 |
-| references/agent-lifecycle.md | Agent生命周期管理：激活、协作、降级与回收 |
-| references/knowledge-workflow-details.md | 知识工作流：检索、注入、沉淀与跨分支同步 |
-| references/collaboration-modes.md | 协作模式定义：人机协作断点与决策仲裁 |
-| references/iteration-scheduling.md | 智能迭代调度：优先级矩阵、增量验证与收敛判定 |
-
-### 并行与优化参考（P2 — Phase 3+加载）
-
-| 文件 | 内容 |
-|------|------|
-| references/parallelization-strategy.md | 并行化策略：Git Worktree、Fork对话与冲突解决 |
-| references/concurrency-standards.md | 并发编码标准：线程安全、锁策略与竞态防护 |
-
-## MCP工具摘要
-
-| 工具 | 功能 | 关键参数 |
-|------|------|----------|
-| skill_analyze | 项目结构分析 | skill_path, depth |
-| knowledge_search | 三层知识库检索 | action, query, top_k, search_type |
-| knowledge_inject | 知识注入到上下文 | action, content, scope |
-| quality_gate_check | 54项质量门禁 | gate_ids, phase, project_path |
-| spec_drift_detect | 规格偏差检测 | spec_dir, src_dir |
-| security_scan | OWASP+依赖扫描 | target, severity_threshold |
-| code_simplify | 代码简化分析 | target, scope, include_dedup |
-| session_manage | 会话状态管理 | action, completed_tasks, decisions |
-| workflow_dispatch | 工作流调度 | action, workflow, project_path |
-| agent_status | Agent状态查询 | action, phase, agent_name |
-| agent_manage | Agent实例管理 | action, agent_type, agent_id |
-| hook_manage | Hook管理 | action, profile, hook_name |
-| resource_load_status | 渐进式加载状态 | action, phase, resource_ids |
-| context_compress | 上下文压缩 | content, strategy, target_tokens |
-| server_health | 服务器健康检查 | action, include_details |
-| decision_log | 决策日志管理 | action, title, decision |
-| token_budget | Token预算管理 | action, total_budget |
-| project_init | 项目初始化 | action, name, stack |
-| metrics_report | 指标报告 | action, tool_name, time_range |
-| config_manage | 配置管理 | action, config_key, config_value |
+完整命令路由见 xuansto://commands/routes | 完整Agent注册表(57个/13层)见 xuansto://agents/registry | 核心约束见 xuansto://config/constraints | 质量门禁完整列表见 xuansto://gates/definitions | 工作流阶段定义见 xuansto://workflows/definitions | MCP工具完整参数见 xuansto://config/skill
 
 <!-- PHASE_2_END -->
 
 <!-- PHASE_3_START -->
 
-## Hook系统说明
+Hook系统定义见 xuansto://hooks/definitions | 模型路由规则见 xuansto://config/skill | 并行化策略见 xuansto://workflows/definitions
 
-三级配置: minimal(仅security-block) → standard(+encoding-check, token-guard) → full(+session-persist, spec-drift-guard, quality-enforce)
-
-关键Hook:
-- **PhaseEnter**: Phase转换时触发，执行门禁预检
-- **PreCommit**: Git提交前触发，执行编码检查和格式验证
-- **PostTest**: 测试完成后触发，执行覆盖率检查和规格偏差检测
-- **SecurityBlock**: 安全阻断，检测敏感信息和危险操作
-
-## 模型路由说明
-
-| 路由 | 模型 | 适用场景 |
-|------|------|----------|
-| fast | 轻量模型 | 简单查询、格式化、快速响应 |
-| standard | 标准模型 | 常规开发任务、代码生成、测试编写 |
-| deep | 深度模型 | 架构设计、复杂分析、安全审计、决策仲裁 |
-
-路由规则: Orchestrator/System Architect → deep; 编排/产品层核心 → standard; 简单查询 → fast
-
-## 关键规则
-
-2-Action Research | 3-Strike Error | Chesterton's Fence | Loop Enforcement | Confidence≥80 | 三级仲裁(L1技术→L2策略ADR→L3安全人工)
-UTF-8无BOM+LF | Python优先 | 业务注释中文 | Git:`<类型>(<范围>): <中文描述>` | 禁止Shell(.sh) | 五步闭环
+关键规则: 2-Action Research | 3-Strike Error | Chesterton's Fence | Loop Enforcement | Confidence≥80 | 三级仲裁(L1技术→L2策略ADR→L3安全人工) | UTF-8无BOM+LF | Python优先 | 业务注释中文 | Git:`<类型>(<范围>): <中文描述>` | 禁止Shell(.sh) | 五步闭环
 
 <!-- PHASE_3_END -->

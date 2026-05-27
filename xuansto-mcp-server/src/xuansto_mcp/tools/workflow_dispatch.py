@@ -18,7 +18,7 @@ from mcp.types import ToolAnnotations
 
 from ..core import atomic_write
 from ..core.config import QUALITY_GATES_PHASE_MAP, WORK_DIR, WORKFLOWS_DIR, _resolve_skill_file
-from ..core.database import delete_workflow_state, load_workflow_states, save_workflow_state
+from ..core.database import delete_workflow_state, load_state, load_workflow_states, persist_state, save_workflow_state
 from ..core.errors import (
     ERR_INTERNAL,
     ERR_NOT_FOUND,
@@ -30,7 +30,7 @@ from ..core.errors import (
 )
 from ..core.logging_config import get_logger
 from ..core.notifications import notify
-from ..core.validator import validate_input
+from ..core.validator import validate_input, validate_path_safety
 from ..models.schemas import WorkflowDispatchInput
 from .quality_gate_check import INLINE_CHECKS
 
@@ -38,6 +38,8 @@ logger = get_logger("workflow_dispatch")
 
 _DEFAULT_MAX_SNAPSHOTS_PER_WORKFLOW = 20
 _DEFAULT_SNAPSHOT_TTL_DAYS = 30
+
+_file_backup_enabled: bool = False
 
 _SNAPSHOT_CLEANUP_CONFIG: dict[str, Any] = {}
 
@@ -79,15 +81,63 @@ def _get_workflows_dir() -> Path:
     d.mkdir(parents=True, exist_ok=True)
     return d
 
+def _persist_workflow_to_sqlite(workflow_id: str, data: dict[str, Any]) -> None:
+    core_data = {k: v for k, v in data.items() if k not in ("_timestamp", "_hash")}
+    try:
+        persist_state("workflow_instances", {
+            "id": workflow_id,
+            "workflow_type": core_data.get("workflow", ""),
+            "current_phase": core_data.get("current_phase", 0),
+            "status": core_data.get("status", "running"),
+            "data_json": core_data,
+        })
+    except Exception as exc:
+        logger.warning("Failed to persist workflow %s to SQLite: %s", workflow_id, exc)
+
+def _load_workflow_from_sqlite(workflow_id: str) -> dict[str, Any] | None:
+    try:
+        results = load_state("workflow_instances", {"id": workflow_id})
+        if results:
+            row = results[0]
+            data_json = row.get("data_json", {})
+            if isinstance(data_json, str):
+                data_json = json.loads(data_json)
+            if data_json:
+                return data_json
+    except Exception:
+        pass
+    return None
+
+def _load_all_workflows_from_sqlite() -> dict[str, dict[str, Any]]:
+    result: dict[str, dict[str, Any]] = {}
+    try:
+        rows = load_state("workflow_instances")
+        for row in rows:
+            data_json = row.get("data_json", {})
+            if isinstance(data_json, str):
+                data_json = json.loads(data_json)
+            if data_json:
+                wid = data_json.get("workflow_id", row.get("id", ""))
+                if wid:
+                    result[wid] = data_json
+    except Exception:
+        pass
+    return result
+
 def _persist_workflow(workflow_id: str, data: dict[str, Any]) -> None:
+    if not _file_backup_enabled:
+        return
     core_data = {k: v for k, v in data.items() if k not in ("_timestamp", "_hash")}
     payload = dict(core_data)
-    payload["_timestamp"] = time.time()
+    payload["_timestamp"] = datetime.now(timezone.utc).isoformat()
     payload["_hash"] = hashlib.sha256(json.dumps(core_data, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
     path = _get_workflows_dir() / f"{workflow_id}.json"
     atomic_write(path, json.dumps(payload, ensure_ascii=False, indent=2))
 
 def _load_workflow(workflow_id: str) -> dict[str, Any] | None:
+    sqlite_data = _load_workflow_from_sqlite(workflow_id)
+    if sqlite_data is not None:
+        return sqlite_data
     path = _get_workflows_dir() / f"{workflow_id}.json"
     if not path.exists():
         return None
@@ -107,24 +157,27 @@ def _load_workflow(workflow_id: str) -> dict[str, Any] | None:
         return None
 
 def _load_all_workflows() -> dict[str, dict[str, Any]]:
-    result: dict[str, dict[str, Any]] = {}
+    result = _load_all_workflows_from_sqlite()
     for f in _get_workflows_dir().glob("*.json"):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
             wid = data.get("workflow_id", f.stem)
-            result[wid] = data
+            if wid not in result:
+                result[wid] = data
         except Exception:
             continue
     return result
 
 def _persist_active_workflows() -> None:
+    if not _file_backup_enabled:
+        return
     persist_dir = WORK_DIR
     persist_dir.mkdir(parents=True, exist_ok=True)
     with _workflows_lock:
         snapshot = dict(_ACTIVE_WORKFLOWS)
     core_data = {k: v for k, v in snapshot.items() if k not in ("_timestamp", "_hash")}
     payload = dict(core_data)
-    payload["_timestamp"] = time.time()
+    payload["_timestamp"] = datetime.now(timezone.utc).isoformat()
     payload["_hash"] = hashlib.sha256(json.dumps(core_data, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
     path = persist_dir / "workflow_states.json"
     atomic_write(path, json.dumps(payload, ensure_ascii=False, indent=2))
@@ -152,33 +205,18 @@ def _load_active_workflows() -> None:
         logger.warning("Failed to parse workflow states from %s", path)
 
 def load_on_startup() -> None:
-    workflows_dir = _get_workflows_dir()
-    recovered = 0
-    skipped_aborted = 0
-    skipped_corrupt = 0
-    entries: dict[str, dict[str, Any]] = {}
-    for f in workflows_dir.glob("*.json"):
-        try:
-            data = json.loads(f.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError) as exc:
-            skipped_corrupt += 1
-            logger.warning("Skipping corrupt workflow file %s: %s", f.name, exc)
-            continue
-        wid = data.get("workflow_id", f.stem)
-        status = data.get("status", "")
-        if status == "aborted":
-            skipped_aborted += 1
-            logger.debug("Skipping aborted workflow %s from %s", wid, f.name)
-            continue
-        entries[wid] = data
-        recovered += 1
+    sqlite_workflows = _load_all_workflows_from_sqlite()
+    restored_from_sqlite = 0
     with _workflows_lock:
-        _ACTIVE_WORKFLOWS.update(entries)
-    logger.info(
-        "Startup recovery: %d workflows restored, %d aborted skipped, %d corrupt skipped",
-        recovered, skipped_aborted, skipped_corrupt,
-    )
-    _persist_active_workflows()
+        for wid, data in sqlite_workflows.items():
+            status = data.get("status", "")
+            if status == "aborted":
+                continue
+            if wid not in _ACTIVE_WORKFLOWS:
+                _ACTIVE_WORKFLOWS[wid] = data
+                restored_from_sqlite += 1
+    if restored_from_sqlite > 0:
+        logger.info("Restored %d workflow instances from SQLite (workflow_instances)", restored_from_sqlite)
 
     restored_from_db = 0
     try:
@@ -198,10 +236,36 @@ def load_on_startup() -> None:
                     _ACTIVE_WORKFLOWS[wid] = entry
                     restored_from_db += 1
         if restored_from_db > 0:
-            logger.info("Restored %d workflow instances from SQLite", restored_from_db)
-            _persist_active_workflows()
+            logger.info("Restored %d workflow instances from SQLite (workflow_states)", restored_from_db)
     except Exception as exc:
         logger.warning("Failed to restore workflow instances from SQLite: %s", exc)
+
+    workflows_dir = _get_workflows_dir()
+    recovered_from_file = 0
+    skipped_aborted = 0
+    skipped_corrupt = 0
+    for f in workflows_dir.glob("*.json"):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as exc:
+            skipped_corrupt += 1
+            logger.warning("Skipping corrupt workflow file %s: %s", f.name, exc)
+            continue
+        wid = data.get("workflow_id", f.stem)
+        status = data.get("status", "")
+        if status == "aborted":
+            skipped_aborted += 1
+            continue
+        with _workflows_lock:
+            if wid not in _ACTIVE_WORKFLOWS:
+                _ACTIVE_WORKFLOWS[wid] = data
+                recovered_from_file += 1
+    if recovered_from_file > 0 or skipped_aborted > 0 or skipped_corrupt > 0:
+        logger.info(
+            "Startup file fallback: %d recovered, %d aborted skipped, %d corrupt skipped",
+            recovered_from_file, skipped_aborted, skipped_corrupt,
+        )
+    _persist_active_workflows()
 
 def _list_workflows() -> list[dict[str, Any]]:
     if not WORKFLOWS_DIR.exists():
@@ -250,6 +314,7 @@ def _start_workflow(workflow: str, project_path: str) -> dict[str, Any]:
         entry["phase_definitions"] = definition["phases"]
     with _workflows_lock:
         _ACTIVE_WORKFLOWS[workflow_id] = entry
+    _persist_workflow_to_sqlite(workflow_id, entry)
     _persist_workflow(workflow_id, entry)
     _persist_active_workflows()
     try:
@@ -287,6 +352,7 @@ def _abort_workflow(workflow_id: str) -> dict[str, Any]:
         entry = _ACTIVE_WORKFLOWS.pop(workflow_id)
     entry["status"] = "aborted"
     entry["aborted_at"] = datetime.now(timezone.utc).isoformat()
+    _persist_workflow_to_sqlite(workflow_id, entry)
     _persist_workflow(workflow_id, entry)
     _persist_active_workflows()
     try:
@@ -380,6 +446,7 @@ def _advance_phase(workflow_id: str) -> dict[str, Any]:
         if new_phase > 8:
             state["status"] = "completed"
             state["completed_at"] = datetime.now(timezone.utc).isoformat()
+        _persist_workflow_to_sqlite(workflow_id, state)
         _persist_workflow(workflow_id, state)
         with _workflows_lock:
             if workflow_id in _ACTIVE_WORKFLOWS:
@@ -444,15 +511,15 @@ def _save_snapshot(workflow_id: str, state: dict[str, Any], project_path: str) -
     snapshot_dir = _get_snapshot_dir(project_path)
     snapshot_dir.mkdir(parents=True, exist_ok=True)
     phase = state.get("current_phase", 0)
-    now = time.time()
-    timestamp = int(now)
+    now_dt = datetime.now(timezone.utc)
+    timestamp = int(now_dt.timestamp())
     filename = f"{workflow_id}_phase{phase}_{timestamp}.json"
     snapshot_path = snapshot_dir / filename
     snapshot_data = {
         "workflow_id": workflow_id,
         "phase": phase,
-        "timestamp": now,
-        "time_iso": datetime.fromtimestamp(now, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "timestamp": now_dt.isoformat(),
+        "time_iso": now_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "state": state,
     }
     gz_path = snapshot_path.with_suffix(".json.gz")
@@ -619,11 +686,15 @@ def register(mcp: FastMCP) -> None:
         phase_action: str | None = None,
         snapshot_phase: int | None = None,
     ) -> dict[str, Any]:
-        """工作流调度：启动/查询/中止/阶段推进工作流执行。支持sdd-tdd-full/medium/fast等15种工作流，返回工作流实例ID和当前状态。"""
+        """工作流调度：启动/查询/中止/阶段推进工作流执行。支持sdd-tdd-full/medium/fast等15种工作流，返回工作流实例ID和当前状态。Prefer using Resource xuansto://workflows/list for read-only access."""
         validated, err = validate_input(WorkflowDispatchInput, action=action, workflow=workflow, project_path=project_path, workflow_id=workflow_id, phase_action=phase_action, snapshot_phase=snapshot_phase)
         if err:
             return err
         logger.info("workflow_dispatch called: action=%s", action)
+        if project_path and project_path != ".":
+            safe_path, path_err = validate_path_safety(project_path, allow_absolute=True)
+            if path_err:
+                return make_error_response(ValueError(path_err), error_code=ERR_VALIDATION)
         try:
             if action == "start":
                 if not workflow:
@@ -679,6 +750,7 @@ def register(mcp: FastMCP) -> None:
                 with _workflows_lock:
                     if workflow_id and workflow_id in _ACTIVE_WORKFLOWS:
                         _ACTIVE_WORKFLOWS[workflow_id] = state.copy()
+                _persist_workflow_to_sqlite(workflow_id, state.copy())
                 _persist_workflow(workflow_id, state.copy())
                 _persist_active_workflows()
                 return make_success_response({

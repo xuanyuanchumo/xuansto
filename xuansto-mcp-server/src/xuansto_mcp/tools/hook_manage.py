@@ -24,6 +24,7 @@ from mcp.types import ToolAnnotations
 
 from ..core.config import HOOK_SCRIPTS_MAP, SCRIPTS_DIR
 from ..core.errors import ERR_INTERNAL, ERR_VALIDATION, make_error_response, make_success_response
+from ..core.hook_engine import get_hook_timeout
 from ..core.logging_config import get_logger
 from ..core.subprocess_utils import run_script
 from ..core.validator import validate_input
@@ -35,6 +36,13 @@ HOOK_PROFILES = {
     "minimal": ["security-block", "session-save"],
     "standard": ["security-block", "token-budget-check", "auto-format", "encoding-check", "load-context", "kb-health-check", "session-save", "git-status-check", "experience-precipitate", "save-state"],
     "strict": list(HOOK_SCRIPTS_MAP.keys()),
+}
+
+PHASE_HOOK_PROFILE_MAP: dict[int, str] = {
+    0: "minimal",
+    1: "standard",
+    2: "standard",
+    3: "strict",
 }
 
 _DANGEROUS_PATTERNS = [
@@ -405,8 +413,8 @@ def _session_save_logic(project_path: str, context: dict[str, Any] | None = None
         logs_dir.mkdir(parents=True, exist_ok=True)
     except OSError:
         return {"status": "warn", "message": "无法创建会话日志目录", "details": {}}
-    from datetime import datetime
-    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    from datetime import datetime, timezone
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     session_file = logs_dir / f"session-{ts}.md"
     tasks = context.get("completed_tasks", []) if context else []
     decisions = context.get("decisions", []) if context else []
@@ -505,9 +513,10 @@ def register(mcp: FastMCP) -> None:
         profile: str = "standard",
         hook_name: str | None = None,
         context: dict[str, Any] | None = None,
+        phase: int | None = None,
     ) -> dict[str, Any]:
-        """Hook管理：列出指定profile的Hook配置，执行指定Hook。支持minimal/standard/strict三种配置级别，16个Hook。"""
-        validated, err = validate_input(HookManageInput, action=action, profile=profile, hook_name=hook_name, context=context)
+        """Hook管理：列出指定profile的Hook配置，执行指定Hook，查询Phase对应的活跃Hook Profile。支持minimal/standard/strict三种配置级别，16个Hook。"""
+        validated, err = validate_input(HookManageInput, action=action, profile=profile, hook_name=hook_name, context=context, phase=phase)
         if err:
             return err
         logger.info("hook_manage called: action=%s hook_name=%s", action, hook_name)
@@ -521,7 +530,14 @@ def register(mcp: FastMCP) -> None:
                     script = HOOK_SCRIPTS_MAP.get(h)
                     has_inline = h in INLINE_HOOK_LOGIC
                     result.append({"name": h, "has_script": script is not None, "script": script, "has_inline_logic": has_inline})
-                return make_success_response({"profile": profile, "hooks": result, "total": len(result)})
+                try:
+                    from .resource_load_status import _current_phase, _phase_lock
+                    with _phase_lock:
+                        current_phase_val = _current_phase
+                    active_profile = PHASE_HOOK_PROFILE_MAP.get(current_phase_val, "standard")
+                except Exception:
+                    active_profile = "standard"
+                return make_success_response({"profile": profile, "hooks": result, "total": len(result), "active_profile": active_profile})
             elif action == "execute":
                 if not hook_name:
                     return make_error_response(ValueError("execute操作需要hook_name参数"), error_code=ERR_VALIDATION)
@@ -538,7 +554,7 @@ def register(mcp: FastMCP) -> None:
                     args = []
                     if context:
                         args.extend(["--context", json.dumps(context, ensure_ascii=False)])
-                    script_result = await run_script(script_path, args=args, timeout=30)
+                    script_result = await run_script(script_path, args=args, timeout=get_hook_timeout(hook_name))
                     if script_result.get("error"):
                         error_info = script_result["error"]
                         return make_error_response(Exception(error_info.get("message", "脚本执行失败")), error_code=ERR_INTERNAL)
@@ -549,8 +565,26 @@ def register(mcp: FastMCP) -> None:
                     inline_result = await asyncio.to_thread(inline_fn, project_path, context)
                     return make_success_response({"hook": hook_name, "status": inline_result["status"], "message": inline_result["message"], "details": inline_result["details"], "source": "inline"})
                 return make_success_response({"hook": hook_name, "status": "skipped", "reason": "无对应脚本或内联逻辑，需手动执行"})
+            elif action == "get_active_profile":
+                if phase is None:
+                    try:
+                        from .resource_load_status import _current_phase, _phase_lock
+                        with _phase_lock:
+                            phase = _current_phase
+                    except Exception:
+                        phase = 0
+                if phase < 0 or phase > 3:
+                    return make_error_response(ValueError(f"无效phase: {phase}，支持0-3"), error_code=ERR_VALIDATION)
+                active_profile = PHASE_HOOK_PROFILE_MAP.get(phase, "standard")
+                hooks = HOOK_PROFILES.get(active_profile, [])
+                return make_success_response({
+                    "phase": phase,
+                    "active_profile": active_profile,
+                    "hooks": hooks,
+                    "hook_count": len(hooks),
+                })
             else:
-                return make_error_response(ValueError(f"未知操作: {action}，支持: list, execute"), error_code=ERR_VALIDATION)
+                return make_error_response(ValueError(f"未知操作: {action}，支持: list, execute, get_active_profile"), error_code=ERR_VALIDATION)
         except Exception as e:
             logger.error("hook_manage error: %s", e)
             return make_error_response(e)

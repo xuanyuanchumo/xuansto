@@ -244,7 +244,7 @@ def register(mcp: FastMCP) -> None:
         capabilities: list[str] | None = None,
         project_file_count: int | None = None,
     ) -> dict[str, Any]:
-        """Agent状态查询：列出全部57个Agent、按Phase查询活跃Agent、查询单个Agent详情、按能力匹配Agent、合并Agent(小项目自动从57合并到~20)。返回Agent名称、层级和匹配状态。"""
+        """Agent状态查询：列出全部57个Agent、按Phase查询活跃Agent、查询单个Agent详情、按能力匹配Agent、合并Agent(小项目自动从57合并到~20)。返回Agent名称、层级和匹配状态。Prefer using Resource xuansto://agents/list for read-only access."""
         validated, err = validate_input(AgentStatusInput, action=action, phase=phase, agent_name=agent_name, capabilities=capabilities, project_file_count=project_file_count)
         if err:
             return err
