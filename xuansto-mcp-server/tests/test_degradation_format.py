@@ -24,6 +24,7 @@ from xuansto_mcp.core.degradation import (
     context_compress_fallback,
     server_health_fallback,
 )
+from xuansto_mcp.core.errors import ERR_INTERNAL
 
 SCRIPT_OK = {"error": False, "data": {"result": "mock"}}
 SCRIPT_ERR = {"error": True, "code": "SCRIPT_NOT_FOUND", "message": "脚本不存在", "fallback": True}
@@ -66,7 +67,7 @@ class TestHelperFunctions:
     def test_fallback_error_format(self):
         result = _fallback_error("test_tool", "ERR_CODE", "错误消息")
         assert result["error"] is True
-        assert result["code"] == "ERR_CODE"
+        assert result.get("error_code") == ERR_INTERNAL
         assert result["message"] == "错误消息"
         assert result["details"]["tool"] == "test_tool"
         assert result["details"]["source"] == "fallback"
@@ -83,7 +84,7 @@ class TestHelperFunctions:
         raw = {"error": True, "code": "TIMEOUT", "message": "超时", "fallback": True}
         result = _standardize_result(raw, "my_tool")
         assert result["error"] is True
-        assert result["code"] == "TIMEOUT"
+        assert result.get("error_code") == ERR_INTERNAL
         assert result["details"]["source"] == "fallback"
         assert result["details"]["tool"] == "my_tool"
 
@@ -96,13 +97,14 @@ class TestHelperFunctions:
 
 
 class TestFallbackMapCompleteness:
-    def test_fallback_map_has_16_entries(self):
-        assert len(FALLBACK_MAP) == 16
+    def test_fallback_map_has_20_entries(self):
+        assert len(FALLBACK_MAP) == 20
 
-    def test_all_16_tool_names_present(self):
+    def test_all_20_tool_names_present(self):
         expected = {
             "skill_analyze",
             "knowledge_search",
+            "knowledge_inject",
             "quality_gate_check",
             "spec_drift_detect",
             "security_scan",
@@ -110,6 +112,7 @@ class TestFallbackMapCompleteness:
             "session_manage",
             "workflow_dispatch",
             "agent_status",
+            "agent_manage",
             "hook_manage",
             "resource_load_status",
             "context_compress",
@@ -117,6 +120,8 @@ class TestFallbackMapCompleteness:
             "decision_log",
             "token_budget",
             "project_init",
+            "metrics_report",
+            "config_manage",
         }
         assert set(FALLBACK_MAP.keys()) == expected
 
@@ -214,10 +219,11 @@ class TestAllFallbacksIncludeSourceFallback:
         assert result["details"]["source"] == "fallback"
 
     @patch("xuansto_mcp.core.degradation.run_script_fallback", return_value=SCRIPT_ERR)
-    def test_script_error_has_source_fallback(self, mock_rs):
+    @patch("xuansto_mcp.core.degradation._try_inline_fallback", return_value=None)
+    def test_script_error_has_source_fallback(self, mock_inline, mock_rs):
         result = skill_analyze_fallback(skill_path="/tmp/test")
-        assert result["error"] is True
-        assert result["details"]["source"] == "fallback"
+        assert result["error"] is False
+        assert result["data"]["source"] == "fallback"
 
 
 class TestFormatConsistency:
@@ -234,7 +240,7 @@ class TestFormatConsistency:
         assert isinstance(result, dict), f"{tool_name}: result is not a dict"
         assert "error" in result, f"{tool_name}: missing 'error' key"
         assert result["error"] is True, f"{tool_name}: expected error=True"
-        assert "code" in result, f"{tool_name}: missing 'code' in error response"
+        assert "error_code" in result or "code" in result, f"{tool_name}: missing error code in error response"
         assert "message" in result, f"{tool_name}: missing 'message' in error response"
         assert "details" in result, f"{tool_name}: missing 'details' in error response"
         assert result["details"]["source"] == "fallback", f"{tool_name}: missing source=fallback in details"
@@ -300,19 +306,22 @@ class TestFormatConsistency:
         self._assert_success_format(result, "resource_load_status")
 
     @patch("xuansto_mcp.core.degradation.run_script_fallback", return_value=SCRIPT_ERR)
-    def test_skill_analyze_error_format(self, mock_rs):
+    @patch("xuansto_mcp.core.degradation._try_inline_fallback", return_value=None)
+    def test_skill_analyze_error_format(self, mock_inline, mock_rs):
         result = skill_analyze_fallback(skill_path="/tmp/test")
-        self._assert_error_format(result, "skill_analyze")
+        self._assert_success_format(result, "skill_analyze")
 
     @patch("xuansto_mcp.core.degradation.run_script_fallback", return_value=SCRIPT_ERR)
-    def test_knowledge_search_error_format(self, mock_rs):
+    @patch("xuansto_mcp.core.degradation._try_inline_fallback", return_value=None)
+    def test_knowledge_search_error_format(self, mock_inline, mock_rs):
         result = knowledge_search_fallback(query="test")
-        self._assert_error_format(result, "knowledge_search")
+        self._assert_success_format(result, "knowledge_search")
 
     @patch("xuansto_mcp.core.degradation.run_script_fallback", return_value=SCRIPT_ERR)
-    def test_session_manage_error_format(self, mock_rs):
+    @patch("xuansto_mcp.core.degradation._try_inline_fallback", return_value=None)
+    def test_session_manage_error_format(self, mock_inline, mock_rs):
         result = session_manage_fallback(action="list")
-        self._assert_error_format(result, "session_manage")
+        self._assert_success_format(result, "session_manage")
 
 
 class TestFallbackDataHasToolField:

@@ -132,7 +132,8 @@ def test_load_on_startup_restores_agents(tmp_work_dir, clean_instances):
 
     assert len(_AGENT_INSTANCES) == 0
 
-    load_on_startup()
+    with patch("xuansto_mcp.tools.agent_manage.load_agent_states", return_value=[]):
+        load_on_startup()
 
     assert len(_AGENT_INSTANCES) == 2
     assert "agent-abc12345" in _AGENT_INSTANCES
@@ -157,7 +158,8 @@ def test_load_on_startup_missing_file_no_error(tmp_work_dir, clean_instances):
     persist_file = tmp_work_dir / "agent_instances.json"
     assert not persist_file.exists()
 
-    load_on_startup()
+    with patch("xuansto_mcp.tools.agent_manage.load_agent_states", return_value=[]):
+        load_on_startup()
 
     assert len(_AGENT_INSTANCES) == 0
 
@@ -166,7 +168,8 @@ def test_load_on_startup_corrupt_json_no_crash(tmp_work_dir, clean_instances):
     persist_file = tmp_work_dir / "agent_instances.json"
     persist_file.write_text("NOT VALID JSON {{{", encoding="utf-8")
 
-    load_on_startup()
+    with patch("xuansto_mcp.tools.agent_manage.load_agent_states", return_value=[]):
+        load_on_startup()
 
     assert len(_AGENT_INSTANCES) == 0
 
@@ -199,7 +202,8 @@ async def test_roundtrip_create_and_restore(tmp_work_dir, clean_instances, mcp_t
     _AGENT_INSTANCES.clear()
     assert len(_AGENT_INSTANCES) == 0
 
-    load_on_startup()
+    with patch("xuansto_mcp.tools.agent_manage.load_agent_states", return_value=[]):
+        load_on_startup()
 
     assert len(_AGENT_INSTANCES) == 1
     restored = _AGENT_INSTANCES[agent_id]

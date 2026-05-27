@@ -1,0 +1,134 @@
+metadata:
+  name: 安全审计与合规验证工作流
+  version: "3.2.0"
+  description: 安全审计合规验证与Agentic安全工作流
+  platform: all
+  min_agents: 2
+  max_agents: 5
+phases:
+  - id: phase-5
+    name: 安全审计验证
+    order: 0
+    optional: false
+    trigger_condition: 用户请求安全审计或定期安全检查
+    agents:
+      primary: [security-auditor, penetration-tester]
+      supporting: [code-reviewer, ai-security-researcher]
+    inputs:
+      - name: 审计范围定义
+        type: document
+        required: true
+      - name: 系统架构文档
+        type: document
+        required: true
+      - name: 源代码仓库
+        type: code
+        required: true
+    outputs:
+      - name: SAST扫描报告
+        type: document
+        validation: 所有代码已扫描
+      - name: 漏洞扫描报告
+        type: document
+        validation: 漏洞已分类评级
+      - name: 渗透测试报告
+        type: document
+        validation: 关键漏洞已验证
+      - name: 依赖漏洞报告
+        type: document
+      - name: Agentic安全审计报告
+        type: document
+      - name: 桌面安全审计报告
+        type: document
+    quality_gates:
+      - gate_id: all_code_scanned
+        blocking: true
+        pass_criteria: 所有代码已扫描
+      - gate_id: high_risk_identified
+        blocking: true
+        pass_criteria: 高危漏洞已识别
+      - gate_id: vulns_classified
+        blocking: true
+        pass_criteria: 漏洞已分类评级
+      - gate_id: critical_vulns_verified
+        blocking: true
+        pass_criteria: 关键漏洞已验证
+      - gate_id: compliance_checked
+        blocking: true
+        pass_criteria: 合规标准已对照
+    timeout_minutes: 180
+    retry:
+      max_attempts: 2
+      backoff: fixed
+  - id: phase-6
+    name: 报告与整改验收
+    order: 1
+    optional: false
+    trigger_condition: 安全审计验证完成
+    agents:
+      primary: [security-auditor, compliance-officer]
+      supporting: []
+    inputs:
+      - name: 各阶段审计结果
+        type: document
+        required: true
+        source_phase: phase-5
+      - name: 整改计划
+        type: document
+        required: true
+    outputs:
+      - name: 安全审计报告
+        type: document
+        validation: 报告完整准确
+      - name: 风险清单
+        type: document
+        validation: 风险已评级
+      - name: 整改跟踪表
+        type: document
+        validation: 整改责任已分配
+    quality_gates:
+      - gate_id: report_complete
+        blocking: true
+        pass_criteria: 报告完整准确
+      - gate_id: risk_rated
+        blocking: true
+        pass_criteria: 风险已评级
+      - gate_id: remediation_assigned
+        blocking: true
+        pass_criteria: 整改责任已分配
+    timeout_minutes: 60
+    retry:
+      max_attempts: 2
+      backoff: fixed
+agent_matrix:
+  security-auditor:
+    phases: [phase-5, phase-6]
+    role: primary
+    max_parallel_instances: 1
+  penetration-tester:
+    phases: [phase-5]
+    role: primary
+    max_parallel_instances: 1
+  compliance-officer:
+    phases: [phase-6]
+    role: primary
+    max_parallel_instances: 1
+  code-reviewer:
+    phases: [phase-5]
+    role: supporting
+    max_parallel_instances: 1
+  ai-security-researcher:
+    phases: [phase-5]
+    role: supporting
+    max_parallel_instances: 1
+exception_handling:
+  phase_failure:
+    action: retry_then_escalate
+    escalation_target: orchestrator
+    max_retries: 3
+  agent_unavailable:
+    action: substitute_and_continue
+    substitute_agent: security-auditor
+  quality_gate_blocked:
+    action: auto_fix_then_pause
+    auto_fix_agents: [security-auditor, penetration-tester]

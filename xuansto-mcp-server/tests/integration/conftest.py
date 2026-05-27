@@ -72,7 +72,7 @@ def fresh_mcp(mock_config_paths, tmp_path: Path):
 
     server = FastMCP(
         "xuansto-mcp-server-test",
-        instructions="Xuansto Skill MCP服务器 v8.0.0",
+        instructions="Xuansto Skill MCP服务器 v8.4.0",
     )
 
     with patch("xuansto_mcp.core.config.KNOWLEDGE_DB_PATH", tmp_path / "knowledge" / "index" / "knowledge.db"), \

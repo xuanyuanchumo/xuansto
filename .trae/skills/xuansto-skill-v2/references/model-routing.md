@@ -12,84 +12,85 @@
 
 | 层级 | 值 | 适用场景 | 典型Agent |
 |------|-----|---------|----------|
-| 快速 | `fast` | 文件搜索、简单编辑、文档查找 | Knowledge Manager, Token Optimizer, Doc Reviewer |
-| 标准 | `standard` | 多文件实现、代码审查、测试编写 | Backend/Frontend/Fullstack Developer, Code Reviewer, Unit Tester |
+| 快速 | `fast` | 文件搜索、简单编辑、文档查找 | Token Optimizer, Doc Reviewer, Bug Scanner, Monitor Specialist |
+| 标准 | `standard` | 多文件实现、代码审查、测试编写 | Backend/Frontend/Fullstack Developer, Code Reviewer, QA Engineer |
 | 深度 | `deep` | 架构设计、安全分析、复杂调试 | System Architect, Security Auditor, AI Penetration Tester, Orchestrator |
 
 ## 57个Agent的model分配
 
-### fast（15个）
+> 权威来源：`agents/registry.yaml`，本文档保持同步。
+
+### fast（10个）
 
 | Agent | model |
 |-------|-------|
-| Knowledge Manager | fast |
-| Learning Specialist | fast |
 | Token Optimizer | fast |
 | Comment Verifier | fast |
 | Doc Reviewer | fast |
-| Documentation Engineer | fast |
-| Specification Keeper | fast |
 | Data Seeder | fast |
 | Progress Tracker | fast |
 | Decision Logger | fast |
 | Quality Monitor | fast |
-| History Analyzer | fast |
 | Bug Scanner | fast |
-| Deduplication Detector | fast |
-| Coverage Checker | fast |
+| Monitor Specialist | fast |
+| Unit Tester | fast |
 
-### standard（27个）
+### standard（37个）
 
 | Agent | model |
 |-------|-------|
-| Backend Developer | standard |
-| Frontend Developer | standard |
-| Fullstack Developer | standard |
-| Mobile Developer | standard |
-| Code Reviewer | standard |
-| Unit Tester | standard |
-| Integration Tester | standard |
-| QA Tester | standard |
-| E2E Tester | standard |
-| Desktop Tester | standard |
-| Performance Tester | standard |
-| Test Architect | standard |
-| Test Maintainer | standard |
-| Refactoring Specialist | standard |
-| CI/CD Specialist | standard |
-| Build-Release Engineer | standard |
-| Data Modeler | standard |
-| DBA | standard |
-| Compliance Officer | standard |
-| UX/UI Designer | standard |
+| Subagent Dispatcher | standard |
+| Task Coordinator | standard |
+| Product Manager | standard |
+| Brainstorming Facilitator | standard |
+| Technical Writer | standard |
+| UX Designer | standard |
 | Frontend Stylist | standard |
-| Design System Generator | standard |
+| UI Designer | standard |
+| Backend Developer | standard |
+| Database Engineer | standard |
+| DevOps Engineer | standard |
+| Frontend Developer | standard |
+| Fullstack Engineer | standard |
+| Mobile Developer | standard |
 | Desktop Developer | standard |
 | Desktop UI Adapter | standard |
-| Native Module Developer | standard |
-| IPC Specialist | standard |
 | Auto-Update Engineer | standard |
-| Technical Writer | standard |
+| Data Modeler | standard |
+| DBA | standard |
+| Desktop Tester | standard |
+| E2E Tester | standard |
+| Integration Tester | standard |
+| Performance Tester | standard |
+| QA Engineer | standard |
+| Test Maintainer | standard |
+| Compliance Officer | standard |
+| Build-Release Engineer | standard |
+| CI/CD Specialist | standard |
+| Runtime Supervisor | standard |
+| Code Reviewer | standard |
+| Compliance Reviewer | standard |
+| History Analyzer | standard |
+| Refactoring Specialist | standard |
+| Documentation Engineer | standard |
+| Specification Keeper | standard |
+| Knowledge Manager | standard |
+| Learning Specialist | standard |
 
-### deep（15个）
+### deep（10个）
 
 | Agent | model |
 |-------|-------|
 | Orchestrator | deep |
-| Subagent Dispatcher | deep |
-| Task Coordinator | deep |
 | System Architect | deep |
-| Product Manager | deep |
-| Brainstorming Facilitator | deep |
 | Security Auditor | deep |
 | Penetration Tester | deep |
 | AI Penetration Tester | deep |
 | Security Tester | deep |
-| Runtime Supervisor | deep |
-| Monitor Specialist | deep |
-| Database Engineer | deep |
-| Product Manager | deep |
-| Subagent Dispatcher | deep |
+| Design System Generator | deep |
+| Native Module Developer | deep |
+| IPC Specialist | deep |
+| Test Architect | deep |
 
 ## Orchestrator路由决策逻辑
 

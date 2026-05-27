@@ -1,4 +1,5 @@
 import sys
+import pytest
 from pathlib import Path
 
 SKILL_PATH = Path(__file__).resolve().parent.parent.parent / ".trae" / "skills" / "xuansto-skill"
@@ -32,3 +33,12 @@ def test_parse_agent_registry():
     else:
         agents = agent_status._parse_agent_registry(Path("/nonexistent"))
         assert agents == []
+
+
+def test_parse_agent_registry_from_data_dir():
+    from xuansto_mcp.core.config import REFERENCES_DIR
+    registry_path = REFERENCES_DIR / "agent-registry.md"
+    if not registry_path.exists():
+        pytest.skip("agent-registry.md not found in REFERENCES_DIR")
+    agents = agent_status._parse_agent_registry(registry_path)
+    assert isinstance(agents, list)

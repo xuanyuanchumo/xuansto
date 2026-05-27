@@ -2,59 +2,248 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [develop, main]
+    paths:
+      - 'xuansto-mcp-server/**'
+      - '.github/**'
   pull_request:
-    branches: [main, develop]
+    branches: [develop]
+    paths:
+      - 'xuansto-mcp-server/**'
+      - '.github/**'
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  test:
+  version-check:
+    name: Version Consistency Check
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.10", "3.11", "3.12"]
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.12"
+      - name: Install pyyaml
+        run: pip install pyyaml
+      - name: Check version consistency
+        run: |
+          PYPROJECT_VERSION=$(python -c "import tomllib; print(tomllib.load(open('xuansto-mcp-server/pyproject.toml','rb'))['project']['version'])")
+          CONSTRAINTS_VERSION=$(python -c "import yaml; print(yaml.safe_load(open('.trae/skills/xuansto-skill-v2/constraints.yaml'))['version'])")
+          SKILL_CONFIG_VERSION=$(python -c "import yaml; print(yaml.safe_load(open('.trae/skills/xuansto-skill-v2/.skill-config.yaml'))['version'])")
+          INIT_VERSION=$(python -c "exec(open('xuansto-mcp-server/src/xuansto_mcp/__init__.py').read()); print(__version__)")
+          echo "pyproject: $PYPROJECT_VERSION, constraints: $CONSTRAINTS_VERSION, skill-config: $SKILL_CONFIG_VERSION, __init__: $INIT_VERSION"
+          if [ "$PYPROJECT_VERSION" != "$CONSTRAINTS_VERSION" ] || [ "$PYPROJECT_VERSION" != "$SKILL_CONFIG_VERSION" ] || [ "$PYPROJECT_VERSION" != "$INIT_VERSION" ]; then
+            echo "ERROR: Version mismatch!"
+            exit 1
+          fi
+          echo "All versions consistent: $PYPROJECT_VERSION"
 
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-lint-${{ hashFiles('xuansto-mcp-server/pyproject.toml') }}
+      - name: Install dependencies
+        working-directory: xuansto-mcp-server
+        run: uv pip install -e ".[dev]" --system
+      - name: Ruff check
+        working-directory: xuansto-mcp-server
+        run: ruff check src/
+
+  type-check:
+    name: Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-typing-${{ hashFiles('xuansto-mcp-server/pyproject.toml') }}
       - name: Install dependencies
         working-directory: xuansto-mcp-server
         run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-
-      - name: Lint with ruff
+          uv pip install -e ".[dev]" --system
+          uv pip install mypy --system
+      - name: Mypy
         working-directory: xuansto-mcp-server
-        run: ruff check src/ tests/
+        run: mypy src/ --ignore-missing-imports
 
-      - name: Run tests
-        working-directory: xuansto-mcp-server
-        run: pytest tests/ -x --tb=short
-
-  skill-validate:
+  schema-validation:
+    name: Schema Validation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Validate Skill YAML
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-schema-${{ hashFiles('xuansto-mcp-server/pyproject.toml') }}
+      - name: Install dependencies
+        working-directory: xuansto-mcp-server
+        run: uv pip install -e ".[dev]" --system
+      - name: Validate JSON files in spec-locks
+        working-directory: xuansto-mcp-server
         run: |
           python -c "
-          import yaml, sys, pathlib
+          import json, sys
+          from pathlib import Path
           errors = []
-          for f in pathlib.Path('.trae/skills/xuansto-skill-v2').rglob('*.yaml'):
+          locks_dir = Path('spec-locks')
+          for f in locks_dir.glob('*.json'):
               try:
-                  yaml.safe_load(f.read_text(encoding='utf-8'))
-              except yaml.YAMLError as e:
+                  json.loads(f.read_text(encoding='utf-8'))
+              except json.JSONDecodeError as e:
                   errors.append(f'{f}: {e}')
           if errors:
               for e in errors: print(e, file=sys.stderr)
               sys.exit(1)
-          print(f'All YAML files valid')
+          print('All spec-locks JSON files valid')
           "
+      - name: Validate tool-parameter-schemas.json has 22 tools
+        working-directory: xuansto-mcp-server
+        run: |
+          python -c "
+          import json, sys
+          from pathlib import Path
+          data = json.loads(Path('spec-locks/tool-parameter-schemas.json').read_text(encoding='utf-8'))
+          tool_schemas = data.get('tool_schemas', {})
+          tool_count = len(tool_schemas)
+          expected = 22
+          if tool_count != expected:
+              print(f'Expected {expected} tools in tool-parameter-schemas.json, found {tool_count}', file=sys.stderr)
+              print(f'Tools found: {sorted(tool_schemas.keys())}', file=sys.stderr)
+              sys.exit(1)
+          print(f'tool-parameter-schemas.json contains all {expected} tools')
+          "
+
+  mcp-definition-validation:
+    name: MCP Definition Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-mcp-${{ hashFiles('xuansto-mcp-server/pyproject.toml') }}
+      - name: Install dependencies
+        working-directory: xuansto-mcp-server
+        run: uv pip install -e ".[dev]" --system
+      - name: Verify MCP tools/resources/prompts registration
+        working-directory: xuansto-mcp-server
+        run: |
+          python -c "
+          import sys
+          sys.path.insert(0, 'src')
+          from xuansto_mcp.server import _REGISTERED_TOOL_NAMES, _REGISTERED_RESOURCE_NAMES, mcp
+          errors = []
+          expected_tools = [
+              'skill_analyze', 'knowledge_search', 'knowledge_inject',
+              'quality_gate_check', 'spec_drift_detect', 'security_scan',
+              'code_simplify', 'session_manage', 'workflow_dispatch',
+              'agent_status', 'agent_manage', 'hook_manage',
+              'resource_load_status', 'resource_subscribe',
+              'context_compress', 'server_health', 'decision_log',
+              'token_budget', 'project_init', 'metrics_report',
+              'config_manage', 'audit_query',
+          ]
+          if len(_REGISTERED_TOOL_NAMES) != 22:
+              errors.append(f'Expected 22 registered tools, found {len(_REGISTERED_TOOL_NAMES)}')
+          for t in expected_tools:
+              if t not in _REGISTERED_TOOL_NAMES:
+                  errors.append(f'Tool not registered: {t}')
+          if not _REGISTERED_RESOURCE_NAMES:
+              errors.append('No resources registered')
+          try:
+              prompts = list(mcp._prompt_manager._prompts.keys())
+              if len(prompts) < 2:
+                  errors.append(f'Expected at least 2 prompts, found {len(prompts)}: {prompts}')
+          except AttributeError:
+              errors.append('Could not inspect prompt manager')
+          if errors:
+              for e in errors: print(e, file=sys.stderr)
+              sys.exit(1)
+          print(f'All 22 tools registered: {sorted(_REGISTERED_TOOL_NAMES)}')
+          print(f'Resources registered: {len(_REGISTERED_RESOURCE_NAMES)}')
+          print(f'Prompts registered: {prompts}')
+          "
+
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    needs: [lint, type-check, schema-validation, mcp-definition-validation]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-test-${{ matrix.python-version }}-${{ hashFiles('xuansto-mcp-server/pyproject.toml') }}
+      - name: Install dependencies
+        working-directory: xuansto-mcp-server
+        run: uv pip install -e ".[dev]" --system
+      - name: Run tests
+        working-directory: xuansto-mcp-server
+        run: pytest tests/ -x --tb=short -q
+
+  build:
+    name: Build
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-build-${{ hashFiles('xuansto-mcp-server/pyproject.toml') }}
+      - name: Install build tool
+        run: uv pip install build --system
+      - name: Build package
+        working-directory: xuansto-mcp-server
+        run: python -m build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-packages
+          path: xuansto-mcp-server/dist/*

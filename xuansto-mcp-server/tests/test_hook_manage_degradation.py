@@ -53,7 +53,7 @@ async def test_script_missing_falls_back_to_inline():
 
 
 @pytest.mark.asyncio
-async def test_script_missing_no_inline_returns_skipped():
+async def test_script_missing_uses_inline_fallback():
     mcp = FastMCP("test")
     register(mcp)
     tool_fn = _get_hook_manage_fn(mcp)
@@ -73,5 +73,5 @@ async def test_script_missing_no_inline_returns_skipped():
     assert result.get("error") is False
     data = result.get("data", {})
     assert data["hook"] == "encoding-check"
-    assert data["status"] == "skipped"
-    assert "脚本不存在且无内嵌逻辑" in data["reason"]
+    assert data["status"] == "pass"
+    assert data["source"] == "inline_fallback"

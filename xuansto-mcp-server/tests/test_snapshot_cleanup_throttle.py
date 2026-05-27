@@ -43,7 +43,7 @@ async def test_server_health_calls_cleanup_on_first_call():
         server_health.register(test_mcp)
         tool_fn = test_mcp._tool_manager._tools["server_health"].fn
 
-        await tool_fn()
+        await tool_fn(action="check")
         mock_cleanup.assert_called_once()
 
     server_health._last_snapshot_cleanup_time = 0.0
@@ -62,7 +62,7 @@ async def test_server_health_skips_cleanup_within_interval():
         server_health.register(test_mcp)
         tool_fn = test_mcp._tool_manager._tools["server_health"].fn
 
-        await tool_fn()
+        await tool_fn(action="check")
         mock_cleanup.assert_not_called()
 
     server_health._last_snapshot_cleanup_time = 0.0
@@ -81,7 +81,7 @@ async def test_server_health_calls_cleanup_after_interval_elapses():
         server_health.register(test_mcp)
         tool_fn = test_mcp._tool_manager._tools["server_health"].fn
 
-        await tool_fn()
+        await tool_fn(action="check")
         mock_cleanup.assert_called_once()
 
     server_health._last_snapshot_cleanup_time = 0.0

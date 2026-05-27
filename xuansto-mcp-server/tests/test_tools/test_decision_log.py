@@ -8,10 +8,11 @@ from xuansto_mcp.tools.decision_log import (
     _query_decisions,
     _export_decisions,
     register,
-    _CREATE_TABLE_SQL,
-    _CREATE_INDEX_SQL,
-    _CREATE_FTS_SQL,
-    _CREATE_FTS_TRIGGERS_SQL,
+)
+from xuansto_mcp.core.database import (
+    _CREATE_TABLES_SQL,
+    _CREATE_INDEXES_SQL,
+    _FTS5_SQL,
 )
 
 
@@ -30,13 +31,12 @@ def decisions_dir(tmp_path):
 def decisions_db(tmp_path):
     db_path = tmp_path / "decisions.db"
     conn = sqlite3.connect(str(db_path))
-    conn.executescript(_CREATE_TABLE_SQL)
+    conn.executescript(_CREATE_TABLES_SQL)
     try:
-        conn.executescript(_CREATE_FTS_SQL)
-        conn.executescript(_CREATE_FTS_TRIGGERS_SQL)
+        conn.executescript(_FTS5_SQL)
     except sqlite3.OperationalError:
         pass
-    conn.executescript(_CREATE_INDEX_SQL)
+    conn.executescript(_CREATE_INDEXES_SQL)
     conn.commit()
     conn.close()
     return db_path
@@ -44,7 +44,7 @@ def decisions_db(tmp_path):
 
 def test_log_decision_positive(decisions_dir, decisions_db):
     with patch("xuansto_mcp.tools.decision_log.DECISIONS_FILE", decisions_dir), \
-         patch("xuansto_mcp.tools.decision_log.DECISIONS_DB", decisions_db), \
+         patch("xuansto_mcp.core.database.DB_PATH", decisions_db), \
          patch("xuansto_mcp.tools.decision_log.notify"):
         result = _log_decision(
             title="Use React",
@@ -59,7 +59,7 @@ def test_log_decision_positive(decisions_dir, decisions_db):
 
 def test_log_decision_multiple(decisions_dir, decisions_db):
     with patch("xuansto_mcp.tools.decision_log.DECISIONS_FILE", decisions_dir), \
-         patch("xuansto_mcp.tools.decision_log.DECISIONS_DB", decisions_db), \
+         patch("xuansto_mcp.core.database.DB_PATH", decisions_db), \
          patch("xuansto_mcp.tools.decision_log.notify"):
         _log_decision(title="First")
         result = _log_decision(title="Second")
@@ -68,14 +68,14 @@ def test_log_decision_multiple(decisions_dir, decisions_db):
 
 def test_query_decisions_empty(decisions_dir, decisions_db):
     with patch("xuansto_mcp.tools.decision_log.DECISIONS_FILE", decisions_dir), \
-         patch("xuansto_mcp.tools.decision_log.DECISIONS_DB", decisions_db):
+         patch("xuansto_mcp.core.database.DB_PATH", decisions_db):
         result = _query_decisions()
         assert result["total"] == 0
 
 
 def test_query_decisions_with_keyword(decisions_dir, decisions_db):
     with patch("xuansto_mcp.tools.decision_log.DECISIONS_FILE", decisions_dir), \
-         patch("xuansto_mcp.tools.decision_log.DECISIONS_DB", decisions_db), \
+         patch("xuansto_mcp.core.database.DB_PATH", decisions_db), \
          patch("xuansto_mcp.tools.decision_log.notify"):
         _log_decision(title="Use React", decision="React")
         _log_decision(title="Use Vue", decision="Vue")
@@ -85,7 +85,7 @@ def test_query_decisions_with_keyword(decisions_dir, decisions_db):
 
 def test_query_decisions_with_date_range(decisions_dir, decisions_db):
     with patch("xuansto_mcp.tools.decision_log.DECISIONS_FILE", decisions_dir), \
-         patch("xuansto_mcp.tools.decision_log.DECISIONS_DB", decisions_db), \
+         patch("xuansto_mcp.core.database.DB_PATH", decisions_db), \
          patch("xuansto_mcp.tools.decision_log.notify"):
         _log_decision(title="Old decision")
         result = _query_decisions(date_from="2020-01-01", date_to="2099-12-31")
@@ -94,7 +94,7 @@ def test_query_decisions_with_date_range(decisions_dir, decisions_db):
 
 def test_query_decisions_limit(decisions_dir, decisions_db):
     with patch("xuansto_mcp.tools.decision_log.DECISIONS_FILE", decisions_dir), \
-         patch("xuansto_mcp.tools.decision_log.DECISIONS_DB", decisions_db), \
+         patch("xuansto_mcp.core.database.DB_PATH", decisions_db), \
          patch("xuansto_mcp.tools.decision_log.notify"):
         for i in range(5):
             _log_decision(title=f"Decision {i}")
@@ -104,20 +104,20 @@ def test_query_decisions_limit(decisions_dir, decisions_db):
 
 def test_export_decisions_json(decisions_dir, decisions_db):
     with patch("xuansto_mcp.tools.decision_log.DECISIONS_FILE", decisions_dir), \
-         patch("xuansto_mcp.tools.decision_log.DECISIONS_DB", decisions_db), \
+         patch("xuansto_mcp.core.database.DB_PATH", decisions_db), \
          patch("xuansto_mcp.tools.decision_log.notify"):
         _log_decision(title="Export test")
-        result = _export_decisions(format="json")
+        result = _export_decisions(export_format="json")
         assert result["format"] == "json"
         assert result["total"] >= 1
 
 
 def test_export_decisions_markdown(decisions_dir, decisions_db):
     with patch("xuansto_mcp.tools.decision_log.DECISIONS_FILE", decisions_dir), \
-         patch("xuansto_mcp.tools.decision_log.DECISIONS_DB", decisions_db), \
+         patch("xuansto_mcp.core.database.DB_PATH", decisions_db), \
          patch("xuansto_mcp.tools.decision_log.notify"):
         _log_decision(title="MD Export", decision="Use MD")
-        result = _export_decisions(format="markdown")
+        result = _export_decisions(export_format="markdown")
         assert result["format"] == "markdown"
         assert "ADR" in result["content"]
 
@@ -127,10 +127,10 @@ async def test_decision_log_log_positive(mcp_server, decisions_dir, decisions_db
     register(mcp_server)
     tool_fn = mcp_server._tool_manager._tools["decision_log"].fn
     with patch("xuansto_mcp.tools.decision_log.DECISIONS_FILE", decisions_dir), \
-         patch("xuansto_mcp.tools.decision_log.DECISIONS_DB", decisions_db), \
+         patch("xuansto_mcp.core.database.DB_PATH", decisions_db), \
          patch("xuansto_mcp.tools.decision_log.notify"):
         result = await tool_fn(action="log", title="Test Decision")
-        assert result.get("error") is False
+        assert result["status"] == "success"
 
 
 @pytest.mark.asyncio
@@ -138,7 +138,7 @@ async def test_decision_log_log_no_title(mcp_server):
     register(mcp_server)
     tool_fn = mcp_server._tool_manager._tools["decision_log"].fn
     result = await tool_fn(action="log", title=None)
-    assert result.get("error") is True
+    assert result["status"] == "error"
 
 
 @pytest.mark.asyncio
@@ -146,9 +146,9 @@ async def test_decision_log_query_positive(mcp_server, decisions_dir, decisions_
     register(mcp_server)
     tool_fn = mcp_server._tool_manager._tools["decision_log"].fn
     with patch("xuansto_mcp.tools.decision_log.DECISIONS_FILE", decisions_dir), \
-         patch("xuansto_mcp.tools.decision_log.DECISIONS_DB", decisions_db):
+         patch("xuansto_mcp.core.database.DB_PATH", decisions_db):
         result = await tool_fn(action="query")
-        assert result.get("error") is False
+        assert result["status"] == "success"
 
 
 @pytest.mark.asyncio
@@ -156,9 +156,9 @@ async def test_decision_log_export_positive(mcp_server, decisions_dir, decisions
     register(mcp_server)
     tool_fn = mcp_server._tool_manager._tools["decision_log"].fn
     with patch("xuansto_mcp.tools.decision_log.DECISIONS_FILE", decisions_dir), \
-         patch("xuansto_mcp.tools.decision_log.DECISIONS_DB", decisions_db):
-        result = await tool_fn(action="export", format="json")
-        assert result.get("error") is False
+         patch("xuansto_mcp.core.database.DB_PATH", decisions_db):
+        result = await tool_fn(action="export", export_format="json")
+        assert result["status"] == "success"
 
 
 @pytest.mark.asyncio
@@ -166,4 +166,4 @@ async def test_decision_log_invalid_action(mcp_server):
     register(mcp_server)
     tool_fn = mcp_server._tool_manager._tools["decision_log"].fn
     result = await tool_fn(action="invalid_action")
-    assert result.get("error") is True
+    assert result["status"] == "error"

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Callable
-
+from collections.abc import Callable
+from typing import Any
 
 ERR_VALIDATION = "ERR_VALIDATION"
 ERR_NOT_FOUND = "ERR_NOT_FOUND"
@@ -12,6 +12,74 @@ ERR_CONFIG = "ERR_CONFIG"
 ERR_INTERNAL = "ERR_INTERNAL"
 ERR_RATE_LIMIT = "ERR_RATE_LIMIT"
 ERR_PERMISSION = "ERR_PERMISSION"
+ERR_WORKFLOW_NOT_FOUND = "ERR_WORKFLOW_NOT_FOUND"
+ERR_DUPLICATE = "ERR_DUPLICATE"
+ERR_VERSION_CONFLICT = "ERR_VERSION_CONFLICT"
+ERR_UNAUTHORIZED = "ERR_UNAUTHORIZED"
+ERR_SERVICE_UNAVAILABLE = "ERR_SERVICE_UNAVAILABLE"
+
+
+class ErrorCodes:
+    TOOL_NOT_FOUND = "TOOL_NOT_FOUND"
+    INVALID_PARAMS = "INVALID_PARAMS"
+    EXECUTION_FAILED = "EXECUTION_FAILED"
+    RATE_LIMITED = "RATE_LIMITED"
+    BLOCKED_BY_HOOK = "BLOCKED_BY_HOOK"
+    SECURITY_VIOLATION = "SECURITY_VIOLATION"
+    DEGRADED = "DEGRADED"
+    TIMEOUT = "TIMEOUT"
+    NOT_FOUND = "NOT_FOUND"
+    INTERNAL_ERROR = "INTERNAL_ERROR"
+    WORKFLOW_NOT_FOUND = "WORKFLOW_NOT_FOUND"
+    UNAUTHORIZED = "UNAUTHORIZED"
+    DUPLICATE_DETECTED = "DUPLICATE_DETECTED"
+    VERSION_CONFLICT = "VERSION_CONFLICT"
+    SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
+
+
+def make_response(data: Any = None, error: bool = False, error_code: str = "", message: str = "") -> dict[str, Any]:
+    if error:
+        return {
+            "status": "error",
+            "data": None,
+            "error": {"code": error_code, "message": message},
+            "metadata": {},
+        }
+    return {"status": "success", "data": data, "metadata": {}}
+
+ERROR_CODE_TO_HTTP_STATUS: dict[str, int] = {
+    ERR_VALIDATION: 400,
+    ERR_NOT_FOUND: 404,
+    ERR_TIMEOUT: 408,
+    ERR_DEGRADATION: 503,
+    ERR_CONFIG: 500,
+    ERR_INTERNAL: 500,
+    ERR_RATE_LIMIT: 429,
+    ERR_PERMISSION: 403,
+    ERR_WORKFLOW_NOT_FOUND: 404,
+    ERR_DUPLICATE: 409,
+    ERR_VERSION_CONFLICT: 409,
+    ERR_UNAUTHORIZED: 401,
+    ERR_SERVICE_UNAVAILABLE: 503,
+}
+
+HTTP_STATUS_TO_ERROR_CODE: dict[int, str] = {v: k for k, v in ERROR_CODE_TO_HTTP_STATUS.items()}
+
+UNIFIED_ERROR_CODE_MAPPING: dict[str, dict[str, Any]] = {
+    ERR_VALIDATION: {"http_status": 400, "category": "client", "retryable": False},
+    ERR_NOT_FOUND: {"http_status": 404, "category": "client", "retryable": False},
+    ERR_TIMEOUT: {"http_status": 408, "category": "transient", "retryable": True},
+    ERR_DEGRADATION: {"http_status": 503, "category": "transient", "retryable": True},
+    ERR_CONFIG: {"http_status": 500, "category": "server", "retryable": False},
+    ERR_INTERNAL: {"http_status": 500, "category": "server", "retryable": False},
+    ERR_RATE_LIMIT: {"http_status": 429, "category": "transient", "retryable": True},
+    ERR_PERMISSION: {"http_status": 403, "category": "client", "retryable": False},
+    ERR_WORKFLOW_NOT_FOUND: {"http_status": 404, "category": "client", "retryable": False},
+    ERR_DUPLICATE: {"http_status": 409, "category": "client", "retryable": False},
+    ERR_VERSION_CONFLICT: {"http_status": 409, "category": "transient", "retryable": True},
+    ERR_UNAUTHORIZED: {"http_status": 401, "category": "client", "retryable": False},
+    ERR_SERVICE_UNAVAILABLE: {"http_status": 503, "category": "transient", "retryable": True},
+}
 
 _ERROR_MESSAGES: dict[str, dict[str, str]] = {
     ERR_VALIDATION: {"zh": "参数校验失败", "en": "Validation failed"},
@@ -36,6 +104,13 @@ _EXCEPTION_CODE_TO_ERR_CODE: dict[str, str] = {
     "INTERNAL_ERROR": ERR_INTERNAL,
     "YAML_PARSE_ERROR": ERR_CONFIG,
     "RETRY_EXHAUSTED": ERR_INTERNAL,
+    "WORKFLOW_NOT_FOUND": ERR_WORKFLOW_NOT_FOUND,
+    "DUPLICATE_DETECTED": ERR_DUPLICATE,
+    "VERSION_CONFLICT": ERR_VERSION_CONFLICT,
+    "UNAUTHORIZED": ERR_UNAUTHORIZED,
+    "SERVICE_UNAVAILABLE": ERR_SERVICE_UNAVAILABLE,
+    "BAD_REQUEST": ERR_VALIDATION,
+    "RATE_LIMITED": ERR_RATE_LIMIT,
 }
 
 
@@ -132,6 +207,18 @@ def is_permanent_error(error: Exception) -> bool:
     return False
 
 
+def is_retryable_error(error: Exception) -> bool:
+    return is_transient_error(error)
+
+
+def _determine_retryable(error: Exception) -> bool:
+    if is_transient_error(error):
+        return True
+    if is_permanent_error(error):
+        return False
+    return False
+
+
 async def retry_tool_call(
     tool_name: str,
     fn: Callable[..., Any],
@@ -189,67 +276,106 @@ def _get_i18n_message(error_code: str, language: str = "zh") -> str | None:
 
 def make_error_response(error: Exception, error_code: str | None = None, language: str = "zh") -> dict[str, Any]:
     resolved_code = _resolve_error_code(error, error_code)
+    error_info: dict[str, Any] = {}
     if isinstance(error, XuanstoMCPError):
-        result: dict[str, Any] = {
-            "error": True,
-            "error_code": resolved_code or _EXCEPTION_CODE_TO_ERR_CODE.get(error.code, ERR_INTERNAL),
+        final_code = resolved_code or _EXCEPTION_CODE_TO_ERR_CODE.get(error.code, ERR_INTERNAL)
+        error_info = {
+            "code": final_code,
             "message": error.message,
             "details": error.details,
+            "retryable": _determine_retryable(error),
         }
-        result["_deprecated_exception_type"] = error.code
         if resolved_code:
             i18n_msg = _get_i18n_message(resolved_code, language)
             if i18n_msg and language != "zh":
-                result["message_i18n"] = i18n_msg
-        result["_migration_note"] = "Field 'code' is deprecated; use 'error_code' instead. Original exception type available in '_deprecated_exception_type'."
-        result["language"] = language
-        return result
-    try:
-        from pydantic import ValidationError as PydanticValidationError
-        if isinstance(error, PydanticValidationError):
-            details = [{"field": ".".join(str(l) for l in e["loc"]), "message": e["msg"]} for e in error.errors()]
-            result = {
-                "error": True,
-                "error_code": resolved_code or ERR_VALIDATION,
-                "message": f"参数校验失败: {len(details)}个错误",
-                "details": {"errors": details},
-            }
-            result["_deprecated_exception_type"] = "VALIDATION_ERROR"
-            if resolved_code:
-                i18n_msg = _get_i18n_message(resolved_code, language)
-                if i18n_msg and language != "zh":
-                    result["message_i18n"] = i18n_msg
-            result["_migration_note"] = "Field 'code' is deprecated; use 'error_code' instead. Original exception type available in '_deprecated_exception_type'."
-            result["language"] = language
-            return result
-    except ImportError:
-        pass
-    result = {
-        "error": True,
-        "error_code": resolved_code or ERR_INTERNAL,
-        "message": _get_i18n_message(ERR_INTERNAL, language) or "内部错误",
-        "details": {},
+                error_info["message_i18n"] = i18n_msg
+    else:
+        try:
+            from pydantic import ValidationError as PydanticValidationError
+            if isinstance(error, PydanticValidationError):
+                details = [{"field": ".".join(str(loc) for loc in e["loc"]), "message": e["msg"]} for e in error.errors()]
+                final_code = resolved_code or ERR_VALIDATION
+                error_info = {
+                    "code": final_code,
+                    "message": f"参数校验失败: {len(details)}个错误",
+                    "details": {"errors": details},
+                    "retryable": False,
+                }
+                if resolved_code:
+                    i18n_msg = _get_i18n_message(resolved_code, language)
+                    if i18n_msg and language != "zh":
+                        error_info["message_i18n"] = i18n_msg
+        except ImportError:
+            pass
+
+    if not error_info:
+        final_code = resolved_code or ERR_INTERNAL
+        error_info = {
+            "code": final_code,
+            "message": _get_i18n_message(ERR_INTERNAL, language) or "内部错误",
+            "details": {},
+            "retryable": _determine_retryable(error),
+        }
+        if isinstance(error, (ValueError, TypeError, KeyError)):
+            error_info["message"] = str(error)
+            if not resolved_code:
+                error_info["code"] = ERR_VALIDATION
+        if resolved_code:
+            i18n_msg = _get_i18n_message(resolved_code, language)
+            if i18n_msg and language != "zh":
+                error_info["message_i18n"] = i18n_msg
+
+    return {
+        "status": "error",
+        "data": None,
+        "error": error_info,
+        "metadata": {"language": language},
     }
-    result["_deprecated_exception_type"] = "INTERNAL_ERROR"
-    if isinstance(error, (ValueError, TypeError, KeyError)):
-        result["message"] = str(error)
-        result["_deprecated_exception_type"] = "VALIDATION_ERROR"
-        if not resolved_code:
-            result["error_code"] = ERR_VALIDATION
-    if resolved_code:
-        i18n_msg = _get_i18n_message(resolved_code, language)
-        if i18n_msg and language != "zh":
-            result["message_i18n"] = i18n_msg
-    result["_migration_note"] = "Field 'code' is deprecated; use 'error_code' instead. Original exception type available in '_deprecated_exception_type'."
-    result["language"] = language
-    return result
 
 
 def make_success_response(data: Any = None, degradation_level: str | None = None) -> dict[str, Any]:
     from .config import MCP_API_VERSION
-    result: dict[str, Any] = {"error": False, "api_version": MCP_API_VERSION}
-    if data is not None:
-        result["data"] = data
+    metadata: dict[str, Any] = {"api_version": MCP_API_VERSION}
     if degradation_level is not None:
-        result["degradation_level"] = degradation_level
-    return result
+        metadata["degradation_level"] = degradation_level
+        metadata["degraded"] = True
+    return {
+        "status": "success",
+        "data": data,
+        "error": None,
+        "metadata": metadata,
+    }
+
+
+class DegradationCoordinator:
+    def __init__(self):
+        self._handlers: dict[str, Callable[..., Any]] = {}
+
+    def register_handler(self, error_code: str, handler: Callable[..., Any]) -> None:
+        self._handlers[error_code] = handler
+
+    async def handle(self, error: Exception, tool_name: str, **kwargs: Any) -> dict[str, Any]:
+        if isinstance(error, XuanstoMCPError):
+            handler = self._handlers.get(error.code)
+            if handler:
+                try:
+                    return handler(tool_name, error, **kwargs)
+                except Exception:
+                    pass
+        from .degradation import get_fallback
+        fallback = get_fallback(tool_name)
+        if fallback:
+            try:
+                result = await fallback(**kwargs)
+                if isinstance(result, dict):
+                    result["degraded"] = True
+                return result
+            except Exception:
+                pass
+        return make_error_response(error)
+
+
+def is_tool_execution_error(error: Exception) -> bool:
+    if isinstance(error, XuanstoMCPError):
+        return error.code not in ("PROTOCOL_ERROR", "TRANSPORT_ERROR")
+    return not isinstance(error, (ConnectionError, OSError))

@@ -54,3 +54,27 @@ class LRUCache:
     def items(self) -> list[tuple[str, Any]]:
         with self._lock:
             return list(self._cache.items())
+
+    def __getitem__(self, key: str) -> Any:
+        with self._lock:
+            if key not in self._cache:
+                raise KeyError(key)
+            self._cache.move_to_end(key)
+            return self._cache[key]
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        self.put(key, value)
+
+    def __delitem__(self, key: str) -> None:
+        if not self.delete(key):
+            raise KeyError(key)
+
+    def __len__(self) -> int:
+        return self.size()
+
+    def __contains__(self, key: str) -> bool:
+        return self.contains(key)
+
+    def __iter__(self):
+        with self._lock:
+            return iter(list(self._cache.keys()))

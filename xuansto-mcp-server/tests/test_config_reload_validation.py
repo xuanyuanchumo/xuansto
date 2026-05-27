@@ -80,7 +80,7 @@ def test_valid_yaml_with_correct_types(config_dir: Path):
         "gate_scripts:\n"
         "  MY-GATE: my-script.py\n"
         "gates_by_phase:\n"
-        "  0:\n"
+        "  \"0\":\n"
         "    - GATE-A\n"
         "hook_scripts:\n"
         "  my-hook: my-hook.py\n"

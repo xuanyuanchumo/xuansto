@@ -12,7 +12,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core.config import SCRIPTS_DIR
-from ..core.errors import make_success_response, make_error_response, ERR_VALIDATION
+from ..core.errors import ERR_VALIDATION, make_error_response, make_success_response
 from ..core.logging_config import get_logger
 from ..core.subprocess_utils import run_script
 from ..core.validator import validate_input, validate_path_safety
@@ -408,10 +408,10 @@ def _inline_dedup(target: str) -> dict[str, Any]:
 def register(mcp: FastMCP) -> None:
     @mcp.tool(
         annotations=ToolAnnotations(
-            readOnlyHint=True,
-            destructiveHint=False,
-            idempotentHint=True,
-            openWorldHint=False,
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=False,
+            openWorldHint=True,
         )
     )
     async def code_simplify(
@@ -433,7 +433,7 @@ def register(mcp: FastMCP) -> None:
 
             simplifier_path = SCRIPTS_DIR / "code-simplifier.py"
             if simplifier_path.exists():
-                result = run_script(
+                result = await run_script(
                     simplifier_path,
                     args=["--target", target, "--scope", scope, "--format", "json"],
                     timeout=60,
@@ -456,7 +456,7 @@ def register(mcp: FastMCP) -> None:
             if include_dedup:
                 dedup_path = SCRIPTS_DIR / "deduplication-detector.py"
                 if dedup_path.exists():
-                    result = run_script(
+                    result = await run_script(
                         dedup_path,
                         args=["--target", target, "--format", "json"],
                         timeout=60,

@@ -1,0 +1,139 @@
+{
+  "version": "1.0.0",
+  "profiles": {
+    "minimal": {
+      "PreToolUse": ["security-block"],
+      "PostToolUse": [],
+      "SessionStart": [],
+      "Stop": ["session-save"],
+      "PreCompact": []
+    },
+    "standard": {
+      "PreToolUse": ["security-block", "token-budget-check"],
+      "PostToolUse": ["auto-format", "encoding-check"],
+      "SessionStart": ["load-context", "kb-health-check"],
+      "Stop": ["session-save", "git-status-check", "experience-precipitate"],
+      "PreCompact": ["save-state"]
+    },
+    "strict": {
+      "PreToolUse": ["security-block", "token-budget-check", "dangerous-cmd-confirm"],
+      "PostToolUse": ["auto-format", "encoding-check", "console-log-detect", "type-check"],
+      "SessionStart": ["load-context", "kb-health-check", "platform-detect"],
+      "Stop": ["session-save", "git-status-check", "experience-precipitate", "pattern-detect"],
+      "PreCompact": ["save-state", "decision-log-persist"]
+    }
+  },
+  "hooks": {
+    "security-block": {
+      "type": "PreToolUse",
+      "matcher": "tool == \"Bash\" && tool_input.command matches \"(rm -rf|git push --force|DROP TABLE|TRUNCATE|chmod 777)\"",
+      "action": "block",
+      "message": "危险操作被拦截，请确认后手动执行"
+    },
+    "token-budget-check": {
+      "type": "PreToolUse",
+      "matcher": "tool == \"Bash\" || tool == \"Write\"",
+      "action": "warn",
+      "threshold_warn": 0.8,
+      "threshold_block": 0.95,
+      "message": "Token预算警告：当前使用率{ratio}%"
+    },
+    "dangerous-cmd-confirm": {
+      "type": "PreToolUse",
+      "matcher": "tool == \"Bash\" && tool_input.command matches \"(sudo|chmod|chown|mkfs|dd)\"",
+      "action": "confirm",
+      "message": "需要确认的命令：{command}"
+    },
+    "auto-format": {
+      "type": "PostToolUse",
+      "matcher": "tool == \"Edit\" || tool == \"Write\"",
+      "file_patterns": [".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".rs"],
+      "action": "format",
+      "commands": {
+        ".ts": "npx prettier --write {file}",
+        ".tsx": "npx prettier --write {file}",
+        ".js": "npx prettier --write {file}",
+        ".jsx": "npx prettier --write {file}",
+        ".py": "python -m black {file}",
+        ".go": "gofmt -w {file}",
+        ".rs": "rustfmt {file}"
+      }
+    },
+    "encoding-check": {
+      "type": "PostToolUse",
+      "matcher": "tool == \"Write\"",
+      "action": "validate",
+      "rules": ["utf8_no_bom", "no_ufffd"]
+    },
+    "console-log-detect": {
+      "type": "PostToolUse",
+      "matcher": "tool == \"Edit\" && file matches \"\\.(ts|tsx|js|jsx)$\"",
+      "action": "warn",
+      "pattern": "console\\.log",
+      "message": "检测到console.log残留，建议移除"
+    },
+    "type-check": {
+      "type": "PostToolUse",
+      "matcher": "tool == \"Edit\" && file matches \"\\.(ts|tsx)$\"",
+      "action": "check",
+      "command": "npx tsc --noEmit"
+    },
+    "load-context": {
+      "type": "SessionStart",
+      "action": "load",
+      "source": ".skill-logs/",
+      "pattern": "session-*.md",
+      "max_files": 1
+    },
+    "kb-health-check": {
+      "type": "SessionStart",
+      "action": "check",
+      "target": "127.0.0.1:8765",
+      "timeout_ms": 3000,
+      "fallback": "filesystem"
+    },
+    "platform-detect": {
+      "type": "SessionStart",
+      "action": "detect",
+      "targets": ["package.json", "Cargo.toml", "go.mod", "pyproject.toml", "pubspec.yaml"]
+    },
+    "session-save": {
+      "type": "Stop",
+      "action": "save",
+      "target": ".skill-logs/session-{timestamp}.md",
+      "sections": ["completed_tasks", "pending_tasks", "key_decisions", "experience"]
+    },
+    "git-status-check": {
+      "type": "Stop",
+      "action": "check",
+      "command": "git status --porcelain",
+      "warn_on": "uncommitted changes",
+      "message": "存在未提交的变更，建议提交后再结束会话"
+    },
+    "experience-precipitate": {
+      "type": "Stop",
+      "action": "trigger",
+      "target": "knowledge_precipitate",
+      "conditions": ["task_completed"]
+    },
+    "pattern-detect": {
+      "type": "Stop",
+      "action": "analyze",
+      "target": "session_errors",
+      "threshold": 2,
+      "output": ".knowledge/experience/patterns/"
+    },
+    "save-state": {
+      "type": "PreCompact",
+      "action": "save",
+      "target": ".agent_cache/",
+      "items": ["current_phase", "workflow_state", "active_agents"]
+    },
+    "decision-log-persist": {
+      "type": "PreCompact",
+      "action": "persist",
+      "source": "decision_log",
+      "target": ".agent_cache/decision-log.md"
+    }
+  }
+}

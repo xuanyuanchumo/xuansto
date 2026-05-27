@@ -14,7 +14,7 @@ def test_health_check_returns_healthy_status():
 
 
 def test_invoke_server_health():
-    result = _invoke_tool("server_health", "{}")
+    result = _invoke_tool("server_health", '{"action": "check"}')
     assert result["error"] is False
     assert result["data"]["status"] == "healthy"
 
@@ -47,7 +47,7 @@ def test_cli_health_subprocess():
 
 def test_cli_invoke_subprocess():
     result = subprocess.run(
-        [sys.executable, "-m", "xuansto_mcp.cli", "invoke", "server_health"],
+        [sys.executable, "-m", "xuansto_mcp.cli", "invoke", "server_health", "--params", '{"action": "check"}'],
         capture_output=True,
         text=True,
     )

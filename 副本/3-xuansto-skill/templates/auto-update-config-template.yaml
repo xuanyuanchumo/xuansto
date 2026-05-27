@@ -1,0 +1,154 @@
+provider: github
+
+channel: latest
+
+schedule:
+  checkOnLaunch: true
+  checkIntervalMinutes: 60
+  allowManualCheck: true
+
+delta:
+  enabled: true
+  maxBlockSize: 65536
+  minVersion: "1.0.0"
+
+rollback:
+  enabled: true
+  keepPreviousVersions: 2
+  autoRollbackOnCrash: true
+  crashThreshold: 3
+  crashWindowMinutes: 5
+
+notification:
+  mode: "prompt"
+  promptIntervalHours: 24
+  silentInDND: true
+  customTitle: "Update Available"
+  customMessage: "A new version of {appName} is available: v{version}"
+  changelog: true
+
+download:
+  retryCount: 3
+  retryDelayMs: 2000
+  timeoutMs: 300000
+  verifyHash: true
+  hashAlgorithm: "sha512"
+
+install:
+  promptBeforeInstall: true
+  autoRestartAfterInstall: false
+  preInstallScript: ""
+  postInstallScript: ""
+
+github:
+  owner: "example-org"
+  repo: "my-app"
+  tokenEnv: "GITHUB_TOKEN"
+  releasePrefix: "v"
+  private: false
+
+s3:
+  bucket: "my-app-updates"
+  region: "us-east-1"
+  path: "updates/{{platform}}/{{arch}}/{{channel}}"
+  accessKeyIdEnv: "AWS_ACCESS_KEY_ID"
+  secretAccessKeyEnv: "AWS_SECRET_ACCESS_KEY"
+
+generic:
+  url: "https://updates.example.com/{{platform}}/{{arch}}/{{channel}}"
+  headers:
+    Authorization: "Bearer ${UPDATE_TOKEN}"
+
+electronUpdater:
+  provider: "github"
+  owner: "example-org"
+  repo: "my-app"
+  token: ""
+  allowPrerelease: false
+  channel:
+    - "latest"
+  disableDifferentialDownload: false
+  updateServerUrl: ""
+  requestHeaders: {}
+
+  autoDownload: false
+  autoInstallOnAppQuit: true
+  forceDevUpdateConfig: false
+
+  publisherName:
+    - "Example Corp"
+
+  dns:
+    dnsServers:
+      - "8.8.8.8"
+      - "8.8.4.4"
+
+  logging:
+    enabled: true
+    level: "info"
+    filePath: "auto-update.log"
+
+tauriUpdater:
+  endpoints:
+    - "https://updates.example.com/{{target}}/{{arch}}/{{current_version}}"
+  pubkey: "PUBLIC_KEY_BASE64"
+
+  windows:
+    installerArgs: ""
+    mode: "passive"
+
+  macOS:
+    mode: "background"
+
+  linux:
+    mode: "background"
+
+  dialog:
+    title: "Update Available"
+    body: "A new version is available. Do you want to update now?"
+    okButton: "Update"
+    cancelButton: "Later"
+
+  beforeQuit:
+    enabled: true
+    timeoutMs: 10000
+
+electronUpdaterJson: |
+  {
+    "version": "1.2.0",
+    "releaseDate": "2024-01-15T10:00:00Z",
+    "releaseName": "v1.2.0",
+    "releaseNotes": "## What's New\n- Feature A\n- Feature B\n\n## Bug Fixes\n- Fix C",
+    "path": "MyApp-1.2.0.dmg",
+    "sha512": "BASE64_SHA512_HASH",
+    "differentialPackage": {
+      "url": "https://github.com/example-org/my-app/releases/download/v1.2.0/MyApp-1.2.0-delta.zip",
+      "sha512": "BASE64_SHA512_HASH",
+      "blockMapSize": 12345
+    }
+  }
+
+tauriUpdaterJson: |
+  {
+    "version": "1.2.0",
+    "date": "2024-01-15T10:00:00Z",
+    "notes": "## What's New\n- Feature A\n- Feature B",
+    "platforms": {
+      "windows-x86_64": {
+        "url": "https://updates.example.com/windows/x86_64/MyApp-1.2.0.msi",
+        "signature": "SIGNATURE_BASE64"
+      },
+      "darwin-x86_64": {
+        "url": "https://updates.example.com/darwin/x86_64/MyApp-1.2.0.app.tar.gz",
+        "signature": "SIGNATURE_BASE64"
+      },
+      "darwin-aarch64": {
+        "url": "https://updates.example.com/darwin/aarch64/MyApp-1.2.0.app.tar.gz",
+        "signature": "SIGNATURE_BASE64"
+      },
+      "linux-x86_64": {
+        "url": "https://updates.example.com/linux/x86_64/MyApp-1.2.0.AppImage.tar.gz",
+        "signature": "SIGNATURE_BASE64"
+      }
+    }
+  }

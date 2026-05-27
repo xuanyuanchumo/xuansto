@@ -1,11 +1,1 @@
-*.md text eol=lf diff=markdown
-*.yaml text eol=lf
-*.yml text eol=lf
-*.json text eol=lf
-
-*.py text eol=lf diff=python
-*.js text eol=lf
-*.ps1 text eol=crlf
-
-*.db binary
-*.sqlite3 binary
+constraints.yaml merge=union

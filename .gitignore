@@ -1,58 +1,133 @@
+# =============================================================================
+# Trae / Skill Runtime
+# =============================================================================
 .trae/*
 !.trae/skills/
 .trae/skills/*
 !.trae/skills/xuansto-skill-v2/
+.trae-cn/
 
 .trae/skills/xuansto-skill-v2/.knowledge/temp-scripts/*
 !.trae/skills/xuansto-skill-v2/.knowledge/temp-scripts/.gitkeep
 .trae/skills/xuansto-skill-v2/.knowledge/script-errors/*
 !.trae/skills/xuansto-skill-v2/.knowledge/script-errors/.gitkeep
 .trae/skills/xuansto-skill-v2/.knowledge/index/knowledge.db
+.trae/skills/xuansto-skill-v2/.knowledge/backup/
 
 .xuansto/
+chroma_db/
 
-.venv/
-.venv2/
-.venv_test/
-.testvenv/
+# =============================================================================
+# MCP Server Runtime
+# =============================================================================
+xuansto-mcp-server/.skill-logs/
+xuansto-mcp-server/.agent_cache/
+xuansto-mcp-server/data/knowledge/general/added-*
+xuansto-mcp-server/src/xuansto_mcp/data/knowledge/general/added-*
+
+# =============================================================================
+# Python
+# =============================================================================
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyo
+*.pyc
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.eggs/
+.tox/
+.nox/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
 
-.DS_Store
-Thumbs.db
-._*
+# =============================================================================
+# Build Artifacts
+# =============================================================================
+dist/
+build/
+*.egg-info/
+*.egg
+*.whl
 
+# =============================================================================
+# Virtual Environments
+# =============================================================================
+.venv*
+venv/
+.uv/
+
+# =============================================================================
+# IDE / Editor
+# =============================================================================
 .idea/
 .vscode/
 .claude/
 .cursor/
 .windsurf/
+.zed/
 *.swp
 *.swo
 *~
 
+# =============================================================================
+# OS
+# =============================================================================
+.DS_Store
+Thumbs.db
+Desktop.ini
+._*
+
+# =============================================================================
+# Environment & Secrets
+# =============================================================================
 .env
 .env.local
 .env.*.local
+.env.production
+credentials/
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
 
+# =============================================================================
+# Logs
+# =============================================================================
 *.log
 logs/
+audit_log.jsonl
 
+# =============================================================================
+# Databases
+# =============================================================================
 *.db
 *.sqlite3
 
-xuansto-clean/
-副本/
+# =============================================================================
+# Cache & Temporary
+# =============================================================================
+*.bak
+*.orig
+*.tmp
+*.temp
+.cache/
+docs/plan/*.tmp
+docs/plan/*.bak
 
-CHANGELOG.md
-CODE_WIKI.md
-xuansto-skill-WIKI.md
-_copy_helper.ps1
-_copy_helper.py
-setup-worktree.ps1
-test-path-resolve.ps1
-test-syntax.ps1
-docs/*
-!docs/plan/
-!docs/amb/
+# =============================================================================
+# Node.js
+# =============================================================================
+node_modules/
+
+# =============================================================================
+# Python Tool Files
+# =============================================================================
+pip-log.txt

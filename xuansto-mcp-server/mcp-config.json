@@ -4,9 +4,14 @@
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/skiller-team/xuansto-mcp-server",
+        "git+https://github.com/xuanyuanchumo/xuansto#subdirectory=xuansto-mcp-server",
         "xuansto-mcp"
       ]
+    },
+    "xuansto-mcp-server-http": {
+      "url": "http://127.0.0.1:8000/mcp",
+      "transport": "streamable-http",
+      "note": "Streamable HTTP transport. Start server with XUANSTO_TRANSPORT=streamable-http XUANSTO_PORT=8000"
     }
   }
 }

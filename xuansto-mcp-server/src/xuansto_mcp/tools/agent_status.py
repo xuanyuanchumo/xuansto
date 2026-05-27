@@ -7,8 +7,8 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from ..core.config import REFERENCES_DIR, AGENTS_DIR, DATA_DIR
-from ..core.errors import make_error_response, make_success_response, ERR_VALIDATION
+from ..core.config import AGENTS_DIR, DATA_DIR, REFERENCES_DIR
+from ..core.errors import ERR_VALIDATION, make_error_response, make_success_response
 from ..core.logging_config import get_logger
 from ..core.validator import validate_input
 from ..models.schemas import AgentStatusInput
@@ -27,7 +27,44 @@ PHASE_AGENT_MAP: dict[int, list[str]] = {
     8: ["Build-Release Engineer", "CI/CD Specialist", "Runtime Supervisor"],
 }
 
+_REGISTRY_YAML_PATH = AGENTS_DIR / "registry.yaml"
+
+_registry_cache: dict[str, Any] = {}
+_registry_cache_mtime: float = 0.0
+
+
+def _load_registry_yaml() -> dict[str, Any]:
+    global _registry_cache, _registry_cache_mtime
+    if not _REGISTRY_YAML_PATH.exists():
+        return {}
+    try:
+        mtime = _REGISTRY_YAML_PATH.stat().st_mtime
+        if mtime == _registry_cache_mtime and _registry_cache:
+            return _registry_cache
+        import yaml
+        raw = yaml.safe_load(_REGISTRY_YAML_PATH.read_text(encoding="utf-8"))
+        if isinstance(raw, dict):
+            _registry_cache = raw
+            _registry_cache_mtime = mtime
+            return raw
+    except Exception:
+        pass
+    return {}
+
+
+def _get_agent_phase_map() -> dict[str, int]:
+    registry = _load_registry_yaml()
+    phase_map: dict[str, int] = {}
+    for layer in registry.get("layers", []):
+        for agent in layer.get("agents", []):
+            name = agent.get("name", "")
+            phase_val = agent.get("phase", 2)
+            if name:
+                phase_map[name] = phase_val
+    return phase_map
+
 def _parse_agent_registry(registry_path: Path) -> list[dict[str, Any]]:
+    phase_map = _get_agent_phase_map()
     if not registry_path.exists():
         return []
     content = registry_path.read_text(encoding="utf-8")
@@ -40,7 +77,12 @@ def _parse_agent_registry(registry_path: Path) -> list[dict[str, Any]]:
             continue
         agent_match = re.match(r"^\s*[-*]\s*\*\*(.+?)\*\*", line)
         if agent_match:
-            agents.append({"name": agent_match.group(1).strip(), "layer": current_layer})
+            name = agent_match.group(1).strip()
+            agents.append({
+                "name": name,
+                "layer": current_layer,
+                "phase": phase_map.get(name, 2),
+            })
     return agents
 
 def _get_agent_detail(agent_name: str, agents_dir: Path) -> dict[str, Any]:
@@ -50,12 +92,6 @@ def _get_agent_detail(agent_name: str, agents_dir: Path) -> dict[str, Any]:
             if agent_file.exists():
                 content = agent_file.read_text(encoding="utf-8")
                 return {"name": agent_name, "file": str(agent_file), "content_length": len(content)}
-    detail_dir = REFERENCES_DIR / "agent-details"
-    if detail_dir.exists():
-        for f in detail_dir.glob("*.md"):
-            if agent_name.lower().replace(" ", "-") in f.stem.lower():
-                content = f.read_text(encoding="utf-8")
-                return {"name": agent_name, "file": str(f), "content_length": len(content)}
     return {"name": agent_name, "detail": "未找到详细定义文件"}
 
 
@@ -91,6 +127,22 @@ _MERGE_GROUPS: list[dict[str, Any]] = [
         "capabilities": ["refactoring", "code_simplification", "history_analysis"],
     },
 ]
+
+
+def _evaluate_merge_policy(project_scale: str = "medium") -> dict[str, Any]:
+    if project_scale in ("small", "mini"):
+        return {
+            "merge_recommended": True,
+            "merge_groups": [
+                {
+                    "name": "security_testing_merged",
+                    "agents": ["Security Tester", "Penetration Tester"],
+                    "merged_into": "Security Tester",
+                    "reason": "project_scale_below_medium",
+                },
+            ],
+        }
+    return {"merge_recommended": False, "project_scale": project_scale}
 
 
 def _load_merge_rules_from_yaml() -> list[dict[str, Any]] | None:
@@ -186,7 +238,7 @@ def register(mcp: FastMCP) -> None:
         capabilities: list[str] | None = None,
         project_file_count: int | None = None,
     ) -> dict[str, Any]:
-        """Agent状态查询：列出全部57个Agent、按Phase查询活跃Agent、查询单个Agent详情、按能力匹配Agent、合并Agent(小项目自动从57合并到~20)。返回Agent名称、层级和匹配状态。"""
+        """Agent状态查询：列出全部57个Agent、按Phase查询活跃Agent、查询单个Agent详情、按能力匹配Agent、合并Agent(小项目自动从57合并到~20)。返回Agent名称、层级和匹配状态。Prefer using Resource xuansto://agents/list for read-only access."""
         validated, err = validate_input(AgentStatusInput, action=action, phase=phase, agent_name=agent_name, capabilities=capabilities, project_file_count=project_file_count)
         if err:
             return err
@@ -195,16 +247,22 @@ def register(mcp: FastMCP) -> None:
             if action == "list":
                 registry = REFERENCES_DIR / "agent-registry.md"
                 agents = _parse_agent_registry(registry)
-                return make_success_response({"agents": agents, "total": len(agents)})
+                if phase is not None:
+                    agents = [a for a in agents if a.get("phase", 2) <= phase]
+                return make_success_response({"agents": agents, "total": len(agents), "phase_filter": phase})
             elif action == "by_phase":
                 if phase is None:
                     return make_error_response(ValueError("by_phase操作需要phase参数(0-8)"), error_code=ERR_VALIDATION)
                 phase_agents = PHASE_AGENT_MAP.get(phase, [])
-                return make_success_response({"phase": phase, "agents": phase_agents, "total": len(phase_agents)})
+                phase_map = _get_agent_phase_map()
+                enriched = [{"name": name, "phase": phase_map.get(name, 2)} for name in phase_agents]
+                return make_success_response({"phase": phase, "agents": enriched, "total": len(enriched)})
             elif action == "detail":
                 if not agent_name:
                     return make_error_response(ValueError("detail操作需要agent_name参数"), error_code=ERR_VALIDATION)
                 detail = _get_agent_detail(agent_name, AGENTS_DIR)
+                phase_map = _get_agent_phase_map()
+                detail["phase"] = phase_map.get(agent_name, 2)
                 return make_success_response(detail)
             elif action == "match":
                 if not capabilities:
@@ -237,8 +295,30 @@ def register(mcp: FastMCP) -> None:
             elif action == "merge":
                 result = _merge_agents(project_file_count)
                 return make_success_response(result)
+            elif action == "merge_policy":
+                project_scale = "medium"
+                if project_file_count is not None:
+                    if project_file_count < 20:
+                        project_scale = "small"
+                    elif project_file_count < 50:
+                        project_scale = "medium"
+                    else:
+                        project_scale = "large"
+                policy = _evaluate_merge_policy(project_scale)
+                if policy.get("merge_recommended"):
+                    logger.info("merge_policy_applied: scale=%s groups=%s", project_scale, [g["name"] for g in policy.get("merge_groups", [])])
+                    try:
+                        from .decision_log import _log_decision
+                        _log_decision(
+                            title="Agent合并策略决策",
+                            decision=f"项目规模({project_scale})低于medium，推荐合并: {[g['name'] for g in policy.get('merge_groups', [])]}",
+                            rationale="project_scale_below_medium",
+                        )
+                    except Exception:
+                        pass
+                return make_success_response({"action": "merge_policy", "project_scale": project_scale, **policy})
             else:
-                return make_error_response(ValueError(f"未知操作: {action}，支持: list, by_phase, detail, match, merge"), error_code=ERR_VALIDATION)
+                return make_error_response(ValueError(f"未知操作: {action}，支持: list, by_phase, detail, match, merge, merge_policy"), error_code=ERR_VALIDATION)
         except Exception as e:
             logger.error("agent_status error: %s", e)
             return make_error_response(e)

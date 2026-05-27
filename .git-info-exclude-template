@@ -1,0 +1,50 @@
+# Git local exclude rules
+# This file is NOT tracked by git - add your personal ignore patterns here
+# These rules only apply to your local repository
+#
+# INSTALL: Copy this file to your git info directory:
+#   For worktree: copy .git-info-exclude-template to <gitdir>/info/exclude
+#   For regular repo: copy .git-info-exclude-template to .git/info/exclude
+
+# ===== Editor-specific =====
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+
+# ===== OS-specific =====
+desktop.ini
+Desktop.ini
+ehthumbs.db
+
+# ===== Local development overrides =====
+docker-compose.override.yml
+.local/
+
+# ===== Debug files =====
+*.pyc
+debug/
+debug_*.py
+test_local_*.py
+scratch_*.py
+
+# ===== Personal notes =====
+NOTES.md
+TODO_PERSONAL.md
+
+# ===== Large file temporary storage =====
+*.dump
+*.prof
+*.heap
+
+# ===== Local experimental configs =====
+local_*.yaml
+local_*.json
+local_*.toml
+
+# ===== Personal Python version =====
+.python-version
+
+# ===== Personal toolchain =====
+.tool-versions

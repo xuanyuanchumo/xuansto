@@ -14,7 +14,7 @@ from xuansto_mcp.tools.hook_manage import (
     get_post_hooks,
     get_pre_hooks,
 )
-from xuansto_mcp.tools.server_health import _TOOL_METRICS, record_tool_call
+from xuansto_mcp.core.metrics import get_metrics_collector
 from xuansto_mcp.core.errors import make_success_response
 
 
@@ -43,7 +43,7 @@ def test_get_pre_hooks():
     assert "decision-log-persist" in hooks
 
     hooks = get_pre_hooks("skill_analyze")
-    assert hooks == []
+    assert "platform-detect" in hooks
 
 
 def test_get_post_hooks():
@@ -106,7 +106,7 @@ def test_execute_pre_hooks_no_hooks_for_unknown_tool():
         "project_path": ".",
         "command": "rm -rf /",
     }
-    results, errors = execute_pre_hooks("skill_analyze", kwargs)
+    results, errors = execute_pre_hooks("nonexistent_tool_xyz", kwargs)
     assert results == []
     assert errors == []
 
@@ -129,15 +129,21 @@ def test_execute_post_hooks_no_hook_for_tool():
 
 def test_with_hook_interception_blocks():
     from xuansto_mcp.server import _with_hook_interception
+    from xuansto_mcp.core.hook_engine import get_hook_engine
+    from xuansto_mcp.tools.hook_manage import execute_pre_hooks as hook_manage_pre
+
+    engine = get_hook_engine()
+    if not engine._pre_hooks.get("code_simplify") and not engine._global_pre_hooks:
+        engine.register_hook("pre", hook_manage_pre)
 
     async def fake_tool(**kwargs):
         return make_success_response({"status": "ok"})
 
     wrapped = _with_hook_interception("code_simplify", fake_tool)
     result = asyncio.run(wrapped(project_path=".", command="rm -rf /"))
-    assert result["data"]["action"] == "blocked"
-    assert result["data"]["hook"] == "security-block"
-    assert result["data"]["tool"] == "code_simplify"
+    assert result["action"] == "blocked"
+    assert result["hook"] == "security-block"
+    assert result["tool"] == "code_simplify"
 
 
 def test_with_hook_interception_passes():
@@ -155,7 +161,9 @@ def test_with_hook_interception_records_metrics_on_block():
     from xuansto_mcp.server import _with_hook_interception
     from xuansto_mcp.core.hook_engine import get_hook_engine
 
-    _TOOL_METRICS.pop("__test_hook_block__", None)
+    mc = get_metrics_collector()
+    with mc._lock:
+        mc._tool_metrics.pop("__test_hook_block__", None)
 
     async def fake_tool(**kwargs):
         return make_success_response({"status": "ok"})
@@ -168,20 +176,23 @@ def test_with_hook_interception_records_metrics_on_block():
     engine = get_hook_engine()
     with patch.object(engine, "execute_pre_hooks", side_effect=mock_pre):
         result = asyncio.run(wrapped(project_path="."))
-        assert result["data"]["action"] == "blocked"
+        assert result["action"] == "blocked"
 
-    metrics = _TOOL_METRICS.get("__test_hook_block__")
+    with mc._lock:
+        metrics = mc._tool_metrics.get("__test_hook_block__")
     assert metrics is not None
     assert metrics["call_count"] == 1
-    assert metrics["error_count"] == 1
-    assert len(metrics["latencies"]) == 1
+    assert metrics["failure_count"] == 1
+    assert len(metrics["latency_samples"]) == 1
 
 
 def test_with_hook_interception_records_metrics_on_success():
     from xuansto_mcp.server import _with_hook_interception
     from xuansto_mcp.core.hook_engine import get_hook_engine
 
-    _TOOL_METRICS.pop("__test_hook_success__", None)
+    mc = get_metrics_collector()
+    with mc._lock:
+        mc._tool_metrics.pop("__test_hook_success__", None)
 
     async def fake_tool(**kwargs):
         return make_success_response({"status": "ok"})
@@ -194,18 +205,21 @@ def test_with_hook_interception_records_metrics_on_success():
             result = asyncio.run(wrapped(project_path="."))
             assert result["data"]["status"] == "ok"
 
-    metrics = _TOOL_METRICS.get("__test_hook_success__")
+    with mc._lock:
+        metrics = mc._tool_metrics.get("__test_hook_success__")
     assert metrics is not None
     assert metrics["call_count"] == 1
-    assert metrics["error_count"] == 0
-    assert len(metrics["latencies"]) == 1
+    assert metrics["failure_count"] == 0
+    assert len(metrics["latency_samples"]) == 1
 
 
 def test_with_hook_interception_records_metrics_on_exception():
     from xuansto_mcp.server import _with_hook_interception
     from xuansto_mcp.core.hook_engine import get_hook_engine
 
-    _TOOL_METRICS.pop("__test_hook_exc__", None)
+    mc = get_metrics_collector()
+    with mc._lock:
+        mc._tool_metrics.pop("__test_hook_exc__", None)
 
     async def fake_tool(**kwargs):
         raise RuntimeError("test error")
@@ -219,10 +233,11 @@ def test_with_hook_interception_records_metrics_on_exception():
         except RuntimeError:
             pass
 
-    metrics = _TOOL_METRICS.get("__test_hook_exc__")
+    with mc._lock:
+        metrics = mc._tool_metrics.get("__test_hook_exc__")
     assert metrics is not None
     assert metrics["call_count"] == 1
-    assert metrics["error_count"] == 1
+    assert metrics["failure_count"] == 1
 
 
 def test_with_hook_interception_post_hooks_called():

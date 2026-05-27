@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import gzip
 import hashlib
 import json
@@ -15,12 +16,21 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from ..core.config import QUALITY_GATES_PHASE_MAP, SKILL_ROOT, WORK_DIR, WORKFLOWS_DIR, _resolve_skill_file
-from ..core.errors import XuanstoMCPError, make_error_response, make_success_response, ERR_VALIDATION, ERR_NOT_FOUND, ERR_INTERNAL
 from ..core import atomic_write
+from ..core.config import QUALITY_GATES_PHASE_MAP, WORK_DIR, WORKFLOWS_DIR, _resolve_skill_file
+from ..core.database import delete_workflow_state, load_state, load_workflow_states, persist_state, save_workflow_state
+from ..core.errors import (
+    ERR_INTERNAL,
+    ERR_NOT_FOUND,
+    ERR_VALIDATION,
+    ERR_WORKFLOW_NOT_FOUND,
+    XuanstoMCPError,
+    make_error_response,
+    make_success_response,
+)
 from ..core.logging_config import get_logger
 from ..core.notifications import notify
-from ..core.validator import validate_input
+from ..core.validator import validate_input, validate_path_safety
 from ..models.schemas import WorkflowDispatchInput
 from .quality_gate_check import INLINE_CHECKS
 
@@ -28,6 +38,8 @@ logger = get_logger("workflow_dispatch")
 
 _DEFAULT_MAX_SNAPSHOTS_PER_WORKFLOW = 20
 _DEFAULT_SNAPSHOT_TTL_DAYS = 30
+
+_file_backup_enabled: bool = False
 
 _SNAPSHOT_CLEANUP_CONFIG: dict[str, Any] = {}
 
@@ -69,15 +81,63 @@ def _get_workflows_dir() -> Path:
     d.mkdir(parents=True, exist_ok=True)
     return d
 
+def _persist_workflow_to_sqlite(workflow_id: str, data: dict[str, Any]) -> None:
+    core_data = {k: v for k, v in data.items() if k not in ("_timestamp", "_hash")}
+    try:
+        persist_state("workflow_instances", {
+            "id": workflow_id,
+            "workflow_type": core_data.get("workflow", ""),
+            "current_phase": core_data.get("current_phase", 0),
+            "status": core_data.get("status", "running"),
+            "data_json": core_data,
+        })
+    except Exception as exc:
+        logger.warning("Failed to persist workflow %s to SQLite: %s", workflow_id, exc)
+
+def _load_workflow_from_sqlite(workflow_id: str) -> dict[str, Any] | None:
+    try:
+        results = load_state("workflow_instances", {"id": workflow_id})
+        if results:
+            row = results[0]
+            data_json = row.get("data_json", {})
+            if isinstance(data_json, str):
+                data_json = json.loads(data_json)
+            if data_json:
+                return data_json
+    except Exception:
+        pass
+    return None
+
+def _load_all_workflows_from_sqlite() -> dict[str, dict[str, Any]]:
+    result: dict[str, dict[str, Any]] = {}
+    try:
+        rows = load_state("workflow_instances")
+        for row in rows:
+            data_json = row.get("data_json", {})
+            if isinstance(data_json, str):
+                data_json = json.loads(data_json)
+            if data_json:
+                wid = data_json.get("workflow_id", row.get("id", ""))
+                if wid:
+                    result[wid] = data_json
+    except Exception:
+        pass
+    return result
+
 def _persist_workflow(workflow_id: str, data: dict[str, Any]) -> None:
+    if not _file_backup_enabled:
+        return
     core_data = {k: v for k, v in data.items() if k not in ("_timestamp", "_hash")}
     payload = dict(core_data)
-    payload["_timestamp"] = time.time()
+    payload["_timestamp"] = datetime.now(timezone.utc).isoformat()
     payload["_hash"] = hashlib.sha256(json.dumps(core_data, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
     path = _get_workflows_dir() / f"{workflow_id}.json"
     atomic_write(path, json.dumps(payload, ensure_ascii=False, indent=2))
 
 def _load_workflow(workflow_id: str) -> dict[str, Any] | None:
+    sqlite_data = _load_workflow_from_sqlite(workflow_id)
+    if sqlite_data is not None:
+        return sqlite_data
     path = _get_workflows_dir() / f"{workflow_id}.json"
     if not path.exists():
         return None
@@ -97,24 +157,27 @@ def _load_workflow(workflow_id: str) -> dict[str, Any] | None:
         return None
 
 def _load_all_workflows() -> dict[str, dict[str, Any]]:
-    result: dict[str, dict[str, Any]] = {}
+    result = _load_all_workflows_from_sqlite()
     for f in _get_workflows_dir().glob("*.json"):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
             wid = data.get("workflow_id", f.stem)
-            result[wid] = data
+            if wid not in result:
+                result[wid] = data
         except Exception:
             continue
     return result
 
 def _persist_active_workflows() -> None:
+    if not _file_backup_enabled:
+        return
     persist_dir = WORK_DIR
     persist_dir.mkdir(parents=True, exist_ok=True)
     with _workflows_lock:
         snapshot = dict(_ACTIVE_WORKFLOWS)
     core_data = {k: v for k, v in snapshot.items() if k not in ("_timestamp", "_hash")}
     payload = dict(core_data)
-    payload["_timestamp"] = time.time()
+    payload["_timestamp"] = datetime.now(timezone.utc).isoformat()
     payload["_hash"] = hashlib.sha256(json.dumps(core_data, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
     path = persist_dir / "workflow_states.json"
     atomic_write(path, json.dumps(payload, ensure_ascii=False, indent=2))
@@ -142,11 +205,59 @@ def _load_active_workflows() -> None:
         logger.warning("Failed to parse workflow states from %s", path)
 
 def load_on_startup() -> None:
+    restored_from_sqlite = 0
+    with _workflows_lock:
+        for wid, data in _load_all_workflows_from_sqlite().items():
+            status = data.get("status", "")
+            if status in ("aborted", "completed"):
+                continue
+            if wid not in _ACTIVE_WORKFLOWS:
+                _ACTIVE_WORKFLOWS[wid] = data
+                restored_from_sqlite += 1
+    if restored_from_sqlite > 0:
+        logger.info("Restored %d active workflow instances from SQLite (workflow_instances)", restored_from_sqlite)
+
+    restored_from_db = 0
+    try:
+        db_workflows = load_workflow_states(status="active")
+        with _workflows_lock:
+            for db_wf in db_workflows:
+                wid = db_wf.get("workflow_id", "")
+                if not wid or wid in _ACTIVE_WORKFLOWS:
+                    continue
+                full_data = _load_workflow_from_sqlite(wid)
+                if full_data is not None:
+                    full_status = full_data.get("status", "")
+                    if full_status in ("aborted", "completed"):
+                        continue
+                    _ACTIVE_WORKFLOWS[wid] = full_data
+                else:
+                    entry = {
+                        "workflow_id": wid,
+                        "workflow": db_wf.get("workflow_type", ""),
+                        "project_path": db_wf.get("project_path", "."),
+                        "status": "running",
+                        "current_phase": db_wf.get("current_phase", 0),
+                        "completed_phases": db_wf.get("completed_phases_json", []) or [],
+                    }
+                    tasks = db_wf.get("tasks_json")
+                    if tasks:
+                        entry["tasks"] = tasks
+                    decisions = db_wf.get("decisions_json")
+                    if decisions:
+                        entry["decisions"] = decisions
+                    _ACTIVE_WORKFLOWS[wid] = entry
+                    _persist_workflow_to_sqlite(wid, entry)
+                restored_from_db += 1
+        if restored_from_db > 0:
+            logger.info("Restored %d active workflow instances from SQLite (workflow_states)", restored_from_db)
+    except Exception as exc:
+        logger.warning("Failed to restore workflow instances from SQLite: %s", exc)
+
     workflows_dir = _get_workflows_dir()
-    recovered = 0
+    recovered_from_file = 0
     skipped_aborted = 0
     skipped_corrupt = 0
-    entries: dict[str, dict[str, Any]] = {}
     for f in workflows_dir.glob("*.json"):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
@@ -156,18 +267,22 @@ def load_on_startup() -> None:
             continue
         wid = data.get("workflow_id", f.stem)
         status = data.get("status", "")
-        if status == "aborted":
+        if status in ("aborted", "completed"):
             skipped_aborted += 1
-            logger.debug("Skipping aborted workflow %s from %s", wid, f.name)
             continue
-        entries[wid] = data
-        recovered += 1
+        with _workflows_lock:
+            if wid not in _ACTIVE_WORKFLOWS:
+                _ACTIVE_WORKFLOWS[wid] = data
+                recovered_from_file += 1
+    if recovered_from_file > 0 or skipped_aborted > 0 or skipped_corrupt > 0:
+        logger.info(
+            "Startup file fallback: %d recovered, %d aborted skipped, %d corrupt skipped",
+            recovered_from_file, skipped_aborted, skipped_corrupt,
+        )
+
     with _workflows_lock:
-        _ACTIVE_WORKFLOWS.update(entries)
-    logger.info(
-        "Startup recovery: %d workflows restored, %d aborted skipped, %d corrupt skipped",
-        recovered, skipped_aborted, skipped_corrupt,
-    )
+        total_active = len(_ACTIVE_WORKFLOWS)
+    logger.info("Startup complete: %d total active workflows in memory", total_active)
     _persist_active_workflows()
 
 def _list_workflows() -> list[dict[str, Any]]:
@@ -200,7 +315,7 @@ def _start_workflow(workflow: str, project_path: str) -> dict[str, Any]:
     workflow_file = WORKFLOWS_DIR / f"{workflow}.md"
     if not workflow_file.exists():
         available = [w["name"] for w in _list_workflows()]
-        return {"error": True, "code": "WORKFLOW_NOT_FOUND", "message": f"工作流不存在: {workflow}", "available": available}
+        return make_error_response(XuanstoMCPError("WORKFLOW_NOT_FOUND", f"工作流不存在: {workflow}", {"available": available}), error_code=ERR_WORKFLOW_NOT_FOUND)
     workflow_id = f"wf-{uuid.uuid4().hex[:8]}"
     entry = {
         "workflow_id": workflow_id,
@@ -210,14 +325,27 @@ def _start_workflow(workflow: str, project_path: str) -> dict[str, Any]:
         "current_phase": 0,
         "started_at": datetime.now(timezone.utc).isoformat(),
         "completed_phases": [],
+        "phase_definitions": [],
     }
     definition = _parse_workflow_definition(workflow)
     if definition and "phases" in definition:
         entry["phase_definitions"] = definition["phases"]
     with _workflows_lock:
         _ACTIVE_WORKFLOWS[workflow_id] = entry
+    _persist_workflow_to_sqlite(workflow_id, entry)
     _persist_workflow(workflow_id, entry)
     _persist_active_workflows()
+    try:
+        save_workflow_state(
+            workflow_id=workflow_id,
+            workflow_type=workflow,
+            current_phase=0,
+            project_path=project_path,
+            completed_phases=[],
+            status="active",
+        )
+    except Exception:
+        logger.debug("Failed to persist workflow state to SQLite for %s", workflow_id)
     notify(f"Workflow {workflow} started: {workflow_id}", "info")
     return entry
 
@@ -230,20 +358,25 @@ def _get_workflow_status(workflow_id: str) -> dict[str, Any]:
         with _workflows_lock:
             _ACTIVE_WORKFLOWS[workflow_id] = loaded
         return loaded
-    return {"error": True, "code": "WORKFLOW_NOT_FOUND", "message": f"工作流实例不存在: {workflow_id}"}
+    return make_error_response(XuanstoMCPError("WORKFLOW_NOT_FOUND", f"工作流实例不存在: {workflow_id}"), error_code=ERR_WORKFLOW_NOT_FOUND)
 
 def _abort_workflow(workflow_id: str) -> dict[str, Any]:
     with _workflows_lock:
         if workflow_id not in _ACTIVE_WORKFLOWS:
             loaded = _load_workflow(workflow_id)
             if loaded is None:
-                return {"error": True, "code": "WORKFLOW_NOT_FOUND", "message": f"工作流实例不存在: {workflow_id}"}
+                return make_error_response(XuanstoMCPError("WORKFLOW_NOT_FOUND", f"工作流实例不存在: {workflow_id}"), error_code=ERR_WORKFLOW_NOT_FOUND)
             _ACTIVE_WORKFLOWS[workflow_id] = loaded
         entry = _ACTIVE_WORKFLOWS.pop(workflow_id)
     entry["status"] = "aborted"
     entry["aborted_at"] = datetime.now(timezone.utc).isoformat()
+    _persist_workflow_to_sqlite(workflow_id, entry)
     _persist_workflow(workflow_id, entry)
     _persist_active_workflows()
+    try:
+        delete_workflow_state(workflow_id)
+    except Exception:
+        logger.debug("Failed to delete workflow state from SQLite for %s", workflow_id)
     notify(f"Workflow aborted: {workflow_id}", "warning")
     return entry
 
@@ -251,13 +384,21 @@ def _advance_phase(workflow_id: str) -> dict[str, Any]:
     with _phase_advance_lock:
         state = _load_workflow(workflow_id)
         if state is None:
-            return {"error": True, "code": "WORKFLOW_NOT_FOUND", "message": f"工作流实例不存在: {workflow_id}"}
+            return make_error_response(XuanstoMCPError("WORKFLOW_NOT_FOUND", f"工作流实例不存在: {workflow_id}"), error_code=ERR_WORKFLOW_NOT_FOUND)
         current_phase = state.get("current_phase", 0)
         project_path = state.get("project_path", ".")
         phase_defs = state.get("phase_definitions", [])
         phase_gates = []
         for p in phase_defs:
-            if p.get("id") == current_phase:
+            phase_id = p.get("id")
+            id_match = (
+                phase_id == current_phase
+                or (isinstance(phase_id, str) and isinstance(current_phase, int) and phase_id == f"phase-{current_phase}")
+                or (isinstance(phase_id, int) and isinstance(current_phase, str) and current_phase == f"phase-{phase_id}")
+                or (isinstance(phase_id, str) and phase_id.isdigit() and int(phase_id) == current_phase)
+                or (isinstance(current_phase, str) and current_phase.isdigit() and int(current_phase) == phase_id)
+            )
+            if id_match:
                 phase_gates = p.get("gates", [])
                 break
         gates = phase_gates if phase_gates else QUALITY_GATES_PHASE_MAP.get(str(current_phase), [])
@@ -323,6 +464,7 @@ def _advance_phase(workflow_id: str) -> dict[str, Any]:
         if new_phase > 8:
             state["status"] = "completed"
             state["completed_at"] = datetime.now(timezone.utc).isoformat()
+        _persist_workflow_to_sqlite(workflow_id, state)
         _persist_workflow(workflow_id, state)
         with _workflows_lock:
             if workflow_id in _ACTIVE_WORKFLOWS:
@@ -330,6 +472,18 @@ def _advance_phase(workflow_id: str) -> dict[str, Any]:
             active_state = _ACTIVE_WORKFLOWS.get(workflow_id, state)
         _persist_active_workflows()
         _save_snapshot(workflow_id, active_state, project_path)
+        try:
+            wf_type = state.get("workflow", "")
+            save_workflow_state(
+                workflow_id=workflow_id,
+                workflow_type=wf_type,
+                current_phase=new_phase,
+                project_path=project_path,
+                completed_phases=completed,
+                status="active" if new_phase <= 8 else "completed",
+            )
+        except Exception:
+            logger.debug("Failed to update workflow state in SQLite for %s", workflow_id)
         if new_phase > 8:
             notify(f"Workflow completed: {workflow_id}", "info")
         else:
@@ -350,7 +504,7 @@ def _advance_phase(workflow_id: str) -> dict[str, Any]:
 def _current_phase(workflow_id: str) -> dict[str, Any]:
     state = _load_workflow(workflow_id)
     if state is None:
-        return {"error": True, "code": "WORKFLOW_NOT_FOUND", "message": f"工作流实例不存在: {workflow_id}"}
+        return make_error_response(XuanstoMCPError("WORKFLOW_NOT_FOUND", f"工作流实例不存在: {workflow_id}"), error_code=ERR_WORKFLOW_NOT_FOUND)
     current = state.get("current_phase", 0)
     completed = state.get("completed_phases", [])
     total_phases = 9
@@ -375,15 +529,15 @@ def _save_snapshot(workflow_id: str, state: dict[str, Any], project_path: str) -
     snapshot_dir = _get_snapshot_dir(project_path)
     snapshot_dir.mkdir(parents=True, exist_ok=True)
     phase = state.get("current_phase", 0)
-    now = time.time()
-    timestamp = int(now)
+    now_dt = datetime.now(timezone.utc)
+    timestamp = int(now_dt.timestamp())
     filename = f"{workflow_id}_phase{phase}_{timestamp}.json"
     snapshot_path = snapshot_dir / filename
     snapshot_data = {
         "workflow_id": workflow_id,
         "phase": phase,
-        "timestamp": now,
-        "time_iso": datetime.fromtimestamp(now, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "timestamp": now_dt.isoformat(),
+        "time_iso": now_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "state": state,
     }
     gz_path = snapshot_path.with_suffix(".json.gz")
@@ -398,16 +552,12 @@ def _save_snapshot(workflow_id: str, state: dict[str, Any], project_path: str) -
             gz_path.unlink()
         os.replace(tmp_path, str(gz_path))
     except Exception:
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(tmp_path)
-        except OSError:
-            pass
         raise
     if snapshot_path.exists():
-        try:
+        with contextlib.suppress(OSError):
             snapshot_path.unlink()
-        except OSError:
-            pass
     _cleanup_snapshots(workflow_id, project_path)
     return gz_path
 
@@ -554,17 +704,21 @@ def register(mcp: FastMCP) -> None:
         phase_action: str | None = None,
         snapshot_phase: int | None = None,
     ) -> dict[str, Any]:
-        """工作流调度：启动/查询/中止/阶段推进工作流执行。支持sdd-tdd-full/medium/fast等15种工作流，返回工作流实例ID和当前状态。"""
+        """工作流调度：启动/查询/中止/阶段推进工作流执行。支持sdd-tdd-full/medium/fast等15种工作流，返回工作流实例ID和当前状态。Prefer using Resource xuansto://workflows/list for read-only access."""
         validated, err = validate_input(WorkflowDispatchInput, action=action, workflow=workflow, project_path=project_path, workflow_id=workflow_id, phase_action=phase_action, snapshot_phase=snapshot_phase)
         if err:
             return err
         logger.info("workflow_dispatch called: action=%s", action)
+        if project_path and project_path != ".":
+            safe_path, path_err = validate_path_safety(project_path, allow_absolute=True)
+            if path_err:
+                return make_error_response(ValueError(path_err), error_code=ERR_VALIDATION)
         try:
             if action == "start":
                 if not workflow:
                     return make_error_response(ValueError("start操作需要workflow参数"), error_code=ERR_VALIDATION)
                 result = _start_workflow(workflow, project_path)
-                if result.get("error"):
+                if result.get("status") == "error":
                     return result
                 return make_success_response(result)
             elif action == "status":
@@ -577,14 +731,14 @@ def register(mcp: FastMCP) -> None:
                             all_workflows[wid] = data
                     return make_success_response({"workflows": all_workflows})
                 result = _get_workflow_status(workflow_id)
-                if result.get("error"):
+                if result.get("status") == "error":
                     return result
                 return make_success_response(result)
             elif action == "abort":
                 if not workflow_id:
                     return make_error_response(ValueError("abort操作需要workflow_id参数"), error_code=ERR_VALIDATION)
                 result = _abort_workflow(workflow_id)
-                if result.get("error"):
+                if result.get("status") == "error":
                     return result
                 return make_success_response(result)
             elif action == "phase":
@@ -594,12 +748,12 @@ def register(mcp: FastMCP) -> None:
                     return make_error_response(ValueError("phase操作需要phase_action参数: advance, current"), error_code=ERR_VALIDATION)
                 if phase_action == "advance":
                     result = _advance_phase(workflow_id)
-                    if result.get("error"):
+                    if result.get("status") == "error":
                         return result
                     return make_success_response(result)
                 elif phase_action == "current":
                     result = _current_phase(workflow_id)
-                    if result.get("error"):
+                    if result.get("status") == "error":
                         return result
                     return make_success_response(result)
                 else:
@@ -614,6 +768,7 @@ def register(mcp: FastMCP) -> None:
                 with _workflows_lock:
                     if workflow_id and workflow_id in _ACTIVE_WORKFLOWS:
                         _ACTIVE_WORKFLOWS[workflow_id] = state.copy()
+                _persist_workflow_to_sqlite(workflow_id, state.copy())
                 _persist_workflow(workflow_id, state.copy())
                 _persist_active_workflows()
                 return make_success_response({
@@ -632,7 +787,7 @@ def register(mcp: FastMCP) -> None:
                     "total": len(snapshots),
                 })
             else:
-                return make_error_response(ValueError(f"未知操作: {action}，支持: start, status, abort, phase"), error_code=ERR_VALIDATION)
+                return make_error_response(ValueError(f"未知操作: {action}，支持: start, status, abort, phase, recover, snapshots"), error_code=ERR_VALIDATION)
         except Exception as e:
             logger.error("workflow_dispatch error: %s", e)
             return make_error_response(e)

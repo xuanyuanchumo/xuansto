@@ -40,7 +40,8 @@ def test_active_workflows_recovered_from_disk_on_startup(tmp_path, monkeypatch):
     _write_workflow_file(wf_dir, "wf-completed01", wf_completed)
 
     workflow_dispatch._ACTIVE_WORKFLOWS.clear()
-    workflow_dispatch.load_on_startup()
+    with patch("xuansto_mcp.tools.workflow_dispatch.load_workflow_states", return_value=[]):
+        workflow_dispatch.load_on_startup()
 
     assert "wf-running01" in workflow_dispatch._ACTIVE_WORKFLOWS
     assert workflow_dispatch._ACTIVE_WORKFLOWS["wf-running01"]["status"] == "running"
@@ -71,7 +72,8 @@ def test_aborted_workflows_not_recovered(tmp_path, monkeypatch):
     _write_workflow_file(wf_dir, "wf-running02", wf_running)
 
     workflow_dispatch._ACTIVE_WORKFLOWS.clear()
-    workflow_dispatch.load_on_startup()
+    with patch("xuansto_mcp.tools.workflow_dispatch.load_workflow_states", return_value=[]):
+        workflow_dispatch.load_on_startup()
 
     assert "wf-aborted01" not in workflow_dispatch._ACTIVE_WORKFLOWS
     assert "wf-running02" in workflow_dispatch._ACTIVE_WORKFLOWS
@@ -95,7 +97,8 @@ def test_corrupt_json_files_skipped_without_crashing(tmp_path, monkeypatch):
     _write_workflow_file(wf_dir, "wf-ok01", wf_ok)
 
     workflow_dispatch._ACTIVE_WORKFLOWS.clear()
-    workflow_dispatch.load_on_startup()
+    with patch("xuansto_mcp.tools.workflow_dispatch.load_workflow_states", return_value=[]):
+        workflow_dispatch.load_on_startup()
 
     assert "wf-corrupt" not in workflow_dispatch._ACTIVE_WORKFLOWS
     assert "wf-ok01" in workflow_dispatch._ACTIVE_WORKFLOWS
@@ -106,7 +109,8 @@ def test_missing_directory_handled_gracefully(tmp_path, monkeypatch):
     monkeypatch.setattr(workflow_dispatch, "WORK_DIR", nonexistent)
 
     workflow_dispatch._ACTIVE_WORKFLOWS.clear()
-    workflow_dispatch.load_on_startup()
+    with patch("xuansto_mcp.tools.workflow_dispatch.load_workflow_states", return_value=[]):
+        workflow_dispatch.load_on_startup()
 
     assert workflow_dispatch._ACTIVE_WORKFLOWS == {}
     assert (nonexistent / "workflows").exists()
@@ -187,7 +191,8 @@ def test_load_on_startup_syncs_persist_active_workflows(tmp_path, monkeypatch):
     _write_workflow_file(wf_dir, "wf-sync01", wf1)
 
     workflow_dispatch._ACTIVE_WORKFLOWS.clear()
-    workflow_dispatch.load_on_startup()
+    with patch("xuansto_mcp.tools.workflow_dispatch.load_workflow_states", return_value=[]):
+        workflow_dispatch.load_on_startup()
 
     states_path = tmp_path / "workflow_states.json"
     assert states_path.exists()

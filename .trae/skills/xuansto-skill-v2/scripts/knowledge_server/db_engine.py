@@ -1,16 +1,12 @@
 import hashlib
 import json
 import logging
-import os
 import sqlite3
-import stat
 import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
-
-from .config import SCHEMA_SQL, SCHEMA_VERSION
 
 logger = logging.getLogger("knowledge-server")
 
@@ -21,106 +17,38 @@ class SQLiteEngine:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn: Optional[sqlite3.Connection] = None
         self._write_lock = threading.RLock()
-        self._initialize_schema()
+        self._ensure_schema()
 
     def _get_conn(self) -> sqlite3.Connection:
         if self._conn is None:
             self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
             self._conn.row_factory = sqlite3.Row
             self._conn.execute("PRAGMA journal_mode=WAL")
+            self._conn.execute("PRAGMA busy_timeout=5000")
             self._conn.execute("PRAGMA foreign_keys=ON")
         return self._conn
 
-    def _initialize_schema(self):
+    def _ensure_schema(self):
         conn = self._get_conn()
-        conn.executescript(SCHEMA_SQL)
-        cur = conn.execute("SELECT MAX(version) FROM schema_version")
-        row = cur.fetchone()
-        current_version = row[0] if row[0] is not None else 0
-        if current_version < SCHEMA_VERSION:
-            if current_version < 9:
-                self._migrate_v9(conn)
-            if current_version < 10:
-                self._migrate_v10(conn)
-            if current_version < 11:
-                self._migrate_v11(conn)
-            if current_version < 12:
-                self._migrate_v12(conn)
-            conn.execute(
-                "INSERT OR IGNORE INTO schema_version (version, applied_at, description) VALUES (?, datetime('now'), ?)",
-                (SCHEMA_VERSION, 'Add status, last_accessed fields for lifecycle management'),
-            )
-        conn.commit()
         try:
-            os.chmod(str(self.db_path), stat.S_IRUSR | stat.S_IWUSR)
-        except OSError:
+            cur = conn.execute("PRAGMA table_info(knowledge_entries)")
+            columns = {row[1] for row in cur.fetchall()}
+            if not columns:
+                logger.info("SQLiteEngine: knowledge_entries table missing, schema will be created by xuansto-mcp-server init_db()")
+        except Exception as exc:
+            logger.warning("SQLiteEngine: schema check failed: %s", exc)
+        try:
+            cur = conn.execute("SELECT MAX(version) FROM schema_version")
+            row = cur.fetchone()
+            current_version = row[0] if row[0] is not None else 0
+            if current_version < 13:
+                conn.execute(
+                    "INSERT OR IGNORE INTO schema_version (version, applied_at, description) VALUES (?, datetime('now'), ?)",
+                    (13, 'Unified xuansto.db schema - merged knowledge.db tables'),
+                )
+                conn.commit()
+        except Exception:
             pass
-
-    def _migrate_v9(self, conn):
-        try:
-            cur = conn.execute("PRAGMA table_info(knowledge_entries)")
-            columns = {row[1] for row in cur.fetchall()}
-            if "embedding_retry_count" not in columns:
-                conn.execute("ALTER TABLE knowledge_entries ADD COLUMN embedding_retry_count INTEGER DEFAULT 0")
-            conn.execute("UPDATE knowledge_entries SET embedding_status = 'pending' WHERE embedding_status IS NULL")
-        except Exception as e:
-            logger.warning("operation=migrate_v9, error=%s", e)
-
-    def _migrate_v10(self, conn):
-        try:
-            cur = conn.execute("PRAGMA table_info(knowledge_entries)")
-            columns = {row[1] for row in cur.fetchall()}
-            if "source" not in columns:
-                conn.execute("ALTER TABLE knowledge_entries ADD COLUMN source TEXT")
-            cur = conn.execute("PRAGMA table_info(schema_version)")
-            sv_columns = {row[1] for row in cur.fetchall()}
-            if "description" not in sv_columns:
-                conn.execute("ALTER TABLE schema_version ADD COLUMN description TEXT")
-            conn.execute(
-                "CREATE TABLE IF NOT EXISTS usage_logs ("
-                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                "entry_id TEXT, "
-                "agent_role TEXT, "
-                "query_text TEXT, "
-                "result_count INTEGER DEFAULT 0, "
-                "elapsed_ms REAL DEFAULT 0.0, "
-                "timestamp TEXT DEFAULT (datetime('now')), "
-                "FOREIGN KEY (entry_id) REFERENCES knowledge_entries(id) ON DELETE SET NULL)"
-            )
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_entry ON usage_logs(entry_id)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_agent ON usage_logs(agent_role)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_timestamp ON usage_logs(timestamp)")
-        except Exception as e:
-            logger.warning("operation=migrate_v10, error=%s", e)
-
-    def _migrate_v11(self, conn):
-        try:
-            conn.execute(
-                "CREATE TABLE IF NOT EXISTS backup_history ("
-                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                "backup_type TEXT NOT NULL, "
-                "destination TEXT, "
-                "entry_count INTEGER DEFAULT 0, "
-                "size_bytes INTEGER DEFAULT 0, "
-                "status TEXT DEFAULT 'completed', "
-                "created_at TEXT DEFAULT (datetime('now')))"
-            )
-        except Exception as e:
-            logger.warning("operation=migrate_v11, error=%s", e)
-
-    def _migrate_v12(self, conn):
-        try:
-            cur = conn.execute("PRAGMA table_info(knowledge_entries)")
-            columns = {row[1] for row in cur.fetchall()}
-            if "status" not in columns:
-                conn.execute("ALTER TABLE knowledge_entries ADD COLUMN status TEXT DEFAULT 'active' CHECK(status IN ('active','archived','deleted'))")
-            if "last_accessed" not in columns:
-                conn.execute("ALTER TABLE knowledge_entries ADD COLUMN last_accessed TEXT")
-            conn.execute("UPDATE knowledge_entries SET status = 'active' WHERE status IS NULL")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_entries_status ON knowledge_entries(status)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_entries_last_accessed ON knowledge_entries(last_accessed)")
-        except Exception as e:
-            logger.warning("operation=migrate_v12, error=%s", e)
 
     def close(self):
         if self._conn is not None:
@@ -137,9 +65,9 @@ class SQLiteEngine:
             try:
                 conn.execute(
                     "INSERT INTO knowledge_entries "
-                    "(id, title, content, scope, tags, confidence, source_path, source_rating, occurrences, content_hash, "
-                    "type, category, summary, content_path, embedding_status) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                    "(id, title, content, scope, tags_json, confidence, source_path, source_rating, occurrences, content_hash, "
+                    "type, category, summary, content_path, embedding_status, created_at, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'), datetime('now'))",
                     (
                         entry_id,
                         entry["title"],
@@ -214,14 +142,14 @@ class SQLiteEngine:
             values = []
             for key in ("title", "content", "scope", "confidence", "source_path", "source_rating",
                          "type", "category", "summary", "content_path", "success_count", "failure_count",
-                         "occurrences", "created", "status", "last_accessed", "last_validated"):
+                         "occurrences", "status", "last_accessed", "last_validated"):
                 if key in updates:
                     fields.append(f"{key} = ?")
                     values.append(updates[key])
 
             if "tags" in updates:
                 tags_json = json.dumps(updates["tags"], ensure_ascii=False)
-                fields.append("tags = ?")
+                fields.append("tags_json = ?")
                 values.append(tags_json)
 
             if "content" in updates:
@@ -231,7 +159,7 @@ class SQLiteEngine:
             if not fields:
                 return existing
 
-            fields.append("updated = datetime('now')")
+            fields.append("updated_at = datetime('now')")
             fields.append("version = version + 1")
             values.append(entry_id)
 
@@ -412,17 +340,26 @@ class SQLiteEngine:
     @staticmethod
     def _row_to_dict(row: sqlite3.Row) -> dict:
         d = dict(row)
-        if "tags" in d and isinstance(d["tags"], str):
+        if "tags_json" in d:
+            tags_val = d.pop("tags_json")
+            if isinstance(tags_val, str):
+                try:
+                    d["tags"] = json.loads(tags_val)
+                except json.JSONDecodeError:
+                    d["tags"] = []
+            elif isinstance(tags_val, list):
+                d["tags"] = tags_val
+            else:
+                d["tags"] = []
+        elif "tags" in d and isinstance(d["tags"], str):
             try:
                 d["tags"] = json.loads(d["tags"])
             except json.JSONDecodeError:
                 d["tags"] = []
-        if "_bm25_score" in d:
-            pass
         if "created_at" in d and "created" not in d:
-            d["created"] = d.pop("created_at")
+            d["created"] = d["created_at"]
         if "updated_at" in d and "updated" not in d:
-            d["updated"] = d.pop("updated_at")
+            d["updated"] = d["updated_at"]
         return d
 
     def sync_tags(self, entry_id: str, tags: list):
@@ -452,7 +389,7 @@ class SQLiteEngine:
         cur = conn.execute(
             "SELECT ke.* FROM knowledge_entries ke "
             "JOIN knowledge_tags kt ON ke.id = kt.entry_id "
-            "WHERE kt.tag = ? ORDER BY ke.updated DESC",
+            "WHERE kt.tag = ? ORDER BY ke.updated_at DESC",
             (normalized,),
         )
         return [self._row_to_dict(row) for row in cur.fetchall()]
@@ -492,7 +429,7 @@ class SQLiteEngine:
         cur = conn.execute(
             "SELECT id, content, title, scope FROM knowledge_entries "
             "WHERE embedding_status = 'pending' AND embedding_retry_count < 5 "
-            "ORDER BY updated ASC LIMIT ?",
+            "ORDER BY updated_at ASC LIMIT ?",
             (limit,),
         )
         return [dict(row) for row in cur.fetchall()]
@@ -519,7 +456,7 @@ class SQLiteEngine:
         with self._write_lock:
             conn = self._get_conn()
             conn.execute(
-                "INSERT INTO reconciliation_log "
+                "INSERT INTO kb_reconciliation_log "
                 "(check_time, sqlite_ready_count, chroma_vector_count, missing_in_chroma, orphan_in_chroma, fixed_count, details) "
                 "VALUES (datetime('now'), ?, ?, ?, ?, ?, ?)",
                 (sqlite_ready_count, chroma_vector_count, missing_in_chroma, orphan_in_chroma, fixed_count, details),

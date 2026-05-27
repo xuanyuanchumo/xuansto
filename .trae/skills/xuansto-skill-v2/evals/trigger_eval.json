@@ -1,117 +1,107 @@
 {
-  "version": "2.0.0",
-  "skill": "xuansto-skill",
-  "eval_type": "skill_trigger_accuracy",
-  "description": "评估xuansto-skill的description字段触发准确率，包含应触发和不应触发的边界查询",
-  "should_trigger": [
+  "skill_name": "xuansto-skill-v2",
+  "evals": [
     {
       "id": 1,
-      "query": "我需要从零开始搭建一个Next.js全栈项目，包含用户认证、数据库和部署，帮我规划整个开发流程",
-      "reason": "完整项目从零开发，明确的多步骤任务"
+      "prompt": "帮我搭建一个React项目，使用TDD开发模式",
+      "expected_output": "触发xuansto-skill-v2，执行/init命令，进入9阶段工作流",
+      "files": []
     },
     {
       "id": 2,
-      "query": "这个Python FastAPI后端模块需要重构，先写测试再改代码，确保不引入回归",
-      "reason": "TDD重构，明确要求测试先行"
+      "prompt": "对当前项目进行安全审计和代码质量检查",
+      "expected_output": "触发/audit命令，执行security_scan和quality_gate_check",
+      "files": []
     },
     {
       "id": 3,
-      "query": "帮我做一次完整的代码审查，检查安全漏洞、性能问题和代码规范，我的项目在src/目录下",
-      "reason": "多维度代码审查，需要多Agent协作"
+      "prompt": "spec-driven development for a REST API with authentication",
+      "expected_output": "触发SDD开发流程，从规格定义开始",
+      "files": []
     },
     {
       "id": 4,
-      "query": "我们的React Native应用要打包成桌面版，用Electron，需要处理IPC通信和自动更新",
-      "reason": "桌面应用构建，涉及跨平台和IPC"
+      "prompt": "把main.py第42行的变量名从data改成responseData",
+      "expected_output": "不触发xuansto-skill-v2，这是简单的单文件编辑",
+      "files": [],
+      "not_for": "simple single-file edits"
     },
     {
       "id": 5,
-      "query": "先帮我写需求规格文档，然后按规格实现这个支付模块，最后做安全渗透测试",
-      "reason": "SDD全流程：规格→实现→安全测试"
+      "prompt": "帮我重启Kubernetes集群中的pod并检查服务状态",
+      "expected_output": "不触发xuansto-skill-v2，这是纯基础设施/DevOps操作，不涉及代码变更",
+      "files": [],
+      "not_for": "pure infrastructure/DevOps without code changes"
     },
     {
       "id": 6,
-      "query": "我的项目测试覆盖率只有40%，帮我提升到80%以上，先分析哪些模块缺少测试",
-      "reason": "测试覆盖率提升，多步骤结构化任务"
+      "prompt": "帮我写一个README.md说明项目的安装步骤",
+      "expected_output": "不触发xuansto-skill-v2，这是纯文档任务",
+      "files": [],
+      "not_for": "documentation-only tasks"
     },
     {
       "id": 7,
-      "query": "帮我规划下个Sprint的任务，我们需要完成用户管理、权限系统和API网关三个模块",
-      "reason": "Sprint规划，明确使用/sprint命令场景"
+      "prompt": "JavaScript中Promise和async/await有什么区别？",
+      "expected_output": "不触发xuansto-skill-v2，这是简单的问答",
+      "files": [],
+      "not_for": "simple Q&A"
     },
     {
       "id": 8,
-      "query": "这个微服务架构需要做安全审计，检查OWASP Top 10和API安全，然后出修复方案",
-      "reason": "安全审计+修复，需要/audit命令"
+      "prompt": "设计一个登录页面的交互流程和视觉方案",
+      "expected_output": "不触发xuansto-skill-v2，这是纯UI/UX设计任务",
+      "files": [],
+      "not_for": "pure UI/UX design"
     },
     {
       "id": 9,
-      "query": "我有个复杂bug需要端到端排查：前端React→API网关→后端Go服务→PostgreSQL，错误信息是timeout",
-      "reason": "跨服务复杂bug修复，需要多Agent协作"
+      "prompt": "分析这份CSV销售数据，找出月度趋势",
+      "expected_output": "不触发xuansto-skill-v2，这是纯数据分析任务",
+      "files": [],
+      "not_for": "pure data analysis"
     },
     {
       "id": 10,
-      "query": "帮我设计一个设计系统，包含颜色体系、字体规范、组件库，然后生成代码",
-      "reason": "设计系统生成+代码实现，需要/design-system命令"
-    }
-  ],
-  "should_not_trigger": [
+      "prompt": "把tsconfig.json中的strict改为false",
+      "expected_output": "不触发xuansto-skill-v2，这是简单的配置变更",
+      "files": [],
+      "not_for": "simple config changes"
+    },
     {
       "id": 11,
-      "query": "帮我把这个函数的参数名从userId改成id",
-      "reason": "简单重命名，单文件单行修改"
+      "prompt": "在utils.py的add函数里加上类型注解",
+      "expected_output": "不触发xuansto-skill-v2，这是一行级别的简单修复",
+      "files": [],
+      "not_for": "one-line fixes"
     },
     {
       "id": 12,
-      "query": "这个CSS颜色值#fff改成#ffffff",
-      "reason": "简单样式修改，一行fix"
+      "prompt": "扫描这个仓库有没有SQL注入漏洞",
+      "expected_output": "不触发xuansto-skill-v2，这是简单的安全扫描，不涉及修复",
+      "files": [],
+      "not_for": "simple security scans without remediation"
     },
     {
       "id": 13,
-      "query": "帮我解释一下这段Python代码在做什么",
-      "reason": "简单代码解释，Q&A类型"
+      "prompt": "生成一份OWASP Top 10合规性文档报告",
+      "expected_output": "不触发xuansto-skill-v2，这是纯文档类安全报告",
+      "files": [],
+      "not_for": "documentation-only security reports"
     },
     {
       "id": 14,
-      "query": "在我的Dockerfile里加一行EXPOSE 8080",
-      "reason": "简单配置修改，单行添加"
+      "prompt": "设计一个桌面应用的窗口布局和导航栏样式",
+      "expected_output": "不触发xuansto-skill-v2，这是桌面应用纯UI设计",
+      "files": [],
+      "not_for": "desktop app UI design only"
     },
     {
       "id": 15,
-      "query": "这个页面布局不好看，帮我重新设计一下UI",
-      "reason": "纯UI/UX设计，应使用ui-ux-pro-max而非xuansto-skill"
-    },
-    {
-      "id": 16,
-      "query": "帮我配置一下Nginx的反向代理",
-      "reason": "纯基础设施/DevOps配置，无代码变更"
-    },
-    {
-      "id": 17,
-      "query": "写一个fibonacci函数",
-      "reason": "简单单函数生成，不需要多步骤工作流"
-    },
-    {
-      "id": 18,
-      "query": "帮我整理一下项目文档，写个README",
-      "reason": "纯文档任务，无代码开发"
-    },
-    {
-      "id": 19,
-      "query": "把环境变量DATABASE_URL的值改成localhost:5432",
-      "reason": "简单配置变更，env var修改"
-    },
-    {
-      "id": 20,
-      "query": "帮我查一下这个API返回的JSON结构",
-      "reason": "简单数据查看，Q&A类型"
+      "prompt": "修复app.py中第10行的拼写错误，把recieve改成receive",
+      "expected_output": "不触发xuansto-skill-v2，这是5行以内的快速热修复",
+      "files": [],
+      "not_for": "quick hotfixes under 5 lines"
     }
-  ],
-  "metrics": {
-    "trigger_rate": "should_trigger中被正确触发的比例",
-    "rejection_rate": "should_not_trigger中未被错误触发的比例",
-    "accuracy": "总体准确率(正确判断数/总查询数)",
-    "target_accuracy": 0.80
-  },
-  "notes": "评估方法：将每个query作为用户输入，检查xuansto-skill是否被触发。目标：总体准确率≥80%。边界情况重点关注：should_not_trigger中的#15(UI设计)和#16(DevOps配置)是最容易误触发的查询。"
+  ]
 }

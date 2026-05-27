@@ -1,7 +1,21 @@
+import json
 import logging
+import os
+import subprocess
+import sys
 import threading
 import time
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, Optional
 
+try:
+    import yaml as _yaml
+    _yaml_available = True
+except ImportError:
+    _yaml_available = False
+
+from .config import make_response, make_error_response
 from .embedding import EmbeddingManager
 
 logger = logging.getLogger("knowledge-server")
@@ -153,3 +167,558 @@ class DegradationManager:
                 self.try_recover()
             else:
                 self.check_and_degrade()
+
+
+class MCPToolFallback:
+    SKILL_ROOT = Path(__file__).resolve().parent.parent.parent
+
+    TOOL_SCRIPT_MAP = {
+        "skill_analyze": {
+            "script": "scripts/skill-test.py",
+            "args": ["--analyze", "--format", "json"],
+        },
+        "quality_gate_check": {
+            "script": "scripts/skill-test.py",
+            "args": ["--gate", "--format", "json"],
+        },
+        "knowledge_search": {
+            "script": "scripts/knowledge-server.py",
+            "args": ["--search", "--format", "json"],
+        },
+        "knowledge_inject": {
+            "script": "scripts/knowledge_server/main.py",
+            "args": ["--inject", "--format", "json"],
+        },
+        "spec_drift_detect": {
+            "script": "scripts/spec-drift-detector.py",
+            "args": ["--format", "json"],
+            "inline": "_inline_spec_drift_detect",
+        },
+        "security_scan": {
+            "script": "scripts/agentic-security-scanner.py",
+            "args": ["--format", "json"],
+            "inline": "_inline_security_scan",
+        },
+        "code_simplify": {
+            "script": "scripts/code-simplifier.py",
+            "args": ["--format", "json"],
+            "inline": "_inline_code_simplify",
+        },
+        "session_manage": {
+            "scripts": {
+                "init": ("scripts/init-session.py", []),
+                "catchup": ("scripts/session-catchup.py", ["--format", "json"]),
+                "persist": ("scripts/session-persist.py", []),
+            },
+        },
+        "workflow_dispatch": {
+            "scripts": {
+                "start": ("scripts/project-initializer.py", []),
+            },
+            "inline": "_inline_workflow_dispatch",
+        },
+        "agent_status": {
+            "script": "scripts/skill-test.py",
+            "args": ["--agents", "--format", "json"],
+            "inline": "_inline_agent_status",
+        },
+        "hook_manage": {
+            "scripts": {
+                "check_encoding": ("scripts/check-encoding.py", []),
+                "token_budget": ("scripts/token-budget-guard.py", ["--check"]),
+                "session_persist": ("scripts/session-persist.py", []),
+            },
+            "inline": "_inline_hook_manage",
+        },
+        "resource_load_status": {
+            "inline": "_inline_resource_load_status",
+        },
+        "context_compress": {
+            "script": "scripts/context-compressor.py",
+            "args": ["--format", "json"],
+        },
+        "server_health": {
+            "script": "scripts/health-checker.py",
+            "args": ["--format", "json"],
+            "inline": "_inline_server_health",
+        },
+    }
+
+    def __init__(self, timeout: int = 120, skill_root: Optional[Path] = None):
+        self._timeout = timeout
+        self._skill_root = Path(skill_root) if skill_root else self.SKILL_ROOT
+        self._degraded = False
+        self._degradation_log: list = []
+        self._lock = threading.Lock()
+        self._tool_map = self._load_fallbacks_from_yaml() or self.TOOL_SCRIPT_MAP
+
+    def _load_fallbacks_from_yaml(self) -> Optional[Dict[str, Any]]:
+        yaml_path = self._skill_root / "constraints.yaml"
+        if not yaml_path.exists():
+            return None
+        if not _yaml_available:
+            return None
+        try:
+            with open(str(yaml_path), "r", encoding="utf-8") as f:
+                data = _yaml.safe_load(f)
+            if not isinstance(data, dict):
+                return None
+            fallbacks = data.get("degradation", {}).get("tool_fallbacks", {})
+            if not isinstance(fallbacks, dict) or not fallbacks:
+                return None
+            return fallbacks
+        except Exception:
+            logger.debug("operation=load_fallbacks_yaml, status=failed")
+            return None
+
+    @staticmethod
+    def _wrap_degraded(tool_name: str, result: dict) -> dict:
+        return {"status": "degraded", "tool": tool_name, "result": result}
+
+    @staticmethod
+    def _wrap_inline_degraded(tool_name: str, result: dict) -> dict:
+        return {"status": "inline_degraded", "tool": tool_name, "result": result}
+
+    @staticmethod
+    def _wrap_error(tool_name: str, error: dict) -> dict:
+        return {"status": "error", "tool": tool_name, "error": error}
+
+    @property
+    def is_degraded(self) -> bool:
+        with self._lock:
+            return self._degraded
+
+    @property
+    def degradation_log(self) -> list:
+        with self._lock:
+            return list(self._degradation_log)
+
+    def activate_degradation(self, reason: str = "mcp_unavailable"):
+        with self._lock:
+            self._degraded = True
+            entry = {
+                "event": "degradation_activated",
+                "reason": reason,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+            self._degradation_log.append(entry)
+        logger.warning("operation=mcp_degradation_activate, reason=%s", reason)
+
+    def deactivate_degradation(self):
+        with self._lock:
+            self._degraded = False
+            entry = {
+                "event": "degradation_deactivated",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+            self._degradation_log.append(entry)
+        logger.info("operation=mcp_degradation_deactivate")
+
+    def call_tool(self, tool_name: str, arguments: Optional[Dict[str, Any]] = None) -> dict:
+        if tool_name not in self._tool_map:
+            return self._wrap_error(tool_name, {
+                "code": "UNKNOWN_TOOL",
+                "message": f"Unknown tool: {tool_name}",
+            })
+
+        config = self._tool_map[tool_name]
+        arguments = arguments or {}
+
+        if "script" in config:
+            result = self._execute_script(
+                config["script"],
+                config.get("args", []),
+                arguments,
+            )
+            if result.get("status") != "error":
+                return self._wrap_degraded(tool_name, result)
+            if "inline" in config:
+                inline_method = getattr(self, config["inline"], None)
+                if inline_method:
+                    logger.info(
+                        "operation=mcp_fallback_inline, tool=%s, reason=script_failed",
+                        tool_name,
+                    )
+                    inline_result = inline_method(arguments)
+                    return self._wrap_inline_degraded(tool_name, inline_result)
+            return self._wrap_error(tool_name, result.get("meta", {}).get("error", {
+                "code": "SCRIPT_FAILED",
+                "message": "Script execution failed",
+            }))
+
+        if "scripts" in config:
+            sub_command = arguments.get("action", "init")
+            script_entry = config["scripts"].get(sub_command)
+            if script_entry:
+                script_path, extra_args = script_entry
+                result = self._execute_script(script_path, extra_args, arguments)
+                if result.get("status") != "error":
+                    return self._wrap_degraded(tool_name, result)
+            if "inline" in config:
+                inline_method = getattr(self, config["inline"], None)
+                if inline_method:
+                    logger.info(
+                        "operation=mcp_fallback_inline, tool=%s, action=%s, reason=script_failed",
+                        tool_name,
+                        sub_command,
+                    )
+                    inline_result = inline_method(arguments)
+                    return self._wrap_inline_degraded(tool_name, inline_result)
+            return self._wrap_error(tool_name, {
+                "code": "NO_FALLBACK",
+                "message": f"No fallback for tool={tool_name} action={sub_command}",
+            })
+
+        if "inline" in config:
+            inline_method = getattr(self, config["inline"], None)
+            if inline_method:
+                inline_result = inline_method(arguments)
+                return self._wrap_inline_degraded(tool_name, inline_result)
+
+        return self._wrap_error(tool_name, {
+            "code": "NO_FALLBACK",
+            "message": f"No fallback available for tool: {tool_name}",
+        })
+
+    def _execute_script(
+        self,
+        script_rel_path: str,
+        base_args: list,
+        arguments: Optional[Dict[str, Any]] = None,
+    ) -> dict:
+        script_path = self._skill_root / script_rel_path
+        if not script_path.exists():
+            logger.error(
+                "operation=script_fallback, script=%s, status=not_found",
+                script_rel_path,
+            )
+            return make_error_response(
+                "SCRIPT_NOT_FOUND",
+                f"Script not found: {script_rel_path}",
+                {"script": script_rel_path},
+            )
+
+        cmd = [sys.executable, str(script_path)] + list(base_args)
+
+        stdin_data = None
+        if arguments:
+            stdin_data = json.dumps(arguments)
+
+        log_entry = {
+            "event": "script_fallback_call",
+            "script": script_rel_path,
+            "args": base_args,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        with self._lock:
+            self._degradation_log.append(log_entry)
+
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=self._timeout,
+                cwd=str(self._skill_root),
+                input=stdin_data,
+            )
+
+            if result.returncode == 0:
+                stdout = result.stdout.strip()
+                if stdout:
+                    try:
+                        script_output = json.loads(stdout)
+                        logger.info(
+                            "operation=script_fallback, script=%s, status=success",
+                            script_rel_path,
+                        )
+                        return make_response("success", script_output)
+                    except json.JSONDecodeError:
+                        logger.warning(
+                            "operation=script_fallback, script=%s, status=non_json_output",
+                            script_rel_path,
+                        )
+                        return make_response("success", {
+                            "raw_output": stdout,
+                            "format": "text",
+                            "degraded": True,
+                        })
+                logger.info(
+                    "operation=script_fallback, script=%s, status=success_empty",
+                    script_rel_path,
+                )
+                return make_response("success", {"degraded": True})
+            else:
+                stderr_preview = result.stderr[:1000] if result.stderr else ""
+                logger.error(
+                    "operation=script_fallback, script=%s, status=error, rc=%d, stderr=%s",
+                    script_rel_path,
+                    result.returncode,
+                    stderr_preview,
+                )
+                return make_error_response(
+                    "SCRIPT_ERROR",
+                    f"Script exited with code {result.returncode}",
+                    {
+                        "script": script_rel_path,
+                        "returncode": result.returncode,
+                        "stderr": stderr_preview,
+                    },
+                )
+
+        except subprocess.TimeoutExpired:
+            logger.error(
+                "operation=script_fallback, script=%s, status=timeout, timeout=%d",
+                script_rel_path,
+                self._timeout,
+            )
+            return make_error_response(
+                "SCRIPT_TIMEOUT",
+                f"Script timed out after {self._timeout}s",
+                {"script": script_rel_path, "timeout": self._timeout},
+            )
+        except FileNotFoundError:
+            logger.error(
+                "operation=script_fallback, script=%s, status=not_executable",
+                script_rel_path,
+            )
+            return make_error_response(
+                "SCRIPT_NOT_EXECUTABLE",
+                f"Python interpreter or script not found",
+                {"script": script_rel_path, "python": sys.executable},
+            )
+        except Exception as e:
+            logger.error(
+                "operation=script_fallback, script=%s, status=exception, error=%s",
+                script_rel_path,
+                str(e),
+            )
+            return make_error_response(
+                "SCRIPT_EXCEPTION",
+                f"Script execution failed: {e}",
+                {"script": script_rel_path, "error": str(e)},
+            )
+
+    def _inline_spec_drift_detect(self, arguments: Optional[Dict[str, Any]] = None) -> dict:
+        arguments = arguments or {}
+        spec_dir = self._skill_root / arguments.get("spec_dir", ".trae/specs")
+        src_dir = self._skill_root / arguments.get("src_dir", ".")
+        drift_items = []
+
+        if spec_dir.exists():
+            for spec_file in spec_dir.rglob("*.md"):
+                spec_name = spec_file.stem
+                found_impl = False
+                for ext in (".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java"):
+                    candidates = list(src_dir.rglob(f"{spec_name}{ext}"))
+                    if candidates:
+                        found_impl = True
+                        break
+                if not found_impl:
+                    drift_items.append({
+                        "spec": str(spec_file.relative_to(self._skill_root)),
+                        "status": "no_implementation_found",
+                    })
+
+        return make_response("success", {
+            "drift_detected": len(drift_items) > 0,
+            "items": drift_items,
+            "total": len(drift_items),
+            "degraded": True,
+        })
+
+    def _inline_security_scan(self, arguments: Optional[Dict[str, Any]] = None) -> dict:
+        arguments = arguments or {}
+        target = self._skill_root / arguments.get("target", ".")
+        findings = []
+        sensitive_patterns = [
+            (r'(?:api[_-]?key|secret|password|token)\s*[:=]\s*["\'][^"\']+["\']', "hardcoded_secret", "critical"),
+            (r'eval\s*\(', "eval_usage", "high"),
+            (r'subprocess\.call\s*\(\s*["\']', "shell_injection_risk", "high"),
+            (r'os\.system\s*\(', "os_system_usage", "medium"),
+        ]
+
+        if target.exists():
+            import re
+            scan_exts = {".py", ".js", ".ts", ".yaml", ".yml", ".json", ".md"}
+            for root, _dirs, files in os.walk(str(target)):
+                if any(skip in root for skip in ("node_modules", ".git", "__pycache__", ".venv")):
+                    continue
+                for fname in files:
+                    ext = os.path.splitext(fname)[1].lower()
+                    if ext not in scan_exts:
+                        continue
+                    fpath = os.path.join(root, fname)
+                    try:
+                        with open(fpath, "r", encoding="utf-8", errors="ignore") as fh:
+                            for lineno, line in enumerate(fh, 1):
+                                for pattern, rule_id, severity in sensitive_patterns:
+                                    if re.search(pattern, line, re.IGNORECASE):
+                                        findings.append({
+                                            "file": os.path.relpath(fpath, str(self._skill_root)),
+                                            "line": lineno,
+                                            "rule_id": rule_id,
+                                            "severity": severity,
+                                        })
+                    except OSError:
+                        pass
+
+        return make_response("success", {
+            "findings": findings[:50],
+            "total": len(findings),
+            "scanned_path": str(target),
+            "degraded": True,
+        })
+
+    def _inline_code_simplify(self, arguments: Optional[Dict[str, Any]] = None) -> dict:
+        arguments = arguments or {}
+        target = self._skill_root / arguments.get("target", ".")
+        opportunities = []
+
+        if target.exists():
+            try:
+                import ast
+            except ImportError:
+                return make_response("success", {
+                    "opportunities": [],
+                    "total": 0,
+                    "degraded": True,
+                    "error": "ast module unavailable",
+                })
+
+            for root, _dirs, files in os.walk(str(target)):
+                if any(skip in root for skip in ("node_modules", ".git", "__pycache__", ".venv")):
+                    continue
+                for fname in files:
+                    if not fname.endswith(".py"):
+                        continue
+                    fpath = os.path.join(root, fname)
+                    try:
+                        with open(fpath, "r", encoding="utf-8", errors="ignore") as fh:
+                            source = fh.read()
+                        tree = ast.parse(source)
+                        for node in ast.walk(tree):
+                            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                                body_lines = node.end_lineno - node.lineno + 1 if hasattr(node, 'end_lineno') else 0
+                                if body_lines > 50:
+                                    opportunities.append({
+                                        "file": os.path.relpath(fpath, str(self._skill_root)),
+                                        "function": node.name,
+                                        "line": node.lineno,
+                                        "type": "long_function",
+                                        "lines": body_lines,
+                                    })
+                            elif isinstance(node, (ast.If, ast.For, ast.While)):
+                                depth = 0
+                                parent = node
+                                while hasattr(parent, '_parent'):
+                                    parent = parent._parent
+                                    depth += 1
+                                if depth >= 3:
+                                    opportunities.append({
+                                        "file": os.path.relpath(fpath, str(self._skill_root)),
+                                        "line": node.lineno,
+                                        "type": "deep_nesting",
+                                        "depth": depth,
+                                    })
+                    except (OSError, SyntaxError):
+                        pass
+
+        return make_response("success", {
+            "opportunities": opportunities[:50],
+            "total": len(opportunities),
+            "degraded": True,
+        })
+
+    def _inline_workflow_dispatch(self, arguments: Optional[Dict[str, Any]] = None) -> dict:
+        arguments = arguments or {}
+        action = arguments.get("action", "status")
+        phase = arguments.get("phase", 0)
+
+        if action == "advance":
+            next_phase = min(phase + 1, 8)
+            return make_response("success", {
+                "action": "advance",
+                "previous_phase": phase,
+                "current_phase": next_phase,
+                "degraded": True,
+            })
+
+        return make_response("success", {
+            "action": action,
+            "current_phase": phase,
+            "degraded": True,
+        })
+
+    def _inline_agent_status(self, arguments: Optional[Dict[str, Any]] = None) -> dict:
+        arguments = arguments or {}
+        agents_dir = self._skill_root / "agents"
+        agent_list = []
+
+        if agents_dir.exists():
+            for layer_dir in sorted(agents_dir.iterdir()):
+                if not layer_dir.is_dir():
+                    continue
+                for agent_file in sorted(layer_dir.glob("*.md")):
+                    agent_list.append({
+                        "name": agent_file.stem,
+                        "layer": layer_dir.name,
+                        "available": True,
+                    })
+
+        return make_response("success", {
+            "agents": agent_list,
+            "total": len(agent_list),
+            "degraded": True,
+        })
+
+    def _inline_hook_manage(self, arguments: Optional[Dict[str, Any]] = None) -> dict:
+        arguments = arguments or {}
+        action = arguments.get("action", "list")
+        hooks_file = self._skill_root / "hooks" / "hooks.json"
+
+        if action == "list":
+            hooks = []
+            if hooks_file.exists():
+                try:
+                    with open(str(hooks_file), "r", encoding="utf-8") as fh:
+                        hooks_data = json.load(fh)
+                    hooks = hooks_data if isinstance(hooks_data, list) else [hooks_data]
+                except (json.JSONDecodeError, OSError):
+                    pass
+            return make_response("success", {
+                "hooks": hooks,
+                "total": len(hooks),
+                "degraded": True,
+            })
+
+        return make_response("success", {
+            "action": action,
+            "status": "executed",
+            "degraded": True,
+        })
+
+    def _inline_resource_load_status(self, arguments: Optional[Dict[str, Any]] = None) -> dict:
+        arguments = arguments or {}
+        state_file = self._skill_root / ".knowledge" / "resource_state.json"
+        state = {}
+
+        if state_file.exists():
+            try:
+                with open(str(state_file), "r", encoding="utf-8") as fh:
+                    state = json.load(fh)
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        state.setdefault("phase", 0)
+        state.setdefault("degraded", True)
+        return make_response("success", state)
+
+    def _inline_server_health(self, arguments: Optional[Dict[str, Any]] = None) -> dict:
+        return make_response("success", {
+            "status": "degraded",
+            "mcp_available": False,
+            "fallback_active": True,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "degraded": True,
+        })

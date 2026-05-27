@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import json
 import threading
-import time
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core.config import WORK_DIR
-from ..core.errors import make_error_response, make_success_response, ERR_VALIDATION
+from ..core.errors import ERR_VALIDATION, make_error_response, make_success_response
 from ..core.logging_config import get_logger
 from ..core.validator import validate_input
 from ..models.schemas import MetricsReportInput
@@ -61,16 +60,17 @@ _TIME_RANGE_SECONDS: dict[str, float] = {
 
 def _query_metrics(tool_name: str | None, time_range: str, metric_type: str) -> dict[str, Any]:
     try:
-        from .server_health import _TOOL_METRICS, _metrics_lock as health_lock
-        with health_lock:
-            metrics_snapshot = {
-                name: {
-                    "call_count": m["call_count"],
-                    "error_count": m["error_count"],
-                    "latencies": list(m.get("latencies", [])),
-                }
-                for name, m in _TOOL_METRICS.items()
+        from ..core.metrics import get_metrics_collector
+        collector = get_metrics_collector()
+        tool_summary = collector.get_tool_summary()
+        metrics_snapshot = {
+            name: {
+                "call_count": m["call_count"],
+                "error_count": m["failure_count"],
+                "latencies": m.get("latency_samples", []),
             }
+            for name, m in tool_summary.items()
+        }
     except ImportError:
         metrics_snapshot = _load_persisted_metrics()
 
@@ -107,9 +107,20 @@ def _query_metrics(tool_name: str | None, time_range: str, metric_type: str) -> 
 
 def _summary_metrics(time_range: str) -> dict[str, Any]:
     try:
-        from .server_health import _TOOL_METRICS, _DEGRADATION_COUNTS, _metrics_lock as health_lock
+        from ..core.metrics import get_metrics_collector
+        from .server_health import _DEGRADATION_COUNTS
+        from .server_health import _metrics_lock as health_lock
+        collector = get_metrics_collector()
+        tool_summary = collector.get_tool_summary()
+        metrics_snapshot = {
+            name: {
+                "call_count": m["call_count"],
+                "error_count": m["failure_count"],
+                "latencies": m.get("latency_samples", []),
+            }
+            for name, m in tool_summary.items()
+        }
         with health_lock:
-            metrics_snapshot = dict(_TOOL_METRICS)
             degradation_snapshot = dict(_DEGRADATION_COUNTS)
     except ImportError:
         metrics_snapshot = _load_persisted_metrics()
@@ -180,6 +191,75 @@ def _inline_metrics_report(action: str, **kwargs: Any) -> dict[str, Any]:
     return {"action": action, "metrics": {}}
 
 
+def _evaluate_metrics(criterion: str = "all") -> dict[str, Any]:
+    try:
+        from ..core.metrics import get_metrics_collector
+        from .server_health import _DEGRADATION_COUNTS
+        from .server_health import _metrics_lock as health_lock
+        collector = get_metrics_collector()
+        tool_summary = collector.get_tool_summary()
+        metrics_snapshot = {
+            name: {
+                "call_count": m["call_count"],
+                "error_count": m["failure_count"],
+                "latencies": m.get("latency_samples", []),
+            }
+            for name, m in tool_summary.items()
+        }
+        with health_lock:
+            degradation_snapshot = dict(_DEGRADATION_COUNTS)
+    except ImportError:
+        metrics_snapshot = _load_persisted_metrics()
+        degradation_snapshot = _load_degradation_stats()
+
+    total_calls = sum(m.get("call_count", 0) for m in metrics_snapshot.values())
+    total_errors = sum(m.get("error_count", 0) for m in metrics_snapshot.values())
+    overall_error_rate = round(total_errors / max(total_calls, 1), 4)
+
+    evaluation: dict[str, Any] = {
+        "criterion": criterion,
+        "overall_error_rate": overall_error_rate,
+        "total_calls": total_calls,
+        "total_errors": total_errors,
+        "degradation_count": sum(degradation_snapshot.values()),
+        "pass": True,
+        "details": {},
+    }
+
+    if criterion in ("error_rate", "all"):
+        error_rate_pass = overall_error_rate < 0.1
+        evaluation["details"]["error_rate"] = {
+            "value": overall_error_rate,
+            "threshold": 0.1,
+            "pass": error_rate_pass,
+        }
+        evaluation["pass"] = evaluation["pass"] and error_rate_pass
+
+    if criterion in ("availability", "all"):
+        degradation_total = sum(degradation_snapshot.values())
+        availability_pass = degradation_total == 0
+        evaluation["details"]["availability"] = {
+            "degradation_count": degradation_total,
+            "pass": availability_pass,
+        }
+        evaluation["pass"] = evaluation["pass"] and availability_pass
+
+    if criterion in ("latency", "all"):
+        all_latencies: list[float] = []
+        for m in metrics_snapshot.values():
+            all_latencies.extend(m.get("latencies", []))
+        p95 = _calculate_percentile(all_latencies, 95)
+        latency_pass = p95 < 5000.0
+        evaluation["details"]["latency_p95_ms"] = {
+            "value": p95,
+            "threshold_ms": 5000.0,
+            "pass": latency_pass,
+        }
+        evaluation["pass"] = evaluation["pass"] and latency_pass
+
+    return evaluation
+
+
 def register(mcp: FastMCP) -> None:
     @mcp.tool(
         annotations=ToolAnnotations(
@@ -194,9 +274,10 @@ def register(mcp: FastMCP) -> None:
         tool_name: str | None = None,
         time_range: str = "all",
         metric_type: str = "all",
+        criterion: str = "all",
     ) -> dict[str, Any]:
-        """指标报告：查询工具调用指标(按工具名/时间/类型)，汇总统计(总调用/错误率/延迟分布/降级计数)。"""
-        validated, err = validate_input(MetricsReportInput, action=action, tool_name=tool_name, time_range=time_range, metric_type=metric_type)
+        """指标报告：查询工具调用指标(按工具名/时间/类型)，汇总统计(总调用/错误率/延迟分布/降级计数)，评估(evaluate)按错误率/可用性/延迟标准评估系统健康度。Prefer using Resource xuansto://metrics/summary for read-only access."""
+        validated, err = validate_input(MetricsReportInput, action=action, tool_name=tool_name, time_range=time_range, metric_type=metric_type, criterion=criterion)
         if err:
             return err
         logger.info("metrics_report called: action=%s", action)
@@ -207,8 +288,11 @@ def register(mcp: FastMCP) -> None:
             elif action == "summary":
                 result = _summary_metrics(time_range)
                 return make_success_response(result)
+            elif action == "evaluate":
+                result = _evaluate_metrics(criterion)
+                return make_success_response(result)
             else:
-                return make_error_response(ValueError(f"未知操作: {action}，支持: query, summary"), error_code=ERR_VALIDATION)
+                return make_error_response(ValueError(f"未知操作: {action}，支持: query, summary, evaluate"), error_code=ERR_VALIDATION)
         except Exception as e:
             logger.error("metrics_report error: %s", e)
             return make_error_response(e)

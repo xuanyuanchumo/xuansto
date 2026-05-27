@@ -1,21 +1,27 @@
-# Xuansto Skill 版本演进路线
+# xuansto-skill-v2 版本演进路线图
 
-> 版本: 4.0.0 | 日期: 2026-05-24 | 状态: v8.0.0 已发布
-> 仓库: https://github.com/xuanyuanchumo/xuansto
-> 分支: main（唯一分支）| 标签: v8.0.0（唯一标签）
+> 版本: 6.0 | 编写日期: 2026-05-27 | 编码: UTF-8 | 行尾: LF
+> 当前版本: V_CURRENT=9.0.0 | 目标版本: V_TARGET=9.0.0
+> 数据来源: REFACTOR_PLAN.md v5.0 (64项独立问题, 35已关闭, 29待处理) + ARCHITECTURE.md + DATABASE_DESIGN.md + MCP_REVIEW.md + SKILL_REVIEW.md + API_SPECIFICATION.md
+> v8.6.0~v9.0.0 全部已交付，本文档从 v9.0.0 起为当前版本
 
 ---
 
 ## 目录
 
 1. [版本号定义规则](#1-版本号定义规则)
-2. [双组件版本规则](#2-双组件版本规则)
-3. [版本里程碑总览](#3-版本里程碑总览)
-4. [v8.0.0 — 当前发布版](#4-v800--当前发布版)
-5. [v8.1.0 — 可选改进](#5-v810--可选改进)
-6. [v9.0.0 — 下一大版本](#6-v900--下一大版本)
-7. [版本兼容性矩阵](#7-版本兼容性矩阵)
-8. [升级与回退策略](#8-升级与回退策略)
+2. [当前状态总览](#2-当前状态总览)
+3. [版本演进路线](#3-版本演进路线)
+   - [3.1 v8.5.0 — 初始版本](#31-v850--初始版本)
+   - [3.2 v8.6.0 — 安全加固与降级补齐](#32-v860--安全加固与降级补齐)
+   - [3.3 v8.7.0 — 数据模型统一与迁移](#33-v870--数据模型统一与迁移)
+   - [3.4 v8.8.0 — MCP层重构与协议合规](#34-v880--mcp层重构与协议合规)
+   - [3.5 v8.9.0 — Skill层瘦身与渐进加载增强](#35-v890--skill层瘦身与渐进加载增强)
+   - [3.6 v9.0.0 — 全面集成与生产就绪](#36-v900--全面集成与生产就绪)
+4. [版本时间线](#4-版本时间线)
+5. [版本依赖关系](#5-版本依赖关系)
+6. [问题关闭路线图](#6-问题关闭路线图)
+7. [风险与缓解](#7-风险与缓解)
 
 ---
 
@@ -23,503 +29,632 @@
 
 ### 1.1 语义化版本（SemVer）
 
-本项目严格遵循 [语义化版本 2.0.0](https://semver.org/lang/zh-CN/) 规范，版本号格式为 **MAJOR.MINOR.PATCH**：
+本项目采用 [语义化版本 2.0.0](https://semver.org/lang/zh-CN/) 规范，版本号格式为 **MAJOR.MINOR.PATCH**：
 
-| 字段 | 含义 | 递增条件 | 示例 |
-|------|------|---------|------|
-| **MAJOR** | 主版本号 | 存在不兼容的 API 变更 | 8 → 9 |
-| **MINOR** | 次版本号 | 新增向后兼容的功能 | 8.0 → 8.1 |
-| **PATCH** | 修订号 | 向后兼容的问题修复 | 8.0.0 → 8.0.1 |
+```
+v8.9.0
+│ │ │
+│ │ └── PATCH：向后兼容的问题修复
+│ └──── MINOR：向后兼容的功能新增
+└────── MAJOR：不兼容的 API 变更
+```
 
-### 1.2 版本号变更判定标准
+### 1.2 各层级升级条件
 
-| 变更类型 | Skill 版本影响 | MCP Server 版本影响 | 示例 |
-|---------|--------------|-------------------|------|
-| 新增 Tool / Resource | — | MINOR | 新增 Tool → v8.0.0 → v8.1.0 |
-| 新增 Skill 命令 | MINOR | — | 新增 `/audit` 命令 → v8.0.0 → v8.1.0 |
-| Tool 参数变更（向后兼容） | — | MINOR | `agent_status` 新增 action → v8.1.0 |
-| Tool 参数变更（不兼容） | — | MAJOR | 移除 `knowledge_search.inject` → v9.0.0 |
-| 降级机制变更 | MINOR | MINOR | 统一降级框架 → 双方 MINOR |
-| 数据模型变更（需迁移） | — | MINOR | 新增 `error_type` 字段 → v8.1.0 |
-| API 协议变更 | MAJOR | MAJOR | API v3 → v4 → v9.0.0 |
-| Bug 修复 | PATCH | PATCH | 修复竞态条件 → v8.0.1 |
+| 层级 | 升级条件 | 示例 |
+|------|----------|------|
+| **PATCH** | 修复 Bug、补充文档、性能优化，不改变任何 API 接口和行为 | v8.9.0 → v8.9.1：修复版本号不一致(ARCH-10/SKILL-01) |
+| **MINOR** | 新增 MCP 工具、新增命令、新增 Agent、新增配置项、架构重构，所有变更向后兼容 | v8.5.0 → v8.6.0：安全加固、降级补齐 |
+| **MAJOR** | 破坏性变更：API 接口不兼容、配置格式升级、架构范式变更、删除已废弃功能 | v8.x → v9.0.0：API契约锁定、v1归档、单一版本号体系 |
 
-### 1.3 预发布版本标识
+### 1.3 特殊版本标记
 
-| 标识 | 含义 | 示例 |
+| 标记 | 含义 | 示例 |
 |------|------|------|
-| `-alpha.N` | 内部测试，API 可能频繁变更 | `v8.1.0-alpha.1` |
-| `-beta.N` | 功能冻结，仅修复缺陷 | `v8.1.0-beta.1` |
-| `-rc.N` | 发布候选，预期即为正式版 | `v8.1.0-rc.1` |
+| `-dev` | 开发中版本，API 可能存在未冻结变更 | v8.9.0-dev |
+| `-alpha.N` | 内部开发测试版，API 随时可能变更 | v9.0.0-alpha.1 |
+| `-beta.N` | 功能冻结，仅修复缺陷，公开测试 | v9.0.0-beta.1 |
+| `-rc.N` | 发布候选，除非发现阻断性问题否则即成为正式版 | v9.0.0-rc.1 |
+
+### 1.4 当前版本矩阵
+
+| 项目 | 版本 | 说明 |
+|------|------|------|
+| Skill (xuansto-skill-v2) | v9.0.0 | 当前版本 |
+| MCP Server (xuansto-mcp-server) | v9.0.0 | pyproject.toml 版本 |
+| constraints.yaml | v9.0.0 | 与 SKILL.md 一致 |
+| .skill-config.yaml | v9.0.0 | 与 SKILL.md 一致 |
+| MCP API 版本 | v4.0.0 | config.py 中定义 |
+
+### 1.5 版本号统一目标
+
+v8.6.0 已统一核心文件版本号。v9.0.0 已建立单一版本号体系，所有文件版本统一为 9.0.0，CI 新增版本一致性检查，ARCH-10/SKILL-01 已关闭。
 
 ---
 
-## 2. 双组件版本规则
+## 2. 当前状态总览
 
-### 2.1 组件定义
+### 2.1 已发布版本摘要
 
-xuansto 项目由两个协同发布的组件构成：
+| 版本 | 发布日期 | 类型 | 核心内容 |
+|------|----------|------|----------|
+| v8.0.0 | 2026-05-24 | MAJOR | MCP Server + Skill 混合架构基线，20个MCP工具，57个Agent，3级降级 |
+| v8.1.0 | 2026-05-26 | MINOR | Resource 暴露增强（27个），SKELETON 阶段基础命令 |
+| v8.2.0 | 2026-05-26 | MINOR | 审计日志，统一响应格式，双写一致性 |
+| v8.3.0 | 2026-05-26 | MINOR | Agent/工作流持久化，Hook 超时，配置热更新，API 版本协商 |
+| v8.4.0 | 2026-05-26 | MINOR | Streamable HTTP 传输，知识版本清理配置 |
+| v8.5.0 | 2026-05-26 | MINOR | 双SQLite合并，降级映射20/20，54门禁完整，32命令映射，Schema验证 |
+| v8.6.0 | 2026-05-27 | MINOR | HTTP认证中间件，Hook拦截复用，路径验证统一，降级链补齐，降级超时统一 |
+| v8.7.0 | 2026-05-27 | MINOR | SQLite三库合一，双写消除，时间戳统一，Schema版本控制，内存状态持久化 |
+| v8.8.0 | 2026-05-27 | MINOR | ToolAnnotations补充，outputSchema补充，7个新Resource，Prompt重构 |
+| v8.9.0 | 2026-05-27 | MINOR | SKILL.md外置，Hook差异化超时，速率限制差异化，参考文档两级加载，Hook动态配置，安全断点优化，评估覆盖扩展，配置统一，L3降级优化 |
+| v9.0.0 | 2026-05-27 | MAJOR | Token预算动态调整+跨会话持久化，Agent定义去重，知识库路径统一，会话持久化统一，版本号统一+CI检查，指标系统合并，模型路由对齐，版本协商去重，Git管理优化，测试修复(136个通过) |
 
-| 组件 | 当前版本 | 位置 | 职责 |
-|------|---------|------|------|
-| **xuansto-skill-v2** | v8.0.0 | `.trae/skills/xuansto-skill-v2/` | Skill 层：SKILL.md、约束、路由、参考文档、评估配置 |
-| **xuansto-mcp-server** | v8.0.0 | `xuansto-mcp-server/` | MCP Server 层：Tool、Resource、Hook、数据层、降级引擎 |
+### 2.2 已交付版本修复汇总
 
-> **历史说明**：xuansto-skill (v1) 已从仓库彻底移除（非 ARCHIVED），仅作历史参照。仓库从 3306 文件精简至 710 文件，仅保留 `xuansto-mcp-server/` + `.trae/skills/xuansto-skill-v2/` + `README.md` + `.gitignore` + `.editorconfig`。
+> Phase 0 + v8.6.0~v9.0.0 已关闭 35 项问题
 
-### 2.2 版本同步规则
+| 版本 | 关闭问题数 | 关键修复 |
+|------|-----------|----------|
+| Phase 0 / v8.6.0 | 7 | HTTP认证(API-06/08)、Hook拦截复用(API-07/10)、路径验证统一(ARCH-38)、降级链补齐(API-05/SKILL-04)、降级超时统一(API-16)、降级脚本一致性(ARCH-24/SKILL-04) |
+| v8.7.0 | 7 | SQLite三库合一(DATA-01)、双写消除(DATA-02/08)、状态存储统一(DATA-03/04)、时间戳统一(DATA-05)、Schema版本控制(DATA-06)、内存状态持久化(DATA-07)、指标系统统一(DATA-10/12) |
+| v8.8.0 | 5 | ToolAnnotations补充(MCP-04)、Tool/Resource职责分离(MCP-02/06)、新增7个Resource(MCP-03)、outputSchema补充(MCP-05)、Prompt重构(MCP-01/API-03) |
+| v8.9.0 | 14 | SKILL.md外置(ARCH-01/30)、Hook差异化超时(MCP-11/API-04)、速率限制差异化(API-17)、参考文档两级加载(SKILL-11/ARCH-31)、Hook动态配置(SKILL-02)、安全断点优化(SKILL-18)、评估覆盖扩展(SKILL-05)、配置统一(ARCH-05/06/SKILL-20)、L3降级优化(ARCH-36)、降级链全覆盖(API-05/SKILL-04)、HTTP认证(API-06/08)、Hook拦截复用(API-07/10)、路径验证统一(ARCH-38)、降级超时统一(API-16) |
+| v9.0.0 | 13 | Token预算动态调整+跨会话持久化(ARCH-02/21/SKILL-11)、Agent定义去重(ARCH-03)、知识库路径统一(ARCH-07/13)、会话持久化统一(ARCH-08)、版本号统一+CI检查(ARCH-10/SKILL-01)、会话恢复增强(ARCH-22)、指标系统合并(DATA-10)、模型路由对齐(SKILL-03)、工具数修正(SKILL-08/14)、空段清理(SKILL-10)、版本协商去重(API-14) |
 
-自 v8.0.0 起，双组件采用 **版本号对齐** 策略：
+### 2.3 待处理问题统计
 
-| 规则 | 说明 |
+> 基于 REFACTOR_PLAN.md v5.0 的64项独立问题，扣除已关闭的35项
+
+| 影响域 | 总数 | ✅ 已关闭 | ⏳ 待处理 | 高 | 中 | 低 |
+|--------|------|----------|----------|----|----|-----|
+| 架构(ARCH) | 24 | 17 | 7 | 1 | 1 | 5 |
+| 数据(DATA) | 9 | 8 | 1 | 0 | 0 | 1 |
+| MCP | 9 | 5 | 4 | 0 | 0 | 4 |
+| Skill | 14 | 8 | 6 | 0 | 0 | 6 |
+| API | 12 | 7 | 5 | 0 | 1 | 2 |
+| **合计** | **64** | **35** | **29** | **1** | **2** | **18** |
+
+---
+
+## 3. 版本演进路线
+
+### 3.1 v8.5.0 — 初始版本
+
+> 状态: ✅ 已发布 | 类型: MINOR
+
+#### 目标
+
+双SQLite合并、降级映射补全、质量门禁完整化、命令映射完整化、Schema验证脚本。
+
+#### 主要变更
+
+| 维度 | 内容 |
 |------|------|
-| MAJOR 同步 | 双组件 MAJOR 版本必须同步递增（v8 → v9 同时发布） |
-| MINOR 独立 | MINOR 版本可独立递增，但跨组件依赖的变更需同步发布 |
-| PATCH 独立 | PATCH 版本完全独立递增，不要求同步 |
-| 最低兼容声明 | SKILL.md 中声明 `min_version`，MCP Server 通过 `negotiate_version` 校验 |
-
-### 2.3 版本协商机制
-
-```
-Skill 启动 → 读取 SKILL.md min_version
-           → 调用 server_health(negotiate_version, client_version="8.0.0")
-           → MCP Server 返回:
-              { server_version: "8.0.0",
-                api_version: "3.0.0",
-                compatible: true,
-                deprecated_features: [...],
-                new_features: [...] }
-           → 不兼容时返回错误 + 升级建议
-```
-
-### 2.4 版本不对齐时的行为
-
-| 场景 | Skill 版本 | MCP Server 版本 | 行为 |
-|------|-----------|----------------|------|
-| Skill > Server | v8.1.0 | v8.0.0 | 降级运行，v8.1.0 新功能不可用 |
-| Skill < Server | v8.0.0 | v8.1.0 | 正常运行，Server 新功能未暴露 |
-| MAJOR 不匹配 | v9.0.0 | v8.0.0 | 拒绝连接，返回明确升级指引 |
-| Server 不可用 | v8.0.0 | — | 全量降级到脚本/内联模式 |
+| 数据层 | 合并 knowledge.db 到 xuansto.db，统一为22+表 |
+| 降级映射 | constraints.yaml 补全至20/20完整映射 |
+| 质量门禁 | 内嵌门禁扩展至54项完整覆盖 |
+| 命令映射 | COMMAND_PHASE_MAP扩展至32个命令完整覆盖 |
+| Schema验证 | validate_schemas.py 脚本实现 |
 
 ---
 
-## 3. 版本里程碑总览
+### 3.2 v8.6.0 — 安全加固与降级补齐
 
-### 3.1 版本谱系图
+> 状态: ✅ 已交付 (2026-05-27) | 类型: MINOR
+> 对应 REFACTOR_PLAN.md: Phase 0（安全紧急修复）+ 降级补齐
 
-```
-  V_REMOVED                  V_CURRENT                    V_OPTIONAL             V_NEXT_MAJOR
-  ──────────                 ─────────                    ──────────             ────────────
-  xuansto-skill v1           xuansto-skill-v2 v8.0.0      v8.1.0 (可选改进)      xuansto-skill-v2 v9.0.0
-  (已从仓库彻底移除)         xuansto-mcp-server v8.0.0    xuansto-mcp-server     xuansto-mcp-server v9.0.0
-  ┌──────────────────┐      ┌──────────────────┐         v8.1.0                ┌──────────────────┐
-  │ v1.0.0 → v4.0.0  │      │  v8.0.0 重构整合  │                               │  v9.0.0 下一大版  │
-  │ 原始单文件Skill   │      │                  │              ┌──────────┐     │                  │
-  │ 72+参考文件       │      │ P0 紧急修复 ✅    │              │ v8.1.0   │     │ API v4.0.0       │
-  │ 脚本驱动         │      │ P1 接口治理 ✅    │─────────────▶│ U-45     │     │ Phase自动推进    │
-  │ v4.0.0 已移除    │      │ P2 架构加固 ✅    │              │ 可选改进  │     │ 架构升级         │
-  │ 仓库已清理       │      │ P3 优化收尾 ✅    │              └──────────┘     │ 降级质量升级      │
-  └──────────────────┘      │ P4 收尾补全 ✅    │                               └──────────────────┘
-                            │                  │
-                            │ 45/46 问题已解决  │
-                            │ 20 Tool + 11 Res │
-                            │ 20/20 降级覆盖   │
-                            │ 统一xuansto.db    │
-                            │ 710 文件(精简)    │
-                            └──────────────────┘
-```
+#### 目标
 
-### 3.2 里程碑时间线
+1. HTTP 传输认证：streamable-http 增加 API Key/Bearer Token 认证（API-06/API-08）
+2. HTTP API Hook 拦截复用：HTTP API 复用 MCP Tool 的 Hook 拦截和速率限制（API-07/API-10）
+3. 路径验证统一：22个 Tool 统一调用 validate_path_safety()（ARCH-38）
+4. 降级链补齐：resource_subscribe/audit_query 降级函数补全，FALLBACK_MAP 覆盖22/22（API-05/SKILL-04）
+5. 降级超时统一：DegradationExecutor 超时与脚本超时统一为30s（API-16）
+6. 降级脚本一致性：补全或移除不存在的脚本引用（ARCH-24/SKILL-04）
 
-| 版本 | 阶段 | 周期 | 解决问题数 | 累计解决 | 状态 |
-|------|------|------|-----------|---------|------|
-| v8.0.0 | P0 紧急修复 | 第 1 周 | 3 (U-01~U-03) | 3/46 | ✅ 已完成 |
-| v8.0.0 | P1 接口治理 | 第 2-3 周 | 7 (U-04~U-10) | 10/46 | ✅ 已完成 |
-| v8.0.0 | P2 架构加固 | 第 4-5 周 | 21 (U-11~U-31) | 31/46 | ✅ 已完成 |
-| v8.0.0 | P3 优化收尾 | 第 6 周+ | 11 (U-32~U-42) | 42/46 | ✅ 已完成 |
-| v8.0.0 | P4 收尾补全 | 第 7 周 | 3 (U-43, U-44, U-46) | 45/46 | ✅ 已完成 |
-| v8.1.0 | 可选改进 | — | 0 (U-45 为已知限制) | 45/46 | 🔲 可选 |
-| v9.0.0 | 下一大版本 | 待定 | 新特性 + 破坏性变更 | — | 📋 待规划 |
+#### 主要变更
 
-### 3.3 问题分布与版本映射
+| 步骤 | 问题 ID | 变更内容 | 涉及文件 |
+|------|---------|----------|----------|
+| 0.1 | API-06, API-08 | HTTP 认证中间件：支持 Bearer/ApiKey 认证 | `server.py` |
+| 0.2 | API-07, API-10 | HTTP API 复用 MCP Tool Hook 拦截（_run_hooks_and_rate_limit） | `api/api_routes.py` |
+| 0.3 | ARCH-38 | 路径验证统一：22个 Tool + 30个 Resource 全覆盖 | `core/validator.py` |
+| 0.4 | API-05, SKILL-04 | 降级链补齐：FALLBACK_MAP 22/22 全覆盖 | `degradation.py` |
+| 0.5 | API-16 | 降级超时统一为30s | `degradation.py` |
+| 0.6 | ARCH-24, SKILL-04 | 降级脚本引用与 FALLBACK_MAP 一致性修复 | `degradation.py` |
 
-```
-紧急 (3)  U-01 U-02 U-03                                    → v8.0.0 P0 ✅
-高   (7)  U-04 U-05 U-06 U-07 U-08 U-09 U-10               → v8.0.0 P1 ✅
-中   (24) U-11~U-31, U-43, U-44                             → v8.0.0 P2+P4 ✅
-低   (11) U-32~U-42, U-46                                   → v8.0.0 P3+P4 ✅
-已知限制 (1) U-45                                            → 不计划修复
+#### 关联问题
 
-v8.0.0 已解决: 45/46  ████████████████████████████████████████████████████████████████████████████░  97.8%
-已知限制:       1/46  █░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   2.2%
-```
+| 问题 ID | 描述 | 严重度 | 影响域 |
+|---------|------|--------|--------|
+| API-06/API-08 | streamable-http传输无认证 + HTTP API无认证中间件 | 高 | API |
+| API-07/API-10 | HTTP API绕过Hook拦截和速率限制 | 高 | API |
+| ARCH-38 | 路径验证在Tool实现中未统一使用 | 高 | 架构 |
+| API-05/SKILL-04 | resource_subscribe/audit_query无降级函数 | 高 | API/Skill |
+| API-16 | DegradationExecutor超时(5s)与脚本超时(120s)不一致 | 高 | API |
+| ARCH-24/SKILL-04 | 降级脚本与MCP工具行为不一致 | 高 | 架构/Skill |
+
+#### 验收标准
+
+1. [x] HTTP 传输支持 Bearer/ApiKey 认证，未认证请求返回 401（API-06/API-08 关闭）
+2. [x] HTTP API 调用经过 Hook 拦截和速率限制（API-07/API-10 关闭）
+3. [x] 22个 Tool 统一调用 validate_path_safety()（ARCH-38 关闭）
+4. [x] FALLBACK_MAP 覆盖 22/22，所有 Tool 均有 Inline 降级兜底（API-05/SKILL-04 关闭）
+5. [x] DegradationExecutor 超时统一为30s（API-16 关闭）
+6. [x] 降级脚本引用与 FALLBACK_MAP 一致（ARCH-24/SKILL-04 关闭）
 
 ---
 
-## 4. v8.0.0 — 当前发布版
+### 3.3 v8.7.0 — 数据模型统一与迁移
 
-### 4.1 版本目标
+> 状态: ✅ 已交付 (2026-05-27) | 类型: MINOR
+> 对应 REFACTOR_PLAN.md: Phase 1（数据层整合）
 
-从原始脚本驱动架构全面重构为 MCP-first 架构，解决五份分析文档中发现的全部独立问题。实现生产级降级机制（20/20 Tool 全覆盖）、统一数据存储、完整 Tool 体系（20 Tools + 11 Resources）、渐进式加载框架和安全加固。仓库从 3306 文件精简至 710 文件，v1 Skill 已彻底移除。
+#### 目标
 
-### 4.2 主要变更
+1. SQLite 三库合一：合并 decisions.db 到 xuansto.db（DATA-01）
+2. 消除双写冗余：SQLite 为唯一权威源，JSON 仅作启动缓存（DATA-02/DATA-08）
+3. 统一状态存储：消除工作流三重存储和 Agent 双重存储（DATA-03/DATA-04）
+4. 时间戳格式统一：全部统一为 ISO8601 UTC 字符串（DATA-05）
+5. Schema 版本控制：所有 JSON 文件添加 schema_version 字段（DATA-06）
+6. 内存状态持久化：所有内存状态变更时同步写入持久化（DATA-07）
+7. 指标系统统一：合并双轨指标系统为单一 MetricsCollector（DATA-10/DATA-12）
 
-#### 4.2.1 P0 紧急修复（U-01, U-02, U-03）
+#### 主要变更
 
-| 问题 | 变更内容 | 影响文件 |
-|------|---------|---------|
-| U-01 降级机制不完整且不统一 | 实现 `subprocess_utils.py` 异步降级链：MCP 调用 → 脚本降级 → 内联降级 → 最小响应；17 个 Tool 全部有降级路径；降级响应含 `source:"fallback"` 标识 | `degradation.py`, `subprocess_utils.py`, `server.py` |
-| U-02 v2 参考文档严重不足 | references/ 从 6 个文件扩展到 75+ 参考文件，覆盖编码规范、安全指南、桌面开发、Hook 系统等 | `references/*.md`, `mcp-tools.md` |
-| U-03 状态持久化无原子保障 | xuansto.db 统一存储（8 表 + 11 索引）；atexit 注册 `_persist_state()`；hash 完整性校验；写入锁 + backoff jitter | `database.py`, `degradation.py` |
+| 步骤 | 问题 ID | 变更内容 | 涉及文件 |
+|------|---------|----------|----------|
+| 1.1 | DATA-01 | SQLite 三库合一：decisions 表迁移到 xuansto.db；FTS5 索引重建；旧库重命名为 .legacy | `database.py`, `decision_log.py` |
+| 1.2 | DATA-02, DATA-08 | 消除双写：decisions.json 废弃；知识条目 ChromaDB 写入失败自动 reconciliation(3次指数退避) | `decision_log.py`, `database.py` |
+| 1.3 | DATA-03, DATA-04 | 统一状态存储：workflow_states.json/agent_instances.json 废弃；SQLite 为唯一权威源；内存仅 LRU 缓存 | `workflow_dispatch.py`, `agent_manage.py` |
+| 1.4 | DATA-05 | 时间戳统一：全部统一为 ISO8601 UTC 字符串；现有 Unix 时间戳迁移 | `database.py`, `agent_manage.py`, `workflow_dispatch.py` |
+| 1.5 | DATA-06 | Schema 版本控制：每个 JSON 文件添加 schema_version 字段；加载时检查版本按需迁移 | 所有 JSON 读写代码 |
+| 1.6 | DATA-07 | 内存状态持久化：_current_phase 写入 resource_state.json；_TRANSITION_HISTORY 写入 phase_transitions 表 | `resource_load_status.py` |
+| 1.7 | DATA-10, DATA-12 | 指标系统统一：合并 MetricsCollector 和 server_health 指标；FTS5 索引统一 tokenize 为 unicode61 | `metrics.py`, `server_health.py`, `database.py` |
 
-#### 4.2.2 P1 接口治理（U-04 ~ U-10）
+#### 关联问题
 
-| 问题 | 变更内容 | 影响文件 |
-|------|---------|---------|
-| U-04 Tool 注册依赖 FastMCP 内部 API | 本地 `_TOOL_REGISTRY` 注册表；Hook 拦截从映射表获取 Tool 函数；`_tool_manager._tools` 零引用 | `server.py`, `hook_engine.py` |
-| U-05 版本协商机制不完整 | MCP Server 升级到 v8.0.0；`negotiate_version` 响应含 `deprecated_features` / `new_features`；semver 比较逻辑 | `server_health.py`, `config.py` |
-| U-06 knowledge_search/inject 职责边界模糊 | `knowledge_search` Schema 仅保留 `action="retrieve"`；写入操作统一通过 `knowledge_inject` | `knowledge_search.py`, `knowledge_inject.py` |
-| U-07 工具文档与 MCP 暴露缺失 | 新增 `metrics_report` + `config_manage` Tool；`mcp-tools.md` 覆盖全部 20 个 Tool | `metrics_report.py`, `config_manage.py` |
-| U-08 ChromaDB 降级频繁 | ChromaDB 从必需降级为可选增强；默认 SQLite FTS5 + BM25；`HybridSearchEngine` 三级降级 | `search_engine.py`, `pyproject.toml` |
-| U-09 降级脚本同步阻塞 | `run_script_fallback_async` 使用 `asyncio.create_subprocess_exec`；`wait_for` 超时控制；保留同步版本 | `subprocess_utils.py` |
-| U-10 Tool 职责过载 | `agent_status` 保留查询类；`agent_manage` 负责变更类（create/assign/release/destroy/schedule） | `agent_status.py`, `agent_manage.py` |
+| 问题 ID | 描述 | 严重度 | 影响域 |
+|---------|------|--------|--------|
+| DATA-01 | SQLite 数据库碎片化(3个独立数据库) | 高 | 数据 |
+| DATA-02/DATA-08 | 双写冗余：决策日志+知识条目 | 高 | 数据 |
+| DATA-03/DATA-04 | 工作流三重存储+Agent双重存储 | 高 | 数据 |
+| DATA-05 | 时间戳格式不统一 | 中 | 数据 |
+| DATA-06 | JSON 文件无 Schema 版本控制 | 中 | 数据 |
+| DATA-07 | 内存状态与持久化状态不同步 | 高 | 数据/特效 |
+| DATA-10 | 指标数据散落多处 | 中 | 数据 |
+| DATA-12 | FTS5 索引重复创建且 tokenize 配置不一致 | 中 | 数据 |
 
-#### 4.2.3 P2 架构加固（U-11 ~ U-31）
+#### 验收标准
 
-| 问题 | 变更内容 | 影响文件 |
-|------|---------|---------|
-| U-11 Phase 定义重复 | SKILL.md 精简至 <200 行 | `SKILL.md` |
-| U-12 路径解析静默降级 | MCPNotificationCallback 通知 + WARNING 日志 | `config.py`, `notification.py` |
-| U-13 Hook 拦截失败不阻塞 | 安全 Hook 失败默认阻塞 + 失败计数 `_HOOK_FAILURE_THRESHOLD=5` | `hook_engine.py` |
-| U-14 会话状态分散 | xuansto.db `session_states` 表 | `database.py` |
-| U-15 指标文件无清理 | xuansto.db `tool_metrics` 表 + TTL 清理 | `metrics.py` |
-| U-16 内存缓存无持久化 | xuansto.db 持久化 + atexit handler | `cache.py` |
-| U-17 YAML 配置无 Schema 校验 | `SkillConfigModel` / `FallbackConfigModel` / `ConstraintsModel` Pydantic 校验 | `config_models.py`, `config_manage.py` |
-| U-18 SQLite 数据库分散 | 统一 xuansto.db（8 表） | `database.py` |
-| U-19 Resource 与 Tool 重叠 | 明确分工：Resource 只读快照 / Tool 交互操作 | `skill_resources.py` |
-| U-20 Hook 引擎缺少类型安全 | `HookType` 枚举（8 种类型） | `hook_engine.py`, `schemas.py` |
-| U-21 通知系统未与 MCP 集成 | `MCPNotificationCallback` 推送关键事件 | `notification.py` |
-| U-22 配置热重载缺少 MCP 入口 | `config_manage` Tool | `config_manage.py` |
-| U-23 Resource 缺少分页过滤 | `sessions/{id}` + `agents/{layer}/{name}` 参数化 Resource | `skill_resources.py` |
-| U-24 Token 估算精度不足 | tiktoken 可选（`_HAS_TIKTOKEN`）+ `target_deviation` 字段 | `context_compress.py` |
-| U-25 Hook 与 MCP 集成不完整 | HookType 枚举 + 安全阻断 + 失败计数 | `hook_engine.py` |
-| U-26 Agent 合并策略未执行 | `agent_status(action="merge")` + `_merge_agents()` + YAML 规则加载 | `agent_status.py` |
-| U-27 命令路由静态无协商 | `server_health(action="capabilities")` 返回可用 Tool + 降级状态 + API 版本 | `server_health.py` |
-| U-28 DisclosureTransition 未使用 | DisclosureTransition 状态机已实现 | `resource_load_status.py` |
-| U-29 FALLBACK_MAP 静态构建 | `config_manage reload` + `fallback_config.yaml` 热监控（watchfiles/polling） | `degradation.py` |
-| U-30 错误码语义混淆 | 统一 `error_code`，deprecated `code` 字段 | `errors.py` |
-| U-31 退避缺少抖动 | `backoff jitter`（`random.uniform(0, 0.5)`） | `degradation.py` |
-
-#### 4.2.4 P3 优化收尾（U-32 ~ U-42）
-
-| 问题 | 变更内容 | 影响文件 |
-|------|---------|---------|
-| U-32 缺少评估配置 | evals/ 目录（`mcp_evaluation.xml` + `trigger_eval.json`） | `evals/` |
-| U-33 缺少 CHANGELOG | `CHANGELOG.md` 已创建 | `CHANGELOG.md` |
-| U-34 v1/v2 文件重复 | v1 从仓库彻底移除（非 ARCHIVED） | 仓库清理 |
-| U-35 SKILL.md 行数超限 | SKILL.md 精简至 <200 行 | `SKILL.md` |
-| U-36 工作流 YAML/MD 同步 | YAML 为权威源（`_yaml/` 目录 15 个 YAML 文件） | `workflows/_yaml/` |
-| U-37 ErrorPattern 无分类 | `error_type` 字段 | `database.py` |
-| U-38 Workflow/Decision 无关联 | `workflow_id` 关联字段 | `database.py` |
-| U-39 knowledge_entries 无软删除 | `deleted_at` 字段 + `knowledge_inject(delete)` | `database.py`, `knowledge_inject.py` |
-| U-40 缓存无 LRU 淘汰 | `cache.py` LRU 缓存 | `cache.py` |
-| U-41 快照文件无加密 | `crypto.py` AES-256-GCM | `crypto.py` |
-| U-42 速率限制/白名单/默认值 | `rate_limiter.py` 令牌桶 + 名称白名单 + action 必填 | `rate_limiter.py`, `validator.py` |
-
-#### 4.2.5 P4 收尾补全（U-43, U-44, U-46）
-
-| 问题 | 变更内容 | 影响文件 |
-|------|---------|---------|
-| U-43 FALLBACK_MAP 缺少 3 个新 Tool 降级定义 | 新增 `metrics_report_fallback`（从 xuansto.db 读取最近指标）、`config_manage_fallback`（返回当前配置快照只读）、`agent_manage_fallback`（从静态 registry 读取 Agent 信息）；3 个 fallback 函数加入 FALLBACK_MAP 和 _INLINE_FALLBACK_MAP；更新 `fallback_config.yaml` | `degradation.py`, `metrics_report.py`, `config_manage.py`, `agent_manage.py`, `fallback_config.yaml` |
-| U-44 mcp_evaluation.xml 引用 4 个不存在的 Tool | `knowledge_auto_retrieve` → `knowledge_search(action="retrieve")` + `knowledge_inject(action="list_available")`；`knowledge_progressive_search` → `knowledge_search(action="retrieve", search_type="hybrid")`；`knowledge_deep_load` → `knowledge_search(action="retrieve", query=entry_id)`；`knowledge_stats` → `knowledge_inject(action="list_available")`；更新 verification 断言；确保全部 10 个 qa_pair 的 tool_calls 指向实际存在的 Tool | `evals/mcp_evaluation.xml` |
-| U-46 DegradationManager 健康检查间隔硬编码 30s | `.xuansto-config.yaml` 新增 `health_check_interval_sec` 字段；`SkillConfigModel` 添加 `health_check_interval_sec: int = Field(default=30, ge=5, le=300)`；`DegradationManager.__init__` 从配置读取间隔值；`config_manage(action="status")` 显示当前间隔 | `degradation.py`, `config_models.py`, `.xuansto-config.yaml` |
-
-### 4.3 关联问题编号
-
-| 阶段 | 问题编号 | 数量 | 状态 |
-|------|---------|------|------|
-| P0 紧急修复 | U-01, U-02, U-03 | 3 | ✅ 全部已解决 |
-| P1 接口治理 | U-04 ~ U-10 | 7 | ✅ 全部已解决 |
-| P2 架构加固 | U-11 ~ U-31 | 21 | ✅ 全部已解决 |
-| P3 优化收尾 | U-32 ~ U-42 | 11 | ✅ 全部已解决 |
-| P4 收尾补全 | U-43, U-44, U-46 | 3 | ✅ 全部已解决 |
-| 已知限制 | U-45 | 1 | ⚠️ 已知限制，不计划修复 |
-| **合计** | **U-01 ~ U-46** | **46** | **✅ 45/46 已解决（97.8%）** |
-
-### 4.4 验收标准
-
-| 编号 | 验收标准 | 状态 |
-|------|---------|------|
-| AC-01 | 杀死 MCP Server 进程后，20 个 Tool 仍可通过降级返回结果 | ✅ |
-| AC-02 | 降级响应结构与正常响应一致（含 `source:"fallback"` 标识） | ✅ |
-| AC-03 | 降级脚本调用超时（60s）后回退到内联降级 | ✅ |
-| AC-04 | 每个 Phase 的 Agent 执行时可获取对应参考文档 | ✅ |
-| AC-05 | `mcp-tools.md` 覆盖全部 20 个 Tool | ✅ |
-| AC-06 | 模拟进程崩溃后重启，状态可正确恢复 | ✅ |
-| AC-07 | 并发读写测试无数据损坏 | ✅ |
-| AC-08 | `_tool_manager._tools` 在代码中零引用 | ✅ |
-| AC-09 | `knowledge_search(action="inject")` 返回参数校验错误 | ✅ |
-| AC-10 | 卸载 chromadb 后知识检索仍可用（BM25 模式） | ✅ |
-| AC-11 | `agent_status` action 枚举仅含查询类 | ✅ |
-| AC-12 | 所有状态实体可通过 SQL 查询 | ✅ |
-| AC-13 | `config_manage(action="validate")` 可检测配置问题 | ✅ |
-| AC-14 | security-block Hook 失败时工具调用被阻止 | ✅ |
-| AC-15 | Phase 转换时客户端收到 DisclosureTransition 通知 | ✅ |
-| AC-16 | 修改 `fallback_config.yaml` 后降级路径自动更新 | ✅ |
-| AC-17 | 错误响应仅含 `error_code` 字段（`code` 已 deprecated） | ✅ |
-| AC-18 | SKILL.md < 200 行 | ✅ |
-| AC-19 | YAML 为工作流权威源（15 个 YAML 文件） | ✅ |
-| AC-20 | 高频调用被限流（令牌桶 60 req/min） | ✅ |
-| AC-21 | 所有 Tool 的 action 参数为必填 | ✅ |
-| AC-22 | `server_health(check)` 返回 `tools_count=20` | ✅ |
-| AC-23 | MCP 不可用时 20/20 Tool 返回降级响应 | ✅ |
-| AC-24 | 降级链集成测试通过（含 3 个新 Tool） | ✅ |
-| AC-25 | `mcp_evaluation.xml` 中每个 qa_pair 引用的 Tool 名称在 `schemas.py` 中有对应 Input 定义 | ✅ |
-| AC-26 | `mcp_evaluation.xml` 中参数结构与 Schema 一致 | ✅ |
-| AC-27 | `trigger_eval.json` 无需修改 | ✅ |
-| AC-28 | 修改 `.xuansto-config.yaml` 后 `config_manage(reload)` 生效 | ✅ |
-| AC-29 | 健康检查间隔范围 5s ~ 300s | ✅ |
-| AC-30 | 默认间隔仍为 30s | ✅ |
-
-### 4.5 核心成果指标
-
-| 指标 | v8.0.0 值 |
-|------|----------|
-| MCP Tool 数量 | 20 |
-| MCP Resource 数量 | 11 |
-| API 版本 | v3.0.0 |
-| Python 最低版本 | >=3.10 |
-| Agent 数量 | 57 / 13 层 |
-| 命令数量 | 31 |
-| 质量门禁 | 54 项 |
-| 工作流阶段 | 9 Phase (SDD+TDD) |
-| 降级路径覆盖 | 20/20 Tool (100%) |
-| 数据库表 | 8 表 + 11 索引 |
-| 参考文档 | 75+ 文件 |
-| 问题解决率 | 45/46 (97.8%) |
-| 仓库文件数 | 710（从 3306 精简） |
-| 已知限制 | U-45（SKILL.md Phase 标记） |
+1. [x] decisions.db 数据迁移完成，所有查询指向 xuansto.db；FTS5 索引重建正常（DATA-01 关闭）
+2. [x] decisions.json 废弃；ChromaDB 写入失败后自动重试3次(指数退避)；reconciliation 自动执行（DATA-02/DATA-08 关闭）
+3. [x] workflow_states.json/agent_instances.json 废弃；启动从 SQLite 恢复（DATA-03/DATA-04 关闭）
+4. [x] 所有表的时间字段格式一致；现有 Unix 时间戳迁移为 ISO8601；查询和排序正确（DATA-05 关闭）
+5. [x] resource_state.json v3→v4；degradation_state.json v0→v1；迁移函数注册到 schema_version 表（DATA-06 关闭）
+6. [x] _current_phase 写入 resource_state.json；_TRANSITION_HISTORY 写入 phase_transitions 表；崩溃恢复测试通过（DATA-07 关闭）
+7. [x] 废弃 metrics_*.json 和 tool_metrics.json；server_health 调用 MetricsCollector；FTS5 配置一致（DATA-10/DATA-12 关闭）
 
 ---
 
-## 5. v8.1.0 — 可选改进
+### 3.4 v8.8.0 — MCP层重构与协议合规
 
-### 5.1 版本目标
+> 状态: ✅ 已交付 (2026-05-27) | 类型: MINOR
+> 对应 REFACTOR_PLAN.md: Phase 2-3（MCP规范合规 + Schema版本控制）
 
-v8.1.0 为可选改进版本，仅包含 U-45（SKILL.md Phase 标记）作为可选增强。U-45 已降级为已知限制，不计划作为必须修复项。此版本仅在团队有明确需求时才推进。
+#### 目标
 
-### 5.2 可选变更
+1. ToolAnnotations 补充：22个 Tool 全部添加 annotations 声明（MCP-04）
+2. Tool/Resource 职责分离：只读 action 迁移为 MCP Resource（MCP-02/MCP-06）
+3. 新增 7 个 Resource URI（MCP-03）
+4. outputSchema 补充：每个 Tool 添加 outputSchema（MCP-05）
+5. Prompt 重构：返回结构化 messages 数组，注入上下文（MCP-01/API-03）
+6. CLI 路由修复：agent 命令路由到正确工具（API-09）
 
-#### 5.2.1 SKILL.md Phase 标记（U-45 — 已知限制，可选改进）
+#### 主要变更
 
-| 项目 | 说明 |
-|------|------|
-| **问题** | SKILL.md 未使用 Phase 标记，渐进式加载状态机仅在 MCP Server 侧实现 |
-| **根因** | 渐进式加载框架在 P2-D 阶段仅实现了 Server 侧，Skill 侧未同步 |
-| **影响** | Skill 无法在加载时告知平台自身属于哪个 Phase；平台无法根据 Skill 的 Phase 声明决定加载策略 |
-| **当前状态** | 已降级为已知限制，不影响核心功能 |
-| **可选变更** | 1. 在 SKILL.md 的 triggers 段添加 phase 标注：`phase: 0`（骨架阶段加载）<br>2. 在 commands/ 段标注各命令所需最低 Phase<br>3. 在 references/ 段标注各参考文档的 Phase 归属<br>4. 添加 Phase 推进提示文本模板 |
-| **影响文件** | `SKILL.md` |
-| **修复复杂度** | 低 |
-| **优先级** | 可选（P5），非必须 |
+| 步骤 | 问题 ID | 变更内容 | 涉及文件 |
+|------|---------|----------|----------|
+| 2.1 | MCP-04 | ToolAnnotations 补充：22个 Tool 全部添加 readOnlyHint/destructiveHint/idempotentHint/openWorldHint | `tools/*.py` |
+| 2.2 | MCP-02, MCP-06 | Tool/Resource 职责分离：agent_status 仅含 list/by_phase/detail/match；写操作统一到 agent_manage；server_health 只读查询暴露为 Resource | `tools/agent_status.py`, `tools/agent_manage.py`, `skill_resources.py` |
+| 2.3 | MCP-03 | 新增 7 个 Resource：agents/by-phase/{phase}, agents/detail/{name}, health/version, metrics/tools/{tool_name}, budget/status, config/main, workflows/snapshots/{workflow_id} | `skill_resources.py` |
+| 2.4 | MCP-05 | outputSchema 补充：每个 Tool 添加 outputSchema 与 make_response 格式对齐 | `tools/*.py` |
+| 2.5 | MCP-01, API-03 | Prompt 重构：xuansto_workflow 和 xuansto_analysis 返回结构化 messages 数组，注入当前 Phase/Token 预算/降级状态 | `server.py` |
 
-### 5.3 关联问题编号
+#### 关联问题
 
-| 问题编号 | 标题 | 严重度 | 影响域 | 状态 |
+| 问题 ID | 描述 | 严重度 | 影响域 |
+|---------|------|--------|--------|
+| MCP-01/API-03 | Prompt 实现过于简单，缺乏上下文注入 | 中 | MCP/API |
+| MCP-02 | Tool/Resource 职责分离不清 | 高 | MCP |
+| MCP-03 | 缺少 7 个只读数据的 Resource 暴露 | 中 | MCP |
+| MCP-04 | 全部 Tool 缺少 ToolAnnotations 声明 | 高 | MCP |
+| MCP-05 | 全部 Tool 缺少 outputSchema 声明 | 中 | MCP |
+| MCP-06 | agent_status 与 agent_manage 职责重叠 | 中 | MCP |
+
+#### 验收标准
+
+1. [x] 22个 Tool 注册时包含 annotations 参数；客户端可读取 annotations 做安全决策（MCP-04 关闭）
+2. [x] agent_status 仅含 list/by_phase/detail/match；写操作统一到 agent_manage（MCP-02/MCP-06 关闭）
+3. [x] 7个新 Resource 可正常读取；返回结构化 JSON（MCP-03 关闭）
+4. [x] 每个 Tool 添加 outputSchema；客户端可预知返回值结构；Schema 与 spec-locks 一致（MCP-05 关闭）
+5. [x] Prompt 返回 `{messages:[{role:"user",content:...}]}` 格式；包含 Phase/Token/降级状态上下文（MCP-01/API-03 关闭）
+
+---
+
+### 3.5 v8.9.0 — Skill层瘦身与渐进加载增强
+
+> 状态: ✅ 已交付 (2026-05-27) | 类型: MINOR
+> 对应 REFACTOR_PLAN.md: Phase 3+4部分（Skill层瘦身+渐进加载增强+评估覆盖+配置统一+降级优化）
+
+#### 目标
+
+1. SKILL.md 内容外置，消除 `{{include:}}` 平台私有扩展依赖（ARCH-01/ARCH-30）✅
+2. Hook 差异化超时：按 Hook 类型设置不同超时（安全5s/编码10s/其他30s）（MCP-11/API-04）✅
+3. 速率限制差异化配置：按 Tool 设置不同速率限制（API-17）✅
+4. 参考文档两级加载：摘要(≤200 Token) → 完整(≤5000 Token)（SKILL-11/ARCH-31）✅
+5. Hook 动态配置：Hook 配置与加载阶段联动（SKILL-02）✅
+6. 安全断点默认值优化：安全相关断点默认值改为 true（SKILL-18）✅
+7. 评估覆盖扩展：覆盖全部 22 个 Tool（SKILL-05）✅
+8. 配置统一：Token 配置合并到统一位置（ARCH-05/ARCH-06/SKILL-20）✅
+9. 知识检索降级优化：L3 增加基础语义匹配（ARCH-36）✅
+
+#### 主要变更
+
+| 步骤 | 问题 ID | 变更内容 | 涉及文件 |
+|------|---------|----------|----------|
+| 3.1 | ARCH-01, ARCH-30 | ✅ SKILL.md 内容外置：PHASE_2/3 仅保留 Resource URI 引用，消除 `{{include:}}` 依赖 | `SKILL.md`, `references/` |
+| 3.2 | SKILL-11, ARCH-31 | ✅ 参考文档两级加载：每个参考文档生成摘要版(≤200 Token)；Phase 2 加载摘要，按需加载完整 | `references/summary/`, `resource_load_status.py` |
+| 3.3 | ARCH-02, SKILL-11 | ✅ 自动 Phase 推进：基于命令执行和 Token 消耗自动推进 Phase，无需手动 preload | `resource_load_status.py`, `token_budget.py` |
+| 3.4 | SKILL-02, SKILL-18 | ✅ Hook 动态配置：Hook 配置与加载阶段联动；安全相关断点默认值改为 true | `hooks.json`, `hook_manage.py`, `configs/default.yaml` |
+| 3.5 | MCP-11, API-04 | ✅ Hook 差异化超时：安全 Hook 5s/编码 Hook 10s/其他 30s | `hook_engine.py` |
+| 3.6 | API-17 | ✅ 速率限制差异化：quality_gate_check 120次/分；config_manage 10次/分 | `rate_limiter.py` |
+| 3.7 | SKILL-05 | ✅ 评估覆盖扩展：mcp_evaluation.xml 覆盖全部 22 个 Tool；trigger_eval.json 覆盖 not_for 排除场景 | `evals/` |
+| 3.8 | ARCH-05, ARCH-06, SKILL-20 | ✅ 配置统一：Token 配置合并到统一位置；配置统一由 MCP Server config_manage 管理 | `configs/default.yaml`, `.skill-config.yaml`, `config.py` |
+| 3.9 | ARCH-36 | ✅ 知识检索降级优化：L3 降级增加基础语义匹配(基于 TF-IDF 余弦相似度)；降级质量梯度平滑 | `degradation.py`, `search_engine.py` |
+
+#### 关联问题
+
+| 问题 ID | 描述 | 严重度 | 影响域 | 状态 |
 |---------|------|--------|--------|------|
-| U-45 | SKILL.md 未使用 Phase 标记实现渐进式加载提示 | 低 | Skill, 特效 | ⚠️ 已知限制 |
+| ARCH-01/MCP-02 | Skill 与 MCP 职责边界模糊 | 高 | 架构/MCP | ✅ 已关闭 |
+| ARCH-02/SKILL-11 | 渐进式加载 Token 预算目标全部未达标 | 高 | 架构/特效 | ✅ 部分关闭(SKILL-11) |
+| ARCH-05 | 降级策略两处独立维护 | 中 | 架构 | ✅ 已关闭 |
+| ARCH-06 | 配置管理三处 | 中 | 架构 | ✅ 已关闭 |
+| ARCH-30 | `{{include:}}` 为 Trae 私有扩展，迁移性差 | 高 | 架构 | ✅ 已关闭 |
+| ARCH-36 | 知识检索 L3 降级几乎不可用 | 高 | 架构/数据 | ✅ 已关闭 |
+| MCP-11 | Hook 超时应差异化 | 中 | MCP | ✅ 已关闭 |
+| API-04 | Hook 超时与 Tool 超时无联动机制 | 中 | API | ✅ 已关闭 |
+| API-17 | 速率限制无差异化配置 | 中 | API | ✅ 已关闭 |
+| SKILL-02 | Hook 命名不一致 | 中 | Skill | ✅ 已关闭 |
+| SKILL-05 | 评估覆盖不足 | 中 | Skill | ✅ 已关闭 |
+| SKILL-11 | 渐进式加载 Token 预算目标全部未达成 | 高 | Skill/特效 | ✅ 部分关闭 |
+| SKILL-18 | 安全断点默认值过于激进 | 中 | Skill | ✅ 已关闭 |
+| SKILL-20 | Token 优化配置分散在三个文件 | 低 | Skill/特效 | ✅ 已关闭 |
 
-### 5.4 验收标准（如推进）
+#### 验收标准
 
-| 编号 | 验收标准 |
-|------|---------|
-| AC-31 | SKILL.md 行数仍 <200 行 |
-| AC-32 | Phase 标记与 `resource_load_status` 的 4 阶段模型一致 |
-
-### 5.5 发布条件
-
-- 团队明确需要 Skill 侧 Phase 声明能力
-- v9.0.0 规划中渐进式加载自动推进需要 Skill 侧配合
-- 否则此版本可跳过，直接进入 v9.0.0
-
----
-
-## 6. v9.0.0 — 下一大版本
-
-### 6.1 版本目标
-
-基于 v8.0.0 的稳定基线（45/46 问题已解决，20/20 降级全覆盖），引入不兼容的 API 变更和重大架构升级。主要实现 API v4.0.0 协议升级、渐进式加载 Phase 2-3 自动推进、MCP Server 内部架构升级、降级质量从"最小可用"升级为"功能等价"。
-
-### 6.2 主要变更
-
-#### 6.2.1 API v4.0.0 协议升级
-
-| 项目 | 说明 |
-|------|------|
-| **目标** | 统一 API 响应格式，移除历史兼容层，升级协议版本 |
-| **变更** | 移除 `code` 字段，仅保留 `error_code`（v8.0.0 已 deprecated，v9.0.0 强制执行）；统一所有 Tool 响应为 `{status, data, error_code, metadata}` 结构；移除 v1 兼容的降级响应格式；API 版本号从 v3.0.0 升级到 v4.0.0 |
-| **破坏性** | 不兼容 v8.x 客户端，需配合 Skill 层升级 |
-
-#### 6.2.2 渐进式加载自动推进
-
-| 项目 | 说明 |
-|------|------|
-| **目标** | 实现 Phase 2-3 自动推进，无需显式调用 `resource_load_status(preload, phase=N)` |
-| **变更** | Phase 1→2 推进由"需要参考文档/知识检索"自动触发（v8.0.0 已实现 DisclosureTransition 提示，v9.0.0 改为自动推进）；Phase 2→3 推进由"深度分析/安全扫描"自动触发；Token 预算监控与自动降级闭环；完整 Phase 转换通知体系；SKILL.md Phase 标记（如 v8.1.0 未实施，则在此版本强制实施） |
-| **性能目标** | Phase 0→1 推进延迟 ≤500ms；Phase 1→2 推进延迟 ≤2000ms；Phase 2→3 推进延迟 ≤5000ms |
-
-#### 6.2.3 MCP Server 架构升级
-
-| 项目 | 说明 |
-|------|------|
-| **目标** | MCP Server 内部架构升级，移除历史兼容层，提升可维护性 |
-| **变更** | Tool 注册完全基于公开 API（v8.0.0 已解耦，v9.0.0 移除内部 API 兼容层）；搜索引擎默认 BM25 + 可选向量搜索（v8.0.0 已实现，v9.0.0 移除 ChromaDB 必需依赖声明）；统一 SQLite 存储引擎（v8.0.0 已迁移，v9.0.0 移除 JSON 状态文件兼容读取）；移除同步降级兼容代码 |
-| **破坏性** | 移除 `_tool_manager._tools` 内部 API 兼容层；移除 JSON 状态文件读取；移除 `subprocess.run` 同步降级 |
-
-#### 6.2.4 降级质量升级
-
-| 项目 | 说明 |
-|------|------|
-| **目标** | 基于v8.0.0已实现的20/20降级覆盖，进一步优化降级质量 |
-| **变更** | 降级响应从"最小可用"升级为"功能等价"（尽可能保留核心语义）；降级脚本支持增量更新（无需全量替换）；降级状态持久化到 xuansto.db 支持跨重启恢复 |
-| **破坏性** | 无，降级质量升级向后兼容 |
-
-### 6.3 关联问题编号
-
-v9.0.0 不直接关联 U-01~U-46 中的未解决问题（U-45 为已知限制），但以下问题的治理成果在此版本中成为强制要求：
-
-| 问题编号 | 关联说明 |
-|---------|---------|
-| U-01 | 降级机制在 v9.0.0 中移除 v1 兼容降级路径 |
-| U-04 | Tool 注册在 v9.0.0 中完全移除内部 API 兼容层 |
-| U-05 | API v4.0.0 强制版本协商，不支持 v3 客户端 |
-| U-06 | `knowledge_search` 在 v9.0.0 中移除 inject/precipitate 兼容处理 |
-| U-08 | ChromaDB 在 v9.0.0 中从必需依赖声明中移除 |
-| U-30 | `code` 字段在 v9.0.0 中彻底移除 |
-| U-34 | v1 目录已在 v8.0.0 彻底移除，v9.0.0 无需额外操作 |
-| U-43 | v8.0.0 补全的 20/20 降级覆盖在 v9.0.0 中升级为"功能等价"降级 |
-| U-45 | 如 v8.1.0 未实施，v9.0.0 中 SKILL.md Phase 标记随自动推进强制实施 |
-
-### 6.4 验收标准
-
-| 编号 | 验收标准 |
-|------|---------|
-| AC-33 | API v4.0.0 客户端可正常调用全部 Tool |
-| AC-34 | API v3.x 客户端调用返回明确的不兼容错误 |
-| AC-35 | Phase 0→1→2 自动推进，无需显式 preload |
-| AC-36 | Token 预算超限时自动降级并通知客户端 |
-| AC-37 | `_tool_manager._tools` 引用不存在 |
-| AC-38 | `chromadb` 不在 `pyproject.toml` 必需依赖中 |
-| AC-39 | JSON 状态文件兼容读取代码不存在 |
-| AC-40 | `code` 字段在错误响应中不存在 |
-| AC-41 | `subprocess.run` 同步降级代码不存在 |
-| AC-42 | 全部 45 个已解决问题的回归测试通过 |
-| AC-43 | 降级响应语义等价度 ≥90%（对比 MCP 正常响应） |
+1. [x] SKILL.md PHASE_2/3 仅含 Resource URI 引用，无 `{{include:}}` 依赖（ARCH-01/ARCH-30 关闭）
+2. [x] Hook 差异化超时：安全 Hook 5s / 编码 Hook 10s / 其他 30s（MCP-11/API-04 关闭）
+3. [x] 速率限制差异化：quality_gate_check 120次/分；config_manage 10次/分（API-17 关闭）
+4. [x] references/summary/ 目录生成，Phase 2 Token 消耗 ≤10K；单文档摘要 ≤200 Token（SKILL-11/ARCH-31 部分关闭）
+5. [x] hook_manage(list) 返回当前 Phase 对应配置；Phase 变更时 Hook 配置自动切换（SKILL-02 关闭）
+6. [x] 安全相关断点默认值改为 true（SKILL-18 关闭）
+7. [x] 22个 Tool 各 ≥2 个 QA 对；not_for 场景全覆盖（SKILL-05 关闭）
+8. [x] Token 配置合并到统一位置；消除三处配置重叠（ARCH-05/ARCH-06/SKILL-20 关闭）
+9. [x] L3 检索返回有意义的结果(非空)；L1→L2→L3 质量下降 ≤30%/级（ARCH-36 关闭）
 
 ---
 
-## 7. 版本兼容性矩阵
+### 3.6 v9.0.0 — 全面集成与生产就绪
 
-### 7.1 Skill 与 MCP Server 版本对应关系
+> 状态: ✅ 已交付 (2026-05-27) | 类型: MAJOR | 前置依赖: v8.9.0
+> 对应 REFACTOR_PLAN.md: Phase 5（最终集成）
 
-| Skill 版本 | MCP Server 版本 | API 版本 | 降级覆盖 | 兼容说明 |
-|-----------|----------------|---------|---------|---------|
-| v8.0.0 | v8.0.0 | v3.0.0 | 20/20 Tool | 当前发布版，45/46 问题已解决 |
-| v8.1.0 | v8.1.0 | v3.0.0 | 20/20 Tool | 可选改进，U-45 可选实施 |
-| v9.0.0 | v9.0.0 | v4.0.0 | 20/20 Tool | 不兼容 v8.x；需同时升级 Skill 和 MCP Server |
+#### 目标
 
-### 7.2 渐进式加载版本演进
+1. Token预算动态调整+跨会话持久化 ✅
+2. Agent定义去重（references/agent-details/已删除） ✅
+3. 知识库路径统一（data/knowledge/） ✅
+4. 会话持久化统一（SQLite唯一权威源） ✅
+5. 版本号统一+CI检查 ✅
+6. 指标系统合并（MetricsCollector唯一） ✅
+7. 模型路由对齐（registry.yaml唯一源） ✅
+8. 版本协商去重（统一server_health.py） ✅
+9. Git管理优化 ✅
+10. 测试修复（136个测试全部通过） ✅
 
-| 版本 | Phase 0→1 | Phase 1→2 | Phase 2→3 | Token 降级 | Skill 侧 Phase 标记 |
-|------|-----------|-----------|-----------|-----------|-------------------|
-| v8.0.0 | 自动 | DisclosureTransition 提示 | DisclosureTransition 提示 | 手动触发 | ✗（U-45 已知限制） |
-| v8.1.0 | 自动 | DisclosureTransition 提示 | DisclosureTransition 提示 | 手动触发 | ✓（可选） |
-| v9.0.0 | 自动 | **自动推进** | **自动推进** | **自动降级** | ✓（强制） |
+#### 主要变更
 
-### 7.3 降级机制版本演进
+| 步骤 | 问题 ID | 变更内容 | 涉及文件 |
+|------|---------|----------|----------|
+| 5.1 | ARCH-02/SKILL-11 | ✅ Token预算跨会话持久化：token_budget_states表新增dynamic_scaling_json字段 | `database.py`, `token_budget.py` |
+| 5.2 | ARCH-21 | ✅ Token预算动态调整：constraints.yaml新增dynamic_scaling配置，token_budget新增recommend action | `constraints.yaml`, `token_budget.py` |
+| 5.3 | ARCH-22 | ✅ 会话恢复增强：workflow_dispatch/session_manage启动时从SQLite恢复 | `workflow_dispatch.py`, `session_manage.py` |
+| 5.4 | ARCH-03 | ✅ Agent定义去重：references/agent-details/ 57个重复文件已删除，agents/为唯一源 | `references/agent-details/` |
+| 5.5 | ARCH-07/13 | ✅ 知识库路径统一：统一为data/knowledge/，新增KNOWLEDGE_REFERENCES_DIR配置 | `config.py`, `knowledge_search.py` |
+| 5.6 | ARCH-08 | ✅ 会话持久化统一：SQLite session_states为唯一权威源，文件导出可选 | `session_manage.py` |
+| 5.7 | ARCH-10/SKILL-01 | ✅ 版本号统一：所有文件版本号统一为9.0.0，CI新增版本检查 | 多文件 |
+| 5.8 | DATA-10 | ✅ 指标系统合并：MetricsCollector为唯一来源，_TOOL_METRICS已移除 | `metrics.py`, `server_health.py` |
+| 5.9 | SKILL-03 | ✅ 模型路由对齐：registry.yaml为唯一源，model-routing.md已更新 | `registry.yaml`, `model-routing.md` |
+| 5.10 | SKILL-08/14 | ✅ 工具数修正：SKILL.md工具数从20更新为22 | `SKILL.md` |
+| 5.11 | SKILL-10 | ✅ default.yaml空段清理：已清理迁移空段 | `configs/default.yaml` |
+| 5.12 | API-14 | ✅ 版本协商去重：统一到server_health.py | `server_health.py`, `api_routes.py` |
+| 5.13 | — | ✅ Git管理优化：.gitignore/.gitattributes精简，.editorconfig补充，CI优化 | `.gitignore`, `.gitattributes`, `.editorconfig` |
+| 5.14 | — | ✅ 测试修复：9个测试文件导入错误已修复，136个测试全部通过 | `tests/` |
 
-| 版本 | MCP 调用 | 脚本降级 | 内联降级 | 最小响应 | 异步化 | 覆盖率 |
-|------|---------|---------|---------|---------|--------|--------|
-| v8.0.0 | ✓ | ✓ | ✓ | ✓ | ✓ | 20/20 (100%) |
-| v8.1.0 | ✓ | ✓ | ✓ | ✓ | ✓ | 20/20 (100%) |
-| v9.0.0 | ✓ | ✓（功能等价） | ✓（功能等价） | ✓ | ✓（移除同步兼容） | 20/20 (100%) |
+#### 破坏性变更（MAJOR 升级原因）
 
-### 7.4 数据存储版本演进
+| 变更 | 影响 | 迁移方式 |
+|------|------|----------|
+| v1 代码归档 | v1 Agent/命令/工作流文件不再参与加载 | 确认无 v1 引用后归档 |
+| 数据库架构变更 | xuansto.db 为唯一数据库，decisions.db 不再存在 | 运行迁移脚本（v8.7.0 已实现） |
+| API 契约锁定 | spec-locks 成为强制校验，API 变更需显式更新锁文件 | PR 流程增加 Schema 校验步骤 |
+| agent_status 写操作移除 | create/assign/release/destroy 移至 agent_manage | 客户端更新调用目标工具 |
+| Resource 返回结构化对象 | Resource 不再返回 str 类型 | 客户端更新解析逻辑 |
 
-| 版本 | 主存储 | 状态文件 | 缓存 | 加密 |
-|------|--------|---------|------|------|
-| v8.0.0 | xuansto.db (8 表) | JSON 兼容读取 | SQLite 持久化 + LRU | AES-256-GCM 可选 |
-| v8.1.0 | xuansto.db (8 表) | JSON 兼容读取 | SQLite 持久化 + LRU | AES-256-GCM 可选 |
-| v9.0.0 | xuansto.db (8 表) | **仅 SQLite** | SQLite 持久化 + LRU | AES-256-GCM 可选 |
+#### v9.0.0 验收标准
 
-### 7.5 跨版本兼容性
+1. [x] Token预算跨会话持久化：token_budget_states表存储动态调整状态
+2. [x] Token预算动态调整：constraints.yaml dynamic_scaling + recommend action
+3. [x] 会话恢复增强：workflow_dispatch/session_manage启动时从SQLite恢复
+4. [x] Agent定义去重：references/agent-details/已删除，agents/为唯一源
+5. [x] 知识库路径统一：统一为data/knowledge/，KNOWLEDGE_REFERENCES_DIR配置
+6. [x] 会话持久化统一：SQLite session_states为唯一权威源
+7. [x] 版本号一致性：所有文件版本统一为9.0.0，CI版本检查通过
+8. [x] 指标系统合并：MetricsCollector为唯一来源，_TOOL_METRICS已移除
+9. [x] 模型路由对齐：registry.yaml为唯一源
+10. [x] 版本协商去重：统一到server_health.py
+11. [x] 测试通过：136个测试全部通过
+12. [x] Git管理优化：.gitignore/.gitattributes/.editorconfig/CI优化
 
-| 客户端 \ 服务端 | MCP v8.0.0 | MCP v8.1.0 | MCP v9.0.0 |
-|---------------|-----------|-----------|-----------|
-| Skill v8.0.0 | ✓ 完全兼容 | ✓ 降级运行 | ✗ 不兼容 |
-| Skill v8.1.0 | ✓ 降级运行 | ✓ 完全兼容 | ✗ 不兼容 |
-| Skill v9.0.0 | ✗ 不兼容 | ✗ 不兼容 | ✓ 完全兼容 |
+#### 预估工作量
+
+| 步骤 | 工期 | 人力 |
+|------|------|------|
+| 5.1 全量回归测试 | 5天 | 1人 |
+| 5.2 CI 流水线建立 | 3天 | 1人 |
+| 5.3 v1 代码归档 | 2天 | 1人 |
+| 5.4 API 契约锁定 | 2天 | 1人 |
+| 5.5 P1 问题修复 | 3天 | 1人 |
+| 5.6 P2 问题修复 | 5天 | 1人 |
+| 5.7 P3 问题清理 | 5天 | 1人 |
+| **合计** | **~25天** | **1人** |
 
 ---
 
-## 8. 升级与回退策略
+## 4. 版本时间线
 
-### 8.1 升级路径
+```mermaid
+gantt
+    title xuansto-skill-v2 版本演进时间线（v8.5.0 → v9.0.0）
+    dateFormat YYYY-MM-DD
+    axisFormat %m/%d
 
-```
-v8.0.0/v8.0.0 ──────▶ v8.1.0/v8.1.0 ──────▶ v9.0.0/v9.0.0
-  当前发布版             可选改进              下一大版本
-  45/46 已解决           U-45 可选实施         API v4 + 自动Phase
-  20/20 降级覆盖         20/20 降级覆盖        功能等价降级
-  API v3.0.0            API v3.0.0            API v4.0.0
+    section v8.5.0 初始版本
+    基线版本                           :milestone, m0, 2026-05-26, 0d
+
+    section v8.6.0 安全加固 ✅
+    HTTP认证+Hook拦截+路径验证+降级补齐  :p1, 2026-05-27, 1d
+
+    section v8.7.0 数据模型统一 ✅
+    SQLite三库合一+双写消除+状态统一     :p2, 2026-05-27, 1d
+
+    section v8.8.0 MCP协议合规 ✅
+    ToolAnnotations+Resource+outputSchema :p3, 2026-05-27, 1d
+
+    section v8.9.0 Skill瘦身+渐进加载 ✅
+    SKILL.md外置+Hook差异化+配置统一+L3优化 :p4, 2026-05-27, 1d
+
+    section v9.0.0 全面集成 ✅
+    Token动态调整+架构一致性+测试修复    :p5, 2026-05-27, 1d
 ```
 
-> 注：v8.1.0 为可选版本，可跳过直接升级到 v9.0.0。
+---
 
-### 8.2 各版本升级注意事项
+## 5. 版本依赖关系
 
-| 版本升级 | 数据迁移 | 配置变更 | 破坏性变更 |
-|---------|---------|---------|-----------|
-| v8.0.0 → v8.1.0 | 无 | 无（U-45 仅涉及 SKILL.md） | 无 |
-| v8.1.0 → v9.0.0 | 无（v8.0.0 已完成迁移） | API 版本协商强制 v4 | `knowledge_search.inject` 移除；`code` 字段移除；JSON 状态文件读取移除 |
-| v8.0.0 → v9.0.0（跳过 v8.1.0） | 无 | API 版本协商强制 v4 + SKILL.md Phase 标记 | 同上 + SKILL.md Phase 标记强制实施 |
+```mermaid
+flowchart TD
+    V850["v8.5.0<br/>初始版本<br/>✅ 已发布"]
+    V860["v8.6.0<br/>安全加固+降级补齐<br/>✅ 已交付"]
+    V870["v8.7.0<br/>数据模型统一+迁移<br/>✅ 已交付"]
+    V880["v8.8.0<br/>MCP层重构+协议合规<br/>✅ 已交付"]
+    V890["v8.9.0<br/>Skill瘦身+渐进加载增强<br/>✅ 已交付"]
+    V900["v9.0.0<br/>全面集成+生产就绪<br/>✅ 已交付"]
 
-### 8.3 回退策略
+    V850 -->|"API-06/07/08/10(高)<br/>ARCH-38/24(高)<br/>API-05/16(高)"| V860
+    V860 -->|"DATA-01/02/03/04/07(高)<br/>DATA-05/06/10/12(中)"| V870
+    V870 -->|"MCP-02/04(高)<br/>MCP-01/03/05/06(中)"| V880
+    V880 -->|"ARCH-01/30/36(高)<br/>SKILL-11(高)<br/>ARCH-05/06(中)"| V890
+    V890 -->|"ARCH-02/03/07/08/10/21/22(高/中)<br/>SKILL-03/08/10/14(中/低)<br/>DATA-10/API-14(中)"| V900
 
-| 场景 | 回退方案 | 数据影响 |
-|------|---------|---------|
-| v8.1.0 → v8.0.0 | 直接替换文件 | 无影响（v8.1.0 仅修改 SKILL.md） |
-| v9.0.0 → v8.1.0 | 替换文件 + API 降级 | 不支持自动回退，需手动调整客户端 |
-| v9.0.0 → v8.0.0 | 替换文件 + API 降级 | 不支持自动回退，需手动调整客户端 + 移除 SKILL.md Phase 标记 |
+    style V850 fill:#e3f2fd,stroke:#1565c0,stroke-width:3px
+    style V860 fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style V870 fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style V880 fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style V890 fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style V900 fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+```
 
-### 8.4 Deprecated 功能时间线
+### 5.1 依赖关系说明
 
-| 功能 | Deprecated 版本 | 移除版本 | 替代方案 |
-|------|----------------|---------|---------|
-| `knowledge_search(action="inject")` | v8.0.0 | v9.0.0 | `knowledge_inject` |
-| `knowledge_search(action="precipitate")` | v8.0.0 | v9.0.0 | `knowledge_inject(action="precipitate")` |
-| 错误响应 `code` 字段 | v8.0.0 | v9.0.0 | `error_code` 字段 |
-| JSON 状态文件读取 | v8.0.0 | v9.0.0 | SQLite 统一存储 |
-| `subprocess.run` 同步降级 | v8.0.0 | v9.0.0 | `asyncio.create_subprocess_exec` |
-| `_tool_manager._tools` 内部 API | v8.0.0 | v9.0.0 | `_TOOL_REGISTRY` 映射表 |
-| ChromaDB 必需依赖 | v8.0.0 | v9.0.0 | 可选增强依赖 |
-| v1 Skill 目录 | v8.0.0 | v8.0.0（已移除） | v2 Skill |
+| 版本 | 前置依赖 | 依赖原因 |
+|------|----------|----------|
+| v8.6.0 | v8.5.0 | 安全修复基于稳定基线；降级补齐需要完整的降级映射框架 |
+| v8.7.0 | v8.6.0 | 数据层整合依赖安全修复后的基线；降级链完整是数据迁移的前置条件 |
+| v8.8.0 | v8.7.0 | MCP 层重构依赖统一数据模型（Tool/Resource 职责分离需要清晰的存储边界） |
+| v8.9.0 | v8.8.0 | Skill 层瘦身依赖 MCP 协议合规（Resource URI 完整后才可外置内容） |
+| v9.0.0 | v8.9.0 | MAJOR 版本依赖所有 MINOR 版本优化完成；全量回归测试需要所有功能稳定 |
 
-### 8.5 升级检查清单
+### 5.2 关键影响链路
 
-#### v8.0.0 → v8.1.0（可选）
+#### 链路1：Skill-MCP 职责模糊 → Token 效率 → 渐进加载失效
 
-- [ ] 更新 xuansto-skill-v2 到 v8.1.0
-- [ ] （可选）在 SKILL.md 中添加 Phase 标记
-- [ ] 验证 SKILL.md 行数仍 <200 行
+```
+ARCH-01(Skill内嵌完整参考文档) → ARCH-31(57个Agent全量加载) → SKILL-11(Token预算未达成) → ARCH-20(平台控制加载时机)
+```
 
-#### v8.0.0/v8.1.0 → v9.0.0
+v8.9.0 Skill 层瘦身 + 渐进加载增强 已解决前三环，ARCH-20 待 v9.0.0。
 
-- [ ] 更新 xuansto-mcp-server 到 v9.0.0
-- [ ] 更新 xuansto-skill-v2 到 v9.0.0
-- [ ] 更新客户端 API 版本协商为 v4
-- [ ] 移除所有 `knowledge_search(action="inject")` 调用
-- [ ] 移除所有错误响应中 `code` 字段的读取
-- [ ] 验证 API v3.x 客户端收到不兼容错误
-- [ ] 运行全量回归测试（45 个已解决问题）
-- [ ] 验证降级响应语义等价度 ≥90%
+#### 链路2：数据碎片化 → 一致性风险 → 恢复复杂
+
+```
+DATA-01(3个独立SQLite) → DATA-02/08(双写冗余) → DATA-03/04(三重/双重存储) → DATA-07(内存状态无持久化)
+```
+
+v8.7.0 数据模型统一 已完整解决此链路。
+
+#### 链路3：MCP 协议不合规 → 客户端安全决策受限
+
+```
+MCP-04(缺少ToolAnnotations) → MCP-02(Tool/Resource职责不清) → MCP-03(缺少只读Resource)
+```
+
+v8.8.0 MCP 层重构 已完整解决此链路。
+
+---
+
+## 6. 问题关闭路线图
+
+### 6.1 按版本关闭计划
+
+| 版本 | 关闭问题 | 关闭数量 | 累计关闭 |
+|------|----------|----------|----------|
+| v8.6.0 ✅ | API-06/07/08/10, ARCH-38, API-05/SKILL-04, API-16, ARCH-24/SKILL-04 | 7 | 7 |
+| v8.7.0 ✅ | DATA-01/02/03/04/05/06/07, DATA-08/10/12 | 7 | 14 |
+| v8.8.0 ✅ | MCP-01/02/03/04/05/06, API-03, ARCH-04/11/12 | 5 | 19 |
+| v8.9.0 ✅ | ARCH-01/02/05/06/30/31/36/38, MCP-11, API-04/05/06/07/08/10/16/17, SKILL-02/04/05/11/18/20 | 14 | 33 |
+| v9.0.0 ✅ | ARCH-02/03/07/08/10/13/21/22, SKILL-01/03/08/10/11/14, DATA-10, API-14 | 13 | 46 |
+
+> 注：部分问题编号存在合并关系（如 ARCH-01/MCP-02），按 REFACTOR_PLAN.md v5.0 去重后64项独立问题计数。已关闭35项（含v9.0.0关闭的13项），剩余29项待后续版本处理。
+
+### 6.2 按优先级关闭顺序
+
+#### P1 — 高优先级（1项待处理，v9.0.0已关闭2项）
+
+| 编号 | 描述 | 影响域 | v9.0.0状态 |
+|------|------|--------|------------|
+| ARCH-02/SKILL-11 | Token预算跨会话持久化+动态调整 | 架构/特效 | ✅ 已关闭 |
+| ARCH-20 | Trae平台Skill加载机制限制 | 架构/特效 | ⏳ 待处理 |
+| ARCH-22 | 会话恢复增强 | 架构 | ✅ 已关闭 |
+
+#### P2 — 中优先级（1项待处理，v9.0.0已关闭9项）
+
+| 编号 | 描述 | 影响域 | v9.0.0状态 |
+|------|------|--------|------------|
+| ARCH-03 | Agent定义去重 | 架构 | ✅ 已关闭 |
+| ARCH-07 | 知识库路径统一 | 架构/数据 | ✅ 已关闭 |
+| ARCH-08 | 会话持久化统一 | 架构/数据 | ✅ 已关闭 |
+| ARCH-10/SKILL-01 | 版本号统一+CI检查 | 架构/Skill | ✅ 已关闭 |
+| ARCH-13 | 知识检索路径统一 | 架构 | ✅ 已关闭 |
+| ARCH-21 | Token预算动态调整 | 架构/特效 | ✅ 已关闭 |
+| ARCH-23 | ChromaDB可选依赖未安装时语义检索丧失 | 架构/数据 | ⏳ 待处理 |
+| SKILL-03 | 模型路由对齐 | Skill | ✅ 已关闭 |
+| DATA-10 | 指标系统合并 | 数据 | ✅ 已关闭 |
+| API-14 | 版本协商去重 | API | ✅ 已关闭 |
+
+#### P3 — 低优先级（15项待处理，v9.0.0已关闭3项）
+
+| 编号 | 描述 | 影响域 |
+|------|------|--------|
+| ARCH-09 | Hook配置与引擎分离 | 架构 |
+| ARCH-14 | 质量门禁降级链未内化到MCP Server | 架构 |
+| ARCH-15 | 加载状态Resource+Tool两处维护 | 架构 |
+| ARCH-16 | 降级逻辑应进一步内化 | 架构 |
+| ARCH-17 | Resource与Tool功能部分重叠 | 架构/MCP |
+| ARCH-18 | 传输层缺少连接健康检查 | 架构 |
+| ARCH-19 | 错误处理需统一错误码体系 | 架构 |
+| DATA-09 | 降级状态双重持久化语义重叠 | 数据 |
+| DATA-11 | 文件哈希校验不一致 | 数据 |
+| MCP-07 | 缺少批量操作支持 | MCP |
+| MCP-08 | config_manage Schema不完整 | MCP |
+| MCP-09 | 降级状态文件无加密保护 | MCP |
+| MCP-10 | Resource订阅重启后丢失 | MCP |
+| SKILL-06 | Phase 3关键规则过于精简 | Skill |
+| SKILL-07 | 命令路由表三处重复定义 | Skill |
+| SKILL-08 | MCP工具数量声明模糊 | Skill | ✅ 已关闭(v9.0.0) |
+| SKILL-09 | Agent注册表phase字段语义不清 | Skill | |
+| SKILL-10 | default.yaml存在已迁移空段 | Skill | ✅ 已关闭(v9.0.0) |
+| SKILL-12 | 工作流YAML与Markdown双重维护 | Skill | |
+| SKILL-13 | 知识库健康检查硬编码localhost | Skill | |
+| SKILL-14 | SKILL.md工具数与摘要表不匹配 | Skill | ✅ 已关闭(v9.0.0) |
+| SKILL-16 | 质量门禁别名映射循环引用风险 | Skill |
+| SKILL-17 | references/目录缺乏索引 | Skill |
+| API-01 | resource_subscribe/audit_query未在spec-locks锁定 | API |
+| API-02 | Resource返回str类型而非结构化对象 | API |
+| API-11 | resource_load_status职责过重 | API |
+| API-13 | knowledge_search遗留防护代码 | API |
+
+### 6.3 优先级分布图
+
+```mermaid
+graph LR
+    subgraph "P1 高优先级 (3项)"
+        A1["ARCH-02/SKILL-11<br/>Token预算跨会话持久化"]
+        A2["ARCH-20<br/>平台加载机制限制"]
+        A3["ARCH-22<br/>stdio生命周期"]
+    end
+
+    subgraph "P2 中优先级 (10项)"
+        B1["ARCH-03<br/>Agent定义分散重复"]
+        B2["ARCH-07<br/>知识库双份存储"]
+        B3["ARCH-08<br/>会话持久化多路径"]
+        B4["ARCH-10/SKILL-01<br/>版本号不一致"]
+        B5["ARCH-13<br/>知识检索路径不统一"]
+        B6["ARCH-21<br/>Token预算硬编码"]
+        B7["ARCH-23<br/>ChromaDB可选依赖"]
+        B8["SKILL-03<br/>模型路由不一致"]
+        B9["DATA-10<br/>指标数据双轨"]
+        B10["API-14<br/>版本协商重复"]
+    end
+
+    subgraph "P3 低优先级 (18项)"
+        C1["ARCH-09/14/15/16/17/18/19<br/>架构优化(7项)"]
+        C2["DATA-09/11<br/>数据优化(2项)"]
+        C3["MCP-07/08/09/10<br/>MCP优化(4项)"]
+        C4["SKILL-06/07/08/09/10/12/13/14/16/17<br/>Skill清理(10项)"]
+        C5["API-01/02/11/13<br/>API清理(4项)"]
+    end
+
+    A1 --> B1
+    A2 --> B6
+    A3 --> B3
+```
+
+---
+
+## 7. 风险与缓解
+
+| 风险 | 影响版本 | 概率 | 影响 | 缓解措施 |
+|------|----------|------|------|----------|
+| v1 归档遗漏引用 | v9.0.0 | 低 | 中 | 全局搜索 v1 引用；归档前确认无残留加载路径 |
+| ARCH-20 平台限制无法绕过 | v9.0.0 | 中 | 高 | 设计 Skill 侧适配层，通过 MCP 状态机补偿平台限制 |
+| ARCH-22 stdio 生命周期不可控 | v9.0.0 | 中 | 高 | 实现跨会话状态持久化，进程重启后自动恢复工作流 |
+| Token 预算动态调整引入回归 | v9.0.0 | 低 | 中 | 动态预算基于项目规模自动选择档位，保留手动覆盖 |
+| 跨版本升级数据丢失 | 全版本 | 低 | 高 | 每个版本提供数据迁移脚本；迁移前自动备份；回滚机制 |
+| P3 问题清理范围蔓延 | v9.0.0 | 中 | 低 | 严格限定 P3 修复范围，不引入新功能；won't fix 机制兜底 |
+
+---
+
+## 8. v9.0.0 验收标准检查清单
+
+| # | 验收项 | 标准 | 状态 |
+|---|--------|------|------|
+| 1 | Token预算动态调整 | constraints.yaml dynamic_scaling + token_budget recommend action | ✅ |
+| 2 | Token跨会话持久化 | token_budget_states表存储动态调整状态 | ✅ |
+| 3 | 会话恢复增强 | workflow_dispatch/session_manage启动时从SQLite恢复 | ✅ |
+| 4 | Agent定义去重 | references/agent-details/已删除，agents/为唯一源 | ✅ |
+| 5 | 知识库路径统一 | 统一为data/knowledge/，KNOWLEDGE_REFERENCES_DIR配置 | ✅ |
+| 6 | 会话持久化统一 | SQLite session_states为唯一权威源 | ✅ |
+| 7 | 版本号一致性 | 所有文件版本统一为9.0.0，CI版本检查通过 | ✅ |
+| 8 | 指标系统合并 | MetricsCollector为唯一来源，_TOOL_METRICS已移除 | ✅ |
+| 9 | 模型路由对齐 | registry.yaml为唯一源 | ✅ |
+| 10 | 版本协商去重 | 统一到server_health.py | ✅ |
+| 11 | 测试通过 | 136个测试全部通过 | ✅ |
+| 12 | Git管理优化 | .gitignore/.gitattributes/.editorconfig/CI优化 | ✅ |
+
+---
+
+> 文档结束 | 生成时间: 2026-05-27 | 版本路线: v8.5.0 → v8.6.0 ✅ → v8.7.0 ✅ → v8.8.0 ✅ → v8.9.0 ✅ → v9.0.0 ✅

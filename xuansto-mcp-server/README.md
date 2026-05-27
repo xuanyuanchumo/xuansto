@@ -38,10 +38,10 @@ Xuansto Skill MCP Server v8.0.0 — 20 atomic tools + 8 resources for autonomous
 
 ### 8 MCP Resources
 
-- `xuansto://skill/config` — Skill configuration
-- `xuansto://quality/gates` — Quality gates reference
+- `xuansto://config/skill` — Skill configuration
+- `xuansto://gates/definitions` — Quality gates reference
 - `xuansto://agents/registry` — Agent registry
-- `xuansto://workflow/phases` — Workflow phases definition
+- `xuansto://workflows/definitions` — Workflow phases definition
 - `xuansto://templates/{name}` — Template documents
 - `xuansto://session/history` — Session history
 - `xuansto://loading/status` — Resource loading status
@@ -68,7 +68,7 @@ Xuansto Skill MCP Server v8.0.0 — 20 atomic tools + 8 resources for autonomous
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/xuanyuanchumo/xuansto",
+        "git+https://github.com/xuanyuanchumo/xuansto#subdirectory=xuansto-mcp-server",
         "xuansto-mcp"
       ]
     }
@@ -78,10 +78,12 @@ Xuansto Skill MCP Server v8.0.0 — 20 atomic tools + 8 resources for autonomous
 
 Paste this JSON into your MCP client (Trae, Claude Desktop, etc.) configuration.
 
+> **Note**: The `#subdirectory=xuansto-mcp-server` fragment is required because `pyproject.toml` lives inside the `xuansto-mcp-server/` subdirectory of the monorepo. Without it, `uvx` will fail with `Failed to resolve --with requirement / Git operation failed`.
+
 ### Via pip
 
 ```bash
-pip install git+https://github.com/xuanyuanchumo/xuansto
+pip install "git+https://github.com/xuanyuanchumo/xuansto#subdirectory=xuansto-mcp-server"
 xuansto-mcp
 ```
 
@@ -113,7 +115,7 @@ To use your own skill data (e.g., from a customized xuansto-skill):
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/xuanyuanchumo/xuansto",
+        "git+https://github.com/xuanyuanchumo/xuansto#subdirectory=xuansto-mcp-server",
         "xuansto-mcp"
       ],
       "env": {
@@ -210,10 +212,10 @@ src/xuansto_mcp/
 
 | URI | Description |
 |-----|-------------|
-| `xuansto://skill/config` | Skill configuration |
-| `xuansto://quality/gates` | Quality gates reference |
+| `xuansto://config/skill` | Skill configuration |
+| `xuansto://gates/definitions` | Quality gates reference |
 | `xuansto://agents/registry` | Agent registry |
-| `xuansto://workflow/phases` | Workflow phases definition |
+| `xuansto://workflows/definitions` | Workflow phases definition |
 | `xuansto://templates/{name}` | Template documents |
 | `xuansto://session/history` | Session history |
 | `xuansto://loading/status` | Resource loading status |

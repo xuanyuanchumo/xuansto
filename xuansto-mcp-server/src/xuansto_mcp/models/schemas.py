@@ -26,17 +26,18 @@ class SkillAnalyzeInput(BaseModel):
     skill_path: str = Field(description="技能根目录路径")
     include_scripts: bool = Field(default=True, description="是否分析scripts目录")
     include_agents: bool = Field(default=True, description="是否分析agents目录")
-    depth: Literal["basic", "full"] = Field(default="basic", description="分析深度: basic 或 full")
+    depth: str = Field(default="basic", description="分析深度: 1/basic=基础, 2/detailed=详细, 3/full/comprehensive=全面")
 
 
 class KnowledgeSearchInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["retrieve"] = Field(description="操作类型: retrieve")
+    action: Literal["retrieve", "cleanup_versions"] = Field(description="操作类型: retrieve, cleanup_versions")
     query: str | None = Field(default=None, description="搜索查询文本")
     top_k: int = Field(default=5, ge=1, le=50, description="返回结果数量上限")
     search_type: Literal["hybrid", "semantic_only", "keyword_only"] = Field(default="hybrid", description="搜索策略: hybrid, semantic_only, keyword_only")
     scope: Literal["general", "workspace", "experience"] | None = Field(default=None, description="限定搜索范围: general, workspace, experience")
     min_confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="最低置信度阈值")
+    keep_last_n: int = Field(default=10, ge=1, le=100, description="版本清理保留数量(cleanup_versions时使用)")
 
 
 class QualityGateCheckInput(BaseModel):
@@ -95,8 +96,8 @@ class WorkflowDispatchInput(BaseModel):
 
 class AgentStatusInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["list", "by_phase", "detail", "match", "merge"] = Field(description="操作类型: list, by_phase, detail, match, merge")
-    phase: int | None = Field(default=None, ge=0, le=8, description="按阶段查询Agent(by_phase时使用, 0-8)")
+    action: Literal["list", "by_phase", "detail", "match", "merge", "merge_policy"] = Field(description="操作类型: list, by_phase, detail, match, merge, merge_policy")
+    phase: int | None = Field(default=None, ge=0, le=8, description="按阶段查询Agent(by_phase时使用0-8工作流阶段; list时使用1-2加载阶段过滤, phase<=值)")
     agent_name: str | None = Field(default=None, description="Agent名称(detail时使用)")
     capabilities: list[str] | None = Field(default=None, description="Agent能力列表(match时使用)，如: ['code_review', 'testing']")
     project_file_count: int | None = Field(default=None, ge=0, description="项目文件数量(merge时使用)，用于判断是否自动合并")
@@ -113,28 +114,30 @@ class AgentManageInput(BaseModel):
 
 class HookManageInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["list", "execute"] = Field(description="操作类型: list, execute")
+    action: Literal["list", "execute", "get_active_profile"] = Field(description="操作类型: list, execute, get_active_profile")
     profile: Literal["minimal", "standard", "strict"] = Field(default="standard", description="Hook配置级别: minimal, standard, strict")
     hook_name: str | None = Field(default=None, description="Hook名称(execute时使用)")
     context: dict[str, Any] | None = Field(default=None, description="执行上下文(execute时使用)")
+    phase: int | None = Field(default=None, ge=0, le=3, description="Phase索引(0-3, get_active_profile时使用)")
 
 
 class ResourceLoadStatusInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["status", "preload", "cache", "clear_cache", "loading_progress", "token_report", "disclosure_transition"] = Field(description="操作类型: status, preload, cache, clear_cache, loading_progress, token_report, disclosure_transition")
+    action: Literal["status", "preload", "cache", "clear_cache", "loading_progress", "token_report", "disclosure_transition", "transition_check", "features", "metrics", "get_requirements", "rollback", "get_hook_profile"] = Field(description="操作类型: status, preload, cache, clear_cache, loading_progress, token_report, disclosure_transition, transition_check, features, metrics, get_requirements, rollback, get_hook_profile")
     phase: int | None = Field(default=None, ge=0, le=3, description="目标加载阶段(0-3): 0=骨架, 1=功能, 2=增强, 3=完整")
     resource_ids: list[str] | None = Field(default=None, description="指定资源ID列表")
     resource_uris: list[str] | None = Field(default=None, description="资源URI列表(preload时使用)")
     priority: Literal["critical", "normal", "background"] = Field(default="normal", description="预加载优先级(preload时使用): critical, normal, background")
     batch_mode: bool = Field(default=False, description="是否批量预加载模式(preload时使用)，批量模式并发加载多个资源")
     auto_upgrade: bool = Field(default=False, description="自动升级阶段(preload时使用)，当Token预算超限时自动推进到下一阶段")
-    target_phase: str | None = Field(default=None, description="目标阶段名称(disclosure_transition时使用): skeleton, functional, enhanced, full")
+    target_phase: str | None = Field(default=None, description="目标阶段名称(disclosure_transition/rollback时使用): skeleton, functional, enhanced, full")
 
 
 class ServerHealthInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["check", "negotiate_version", "capabilities"] = Field(description="操作类型: check, negotiate_version, capabilities")
-    client_version: str | None = Field(default=None, description="客户端API版本(negotiate_version时使用)")
+    action: Literal["check", "negotiate_version", "capabilities", "version"] = Field(description="操作类型: check, negotiate_version, capabilities, version")
+    client_version: str | None = Field(default=None, description="客户端API版本(negotiate_version/version时使用)")
+    client_api_version: str | None = Field(default=None, description="客户端API版本(version时使用，与client_version等效)")
 
 
 class ContextCompressInput(BaseModel):
@@ -147,7 +150,7 @@ class ContextCompressInput(BaseModel):
 
 class DecisionLogInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["log", "list", "query", "update", "export", "stats"] = Field(description="操作类型: log, list, query, update, export, stats")
+    action: Literal["log", "list", "query", "update", "export", "stats", "reconcile", "configure"] = Field(description="操作类型: log, list, query, update, export, stats, reconcile, configure")
     title: str | None = Field(default=None, description="决策标题(log时使用)")
     description: str | None = Field(default=None, description="决策描述(log时使用)")
     context: str | None = Field(default=None, description="决策上下文(log/query时使用)")
@@ -165,28 +168,30 @@ class DecisionLogInput(BaseModel):
     format: Literal["json", "markdown"] = Field(default="json", description="导出格式(export时使用): json, markdown")
     decision_id: str | None = Field(default=None, description="决策ID(update时使用)")
     status: Literal["proposed", "accepted", "deprecated", "superseded"] | None = Field(default=None, description="决策状态(log/update时使用): proposed, accepted, deprecated, superseded")
+    file_backup: bool | None = Field(default=None, description="是否启用文件系统备份(configure时使用)")
 
 
 class TokenBudgetInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["status", "set_budget", "recommend", "report"] = Field(description="操作类型: status, set_budget, recommend, report")
+    action: Literal["status", "set_budget", "recommend", "report", "enforce", "set_from_phase"] = Field(description="操作类型: status, set_budget, recommend, report, enforce, set_from_phase")
     total_budget: int | None = Field(default=None, ge=1000, description="总Token预算(set_budget时使用)")
     phase_allocations: dict[str, int] | None = Field(default=None, description="阶段分配(set_budget时使用)")
     project_size: Literal["small", "medium", "large"] | None = Field(default=None, description="项目规模(recommend时使用): small, medium, large")
     complexity: Literal["low", "medium", "high"] | None = Field(default=None, description="复杂度(recommend时使用): low, medium, high")
     team_size: int | None = Field(default=None, ge=1, le=50, description="团队人数(recommend时使用)")
     period: Literal["daily", "weekly", "session"] = Field(default="session", description="报告周期(report时使用): daily, weekly, session")
+    phase: str | None = Field(default=None, description="阶段名称(set_from_phase时使用): skeleton, functional, enhanced, full")
 
 
 class ProjectInitInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["create", "validate", "detect_stack"] = Field(description="操作类型: create, validate, detect_stack")
-    name: str | None = Field(default=None, description="项目名称(create时使用)")
-    description: str | None = Field(default=None, description="项目描述(create时使用)")
-    stack: list[str] | None = Field(default=None, description="技术栈列表(create时使用)")
-    template: str | None = Field(default=None, description="项目模板(create时使用)")
-    directory: str | None = Field(default=None, description="项目目录(create时使用)")
-    project_path: str | None = Field(default=None, description="项目路径(validate/detect_stack时使用)")
+    action: Literal["create", "validate", "detect_stack", "init", "detect", "configure"] = Field(description="操作类型: create/init=创建项目, validate=验证配置, detect_stack/detect=检测技术栈, configure=配置项目")
+    name: str | None = Field(default=None, description="项目名称(create/init时使用)")
+    description: str | None = Field(default=None, description="项目描述(create/init/configure时使用)")
+    stack: list[str] | None = Field(default=None, description="技术栈列表(create/init/configure时使用)")
+    template: str | None = Field(default=None, description="项目模板(create/init时使用)")
+    directory: str | None = Field(default=None, description="项目目录(create/init时使用)")
+    project_path: str | None = Field(default=None, description="项目路径(validate/detect_stack/detect/configure时使用)")
 
 
 class KnowledgeInjectInput(BaseModel):
@@ -206,12 +211,27 @@ class KnowledgeInjectInput(BaseModel):
 
 class MetricsReportInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["query", "summary"] = Field(description="操作类型: query, summary")
+    action: Literal["query", "summary", "evaluate"] = Field(description="操作类型: query, summary, evaluate")
     tool_name: str | None = Field(default=None, description="工具名称(query时使用)")
     time_range: Literal["1h", "6h", "24h", "7d", "all"] = Field(default="all", description="时间范围: 1h, 6h, 24h, 7d, all")
     metric_type: Literal["calls", "errors", "latency", "all"] = Field(default="all", description="指标类型: calls, errors, latency, all")
+    criterion: Literal["error_rate", "availability", "latency", "all"] = Field(default="all", description="评估标准: error_rate, availability, latency, all")
 
 
 class ConfigManageInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     action: Literal["reload", "status", "validate"] = Field(description="操作类型: reload, status, validate")
+
+
+class ResourceSubscribeInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    action: Literal["subscribe", "unsubscribe", "list"] = Field(description="操作类型: subscribe, unsubscribe, list")
+    uri: str | None = Field(default=None, description="资源URI(subscribe/unsubscribe时使用)，如: xuansto://loading/status")
+    client_id: str | None = Field(default=None, description="客户端标识(subscribe/unsubscribe时使用)，用于区分不同订阅者")
+
+
+class AuditQueryInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    tool_name: str | None = Field(default=None, description="按工具名称过滤，为空则查询全部工具")
+    date_range: str | None = Field(default=None, description="日期范围过滤，格式: YYYY-MM-DD:YYYY-MM-DD")
+    limit: int = Field(default=50, ge=1, le=500, description="返回结果数量上限(1-500)")

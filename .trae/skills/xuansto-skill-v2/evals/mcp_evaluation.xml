@@ -1,175 +1,178 @@
-<?xml version="1.0" encoding="UTF-8"?>
 <evaluation>
-  <qa_pair id="1" category="basic_search" tools="knowledge_search" complexity="single">
-    <question>Search the knowledge base for entries about React hooks best practices, returning only the top 3 results. Verify that each result in the returned array contains both a "type" field and a "category" field.</question>
-    <tool_calls>
-      <tool_call name="knowledge_search">
-        {"action": "retrieve", "query": "React hooks best practices", "top_k": 3}
-      </tool_call name="knowledge_search">
-    </tool_calls>
-    <answer>3</answer>
-    <verification>Assert that results.length &lt;= 3 and every result has "type" and "category" keys</verification>
+  <qa_pair>
+    <question>使用 knowledge_search 工具搜索关于 React hooks 的知识</question>
+    <answer>results</answer>
   </qa_pair>
-
-  <qa_pair id="2" category="auto_retrieve" tools="knowledge_search" complexity="single">
-    <question>Execute a retrieve search for a bug_fix task on a React+TypeScript project with auto scope detection. Inspect the returned results to confirm which programming language was detected in the matched entries.</question>
-    <tool_calls>
-      <tool_call name="knowledge_search">
-        {"action": "retrieve", "query": "bug_fix React TypeScript", "scope": "auto"}
-      </tool_call name="knowledge_search">
-    </tool_calls>
-    <answer>TypeScript</answer>
-    <verification>Assert that results contain entries referencing "TypeScript" (case-insensitive match)</verification>
+  <qa_pair>
+    <question>使用 knowledge_search 查找项目中关于认证流程的最佳实践</question>
+    <answer>results</answer>
   </qa_pair>
-
-  <qa_pair id="3" category="progressive_search" tools="knowledge_search" complexity="single">
-    <question>Perform a hybrid search for "memory leak" with task_type bug_fix and tech_stack languages=["JavaScript"]. Verify that the first result's scope field is "experience", confirming the workspace&gt;experience&gt;general priority order.</question>
-    <tool_calls>
-      <tool_call name="knowledge_search">
-        {"action": "retrieve", "query": "memory leak", "search_type": "hybrid"}
-      </tool_call name="knowledge_search">
-    </tool_calls>
-    <answer>experience</answer>
-    <verification>Assert that results[0].scope === "experience"</verification>
+  <qa_pair>
+    <question>使用 quality_gate_check 检查项目质量门禁状态</question>
+    <answer>passed</answer>
   </qa_pair>
-
-  <qa_pair id="4" category="deep_load" tools="knowledge_search" complexity="multi_step">
-    <question>First, search the knowledge base for entries about OOM (Out of Memory) errors. Then retrieve the full content using a deep search with depth="full". Verify that the deep search entry's content is longer than the truncated content from the initial search result.</question>
-    <tool_calls>
-      <tool_call name="knowledge_search">
-        {"action": "retrieve", "query": "OOM"}
-      </tool_call name="knowledge_search">
-      <tool_call name="knowledge_search">
-        {"action": "retrieve", "query": "OOM", "depth": "full"}
-      </tool_call name="knowledge_search">
-    </tool_calls>
-    <answer>2</answer>
-    <verification>Assert that exactly 2 tool calls were made and deep search content length &gt;= initial search result content length</verification>
+  <qa_pair>
+    <question>使用 quality_gate_check 验证代码覆盖率是否达到门禁阈值</question>
+    <answer>passed</answer>
   </qa_pair>
-
-  <qa_pair id="5" category="stats" tools="metrics_report" complexity="single">
-    <question>Retrieve metrics summary statistics. Confirm that the response contains a "total_calls" field representing the total number of tool calls recorded.</question>
-    <tool_calls>
-      <tool_call name="metrics_report">
-        {"action": "summary"}
-      </tool_call name="metrics_report">
-    </tool_calls>
-    <answer>total_calls</answer>
-    <verification>Assert that response.data contains key "total_calls" and its value is a non-negative integer</verification>
+  <qa_pair>
+    <question>使用 server_health 检查MCP服务器健康状态</question>
+    <answer>healthy</answer>
   </qa_pair>
-
-  <qa_pair id="6" category="combined_search" tools="knowledge_search" complexity="multi_step">
-    <question>First, use knowledge_search with action="retrieve" and scope="auto" to gather security-audit context for a security task. Then, use knowledge_search with action="retrieve" and search_type="hybrid" to deeply search for "XSS prevention". Verify that both calls succeed and the second search returns results with security-relevant content.</question>
-    <tool_calls>
-      <tool_call name="knowledge_search">
-        {"action": "retrieve", "query": "security audit", "scope": "auto"}
-      </tool_call name="knowledge_search">
-      <tool_call name="knowledge_search">
-        {"action": "retrieve", "query": "XSS prevention", "search_type": "hybrid"}
-      </tool_call name="knowledge_search">
-    </tool_calls>
-    <answer>2</answer>
-    <verification>Assert that exactly 2 tool calls were made, both returned status "ok", and second search results contain entries with security-related content</verification>
+  <qa_pair>
+    <question>使用 server_health 获取MCP服务器连接延迟和可用性信息</question>
+    <answer>healthy</answer>
   </qa_pair>
-
-  <qa_pair id="7" category="filtered_search" tools="knowledge_search" complexity="single">
-    <question>Search the knowledge base for TypeError solutions, filtering by type ["bug_fix","error-solution"] with a minimum confidence of 0.6. Verify that the returned results have a type field equal to either "bug_fix" or "error-solution".</question>
-    <tool_calls>
-      <tool_call name="knowledge_search">
-        {"action": "retrieve", "query": "TypeError", "filters": {"type": ["bug_fix", "error-solution"], "min_confidence": 0.6}}
-      </tool_call name="knowledge_search">
-    </tool_calls>
-    <answer>bug_fix</answer>
-    <verification>Assert that every result.type is in ["bug_fix", "error-solution"] and every result.confidence &gt;= 0.6</verification>
+  <qa_pair>
+    <question>使用 resource_load_status 查询渐进式加载状态</question>
+    <answer>SKELETON</answer>
   </qa_pair>
-
-  <qa_pair id="8" category="deep_load_coding_standards" tools="knowledge_search" complexity="multi_step">
-    <question>Search the knowledge base for Python coding standards. Then retrieve the full untruncated content using a deep search with depth="full". Verify that the deep search entry contains a "type" field and its content is the complete version.</question>
-    <tool_calls>
-      <tool_call name="knowledge_search">
-        {"action": "retrieve", "query": "Python coding standards"}
-      </tool_call name="knowledge_search">
-      <tool_call name="knowledge_search">
-        {"action": "retrieve", "query": "Python coding standards", "depth": "full"}
-      </tool_call name="knowledge_search">
-    </tool_calls>
-    <answer>2</answer>
-    <verification>Assert that exactly 2 tool calls were made and deep search result has "type" and "content" fields with content longer than initial search snippet</verification>
+  <qa_pair>
+    <question>使用 resource_load_status 检查资源是否已完全加载到DETAIL级别</question>
+    <answer>DETAIL</answer>
   </qa_pair>
-
-  <qa_pair id="9" category="strategy_comparison" tools="knowledge_search" complexity="parallel">
-    <question>Search the knowledge base for "React error boundary" using two different search strategies: first with "hybrid" and then with "keyword_only". Compare the total result counts from both strategies to verify that the hybrid strategy returns at least as many results as keyword_only.</question>
-    <tool_calls>
-      <tool_call name="knowledge_search">
-        {"action": "retrieve", "query": "React error boundary", "search_type": "hybrid"}
-      </tool_call name="knowledge_search">
-      <tool_call name="knowledge_search">
-        {"action": "retrieve", "query": "React error boundary", "search_type": "keyword_only"}
-      </tool_call name="knowledge_search">
-    </tool_calls>
-    <answer>2</answer>
-    <verification>Assert that exactly 2 tool calls were made, both returned status "ok", and hybrid total &gt;= keyword_only total</verification>
+  <qa_pair>
+    <question>使用 skill_analyze 分析项目结构</question>
+    <answer>analysis</answer>
   </qa_pair>
-
-  <qa_pair id="10" category="context_aware_retrieval" tools="knowledge_search" complexity="multi_step_chained">
-    <question>Use knowledge_search with action="retrieve" and scope="auto" to detect the project's technology stack context. Then pass the detected scope from the first search response into another knowledge_search for "implementation patterns". Verify that the second search uses the detected scope for filtering.</question>
-    <tool_calls>
-      <tool_call name="knowledge_search">
-        {"action": "retrieve", "query": "feature implementation", "scope": "auto"}
-      </tool_call name="knowledge_search">
-      <tool_call name="knowledge_search">
-        {"action": "retrieve", "query": "implementation patterns", "scope": "$.results[0].scope"}
-      </tool_call name="knowledge_search">
-    </tool_calls>
-    <answer>2</answer>
-    <verification>Assert that exactly 2 tool calls were made, first search returned results with scope information, and second search received that scope as input</verification>
+  <qa_pair>
+    <question>使用 skill_analyze 识别项目中的技术栈和依赖关系</question>
+    <answer>analysis</answer>
   </qa_pair>
-
-  <!--
-    ============================================================
-    EVALUATION INSTRUCTIONS
-    ============================================================
-
-    This evaluation set is designed for the Knowledge Base MCP Server
-    and must be executed in one of the following environments:
-
-    1. MCP Inspector (npx @modelcontextprotocol/inspector)
-       - Start the knowledge server via MCP Inspector
-       - Execute each qa_pair's tool_calls sequentially
-       - For multi-step questions (complexity="multi_step" or "multi_step_chained"),
-         pass output from previous calls as input to subsequent calls
-         using JSONPath expressions (e.g., $.results[0].id, $.results[0].scope)
-       - Compare the actual result against the <answer> field
-       - Use the <verification> assertion to validate structural correctness
-
-    2. Actual MCP Client (Claude Desktop, Cursor, etc.)
-       - Configure the knowledge server as an MCP tool provider
-       - Present the <question> to the AI agent
-       - Verify the agent makes the correct tool calls in the correct order
-       - Validate the final answer matches <answer>
-
-    IMPORTANT NOTES:
-    - All questions are READ-ONLY and IDEMPOTENT (no side effects)
-    - Questions with complexity="multi_step" require sequential tool calls
-      where later calls depend on earlier call results
-    - Questions with complexity="parallel" can execute tool calls concurrently
-    - Questions with complexity="multi_step_chained" require extracting
-      specific fields from prior results to parameterize subsequent calls
-    - The "$." prefix in tool_call parameters denotes JSONPath references
-      to fields from the previous tool call's response
-    - Answers are string-comparable: use exact string equality for verification
-    - For questions where answer is a number (e.g., "2", "3"), it represents
-      the expected count of tool calls or result items
-    - For questions where answer is a field name (e.g., "total_calls"),
-      verify that the response object contains that exact key
-    - Test data must be seeded in the knowledge base before evaluation;
-      ensure entries exist for: React hooks, OOM errors, TypeError solutions,
-      Python coding standards, XSS prevention, memory leak, error boundary
-    - Evaluation should be run against a non-production knowledge base instance
-      to avoid interference with real data
-    - Available tools: knowledge_search (action="retrieve"), knowledge_inject,
-      metrics_report (action="query"|"summary"), server_health
-    - Deprecated tools (DO NOT USE): knowledge_auto_retrieve,
-      knowledge_progressive_search, knowledge_deep_load, knowledge_stats
-  -->
+  <qa_pair>
+    <question>使用 knowledge_inject 将设计模式知识注入到当前会话上下文</question>
+    <answer>injected</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 knowledge_inject 导入领域特定知识到项目知识库</question>
+    <answer>injected</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 spec_drift_detect 检测实现代码与规格文档的偏移</question>
+    <answer>drift_report</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 spec_drift_detect 分析API实现是否偏离了原始规格定义</question>
+    <answer>drift_report</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 security_scan 对项目源码进行安全漏洞扫描</question>
+    <answer>vulnerabilities</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 security_scan 检测依赖包中的已知CVE漏洞</question>
+    <answer>vulnerabilities</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 code_simplify 分析并简化复杂度过高的函数</question>
+    <answer>simplified</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 code_simplify 对冗长的条件逻辑进行重构建议</question>
+    <answer>simplified</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 session_manage 创建新的开发会话</question>
+    <answer>session_created</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 session_manage 恢复之前中断的开发会话</question>
+    <answer>session_resumed</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 workflow_dispatch 启动9阶段全生命周期开发工作流</question>
+    <answer>dispatched</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 workflow_dispatch 分派特定阶段的工作流任务</question>
+    <answer>dispatched</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 agent_status 查询所有Agent的当前运行状态</question>
+    <answer>status_report</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 agent_status 检查特定Agent是否已完成分配的任务</question>
+    <answer>status_report</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 agent_manage 启用一个新的代码审查Agent</question>
+    <answer>managed</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 agent_manage 调整Agent的并发执行数量</question>
+    <answer>managed</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 hook_manage 注册代码提交前的pre-commit钩子</question>
+    <answer>hook_registered</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 hook_manage 移除不再需要的post-build钩子</question>
+    <answer>hook_removed</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 resource_subscribe 订阅项目文件变更通知</question>
+    <answer>subscribed</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 resource_subscribe 监听特定目录下的资源更新事件</question>
+    <answer>subscribed</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 context_compress 压缩当前会话的上下文以释放token空间</question>
+    <answer>compressed</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 context_compress 对长对话历史进行摘要压缩</question>
+    <answer>compressed</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 decision_log 记录架构决策及其理由</question>
+    <answer>logged</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 decision_log 查询历史决策记录以了解技术选型原因</question>
+    <answer>logged</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 token_budget 查询当前会话的token使用预算</question>
+    <answer>budget_report</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 token_budget 设置不同开发阶段的token分配策略</question>
+    <answer>budget_updated</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 project_init 初始化一个新的全栈项目</question>
+    <answer>initialized</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 project_init 配置项目的基础架构和开发规范</question>
+    <answer>initialized</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 metrics_report 生成项目质量指标报告</question>
+    <answer>report</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 metrics_report 导出代码复杂度和测试覆盖率趋势数据</question>
+    <answer>report</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 config_manage 更新项目的构建配置参数</question>
+    <answer>config_updated</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 config_manage 读取当前工作流的配置项列表</question>
+    <answer>config_list</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 audit_query 查询项目的审计日志记录</question>
+    <answer>audit_results</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>使用 audit_query 检索特定时间范围内的代码变更审计轨迹</question>
+    <answer>audit_results</answer>
+  </qa_pair>
 </evaluation>

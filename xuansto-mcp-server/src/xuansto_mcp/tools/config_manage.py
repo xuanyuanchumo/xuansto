@@ -6,17 +6,18 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core.config import (
+    _CONFIG_VALIDATION_RESULTS,
     GATE_SCRIPTS_MAP,
-    QUALITY_GATES_PHASE_MAP,
     HOOK_SCRIPTS_MAP,
+    QUALITY_GATES_PHASE_MAP,
     SKILL_ROOT,
     WORK_DIR,
-    _CONFIG_VALIDATION_RESULTS,
-    _validate_config,
     _resolve_skill_file,
+    _validate_config,
+    get_token_budget_config,
     reload_config,
 )
-from ..core.errors import make_error_response, make_success_response, ERR_VALIDATION
+from ..core.errors import ERR_VALIDATION, make_error_response, make_success_response
 from ..core.logging_config import get_logger
 from ..core.validator import validate_input
 from ..models.schemas import ConfigManageInput
@@ -27,9 +28,9 @@ logger = get_logger("config_manage")
 def _validate_all_configs() -> dict[str, Any]:
     results: dict[str, Any] = {}
     try:
-        from ..models.config_models import SkillConfigModel, FallbackConfigModel, ConstraintsModel
+        from ..models.config_models import ConstraintsModel, FallbackConfigModel, SkillConfigModel
     except ImportError:
-        return {"error": True, "message": "config_models not available"}
+        return make_error_response(ValueError("config_models not available"), error_code=ERR_CONFIG)
 
     skill_config_path = _resolve_skill_file(".xuansto-config.yaml")
     if skill_config_path.exists():
@@ -90,6 +91,7 @@ def _get_config_status() -> dict[str, Any]:
         "gates_by_phase_count": len(QUALITY_GATES_PHASE_MAP),
         "hook_scripts_count": len(HOOK_SCRIPTS_MAP),
         "validation_results": dict(_CONFIG_VALIDATION_RESULTS),
+        "token_budget": get_token_budget_config(),
         "config_files": {
             ".xuansto-config.yaml": str(_resolve_skill_file(".xuansto-config.yaml")),
             "fallback_config.yaml": str(_resolve_skill_file("fallback_config.yaml")),
@@ -122,6 +124,17 @@ def _inline_config_manage(action: str, **kwargs: Any) -> dict[str, Any]:
             "validation_results": {},
             "managed": True,
         }
+    elif action == "get":
+        section = kwargs.get("section", "")
+        if section == "token_budget":
+            return {
+                "action": "get",
+                "section": "token_budget",
+                "config": get_token_budget_config(),
+                "source": "constraints.yaml",
+                "managed": True,
+            }
+        return {"action": "get", "section": section, "config": {}, "managed": True}
     return {"action": action, "config": {}}
 
 
@@ -130,14 +143,15 @@ def register(mcp: FastMCP) -> None:
         annotations=ToolAnnotations(
             readOnlyHint=False,
             destructiveHint=False,
-            idempotentHint=True,
+            idempotentHint=False,
             openWorldHint=False,
         )
     )
     async def config_manage(
         action: str,
+        section: str | None = None,
     ) -> dict[str, Any]:
-        """配置管理：重载/查询状态/校验YAML配置文件。reload操作重新读取所有YAML配置并校验，status操作返回当前配置状态和校验结果，validate操作对所有配置文件运行Pydantic校验。"""
+        """配置管理：重载/查询状态/校验/获取YAML配置文件。reload操作重新读取所有YAML配置并校验，status操作返回当前配置状态和校验结果，validate操作对所有配置文件运行Pydantic校验，get操作获取指定配置节(token_budget等)从统一权威源constraints.yaml。"""
         validated, err = validate_input(ConfigManageInput, action=action)
         if err:
             return err
@@ -145,15 +159,28 @@ def register(mcp: FastMCP) -> None:
         try:
             if action == "reload":
                 reload_result = reload_config()
+                if reload_result.get("status") == "error":
+                    return reload_result
                 validation_results = _validate_all_configs()
-                reload_result["validation_results"] = validation_results
-                return make_success_response(reload_result)
+                reload_data = reload_result.get("data", reload_result)
+                if isinstance(reload_data, dict):
+                    reload_data["validation_results"] = validation_results
+                return make_success_response(reload_data)
             elif action == "status":
                 return make_success_response(_get_config_status())
             elif action == "validate":
                 return make_success_response(_validate_all_configs())
+            elif action == "get":
+                target_section = section or "token_budget"
+                if target_section == "token_budget":
+                    return make_success_response({
+                        "section": "token_budget",
+                        "config": get_token_budget_config(),
+                        "source": "constraints.yaml",
+                    })
+                return make_error_response(ValueError(f"未知配置节: {target_section}，支持: token_budget"), error_code=ERR_VALIDATION)
             else:
-                return make_error_response(ValueError(f"未知操作: {action}，支持: reload, status, validate"), error_code=ERR_VALIDATION)
+                return make_error_response(ValueError(f"未知操作: {action}，支持: reload, status, validate, get"), error_code=ERR_VALIDATION)
         except Exception as e:
             logger.error("config_manage error: %s", e)
             return make_error_response(e)

@@ -7,7 +7,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from .core.errors import make_success_response, retry_tool_call
+from .core.errors import ErrorCodes, make_response, retry_tool_call
 from .core.hook_engine import get_hook_engine
 from .core.logging_config import setup_logging
 from .core.notifications import notify
@@ -20,42 +20,48 @@ _TOOL_FUNCTIONS: dict[str, Callable[..., Any]] = {}
 
 mcp = FastMCP(
     "xuansto-mcp-server",
-    instructions="Xuansto Skill MCP服务器 v8.0.0",
+    instructions="Xuansto Skill MCP服务器 v9.0.0",
 )
 
 from .tools import (
-    skill_analyze,
-    knowledge_search,
-    knowledge_inject,
-    quality_gate_check,
-    spec_drift_detect,
-    security_scan,
-    code_simplify,
-    session_manage,
-    workflow_dispatch,
-    agent_status,
     agent_manage,
-    hook_manage,
-    resource_load_status,
-    context_compress,
-    server_health,
-    decision_log,
-    token_budget,
-    project_init,
-    metrics_report,
+    agent_status,
+    audit_query,
+    code_simplify,
     config_manage,
+    context_compress,
+    decision_log,
+    hook_manage,
+    knowledge_inject,
+    knowledge_search,
+    metrics_report,
+    project_init,
+    quality_gate_check,
+    resource_load_status,
+    resource_subscribe,
+    security_scan,
+    server_health,
+    session_manage,
+    skill_analyze,
+    spec_drift_detect,
+    token_budget,
+    workflow_dispatch,
 )
+
 
 def _with_hook_interception(tool_name: str, tool_fn: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(tool_fn)
     async def wrapped(**kwargs: Any) -> dict[str, Any]:
-        import time
         import json as _json
-        from .tools.server_health import record_tool_call
+        import time
+
+        from .core.audit_logger import get_audit_logger
         from .tools.resource_load_status import record_token_usage
+        from .tools.server_health import record_tool_call
 
         start = time.time()
         hook_errors: list[dict[str, str]] = []
+        audit = get_audit_logger()
 
         engine = get_hook_engine()
         pre_results, pre_errors = await engine.execute_pre_hooks(tool_name, kwargs)
@@ -73,28 +79,34 @@ def _with_hook_interception(tool_name: str, tool_fn: Callable[..., Any]) -> Call
                 latency = (time.time() - start) * 1000
                 record_tool_call(tool_name, latency, False)
                 notify(f"Tool {tool_name} blocked by pre-hook: {pr.get('reason', '')}", "warning")
-                result = make_success_response({
-                    "action": "blocked",
-                    "tool": tool_name,
-                    "block_reason": pr.get("reason", "Pre-hook blocked execution"),
-                    "hook": pr.get("hook", ""),
-                })
+                result = make_response(
+                    error=True,
+                    error_code=ErrorCodes.BLOCKED_BY_HOOK,
+                    message=pr.get("reason", "Pre-hook blocked execution"),
+                )
+                result["tool"] = tool_name
+                result["action"] = "blocked"
+                result["hook"] = pr.get("hook", "")
                 if hook_errors:
                     result["hook_errors"] = hook_errors
+                audit.log(tool_name, kwargs, result, latency, False)
                 return result
 
         if security_hook_failed:
             latency = (time.time() - start) * 1000
             record_tool_call(tool_name, latency, False)
             notify(f"Tool {tool_name} blocked: security hook failed", "warning")
-            result = make_success_response({
-                "action": "blocked",
-                "tool": tool_name,
-                "block_reason": "Security hook execution failed - blocking by default",
-                "hook": "security",
-            })
+            result = make_response(
+                error=True,
+                error_code=ErrorCodes.SECURITY_VIOLATION,
+                message="Security hook execution failed - blocking by default",
+            )
+            result["tool"] = tool_name
+            result["action"] = "blocked"
+            result["hook"] = "security"
             if hook_errors:
                 result["hook_errors"] = hook_errors
+            audit.log(tool_name, kwargs, result, latency, False)
             return result
 
         rate_allowed, rate_info = check_rate_limit(tool_name)
@@ -102,20 +114,24 @@ def _with_hook_interception(tool_name: str, tool_fn: Callable[..., Any]) -> Call
             latency = (time.time() - start) * 1000
             record_tool_call(tool_name, latency, False)
             notify(f"Tool {tool_name} rate limited", "warning")
-            return {
-                "error": True,
-                "error_code": rate_info.get("error_code", "ERR_RATE_LIMITED"),
-                "message": rate_info.get("message", "Rate limit exceeded"),
-                "details": rate_info,
-            }
+            result = make_response(
+                error=True,
+                error_code=ErrorCodes.RATE_LIMITED,
+                message=rate_info.get("message", "Rate limit exceeded"),
+            )
+            result["details"] = rate_info
+            audit.log(tool_name, kwargs, result, latency, False)
+            return result
 
         try:
             result = await retry_tool_call(tool_name, tool_fn, kwargs)
             latency = (time.time() - start) * 1000
             record_tool_call(tool_name, latency, True)
+            audit.log(tool_name, kwargs, result if isinstance(result, dict) else {"data": result}, latency, True)
         except Exception as e:
             latency = (time.time() - start) * 1000
             record_tool_call(tool_name, latency, False)
+            audit.log(tool_name, kwargs, {"error": True, "exception": str(e)}, latency, False)
             notify(f"Tool {tool_name} failed: {e}", "error")
             raise
 
@@ -127,12 +143,14 @@ def _with_hook_interception(tool_name: str, tool_fn: Callable[..., Any]) -> Call
             pass
 
         if isinstance(result, dict):
+            if "error" not in result:
+                result = make_response(data=result)
             post_errors = await engine.execute_post_hooks(tool_name, kwargs, result)
             hook_errors.extend(post_errors)
             if hook_errors:
                 result["hook_errors"] = hook_errors
             return result
-        return {"error": False, "data": result}
+        return make_response(data=result)
 
     wrapped.__signature__ = inspect.signature(tool_fn)
     return wrapped
@@ -166,6 +184,7 @@ for tool_module in [
     agent_manage,
     hook_manage,
     resource_load_status,
+    resource_subscribe,
     context_compress,
     server_health,
     decision_log,
@@ -173,6 +192,7 @@ for tool_module in [
     project_init,
     metrics_report,
     config_manage,
+    audit_query,
 ]:
     tool_module.register(mcp)
 
@@ -182,22 +202,75 @@ _REGISTERED_TOOL_NAMES = list(_TOOL_FUNCTIONS.keys())
 _TOOL_REGISTRY = dict(_TOOL_FUNCTIONS)
 
 _hook_engine = get_hook_engine()
-from .tools.hook_manage import execute_pre_hooks, execute_post_hooks
+from .tools.hook_manage import execute_post_hooks, execute_pre_hooks
+
 _hook_engine.register_hook("pre", execute_pre_hooks)
 _hook_engine.register_hook("post", execute_post_hooks)
 
 from .core.config import HOOKS_PATH
+
 _hook_engine.load_hooks_from_config(HOOKS_PATH)
 
 from .resources import skill_resources
 
 skill_resources.register(mcp)
 
+@mcp.prompt("xuansto_workflow")
+def xuansto_workflow_prompt(task_description: str) -> list[dict[str, str]]:
+    return [
+        {"role": "user", "content": "You are an expert workflow orchestrator for the xuansto development system. Follow the xuansto workflow phases and quality gates to ensure structured, high-quality development output."},
+        {"role": "user", "content": f"Execute xuansto workflow for: {task_description}"},
+    ]
+
+@mcp.prompt("xuansto_analysis")
+def xuansto_analysis_prompt(skill_path: str) -> list[dict[str, str]]:
+    return [
+        {"role": "user", "content": "You are an expert code and architecture analyst. Provide thorough analysis of skill definitions, code quality, and architectural patterns."},
+        {"role": "user", "content": f"Analyze skill at: {skill_path}"},
+    ]
+
 try:
     _REGISTERED_RESOURCE_NAMES = list(mcp._resource_manager._resources.keys())
     _REGISTERED_RESOURCE_NAMES.extend(mcp._resource_manager._templates.keys())
 except AttributeError:
     _REGISTERED_RESOURCE_NAMES = []
+
+
+def _verify_api_key(auth_header: str | None, api_key: str) -> bool:
+    if not auth_header:
+        return False
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:].strip()
+        return token == api_key
+    if auth_header.startswith("ApiKey "):
+        token = auth_header[7:].strip()
+        return token == api_key
+    return auth_header.strip() == api_key
+
+
+def _create_auth_middleware(app: Any, api_key: str) -> None:
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse
+
+    class AuthMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next: Any) -> Any:
+            if request.url.path == "/health":
+                return await call_next(request)
+            auth_header = request.headers.get("Authorization") or request.headers.get("X-API-Key")
+            if not auth_header:
+                return JSONResponse(
+                    status_code=401,
+                    content={"status": "error", "error": {"code": "ERR_UNAUTHORIZED", "message": "Authentication required. Provide Authorization: Bearer <key> or X-API-Key header"}},
+                )
+            if not _verify_api_key(auth_header, api_key):
+                return JSONResponse(
+                    status_code=401,
+                    content={"status": "error", "error": {"code": "ERR_UNAUTHORIZED", "message": "Invalid API key"}},
+                )
+            return await call_next(request)
+
+    app.add_middleware(AuthMiddleware)
 
 
 def main() -> None:
@@ -214,12 +287,31 @@ def main() -> None:
     agent_load_on_startup()
     from .tools.server_health import load_on_startup as health_load_on_startup
     health_load_on_startup()
-    from .tools.server_health import metrics_load_on_startup, degradation_load_on_startup
+    from .tools.server_health import degradation_load_on_startup, metrics_load_on_startup
     metrics_load_on_startup()
     degradation_load_on_startup()
     from .core.degradation import start_fallback_watcher
     start_fallback_watcher()
-    mcp.run(transport="stdio")
+
+    import os
+    transport = os.environ.get("XUANSTO_TRANSPORT", "stdio")
+    if transport == "streamable-http":
+        host = os.environ.get("XUANSTO_HOST", "127.0.0.1")
+        port = int(os.environ.get("XUANSTO_PORT", "8000"))
+        api_key = os.environ.get("XUANSTO_API_KEY", "")
+        if api_key:
+            try:
+                from .api.api_routes import create_api_app
+                http_app = create_api_app()
+                _create_auth_middleware(http_app, api_key)
+                import uvicorn
+                uvicorn.run(http_app, host=host, port=port)
+            except ImportError:
+                mcp.run(transport="streamable-http", host=host, port=port)
+        else:
+            mcp.run(transport="streamable-http", host=host, port=port)
+    else:
+        mcp.run(transport="stdio")
 
 
 if __name__ == "__main__":

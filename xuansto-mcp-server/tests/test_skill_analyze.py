@@ -8,12 +8,8 @@ from xuansto_mcp.tools.skill_analyze import (
     _run_skill_validation,
     _assess_project_scale,
 )
-import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-from conftest import SKILL_PATH  # noqa: E402
+SKILL_PATH = Path(__file__).resolve().parent.parent.parent / ".trae" / "skills" / "xuansto-skill"
 
 
 @pytest.mark.asyncio

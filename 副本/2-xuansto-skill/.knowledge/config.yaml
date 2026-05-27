@@ -1,0 +1,143 @@
+knowledge_base:
+  version: "2.0.0"
+  last_sync: "2026-04-28T00:00:00Z"
+
+  general:
+    path: "~/.xuansto/knowledge/general"
+    auto_sync: true
+    sync_interval: "weekly"
+    upstream: ""
+
+  workspace:
+    path: ".knowledge/workspace"
+    auto_update: true
+    track_changes: true
+
+  experience:
+    path: ".knowledge/experience"
+    auto_extract: true
+    review_required: true
+    min_confidence: 0.8
+
+  indexing:
+    vector_enabled: true
+    vector_index_path: ".knowledge/index/vector_index.json"
+    embedding_model: "text-embedding-3-small"
+    reindex_on_change: true
+    keyword_engine: "sqlite-fts5"
+    keyword_index_path: ".knowledge/index/keyword_index.db"
+    metadata_engine: "sqlite"
+    metadata_index_path: ".knowledge/index/metadata_index.json"
+    cross_reference_path: ".knowledge/index/cross_reference.json"
+
+  lifecycle:
+    archive_enabled: true
+    archive_threshold_days: 90
+    archive_min_confidence: 0.5
+    archive_check_interval: 86400
+    confidence_threshold_archive: 0.5
+    archive_after_days: 90
+    archive_path: ".knowledge/archive"
+    dedup_similarity_threshold: 0.92
+    generalization_min_projects: 3
+    tech_stack_check_enabled: true
+
+  active_learning:
+    enabled: true
+    min_source_rating: 3
+    sandbox_verification: true
+    verification_sandbox:
+      enabled: true
+      timeout_seconds: 300
+      test_generation: true
+      auto_promote_on_pass: true
+    default_confidence_new: 0.6
+    default_confidence_verified: 0.8
+    community_digest_enabled: false
+
+  server:
+    host: "127.0.0.1"
+    port: 8765
+    transport: "stdio"
+    log_level: "INFO"
+
+  database:
+    sqlite_path: ".knowledge/index/knowledge.db"
+    chroma_path: ".knowledge/index/chroma_db"
+
+  embedding:
+    primary: "text-embedding-3-small"
+    fallback: "sentence-transformers/all-MiniLM-L6-v2"
+    dimension: 1536
+    strategy: "primary_with_fallback"
+    batch_size: 100
+    cache_enabled: true
+
+  retrieval:
+    default_strategy: "hybrid"
+    semantic_weight: 0.7
+    keyword_weight: 0.3
+    top_k: 5
+    rerank_enabled: false
+    hybrid:
+      rrf_k: 60
+      candidate_multiplier: 2
+    semantic_only:
+      min_similarity: 0.3
+    keyword_only:
+      bm25_weights:
+        summary: 10.0
+        type: 1.0
+        category: 2.0
+
+  dedup:
+    similarity_threshold: 0.92
+    action: "merge"
+    metadata_hash_fields:
+      - "title"
+      - "scope"
+      - "source"
+      - type
+      - category
+      - tags
+    auto_merge: false
+
+  sync:
+    watch_enabled: true
+    delta_sync_interval: 300
+    full_sync_interval: 86400
+    file_patterns:
+      - "*.md"
+      - "*.yaml"
+      - "*.json"
+    watch_interval_seconds: 30
+    full_sync_on_startup: false
+
+  rate_limit:
+    enabled: true
+    max_requests_per_minute: 60
+    algorithm: "sliding_window"
+
+  resource_limits:
+    max_memory_mb: 512
+    max_db_size_mb: 1024
+    max_connections: 20
+
+  logging:
+    level: "INFO"
+    file_path: ".knowledge/logs/knowledge-server.log"
+    max_size_mb: 10
+    backup_count: 5
+    format: "json"
+
+  backup:
+    sqlite_interval_hours: 6
+    chroma_interval_hours: 24
+    sqlite_retention_count: 10
+    chroma_retention_count: 7
+    encryption_enabled: false
+
+  auth:
+    enabled: false
+    remote_enforced: true
+    key_prefix: "xks-"

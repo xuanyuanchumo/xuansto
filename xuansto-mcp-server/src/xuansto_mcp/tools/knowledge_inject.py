@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import asyncio
 import json
-import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -12,11 +12,11 @@ from mcp.types import ToolAnnotations
 from ..core import atomic_write
 from ..core.config import (
     KNOWLEDGE_CHROMA_PATH,
-    KNOWLEDGE_DB_PATH,
     KNOWLEDGE_EXPERIENCE_DIR,
     KNOWLEDGE_GENERAL_DIR,
     KNOWLEDGE_WORKSPACE_DIR,
 )
+from ..core.database import get_db, persist_state
 from ..core.errors import ERR_VALIDATION, make_error_response, make_success_response
 from ..core.logging_config import get_logger
 from ..core.search_engine import get_search_engine
@@ -195,6 +195,34 @@ def _action_precipitate(
     }
 
 
+def _sync_to_chromadb(entry_id: str, content: str, title: str, scope: str, tags: list[str] | None, source: str) -> bool:
+    try:
+        import chromadb
+        client = chromadb.PersistentClient(path=str(KNOWLEDGE_CHROMA_PATH))
+        collection = client.get_or_create_collection("knowledge")
+        meta = {"title": title, "type": scope, "source": source}
+        if tags is not None:
+            meta["tags"] = json.dumps(tags)
+        collection.upsert(
+            ids=[entry_id],
+            documents=[content],
+            metadatas=[meta],
+        )
+        return True
+    except ImportError:
+        logger.warning("ChromaDB not available, skipping vector index sync for %s", entry_id)
+    except Exception as exc:
+        logger.warning("ChromaDB sync failed for %s (SQLite record preserved): %s", entry_id, exc)
+    try:
+        persist_state("knowledge_entries", {
+            "id": entry_id,
+            "sync_status": "pending",
+        })
+    except Exception:
+        logger.debug("Failed to mark knowledge entry %s as pending for ChromaDB retry", entry_id)
+    return False
+
+
 def _action_add(
     title: str,
     content: str,
@@ -209,54 +237,41 @@ def _action_add(
     filename = f"added-{safe_title}-{timestamp}.md"
     filepath = target_dir / filename
 
-    tags_str = json.dumps(tags or [], ensure_ascii=False)
-    frontmatter = (
-        f"---\n"
-        f"type: added\n"
-        f"title: {title}\n"
-        f"scope: {scope}\n"
-        f"tags: {tags_str}\n"
-        f"added_at: {timestamp}\n"
-        f"---\n"
-        f"{content}\n"
-    )
-    atomic_write(filepath, frontmatter)
-
     indexed = False
-    chroma_indexed = False
     try:
-        if KNOWLEDGE_DB_PATH.exists():
-            conn = sqlite3.connect(str(KNOWLEDGE_DB_PATH))
-            try:
-                now = datetime.now(timezone.utc).isoformat()
-                conn.execute(
-                    "INSERT INTO knowledge_entries (id, title, content, type, metadata_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (filename, title, content, scope, json.dumps({"tags": tags or [], "source": "mcp_add"}), now, now),
-                )
-                conn.commit()
-                indexed = True
-            except Exception as exc:
-                logger.warning("Failed to index added knowledge in SQLite: %s", exc)
-            finally:
-                conn.close()
+        conn = get_db()
+        try:
+            now = datetime.now(timezone.utc).isoformat()
+            conn.execute(
+                "INSERT INTO knowledge_entries (id, title, content, type, metadata_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (filename, title, content, scope, json.dumps({"tags": tags or [], "source": "mcp_add"}), now, now),
+            )
+            conn.commit()
+            indexed = True
+        except Exception as exc:
+            logger.warning("Failed to index added knowledge in SQLite: %s", exc)
+        finally:
+            conn.close()
     except Exception as exc:
         logger.warning("Failed to index added knowledge: %s", exc)
 
     if indexed:
-        try:
-            import chromadb
-            client = chromadb.PersistentClient(path=str(KNOWLEDGE_CHROMA_PATH))
-            collection = client.get_or_create_collection("knowledge")
-            collection.upsert(
-                ids=[filename],
-                documents=[content],
-                metadatas=[{"title": title, "type": scope, "source": "mcp_add"}],
-            )
-            chroma_indexed = True
-        except ImportError:
-            logger.warning("ChromaDB not available, skipping vector index for added knowledge")
-        except Exception as exc:
-            logger.warning("Failed to index added knowledge in ChromaDB: %s", exc)
+        tags_str = json.dumps(tags or [], ensure_ascii=False)
+        frontmatter = (
+            f"---\n"
+            f"type: added\n"
+            f"title: {title}\n"
+            f"scope: {scope}\n"
+            f"tags: {tags_str}\n"
+            f"added_at: {timestamp}\n"
+            f"---\n"
+            f"{content}\n"
+        )
+        atomic_write(filepath, frontmatter)
+
+    chroma_indexed = False
+    if indexed:
+        chroma_indexed = _sync_to_chromadb(filename, content, title, scope, tags, "mcp_add")
 
     return {
         "added_id": filename,
@@ -278,56 +293,36 @@ def _action_update(
 ) -> dict[str, Any]:
     updated_fields: list[str] = []
 
-    if KNOWLEDGE_DB_PATH.exists():
+    try:
+        conn = get_db()
         try:
-            conn = sqlite3.connect(str(KNOWLEDGE_DB_PATH))
-            try:
-                cursor = conn.cursor()
-                cursor.execute("SELECT id FROM knowledge_entries WHERE id = ?", (entry_id,))
-                if cursor.fetchone() is None:
-                    conn.close()
-                    return {"entry_id": entry_id, "updated": False, "reason": "entry not found"}
-                now = datetime.now(timezone.utc).isoformat()
-                if title is not None:
-                    conn.execute("UPDATE knowledge_entries SET title = ?, updated_at = ? WHERE id = ?", (title, now, entry_id))
-                    updated_fields.append("title")
-                if content is not None:
-                    conn.execute("UPDATE knowledge_entries SET content = ?, updated_at = ? WHERE id = ?", (content, now, entry_id))
-                    updated_fields.append("content")
-                if tags is not None:
-                    metadata_json = json.dumps({"tags": tags}, ensure_ascii=False)
-                    conn.execute("UPDATE knowledge_entries SET metadata_json = ?, updated_at = ? WHERE id = ?", (metadata_json, now, entry_id))
-                    updated_fields.append("tags")
-                if not updated_fields:
-                    conn.execute("UPDATE knowledge_entries SET updated_at = ? WHERE id = ?", (now, entry_id))
-                conn.commit()
-            finally:
-                conn.close()
-        except Exception as exc:
-            logger.warning("Failed to update knowledge entry in SQLite: %s", exc)
-            return {"entry_id": entry_id, "updated": False, "reason": str(exc)}
-    else:
-        return {"entry_id": entry_id, "updated": False, "reason": "database not found"}
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM knowledge_entries WHERE id = ?", (entry_id,))
+            if cursor.fetchone() is None:
+                return {"entry_id": entry_id, "updated": False, "reason": "entry not found"}
+            now = datetime.now(timezone.utc).isoformat()
+            if title is not None:
+                conn.execute("UPDATE knowledge_entries SET title = ?, updated_at = ? WHERE id = ?", (title, now, entry_id))
+                updated_fields.append("title")
+            if content is not None:
+                conn.execute("UPDATE knowledge_entries SET content = ?, updated_at = ? WHERE id = ?", (content, now, entry_id))
+                updated_fields.append("content")
+            if tags is not None:
+                metadata_json = json.dumps({"tags": tags}, ensure_ascii=False)
+                conn.execute("UPDATE knowledge_entries SET metadata_json = ?, updated_at = ? WHERE id = ?", (metadata_json, now, entry_id))
+                updated_fields.append("tags")
+            if not updated_fields:
+                conn.execute("UPDATE knowledge_entries SET updated_at = ? WHERE id = ?", (now, entry_id))
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as exc:
+        logger.warning("Failed to update knowledge entry in SQLite: %s", exc)
+        return {"entry_id": entry_id, "updated": False, "reason": str(exc)}
 
     chroma_updated = False
     if content is not None:
-        try:
-            import chromadb
-            client = chromadb.PersistentClient(path=str(KNOWLEDGE_CHROMA_PATH))
-            collection = client.get_or_create_collection("knowledge")
-            meta = {"title": title or entry_id, "source": "mcp_update"}
-            if tags is not None:
-                meta["tags"] = json.dumps(tags)
-            collection.upsert(
-                ids=[entry_id],
-                documents=[content],
-                metadatas=[meta],
-            )
-            chroma_updated = True
-        except ImportError:
-            logger.warning("ChromaDB not available, skipping vector index update")
-        except Exception as exc:
-            logger.warning("Failed to update knowledge entry in ChromaDB: %s", exc)
+        chroma_updated = _sync_to_chromadb(entry_id, content, title or entry_id, "", tags, "mcp_update")
 
     return {
         "entry_id": entry_id,
@@ -343,7 +338,7 @@ def register(mcp: FastMCP) -> None:
             readOnlyHint=False,
             destructiveHint=False,
             idempotentHint=False,
-            openWorldHint=True,
+            openWorldHint=False,
         )
     )
     async def knowledge_inject(
@@ -384,11 +379,11 @@ def register(mcp: FastMCP) -> None:
                         ValueError("inject action requires topics parameter"),
                         error_code=ERR_VALIDATION,
                     )
-                result = _action_inject(topics, scope, max_tokens, relevance_threshold)
+                result = await asyncio.to_thread(_action_inject, topics, scope, max_tokens, relevance_threshold)
                 return make_success_response(data=result)
 
             if action == "list_available":
-                result = _action_list_available(scope if scope != "general" else None)
+                result = await asyncio.to_thread(_action_list_available, scope if scope != "general" else None)
                 return make_success_response(data=result)
 
             if action == "precipitate":
@@ -397,7 +392,7 @@ def register(mcp: FastMCP) -> None:
                         ValueError("precipitate action requires category, title, and content parameters"),
                         error_code=ERR_VALIDATION,
                     )
-                result = _action_precipitate(category, title, content, tags, confidence)
+                result = await asyncio.to_thread(_action_precipitate, category, title, content, tags, confidence)
                 return make_success_response(data=result)
 
             if action == "add":
@@ -406,7 +401,7 @@ def register(mcp: FastMCP) -> None:
                         ValueError("add action requires title and content parameters"),
                         error_code=ERR_VALIDATION,
                     )
-                result = _action_add(title, content, scope, tags)
+                result = await asyncio.to_thread(_action_add, title, content, scope, tags)
                 return make_success_response(data=result)
 
             if action == "update":
@@ -415,7 +410,7 @@ def register(mcp: FastMCP) -> None:
                         ValueError("update action requires entry_id parameter"),
                         error_code=ERR_VALIDATION,
                     )
-                result = _action_update(entry_id, title, content, tags)
+                result = await asyncio.to_thread(_action_update, entry_id, title, content, tags)
                 return make_success_response(data=result)
 
             return make_error_response(

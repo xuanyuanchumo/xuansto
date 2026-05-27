@@ -69,6 +69,13 @@ class _ImportErrorChromadb:
         raise ImportError("No module named 'chromadb'")
 
 
+import pytest
+
+from xuansto_mcp.tools.knowledge_search import _chromadb_search
+
+_SKIP_REASON = "_inject_knowledge has been removed from knowledge_search module"
+
+
 class TestInjectChromaDB(unittest.TestCase):
     def setUp(self):
         _FakeClient._reset()
@@ -142,6 +149,7 @@ class TestInjectChromaDB(unittest.TestCase):
             p.stop()
         shutil.rmtree(self._tmpdir, ignore_errors=True)
 
+    @pytest.mark.skip(reason=_SKIP_REASON)
     def test_inject_writes_to_both_sqlite_and_chromadb(self):
         from xuansto_mcp.tools.knowledge_search import _inject_knowledge
 
@@ -163,6 +171,7 @@ class TestInjectChromaDB(unittest.TestCase):
         self.assertIsNotNone(row, "Row should exist in SQLite")
         self.assertEqual(row[0], "Python async patterns for concurrent programming")
 
+    @pytest.mark.skip(reason=_SKIP_REASON)
     def test_inject_works_without_chromadb(self):
         from xuansto_mcp.tools.knowledge_search import _inject_knowledge
 
@@ -184,6 +193,7 @@ class TestInjectChromaDB(unittest.TestCase):
             else:
                 sys.modules.pop("chromadb", None)
 
+    @pytest.mark.skip(reason=_SKIP_REASON)
     def test_chromadb_failure_does_not_affect_sqlite(self):
         from xuansto_mcp.tools.knowledge_search import _inject_knowledge
 
@@ -212,6 +222,7 @@ class TestInjectChromaDB(unittest.TestCase):
         self.assertIsNotNone(row, "Row should exist in SQLite despite ChromaDB failure")
         self.assertEqual(row[0], "Knowledge with broken ChromaDB")
 
+    @pytest.mark.skip(reason=_SKIP_REASON)
     def test_injected_knowledge_found_by_search(self):
         from xuansto_mcp.tools.knowledge_search import _inject_knowledge, _chromadb_search
 
@@ -235,6 +246,7 @@ class TestInjectChromaDB(unittest.TestCase):
         self.assertGreater(search_result["total"], 0, "Should find at least one result")
         self.assertEqual(search_result["strategy"], "chromadb_semantic")
 
+    @pytest.mark.skip(reason=_SKIP_REASON)
     def test_chromadb_not_indexed_when_sqlite_fails(self):
         from xuansto_mcp.tools.knowledge_search import _inject_knowledge
 

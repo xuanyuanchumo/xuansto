@@ -1,0 +1,410 @@
+metadata:
+  name: SDD+TDD中等规模开发工作流
+  version: "3.2.0"
+  description: 中等规模6阶段SDD+TDD融合开发工作流，填补fast(4阶段)与full(9阶段)之间的空白
+  platform: all
+  min_agents: 5
+  max_agents: 12
+phases:
+  - id: phase-A
+    name: 需求与设计
+    order: 0
+    optional: false
+    trigger_condition: 用户请求中等规模开发或中型项目
+    agents:
+      primary: [product-manager, ui-designer, ux-designer]
+      supporting: [brainstorming-facilitator, design-system-generator]
+    inputs:
+      - name: 用户需求描述
+        type: document
+        required: true
+      - name: 业务背景信息
+        type: document
+        required: true
+      - name: 用户画像
+        type: document
+        required: false
+    outputs:
+      - name: 需求规格说明书
+        type: document
+        validation: 需求已获用户确认
+      - name: 用户故事列表
+        type: document
+        validation: 符合INVEST原则
+      - name: 验收标准文档
+        type: document
+        validation: 验收标准明确可测试
+      - name: UX研究报告
+        type: document
+        validation: 用户旅程完整
+      - name: 高保真设计稿
+        type: document
+        validation: 设计评审通过
+      - name: 设计系统定义
+        type: document
+        validation: 设计令牌与技术栈兼容
+    quality_gates:
+      - gate_id: design_system_complete
+        blocking: true
+        pass_criteria: 设计系统完整且设计令牌与技术栈兼容
+      - gate_id: anti_pattern_check
+        blocking: true
+        pass_criteria: 无已知反模式
+      - gate_id: brainstorm_complete
+        blocking: true
+        pass_criteria: 需求探索完成且核心功能点明确
+      - gate_id: gate_001
+        blocking: true
+        pass_criteria: 需求完整性检查通过
+      - gate_id: gate_002
+        blocking: true
+        pass_criteria: 规格一致性检查通过
+    timeout_minutes: 120
+    retry:
+      max_attempts: 2
+      backoff: fixed
+  - id: phase-B
+    name: 架构与规格
+    order: 1
+    optional: false
+    trigger_condition: 需求与设计阶段完成
+    agents:
+      primary: [system-architect]
+      supporting: [specification-keeper, technical-writer]
+    inputs:
+      - name: 需求规格说明书
+        type: document
+        required: true
+        source_phase: phase-A
+      - name: 用户故事列表
+        type: document
+        required: true
+        source_phase: phase-A
+      - name: 设计系统定义
+        type: document
+        required: true
+        source_phase: phase-A
+    outputs:
+      - name: 架构设计文档
+        type: document
+        validation: 符合SOLID原则
+      - name: API接口规范
+        type: document
+        validation: 接口定义清晰完整
+      - name: 数据模型图
+        type: document
+      - name: 技术决策记录
+        type: document
+        validation: 技术选型有充分理由
+      - name: 规格文档
+        type: document
+        validation: 规格与需求一致
+    quality_gates:
+      - gate_id: gate_003
+        blocking: true
+        pass_criteria: 架构设计符合SOLID原则
+      - gate_id: gate_004
+        blocking: true
+        pass_criteria: 接口定义清晰完整
+      - gate_id: plan_atomic
+        blocking: true
+        pass_criteria: 实现计划已原子化拆分
+    timeout_minutes: 90
+    retry:
+      max_attempts: 2
+      backoff: fixed
+  - id: phase-C
+    name: 测试设计
+    order: 2
+    optional: false
+    trigger_condition: 架构与规格阶段完成
+    agents:
+      primary: [test-architect]
+      supporting: [unit-tester]
+    inputs:
+      - name: 架构设计文档
+        type: document
+        required: true
+        source_phase: phase-B
+      - name: 用户故事列表
+        type: document
+        required: true
+        source_phase: phase-A
+    outputs:
+      - name: 测试策略文档
+        type: document
+      - name: 测试用例清单
+        type: document
+        validation: 覆盖所有用户故事
+      - name: 测试数据方案
+        type: document
+    quality_gates:
+      - gate_id: gate_005
+        blocking: true
+        pass_criteria: 测试覆盖所有用户故事
+      - gate_id: gate_006
+        blocking: true
+        pass_criteria: 测试用例可自动化执行且边界条件已覆盖
+    timeout_minutes: 60
+    retry:
+      max_attempts: 2
+      backoff: fixed
+  - id: phase-D
+    name: TDD实现
+    order: 3
+    optional: false
+    trigger_condition: 测试设计阶段完成
+    agents:
+      primary: [fullstack-engineer, unit-tester, code-reviewer]
+      supporting: [subagent-dispatcher]
+    inputs:
+      - name: 架构设计文档
+        type: document
+        required: true
+        source_phase: phase-B
+      - name: 测试用例清单
+        type: document
+        required: true
+        source_phase: phase-C
+      - name: 规格文档
+        type: document
+        required: true
+        source_phase: phase-B
+    outputs:
+      - name: 源代码文件
+        type: code
+        validation: 代码审查通过
+      - name: 单元测试文件
+        type: code
+        validation: 覆盖率>=70%
+      - name: 代码覆盖率报告
+        type: document
+        validation: 覆盖率>=70%
+      - name: 代码审查报告
+        type: document
+      - name: 改进建议清单
+        type: document
+    quality_gates:
+      - gate_id: gate_007
+        blocking: true
+        pass_criteria: 代码质量门禁通过
+      - gate_id: test_pass
+        blocking: true
+        pass_criteria: 所有测试用例通过
+      - gate_id: gate_009
+        blocking: true
+        pass_criteria: 代码审查通过
+      - gate_id: subagent_review
+        blocking: true
+        pass_criteria: 子代理审查完成
+      - gate_id: review_confidence
+        blocking: true
+        pass_criteria: 审查置信度>=80
+      - gate_id: file_encoding
+        blocking: true
+        pass_criteria: 所有源代码文件为UTF-8 without BOM
+      - gate_id: comment_language
+        blocking: true
+        pass_criteria: 业务注释包含中文说明
+      - gate_id: script_security
+        blocking: true
+        pass_criteria: 无安全风险脚本
+    timeout_minutes: 240
+    retry:
+      max_attempts: 3
+      backoff: exponential
+  - id: phase-E
+    name: 验证与验收
+    order: 4
+    optional: false
+    trigger_condition: TDD实现阶段完成
+    agents:
+      primary: [qa-engineer, security-auditor, performance-tester, product-manager]
+      supporting: []
+    inputs:
+      - name: 通过审查的代码
+        type: code
+        required: true
+        source_phase: phase-D
+      - name: 测试用例清单
+        type: document
+        required: true
+        source_phase: phase-C
+      - name: 用户故事和验收标准
+        type: document
+        required: true
+        source_phase: phase-A
+    outputs:
+      - name: 测试执行报告
+        type: document
+        validation: 通过率和覆盖率达标
+      - name: 安全审计报告
+        type: document
+        validation: 无P0/P1安全问题
+      - name: 性能测试报告
+        type: document
+      - name: 用户验收测试报告
+        type: document
+      - name: 正式发布建议
+        type: document
+        validation: 批准或驳回
+    quality_gates:
+      - gate_id: gate_011
+        blocking: true
+        pass_criteria: 端到端测试门禁通过
+      - gate_id: gate_012
+        blocking: true
+        pass_criteria: 安全扫描门禁通过
+      - gate_id: gate_013
+        blocking: true
+        pass_criteria: 部署就绪门禁通过
+      - gate_id: gate_014
+        blocking: true
+        pass_criteria: 生产验证门禁通过
+      - gate_id: agentic_security
+        blocking: true
+        pass_criteria: Agentic安全合规通过
+      - gate_id: playwright_e2e_pass
+        blocking: true
+        pass_criteria: Playwright E2E测试通过
+    timeout_minutes: 120
+    retry:
+      max_attempts: 2
+      backoff: fixed
+  - id: phase-F
+    name: 迭代与交付
+    order: 5
+    optional: false
+    trigger_condition: 验证与验收阶段通过
+    agents:
+      primary: [refactoring-specialist, build-release-engineer]
+      supporting: [cicd-specialist]
+    inputs:
+      - name: 验证通过的代码
+        type: code
+        required: true
+        source_phase: phase-E
+      - name: 正式发布建议
+        type: document
+        required: true
+        source_phase: phase-E
+    outputs:
+      - name: 优化后的代码
+        type: code
+        validation: 重构验证通过
+      - name: 迭代总结报告
+        type: document
+      - name: 发布说明文档
+        type: document
+        validation: 发布说明完整
+      - name: 多平台安装包
+        type: artifact
+        validation: 所有平台构建成功（如适用）
+    quality_gates:
+      - gate_id: gate_015
+        blocking: true
+        pass_criteria: 演化闭环门禁通过
+      - gate_id: simplification_behavior
+        blocking: true
+        pass_criteria: 简化行为等价验证通过
+      - gate_id: chesterton_fence
+        blocking: true
+        pass_criteria: Chesterton's Fence检查通过
+      - gate_id: doc_completeness
+        blocking: true
+        pass_criteria: 文档完整性检查通过
+      - gate_id: desktop_build
+        blocking: false
+        pass_criteria: 桌面构建成功（仅桌面项目）
+    timeout_minutes: 180
+    retry:
+      max_attempts: 3
+      backoff: exponential
+agent_matrix:
+  product-manager:
+    phases: [phase-A, phase-E]
+    role: primary
+    max_parallel_instances: 1
+  brainstorming-facilitator:
+    phases: [phase-A]
+    role: supporting
+    max_parallel_instances: 1
+  ui-designer:
+    phases: [phase-A]
+    role: primary
+    max_parallel_instances: 1
+  ux-designer:
+    phases: [phase-A]
+    role: primary
+    max_parallel_instances: 1
+  design-system-generator:
+    phases: [phase-A]
+    role: supporting
+    max_parallel_instances: 1
+  system-architect:
+    phases: [phase-B]
+    role: primary
+    max_parallel_instances: 1
+  specification-keeper:
+    phases: [phase-B]
+    role: supporting
+    max_parallel_instances: 1
+  technical-writer:
+    phases: [phase-B]
+    role: supporting
+    max_parallel_instances: 1
+  test-architect:
+    phases: [phase-C]
+    role: primary
+    max_parallel_instances: 1
+  unit-tester:
+    phases: [phase-C, phase-D]
+    role: primary
+    max_parallel_instances: 2
+  fullstack-engineer:
+    phases: [phase-D]
+    role: primary
+    max_parallel_instances: 2
+  code-reviewer:
+    phases: [phase-D]
+    role: primary
+    max_parallel_instances: 2
+  subagent-dispatcher:
+    phases: [phase-D]
+    role: supporting
+    max_parallel_instances: 1
+  qa-engineer:
+    phases: [phase-E]
+    role: primary
+    max_parallel_instances: 1
+  security-auditor:
+    phases: [phase-E]
+    role: primary
+    max_parallel_instances: 1
+  performance-tester:
+    phases: [phase-E]
+    role: primary
+    max_parallel_instances: 1
+  refactoring-specialist:
+    phases: [phase-F]
+    role: primary
+    max_parallel_instances: 1
+  build-release-engineer:
+    phases: [phase-F]
+    role: primary
+    max_parallel_instances: 1
+  cicd-specialist:
+    phases: [phase-F]
+    role: supporting
+    max_parallel_instances: 1
+exception_handling:
+  phase_failure:
+    action: retry_then_escalate
+    escalation_target: orchestrator
+    max_retries: 3
+  agent_unavailable:
+    action: substitute_and_continue
+    substitute_agent: fullstack-engineer
+  quality_gate_blocked:
+    action: auto_fix_then_pause
+    auto_fix_agents: [fullstack-engineer, refactoring-specialist]

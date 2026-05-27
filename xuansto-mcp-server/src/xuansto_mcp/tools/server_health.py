@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import json
 import threading
 import time
@@ -8,17 +10,27 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from ..core.config import DATA_DIR, SKILL_ROOT, WORK_DIR, KNOWLEDGE_CHROMA_PATH, MCP_API_VERSION, MCP_MIN_SUPPORTED_VERSION, API_CHANGELOG, AGENTS_DIR, REFERENCES_DIR, COMMANDS_DIR
-from ..core.errors import make_success_response, make_error_response, ERR_VALIDATION
 from ..core import atomic_write
+from ..core.config import (
+    AGENTS_DIR,
+    API_CHANGELOG,
+    COMMANDS_DIR,
+    DATA_DIR,
+    KNOWLEDGE_CHROMA_PATH,
+    MCP_API_VERSION,
+    MCP_MIN_SUPPORTED_VERSION,
+    REFERENCES_DIR,
+    SKILL_MIN_VERSION,
+    SKILL_ROOT,
+    WORK_DIR,
+)
+from ..core.errors import ERR_VALIDATION, make_error_response, make_success_response
 from ..core.logging_config import get_logger
+from ..core.metrics import get_metrics_collector
 from ..core.validator import validate_input
 from ..models.schemas import ServerHealthInput
 
 _START_TIME = time.time()
-
-_PERSIST_INTERVAL_SEC: float = 60.0
-_PERSIST_CALL_THRESHOLD: int = 100
 
 _SNAPSHOT_CLEANUP_MIN_INTERVAL: float = 300.0
 _last_snapshot_cleanup_time: float = 0.0
@@ -27,15 +39,9 @@ _DEGRADATION_COUNTS: dict[str, int] = {}
 
 _CHROMADB_DEGRADATION_KEY = "chromadb_unavailable"
 
-_TOOL_METRICS: dict[str, dict[str, Any]] = {}
-
 _metrics_lock = threading.Lock()
-_persist_lock = threading.Lock()
 
 _chromadb_client = None
-
-_last_metrics_persist_time: float = 0.0
-_metrics_persist_count: int = 0
 
 logger = get_logger("server_health")
 
@@ -70,39 +76,14 @@ def _check_chromadb_health() -> dict[str, Any]:
         return {"available": False, "latency_ms": latency_ms, "reason": str(exc)}
 
 
-def _should_persist() -> bool:
-    if _metrics_persist_count >= _PERSIST_CALL_THRESHOLD:
-        return True
-    if _last_metrics_persist_time == 0.0:
-        return False
-    if (time.time() - _last_metrics_persist_time) >= _PERSIST_INTERVAL_SEC:
-        return True
-    return False
-
-
-def _persist_metrics() -> None:
-    global _last_metrics_persist_time, _metrics_persist_count
+def _persist_degradation() -> None:
     with _metrics_lock:
-        trimmed = {}
-        for tool_name, metrics in _TOOL_METRICS.items():
-            trimmed[tool_name] = {
-                "call_count": metrics["call_count"],
-                "error_count": metrics["error_count"],
-                "latencies": metrics["latencies"][-100:],
-            }
         degr_snapshot = dict(_DEGRADATION_COUNTS)
-    with _persist_lock:
-        persist_dir = WORK_DIR
-        persist_dir.mkdir(parents=True, exist_ok=True)
-        metrics_path = persist_dir / "tool_metrics.json"
-        atomic_write(metrics_path, json.dumps(trimmed, ensure_ascii=False, indent=2))
-        logger.info("Persisted tool metrics (%d tools) to %s", len(trimmed), metrics_path)
-        degr_path = persist_dir / "degradation_stats.json"
-        atomic_write(degr_path, json.dumps(degr_snapshot, ensure_ascii=False, indent=2))
-        logger.info("Persisted degradation counts (%d tools) to %s", len(degr_snapshot), degr_path)
-    with _metrics_lock:
-        _last_metrics_persist_time = time.time()
-        _metrics_persist_count = 0
+    persist_dir = WORK_DIR
+    persist_dir.mkdir(parents=True, exist_ok=True)
+    degr_path = persist_dir / "degradation_stats.json"
+    atomic_write(degr_path, json.dumps(degr_snapshot, ensure_ascii=False, indent=2))
+    logger.info("Persisted degradation counts (%d items) to %s", len(degr_snapshot), degr_path)
 
 
 def _load_metrics() -> None:
@@ -111,23 +92,7 @@ def _load_metrics() -> None:
 
 
 def metrics_load_on_startup() -> None:
-    metrics_path = WORK_DIR / "tool_metrics.json"
-    try:
-        raw = json.loads(metrics_path.read_text(encoding="utf-8"))
-        with _metrics_lock:
-            for tool_name, d in raw.items():
-                _TOOL_METRICS[tool_name] = {
-                    "call_count": d.get("call_count", 0),
-                    "error_count": d.get("error_count", 0),
-                    "latencies": d.get("latencies", []),
-                }
-        logger.info("Loaded tool metrics (%d tools) from %s", len(raw), metrics_path)
-    except FileNotFoundError:
-        logger.debug("No persisted tool metrics found at %s", metrics_path)
-    except json.JSONDecodeError:
-        logger.warning("Failed to parse tool metrics from %s; starting fresh", metrics_path)
-    except Exception:
-        logger.warning("Unexpected error loading tool metrics from %s; starting fresh", metrics_path)
+    get_metrics_collector().load()
 
 
 def degradation_load_on_startup() -> None:
@@ -150,50 +115,13 @@ def load_on_startup() -> None:
 
 
 def track_degradation(tool_name: str) -> None:
-    global _metrics_persist_count
-    should_persist = False
     with _metrics_lock:
         _DEGRADATION_COUNTS[tool_name] = _DEGRADATION_COUNTS.get(tool_name, 0) + 1
-        _metrics_persist_count += 1
-        should_persist = _should_persist()
-    if should_persist:
-        _persist_metrics()
+    _persist_degradation()
 
 
 def record_tool_call(tool_name: str, latency_ms: float, success: bool) -> None:
-    global _metrics_persist_count
-    should_persist = False
-    with _metrics_lock:
-        if tool_name not in _TOOL_METRICS:
-            _TOOL_METRICS[tool_name] = {
-                "call_count": 0,
-                "error_count": 0,
-                "latencies": [],
-            }
-        metrics = _TOOL_METRICS[tool_name]
-        metrics["call_count"] += 1
-        if not success:
-            metrics["error_count"] += 1
-        metrics["latencies"].append(latency_ms)
-        if len(metrics["latencies"]) > 1000:
-            metrics["latencies"] = metrics["latencies"][-1000:]
-        _metrics_persist_count += 1
-        should_persist = _should_persist()
-    if should_persist:
-        _persist_metrics()
-
-
-def _calculate_percentile(values: list[float], percentile: float) -> float:
-    if not values:
-        return 0.0
-    sorted_values = sorted(values)
-    n = len(sorted_values)
-    rank = percentile / 100.0 * (n - 1)
-    lower = int(rank)
-    upper = min(lower + 1, n - 1)
-    fraction = rank - lower
-    result = sorted_values[lower] + fraction * (sorted_values[upper] - sorted_values[lower])
-    return round(result, 1)
+    get_metrics_collector().record_tool_call(tool_name, latency_ms, success)
 
 
 def _negotiate_api_version(client_version: str) -> dict[str, Any]:
@@ -299,42 +227,48 @@ def register(mcp: FastMCP) -> None:
             openWorldHint=False,
         )
     )
-    async def server_health(action: str, client_version: str | None = None) -> dict[str, Any]:
-        """MCP Server 健康检查：返回服务器状态、版本、运行时间、配置路径和工具统计。支持API版本协商。"""
-        validated, val_err = validate_input(ServerHealthInput, action=action, client_version=client_version)
+    async def server_health(action: str, client_version: str | None = None, client_api_version: str | None = None) -> dict[str, Any]:
+        """MCP Server 健康检查：返回服务器状态、版本、运行时间、配置路径和工具统计。支持API版本协商。action=version时可通过client_api_version参数检查兼容性。"""
+        validated, val_err = validate_input(ServerHealthInput, action=action, client_version=client_version, client_api_version=client_api_version)
         if val_err:
             return val_err
         logger.info("server_health called: action=%s", action)
         try:
             from .. import __version__
-            from ..server import _REGISTERED_TOOL_NAMES, _REGISTERED_RESOURCE_NAMES
+            from ..server import _REGISTERED_RESOURCE_NAMES, _REGISTERED_TOOL_NAMES
 
             if action == "negotiate_version":
                 if not client_version:
                     return make_error_response(ValueError("negotiate_version操作需要client_version参数"), error_code=ERR_VALIDATION)
                 return make_success_response(_negotiate_api_version(client_version))
 
+            if action == "version":
+                effective_version = client_api_version or client_version
+                if effective_version:
+                    return make_success_response(_negotiate_api_version(effective_version))
+                return make_success_response({
+                    "server_version": MCP_API_VERSION,
+                    "min_supported_version": MCP_MIN_SUPPORTED_VERSION,
+                    "api_changelog": API_CHANGELOG,
+                })
+
             if action == "capabilities":
-                from ..server import _REGISTERED_TOOL_NAMES, _REGISTERED_RESOURCE_NAMES, _TOOL_REGISTRY
+                from ..server import _REGISTERED_RESOURCE_NAMES, _REGISTERED_TOOL_NAMES, _TOOL_REGISTRY
                 tool_capabilities = []
                 for tool_name in sorted(_REGISTERED_TOOL_NAMES):
                     tool_fn = _TOOL_REGISTRY.get(tool_name)
                     annotations = None
                     if tool_fn is not None:
-                        try:
+                        with contextlib.suppress(Exception):
                             annotations = getattr(tool_fn, "annotations", None)
-                        except Exception:
-                            pass
                     tool_entry: dict[str, Any] = {"name": tool_name, "available": True}
                     if annotations is not None:
-                        try:
+                        with contextlib.suppress(Exception):
                             tool_entry["annotations"] = {
                                 "read_only": getattr(annotations, "readOnlyHint", None),
                                 "destructive": getattr(annotations, "destructiveHint", None),
                                 "idempotent": getattr(annotations, "idempotentHint", None),
                             }
-                        except Exception:
-                            pass
                     tool_capabilities.append(tool_entry)
                 resource_capabilities = []
                 for res_name in sorted(_REGISTERED_RESOURCE_NAMES):
@@ -351,7 +285,7 @@ def register(mcp: FastMCP) -> None:
                     "api_version": MCP_API_VERSION,
                 })
 
-            from .workflow_dispatch import _load_all_workflows, _cleanup_all_snapshots
+            from .workflow_dispatch import _cleanup_all_snapshots, _load_all_workflows
 
             active_workflows = len(_load_all_workflows())
             global _last_snapshot_cleanup_time
@@ -362,24 +296,32 @@ def register(mcp: FastMCP) -> None:
             total_deleted = sum(r["deleted_count"] for r in snapshot_cleanup.values())
             total_remaining = sum(r["remaining_count"] for r in snapshot_cleanup.values())
             performance_metrics = {}
+            tool_summary = get_metrics_collector().get_tool_summary()
+            for tool_name, m in tool_summary.items():
+                call_count = m["call_count"]
+                failure_count = m["failure_count"]
+                performance_metrics[tool_name] = {
+                    "call_count": call_count,
+                    "error_count": failure_count,
+                    "error_rate": round(failure_count / max(call_count, 1), 4),
+                    "latency_p50_ms": m.get("latency_p50_ms", 0.0),
+                    "latency_p95_ms": m.get("latency_p95_ms", 0.0),
+                    "latency_p99_ms": m.get("latency_p99_ms", 0.0),
+                }
             with _metrics_lock:
-                for tool_name, metrics in _TOOL_METRICS.items():
-                    latencies = metrics.get("latencies", [])
-                    performance_metrics[tool_name] = {
-                        "call_count": metrics["call_count"],
-                        "error_count": metrics["error_count"],
-                        "error_rate": round(metrics["error_count"] / max(metrics["call_count"], 1), 4),
-                        "latency_p50_ms": _calculate_percentile(latencies, 50),
-                        "latency_p95_ms": _calculate_percentile(latencies, 95),
-                        "latency_p99_ms": _calculate_percentile(latencies, 99),
-                    }
                 degradation_snapshot = dict(_DEGRADATION_COUNTS)
-            chromadb_health = _check_chromadb_health()
+            chromadb_health = await asyncio.to_thread(_check_chromadb_health)
             tools_count = len(_REGISTERED_TOOL_NAMES) if _REGISTERED_TOOL_NAMES else 13
             resources_count = len(_REGISTERED_RESOURCE_NAMES) if _REGISTERED_RESOURCE_NAMES else 7
             return make_success_response({
                 "status": "healthy",
                 "version": __version__,
+                "version_compatibility": {
+                    "mcp_server_version": __version__,
+                    "skill_min_version": SKILL_MIN_VERSION,
+                    "mcp_api_version": MCP_API_VERSION,
+                    "mcp_min_supported_version": MCP_MIN_SUPPORTED_VERSION,
+                },
                 "api_version": MCP_API_VERSION,
                 "api_changelog": API_CHANGELOG,
                 "uptime_seconds": round(time.time() - _START_TIME, 1),

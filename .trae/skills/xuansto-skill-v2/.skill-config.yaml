@@ -1,0 +1,21 @@
+name: xuansto-skill-v2
+version: "9.0.0"
+runtime:
+  loop:
+    max_iterations: 50
+    stagnation_threshold: 3
+    auto_archive: true
+  planning_files:
+    cache_dir: ".xuansto/plans"
+    auto_archive: true
+    two_action_rule: true
+    three_strike_protocol: true
+  on_demand_loading:
+    enabled: true
+    default_phase: 0
+    phase_upgrade_trigger: command_execution
+  knowledge_service:
+    host: "127.0.0.1"
+    port: 8765
+    fallback: filesystem
+token_budget: "See constraints.yaml for token budget configuration (unified authority source)"

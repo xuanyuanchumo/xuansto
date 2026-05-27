@@ -9,9 +9,20 @@ from xuansto_mcp.tools.resource_load_status import _RESOURCE_CACHE, register
 
 @pytest.fixture(autouse=True)
 def _clear_cache():
-    _RESOURCE_CACHE.clear()
+    import xuansto_mcp.tools.resource_load_status as mod
+    mod._LOADED_PROGRESS["total_resources"] = 0
+    mod._LOADED_PROGRESS["loaded_resources"] = 0
+    mod._LOADED_PROGRESS["current_phase"] = None
+    mod._LOADED_PROGRESS["loading"] = False
+    mod._LOADED_PROGRESS["started_at"] = None
+    mod._LOADED_PROGRESS["completed_at"] = None
+    original_lru = mod._resource_lru
+    mod._resource_lru = mod.LRUCache(maxsize=mod._CACHE_MAX_ENTRIES)
+    mod._RESOURCE_CACHE = mod._resource_lru
     yield
-    _RESOURCE_CACHE.clear()
+    mod._resource_lru = original_lru
+    mod._RESOURCE_CACHE = original_lru
+    mod._current_phase = 0
 
 
 @pytest.mark.asyncio
@@ -32,6 +43,7 @@ async def test_phase_preload_stores_nonempty_content_for_file(tmp_path: Path):
     try:
         test_mcp = FastMCP("test")
         register(test_mcp)
+        resource_load_status._current_phase = -1
         tool_fn = test_mcp._tool_manager._tools["resource_load_status"].fn
 
         result = await tool_fn(action="preload", phase=0)
@@ -40,7 +52,7 @@ async def test_phase_preload_stores_nonempty_content_for_file(tmp_path: Path):
         preloaded = data.get("preloaded", [])
         assert any(p["id"] == "test-res-1" and p["status"] == "loaded" for p in preloaded)
 
-        cached = _RESOURCE_CACHE.get("test-res-1")
+        cached = resource_load_status._resource_lru.get("test-res-1")
         assert cached is not None, "Resource should be in cache"
         assert cached["content"] != "", "Cache content should NOT be empty"
         assert "hello world content" in cached["content"]
@@ -69,6 +81,7 @@ async def test_phase_preload_stores_nonempty_content_for_dir(tmp_path: Path):
     try:
         test_mcp = FastMCP("test")
         register(test_mcp)
+        resource_load_status._current_phase = -1
         tool_fn = test_mcp._tool_manager._tools["resource_load_status"].fn
 
         result = await tool_fn(action="preload", phase=0)
@@ -76,7 +89,7 @@ async def test_phase_preload_stores_nonempty_content_for_dir(tmp_path: Path):
         preloaded = data.get("preloaded", [])
         assert any(p["id"] == "test-dir-1" and p["status"] == "loaded" for p in preloaded)
 
-        cached = _RESOURCE_CACHE.get("test-dir-1")
+        cached = resource_load_status._resource_lru.get("test-dir-1")
         assert cached is not None
         assert cached["content"] != "", "Cache content should NOT be empty for directory"
         assert "content of file1" in cached["content"]
@@ -104,11 +117,12 @@ async def test_phase_preload_content_hash_is_valid(tmp_path: Path):
     try:
         test_mcp = FastMCP("test")
         register(test_mcp)
+        resource_load_status._current_phase = -1
         tool_fn = test_mcp._tool_manager._tools["resource_load_status"].fn
 
         await tool_fn(action="preload", phase=0)
 
-        cached = _RESOURCE_CACHE.get("test-hash-1")
+        cached = resource_load_status._resource_lru.get("test-hash-1")
         assert cached is not None
         assert cached["content_hash"] != "", "content_hash should not be empty"
         assert len(cached["content_hash"]) == 64, "SHA-256 hex digest should be 64 chars"

@@ -1,0 +1,534 @@
+{
+  "name": "[项目名称] 设计令牌",
+  "version": "1.0.0",
+  "description": "设计系统核心变量定义",
+  "lastUpdated": "[YYYY-MM-DD]",
+  "tokens": {
+    "color": {
+      "primary": {
+        "value": "#3B82F6",
+        "description": "主色调，用于主要按钮、链接、强调元素",
+        "type": "color"
+      },
+      "primaryLight": {
+        "value": "#60A5FA",
+        "description": "主色浅色变体，用于悬停状态、背景色",
+        "type": "color"
+      },
+      "primaryDark": {
+        "value": "#2563EB",
+        "description": "主色深色变体，用于按下状态、阴影",
+        "type": "color"
+      },
+      "accent": {
+        "value": "#6366F1",
+        "description": "强调色，用于高亮、徽标、交互提示",
+        "type": "color"
+      },
+      "accentLight": {
+        "value": "#818CF8",
+        "description": "强调色浅色变体",
+        "type": "color"
+      },
+      "accentDark": {
+        "value": "#4F46E5",
+        "description": "强调色深色变体",
+        "type": "color"
+      },
+      "secondary": {
+        "value": "#64748B",
+        "description": "辅助色，用于次要按钮、图标",
+        "type": "color"
+      },
+      "secondaryLight": {
+        "value": "#94A3B8",
+        "description": "辅助色浅色变体",
+        "type": "color"
+      },
+      "secondaryDark": {
+        "value": "#475569",
+        "description": "辅助色深色变体",
+        "type": "color"
+      },
+      "semantic": {
+        "success": {
+          "value": "#22C55E",
+          "description": "成功状态色",
+          "type": "color"
+        },
+        "successLight": {
+          "value": "#86EFAC",
+          "description": "成功状态浅色背景",
+          "type": "color"
+        },
+        "warning": {
+          "value": "#F59E0B",
+          "description": "警告状态色",
+          "type": "color"
+        },
+        "warningLight": {
+          "value": "#FCD34D",
+          "description": "警告状态浅色背景",
+          "type": "color"
+        },
+        "error": {
+          "value": "#EF4444",
+          "description": "错误状态色",
+          "type": "color"
+        },
+        "errorLight": {
+          "value": "#FCA5A5",
+          "description": "错误状态浅色背景",
+          "type": "color"
+        },
+        "info": {
+          "value": "#3B82F6",
+          "description": "信息状态色",
+          "type": "color"
+        },
+        "infoLight": {
+          "value": "#93C5FD",
+          "description": "信息状态浅色背景",
+          "type": "color"
+        }
+      },
+      "neutral": {
+        "white": {
+          "value": "#FFFFFF",
+          "description": "白色",
+          "type": "color"
+        },
+        "black": {
+          "value": "#000000",
+          "description": "黑色",
+          "type": "color"
+        },
+        "gray": {
+          "100": {
+            "value": "#F1F5F9",
+            "description": "最浅灰色，用于浅背景",
+            "type": "color"
+          },
+          "200": {
+            "value": "#E2E8F0",
+            "description": "浅灰色，用于边框、分割线",
+            "type": "color"
+          },
+          "300": {
+            "value": "#CBD5E1",
+            "description": "中浅灰色，用于禁用状态",
+            "type": "color"
+          },
+          "400": {
+            "value": "#94A3B8",
+            "description": "中灰色，用于占位符文字",
+            "type": "color"
+          },
+          "500": {
+            "value": "#64748B",
+            "description": "中性灰，用于辅助文字",
+            "type": "color"
+          },
+          "600": {
+            "value": "#475569",
+            "description": "中深灰色，用于正文文字",
+            "type": "color"
+          },
+          "700": {
+            "value": "#334155",
+            "description": "深灰色，用于标题文字",
+            "type": "color"
+          },
+          "800": {
+            "value": "#1E293B",
+            "description": "更深灰色，用于深色背景文字",
+            "type": "color"
+          },
+          "900": {
+            "value": "#0F172A",
+            "description": "最深灰色，用于最深文字",
+            "type": "color"
+          }
+        }
+      },
+      "background": {
+        "primary": {
+          "value": "#FFFFFF",
+          "description": "主背景色",
+          "type": "color"
+        },
+        "secondary": {
+          "value": "#F8FAFC",
+          "description": "次背景色",
+          "type": "color"
+        },
+        "tertiary": {
+          "value": "#F1F5F9",
+          "description": "第三背景色",
+          "type": "color"
+        }
+      },
+      "text": {
+        "primary": {
+          "value": "#0F172A",
+          "description": "主要文字颜色",
+          "type": "color"
+        },
+        "secondary": {
+          "value": "#475569",
+          "description": "次要文字颜色",
+          "type": "color"
+        },
+        "disabled": {
+          "value": "#CBD5E1",
+          "description": "禁用文字颜色",
+          "type": "color"
+        },
+        "inverse": {
+          "value": "#FFFFFF",
+          "description": "反色文字颜色",
+          "type": "color"
+        }
+      }
+    },
+    "typography": {
+      "fontFamily": {
+        "primary": {
+          "value": "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
+          "description": "主字体族",
+          "type": "fontFamily"
+        },
+        "secondary": {
+          "value": "Georgia, Cambria, serif",
+          "description": "辅助字体族",
+          "type": "fontFamily"
+        },
+        "mono": {
+          "value": "JetBrains Mono, Fira Code, Consolas, monospace",
+          "description": "等宽字体族，用于代码",
+          "type": "fontFamily"
+        }
+      },
+      "fontSize": {
+        "xxxl": {
+          "value": "48px",
+          "description": "超大标题字号",
+          "type": "fontSize"
+        },
+        "xxl": {
+          "value": "36px",
+          "description": "大标题字号",
+          "type": "fontSize"
+        },
+        "xl": {
+          "value": "28px",
+          "description": "中标题字号",
+          "type": "fontSize"
+        },
+        "lg": {
+          "value": "22px",
+          "description": "小标题字号",
+          "type": "fontSize"
+        },
+        "md": {
+          "value": "16px",
+          "description": "正文字号",
+          "type": "fontSize"
+        },
+        "sm": {
+          "value": "14px",
+          "description": "辅助文字字号",
+          "type": "fontSize"
+        },
+        "xs": {
+          "value": "12px",
+          "description": "注释文字字号",
+          "type": "fontSize"
+        }
+      },
+      "fontWeight": {
+        "light": {
+          "value": "300",
+          "description": "细体字重",
+          "type": "fontWeight"
+        },
+        "regular": {
+          "value": "400",
+          "description": "常规字重",
+          "type": "fontWeight"
+        },
+        "medium": {
+          "value": "500",
+          "description": "中等字重",
+          "type": "fontWeight"
+        },
+        "semibold": {
+          "value": "600",
+          "description": "半粗字重",
+          "type": "fontWeight"
+        },
+        "bold": {
+          "value": "700",
+          "description": "粗体字重",
+          "type": "fontWeight"
+        }
+      },
+      "lineHeight": {
+        "tight": {
+          "value": "1.25",
+          "description": "紧凑行高，用于标题",
+          "type": "lineHeight"
+        },
+        "normal": {
+          "value": "1.5",
+          "description": "正常行高，用于正文",
+          "type": "lineHeight"
+        },
+        "relaxed": {
+          "value": "1.75",
+          "description": "宽松行高，用于长文本",
+          "type": "lineHeight"
+        }
+      },
+      "letterSpacing": {
+        "tight": {
+          "value": "-0.025em",
+          "description": "紧凑字间距",
+          "type": "letterSpacing"
+        },
+        "normal": {
+          "value": "0",
+          "description": "正常字间距",
+          "type": "letterSpacing"
+        },
+        "wide": {
+          "value": "0.025em",
+          "description": "宽松字间距",
+          "type": "letterSpacing"
+        }
+      }
+    },
+    "spacing": {
+      "xxs": {
+        "value": "2px",
+        "description": "极小间距",
+        "type": "spacing"
+      },
+      "xs": {
+        "value": "4px",
+        "description": "小间距",
+        "type": "spacing"
+      },
+      "sm": {
+        "value": "8px",
+        "description": "中小间距",
+        "type": "spacing"
+      },
+      "md": {
+        "value": "16px",
+        "description": "中间距",
+        "type": "spacing"
+      },
+      "lg": {
+        "value": "24px",
+        "description": "中大间距",
+        "type": "spacing"
+      },
+      "xl": {
+        "value": "32px",
+        "description": "大间距",
+        "type": "spacing"
+      },
+      "xxl": {
+        "value": "48px",
+        "description": "超大间距",
+        "type": "spacing"
+      }
+    },
+    "borderRadius": {
+      "none": {
+        "value": "0",
+        "description": "无圆角",
+        "type": "borderRadius"
+      },
+      "sm": {
+        "value": "4px",
+        "description": "小圆角",
+        "type": "borderRadius"
+      },
+      "md": {
+        "value": "8px",
+        "description": "中圆角",
+        "type": "borderRadius"
+      },
+      "lg": {
+        "value": "12px",
+        "description": "大圆角",
+        "type": "borderRadius"
+      },
+      "xl": {
+        "value": "16px",
+        "description": "超大圆角",
+        "type": "borderRadius"
+      },
+      "full": {
+        "value": "9999px",
+        "description": "圆形",
+        "type": "borderRadius"
+      }
+    },
+    "shadow": {
+      "none": {
+        "value": "none",
+        "description": "无阴影",
+        "type": "boxShadow"
+      },
+      "sm": {
+        "value": "0 1px 2px rgba(0, 0, 0, 0.05)",
+        "description": "浅阴影",
+        "type": "boxShadow"
+      },
+      "md": {
+        "value": "0 4px 6px rgba(0, 0, 0, 0.1)",
+        "description": "中阴影",
+        "type": "boxShadow"
+      },
+      "lg": {
+        "value": "0 10px 15px rgba(0, 0, 0, 0.15)",
+        "description": "深阴影",
+        "type": "boxShadow"
+      },
+      "xl": {
+        "value": "0 20px 25px rgba(0, 0, 0, 0.2)",
+        "description": "超深阴影",
+        "type": "boxShadow"
+      },
+      "inner": {
+        "value": "inset 0 2px 4px rgba(0, 0, 0, 0.1)",
+        "description": "内阴影",
+        "type": "boxShadow"
+      }
+    },
+    "animation": {
+      "duration": {
+        "fast": {
+          "value": "[值]ms",
+          "description": "快速动画时长",
+          "type": "duration"
+        },
+        "normal": {
+          "value": "[值]ms",
+          "description": "正常动画时长",
+          "type": "duration"
+        },
+        "slow": {
+          "value": "[值]ms",
+          "description": "慢速动画时长",
+          "type": "duration"
+        },
+        "slower": {
+          "value": "[值]ms",
+          "description": "更慢动画时长",
+          "type": "duration"
+        }
+      },
+      "easing": {
+        "linear": {
+          "value": "linear",
+          "description": "线性缓动",
+          "type": "easing"
+        },
+        "easeIn": {
+          "value": "cubic-bezier(0.4, 0, 1, 1)",
+          "description": "缓入",
+          "type": "easing"
+        },
+        "easeOut": {
+          "value": "cubic-bezier(0, 0, 0.2, 1)",
+          "description": "缓出",
+          "type": "easing"
+        },
+        "easeInOut": {
+          "value": "cubic-bezier(0.4, 0, 0.2, 1)",
+          "description": "缓入缓出",
+          "type": "easing"
+        }
+      }
+    },
+    "breakpoints": {
+      "xs": {
+        "value": "[值]px",
+        "description": "手机断点",
+        "type": "breakpoint"
+      },
+      "sm": {
+        "value": "[值]px",
+        "description": "手机横屏断点",
+        "type": "breakpoint"
+      },
+      "md": {
+        "value": "[值]px",
+        "description": "平板断点",
+        "type": "breakpoint"
+      },
+      "lg": {
+        "value": "[值]px",
+        "description": "桌面断点",
+        "type": "breakpoint"
+      },
+      "xl": {
+        "value": "[值]px",
+        "description": "大屏断点",
+        "type": "breakpoint"
+      },
+      "xxl": {
+        "value": "[值]px",
+        "description": "超大屏断点",
+        "type": "breakpoint"
+      }
+    },
+    "zIndex": {
+      "dropdown": {
+        "value": "1000",
+        "description": "下拉菜单层级",
+        "type": "zIndex"
+      },
+      "sticky": {
+        "value": "1020",
+        "description": "粘性元素层级",
+        "type": "zIndex"
+      },
+      "fixed": {
+        "value": "1030",
+        "description": "固定元素层级",
+        "type": "zIndex"
+      },
+      "modalBackdrop": {
+        "value": "1040",
+        "description": "模态框背景层级",
+        "type": "zIndex"
+      },
+      "modal": {
+        "value": "1050",
+        "description": "模态框层级",
+        "type": "zIndex"
+      },
+      "popover": {
+        "value": "1060",
+        "description": "弹出框层级",
+        "type": "zIndex"
+      },
+      "tooltip": {
+        "value": "1070",
+        "description": "工具提示层级",
+        "type": "zIndex"
+      }
+    }
+  },
+  "metadata": {
+    "author": "[作者姓名]",
+    "organization": "[组织名称]",
+    "repository": "[代码仓库链接]",
+    "figma": "[Figma设计稿链接]"
+  }
+}

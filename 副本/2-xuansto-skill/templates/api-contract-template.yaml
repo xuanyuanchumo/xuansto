@@ -1,0 +1,645 @@
+openapi: 3.0.3
+info:
+  title: API服务名称
+  description: |
+    API服务描述信息
+    
+    ## 概述
+    本文档描述了XXX服务的API接口规范。
+    
+    ## 认证方式
+    所有API接口使用Bearer Token认证方式，请在请求头中添加：
+    ```
+    Authorization: Bearer <your_token>
+    ```
+    
+    ## 错误处理
+    所有错误响应遵循统一的错误格式，详见错误响应模型。
+    
+    ## 版本控制
+    API版本通过URL路径前缀控制，当前版本为v1。
+  version: 1.0.0
+  contact:
+    name: API支持团队
+    email: api-support@example.com
+    url: https://api-docs.example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.example.com/v1
+    description: 生产环境
+  - url: https://api-staging.example.com/v1
+    description: 预发布环境
+  - url: https://api-dev.example.com/v1
+    description: 开发环境
+  - url: http://localhost:8080/v1
+    description: 本地开发环境
+
+tags:
+  - name: resources
+    description: 资源管理相关接口
+  - name: users
+    description: 用户管理相关接口
+  - name: health
+    description: 健康检查接口
+
+paths:
+  /resources:
+    get:
+      tags:
+        - resources
+      summary: 获取资源列表
+      description: |
+        获取资源列表，支持分页、排序和过滤。
+        
+        ## 权限要求
+        - 需要`resource:read`权限
+        
+        ## 使用示例
+        ```
+        GET /resources?page=1&limit=20&sort=created_at:desc&filter[name]=test
+        ```
+      operationId: listResources
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: 页码，从1开始
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: 每页数量，最大100
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: sort
+          in: query
+          description: |
+            排序字段，格式为`field:direction`
+            - direction: asc(升序) 或 desc(降序)
+            - 支持多字段排序，用逗号分隔
+          required: false
+          schema:
+            type: string
+            example: created_at:desc,name:asc
+        - name: filter[name]
+          in: query
+          description: 按名称过滤，支持模糊匹配
+          required: false
+          schema:
+            type: string
+        - name: filter[status]
+          in: query
+          description: 按状态过滤
+          required: false
+          schema:
+            type: string
+            enum:
+              - active
+              - inactive
+              - archived
+      responses:
+        '200':
+          description: 成功获取资源列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceListResponse'
+              example:
+                code: 200
+                message: success
+                data:
+                  items:
+                    - id: res_abc123
+                      name: 示例资源
+                      description: 这是一个示例资源
+                      status: active
+                      createdAt: '2024-01-01T00:00:00Z'
+                      updatedAt: '2024-01-01T00:00:00Z'
+                  pagination:
+                    page: 1
+                    limit: 20
+                    total: 100
+                    totalPages: 5
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags:
+        - resources
+      summary: 创建资源
+      description: |
+        创建新的资源。
+        
+        ## 权限要求
+        - 需要`resource:write`权限
+      operationId: createResource
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateResourceRequest'
+            example:
+              name: 新资源名称
+              description: 新资源描述
+              tags:
+                - tag1
+                - tag2
+      responses:
+        '201':
+          description: 资源创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceResponse'
+              example:
+                code: 201
+                message: created
+                data:
+                  id: res_xyz789
+                  name: 新资源名称
+                  description: 新资源描述
+                  status: active
+                  tags:
+                    - tag1
+                    - tag2
+                  createdAt: '2024-01-01T00:00:00Z'
+                  updatedAt: '2024-01-01T00:00:00Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: 资源名称已存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: 409
+                message: 资源名称已存在
+                error:
+                  code: RESOURCE_NAME_EXISTS
+                  details:
+                    field: name
+                    value: 新资源名称
+
+  /resources/{resourceId}:
+    parameters:
+      - name: resourceId
+        in: path
+        description: 资源ID
+        required: true
+        schema:
+          type: string
+          pattern: '^res_[a-zA-Z0-9]+$'
+          example: res_abc123
+
+    get:
+      tags:
+        - resources
+      summary: 获取单个资源
+      description: |
+        根据资源ID获取资源详情。
+        
+        ## 权限要求
+        - 需要`resource:read`权限
+      operationId: getResource
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 成功获取资源详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - resources
+      summary: 更新资源
+      description: |
+        完整更新资源信息。
+        
+        ## 权限要求
+        - 需要`resource:write`权限
+      operationId: updateResource
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateResourceRequest'
+      responses:
+        '200':
+          description: 资源更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - resources
+      summary: 删除资源
+      description: |
+        删除指定资源。
+        
+        ## 权限要求
+        - 需要`resource:delete`权限
+        
+        ## 注意事项
+        - 删除操作不可恢复
+        - 关联数据将级联删除
+      operationId: deleteResource
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: 资源删除成功
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /health:
+    get:
+      tags:
+        - health
+      summary: 健康检查
+      description: 检查服务健康状态
+      operationId: healthCheck
+      responses:
+        '200':
+          description: 服务健康
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: healthy
+                version: 1.0.0
+                timestamp: '2024-01-01T00:00:00Z'
+                checks:
+                  database: ok
+                  cache: ok
+                  external_api: ok
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT认证令牌
+        
+        获取方式：
+        1. 通过登录接口获取
+        2. 通过OAuth2授权获取
+        
+        令牌有效期：2小时
+        刷新令牌有效期：7天
+
+  schemas:
+    Resource:
+      type: object
+      required:
+        - id
+        - name
+        - status
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          description: 资源唯一标识
+          pattern: '^res_[a-zA-Z0-9]+$'
+          example: res_abc123
+        name:
+          type: string
+          description: 资源名称
+          minLength: 1
+          maxLength: 255
+          example: 示例资源
+        description:
+          type: string
+          description: 资源描述
+          maxLength: 1000
+          example: 这是一个示例资源
+        status:
+          type: string
+          description: 资源状态
+          enum:
+            - active
+            - inactive
+            - archived
+          example: active
+        tags:
+          type: array
+          description: 标签列表
+          items:
+            type: string
+          example:
+            - tag1
+            - tag2
+        metadata:
+          type: object
+          description: 扩展元数据
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+          description: 创建时间
+          example: '2024-01-01T00:00:00Z'
+        updatedAt:
+          type: string
+          format: date-time
+          description: 更新时间
+          example: '2024-01-01T00:00:00Z'
+
+    CreateResourceRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: 资源名称
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+          description: 资源描述
+          maxLength: 1000
+        tags:
+          type: array
+          description: 标签列表
+          items:
+            type: string
+            maxLength: 50
+          maxItems: 10
+        metadata:
+          type: object
+          description: 扩展元数据
+
+    UpdateResourceRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: 资源名称
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+          description: 资源描述
+          maxLength: 1000
+        status:
+          type: string
+          description: 资源状态
+          enum:
+            - active
+            - inactive
+            - archived
+        tags:
+          type: array
+          description: 标签列表
+          items:
+            type: string
+            maxLength: 50
+          maxItems: 10
+        metadata:
+          type: object
+          description: 扩展元数据
+
+    Pagination:
+      type: object
+      required:
+        - page
+        - limit
+        - total
+        - totalPages
+      properties:
+        page:
+          type: integer
+          description: 当前页码
+          minimum: 1
+        limit:
+          type: integer
+          description: 每页数量
+          minimum: 1
+        total:
+          type: integer
+          description: 总记录数
+          minimum: 0
+        totalPages:
+          type: integer
+          description: 总页数
+          minimum: 0
+
+    ResourceListResponse:
+      type: object
+      required:
+        - code
+        - message
+        - data
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          required:
+            - items
+            - pagination
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Resource'
+            pagination:
+              $ref: '#/components/schemas/Pagination'
+
+    ResourceResponse:
+      type: object
+      required:
+        - code
+        - message
+        - data
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: success
+        data:
+          $ref: '#/components/schemas/Resource'
+
+    ErrorResponse:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: integer
+          description: HTTP状态码
+        message:
+          type: string
+          description: 错误消息
+        error:
+          type: object
+          description: 错误详情
+          properties:
+            code:
+              type: string
+              description: 业务错误码
+            details:
+              type: object
+              description: 错误详细信息
+              additionalProperties: true
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - version
+        - timestamp
+      properties:
+        status:
+          type: string
+          enum:
+            - healthy
+            - unhealthy
+            - degraded
+        version:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        checks:
+          type: object
+          additionalProperties:
+            type: string
+            enum:
+              - ok
+              - error
+              - warning
+
+  responses:
+    BadRequest:
+      description: 请求参数错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 400
+            message: 请求参数错误
+            error:
+              code: INVALID_PARAMETER
+              details:
+                field: name
+                message: 名称不能为空
+
+    Unauthorized:
+      description: 未授权访问
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 401
+            message: 未授权访问
+            error:
+              code: UNAUTHORIZED
+              details:
+                message: 请先登录或提供有效的认证令牌
+
+    Forbidden:
+      description: 权限不足
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 403
+            message: 权限不足
+            error:
+              code: FORBIDDEN
+              details:
+                message: 您没有执行此操作的权限
+
+    NotFound:
+      description: 资源不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 404
+            message: 资源不存在
+            error:
+              code: RESOURCE_NOT_FOUND
+              details:
+                resourceId: res_abc123
+
+    InternalError:
+      description: 服务器内部错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 500
+            message: 服务器内部错误
+            error:
+              code: INTERNAL_ERROR
+              details:
+                requestId: req_xyz123
+                message: 请稍后重试或联系技术支持

@@ -1,0 +1,18 @@
+{
+  "error_id": "ERR-001",
+  "timestamp": "2026-04-28T14:30:00Z",
+  "agent": "backend_developer",
+  "phase": "implementation",
+  "task_id": "TASK-IMPL-003",
+  "error_type": "test_failure",
+  "error_message": "单元测试失败：UserService.createUser() 未验证邮箱格式",
+  "root_cause": "规格文档中邮箱验证要求未在实现中覆盖",
+  "resolution": "添加邮箱格式验证逻辑和对应测试用例",
+  "resolution_time_minutes": 8,
+  "related_knowledge_id": "KP-EXP-ERR-002",
+  "spec_drift": {
+    "detected": true,
+    "level": "low",
+    "description": "规格中隐含邮箱验证但未显式声明"
+  }
+}

@@ -58,6 +58,13 @@ knowledge_service:
   backup_dir: .knowledge/backup
   max_backup_count: 10
 
+knowledge_base:
+  version_cleanup:
+    enabled: true
+    keep_last_n: 10
+    keep_marked: true
+    auto_cleanup_interval_days: 30
+
 logging:
   level: INFO
   dir: .skill-logs

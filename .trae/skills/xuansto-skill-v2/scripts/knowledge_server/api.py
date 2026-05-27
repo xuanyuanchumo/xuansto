@@ -141,7 +141,7 @@ def _register_health_routes(application, server):
             "sqlite": "connected",
             "chroma": "connected" if server.chroma.available else "unavailable",
         }
-        return make_response("ok", {
+        return make_response("success", {
             "status": "healthy",
             "version": KB_VERSION,
             "engines": engines,
@@ -182,7 +182,7 @@ def _register_health_routes(application, server):
 
         consistent = (missing_in_chroma == 0 and orphan_in_chroma == 0)
 
-        return make_response("ok", {
+        return make_response("success", {
             "consistent": consistent,
             "sqlite": {
                 "total_entries": sqlite_counts.get("total", 0),
@@ -205,7 +205,7 @@ def _register_health_routes(application, server):
                 backup_type=req.type,
                 destination=req.destination,
             )
-            return make_response("ok", result)
+            return make_response("success", result)
         except Exception as e:
             raise HTTPException(
                 status_code=500,

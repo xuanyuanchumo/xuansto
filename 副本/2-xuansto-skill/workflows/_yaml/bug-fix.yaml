@@ -1,0 +1,153 @@
+metadata:
+  name: TDD驱动Bug修复工作流
+  version: "1.9.1"
+  description: TDD驱动缺陷修复与回归验证工作流
+  platform: all
+  min_agents: 2
+  max_agents: 5
+phases:
+  - id: phase-4
+    name: TDD修复与代码审查
+    order: 0
+    optional: false
+    trigger_condition: 用户报告Bug或测试发现缺陷
+    agents:
+      primary: [fullstack-engineer, unit-tester, code-reviewer]
+      supporting: [product-manager, security-auditor]
+    inputs:
+      - name: 缺陷描述
+        type: document
+        required: true
+      - name: 复现步骤
+        type: document
+        required: true
+      - name: 环境信息
+        type: document
+        required: true
+    outputs:
+      - name: 缺陷报告
+        type: document
+        validation: 缺陷可复现
+      - name: 根因分析报告
+        type: document
+        validation: 根因已确定
+      - name: 修复代码
+        type: code
+        validation: 修复完成
+      - name: 测试代码
+        type: code
+        validation: 单元测试通过
+      - name: 代码审查报告
+        type: document
+        validation: 代码审查通过
+    quality_gates:
+      - gate_id: bug_reproducible
+        blocking: true
+        pass_criteria: 缺陷可复现
+      - gate_id: root_cause_found
+        blocking: true
+        pass_criteria: 根因已确定且影响范围已评估
+      - gate_id: fix_complete
+        blocking: true
+        pass_criteria: 代码修改完成
+      - gate_id: unit_test_pass
+        blocking: true
+        pass_criteria: 单元测试通过
+      - gate_id: code_review_pass
+        blocking: true
+        pass_criteria: 代码审查通过
+      - gate_id: no_security_issue
+        blocking: true
+        pass_criteria: 无安全问题
+    timeout_minutes: 120
+    retry:
+      max_attempts: 3
+      backoff: exponential
+  - id: phase-5
+    name: 验证与部署
+    order: 1
+    optional: false
+    trigger_condition: 修复代码审查通过
+    agents:
+      primary: [unit-tester, test-maintainer]
+      supporting: [fullstack-engineer, product-manager]
+    inputs:
+      - name: 审查通过的代码
+        type: code
+        required: true
+        source_phase: phase-4
+      - name: 测试环境
+        type: document
+        required: true
+    outputs:
+      - name: 测试验证报告
+        type: document
+        validation: 缺陷已修复
+      - name: 回归测试报告
+        type: document
+        validation: 回归测试通过
+      - name: 部署记录
+        type: document
+        validation: 部署成功
+      - name: 生产验证报告
+        type: document
+        validation: 生产验证通过
+      - name: 缺陷关闭记录
+        type: document
+        validation: 缺陷已关闭
+    quality_gates:
+      - gate_id: bug_fixed
+        blocking: true
+        pass_criteria: 缺陷已修复
+      - gate_id: regression_pass
+        blocking: true
+        pass_criteria: 回归测试通过
+      - gate_id: no_new_defects
+        blocking: true
+        pass_criteria: 无新缺陷引入
+      - gate_id: deploy_success
+        blocking: true
+        pass_criteria: 部署成功
+      - gate_id: production_verified
+        blocking: true
+        pass_criteria: 生产验证通过
+    timeout_minutes: 60
+    retry:
+      max_attempts: 2
+      backoff: fixed
+agent_matrix:
+  fullstack-engineer:
+    phases: [phase-4]
+    role: primary
+    max_parallel_instances: 2
+  unit-tester:
+    phases: [phase-4, phase-5]
+    role: primary
+    max_parallel_instances: 1
+  code-reviewer:
+    phases: [phase-4]
+    role: primary
+    max_parallel_instances: 1
+  test-maintainer:
+    phases: [phase-5]
+    role: primary
+    max_parallel_instances: 1
+  security-auditor:
+    phases: [phase-5]
+    role: supporting
+    max_parallel_instances: 1
+  product-manager:
+    phases: [phase-4]
+    role: supporting
+    max_parallel_instances: 1
+exception_handling:
+  phase_failure:
+    action: retry_then_escalate
+    escalation_target: orchestrator
+    max_retries: 3
+  agent_unavailable:
+    action: substitute_and_continue
+    substitute_agent: fullstack-engineer
+  quality_gate_blocked:
+    action: auto_fix_then_pause
+    auto_fix_agents: [fullstack-engineer, unit-tester]

@@ -25,7 +25,7 @@ from .dedup import DedupEngine
 from .auth import ApiKeyAuth
 from .security import InputValidator, SensitiveContentFilter, RateLimiter
 from .websocket_manager import WebSocketManager
-from .degradation import DegradationManager
+from .degradation import DegradationManager, MCPToolFallback
 from .backup import BackupManager
 from .importer import FirstRunImporter
 from .exporter import KnowledgeExporter
@@ -43,5 +43,7 @@ from .web_search import (
 from .server import KnowledgeServer
 from .tech_stack_detector import detect_tech_stack
 from .context_formatter import format_knowledge_context, estimate_tokens
+from .progressive_loader import ProgressiveLoader, LoadPhase, LoadingState
 from .kb_client import KnowledgeBaseClient
+from .skill_tools import get_skill_tool_definitions, SkillToolHandler, SKILL_TOOL_NAMES
 from .main import main

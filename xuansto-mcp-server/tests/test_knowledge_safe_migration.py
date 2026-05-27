@@ -93,11 +93,14 @@ def _run_ensure_knowledge_index(dirs: dict[str, Path]) -> None:
 
 
 def _run_inject_knowledge(dirs: dict[str, Path], content: str = "test content", knowledge_type: str = "general") -> dict:
-    from xuansto_mcp.tools.knowledge_search import _inject_knowledge
-    with patch("xuansto_mcp.tools.knowledge_search.KNOWLEDGE_DB_PATH", dirs["db_path"]), \
-         patch("xuansto_mcp.tools.knowledge_search.KNOWLEDGE_GENERAL_DIR", dirs["general_dir"]), \
-         patch("xuansto_mcp.tools.knowledge_search.KNOWLEDGE_WORKSPACE_DIR", dirs["workspace_dir"]), \
-         patch("xuansto_mcp.tools.knowledge_search.KNOWLEDGE_EXPERIENCE_DIR", dirs["experience_dir"]):
+    try:
+        from xuansto_mcp.tools.knowledge_inject import _inject_knowledge
+    except ImportError:
+        pytest.skip("_inject_knowledge not available")
+    with patch("xuansto_mcp.tools.knowledge_inject.KNOWLEDGE_DB_PATH", dirs["db_path"]), \
+         patch("xuansto_mcp.tools.knowledge_inject.KNOWLEDGE_GENERAL_DIR", dirs["general_dir"]), \
+         patch("xuansto_mcp.tools.knowledge_inject.KNOWLEDGE_WORKSPACE_DIR", dirs["workspace_dir"]), \
+         patch("xuansto_mcp.tools.knowledge_inject.KNOWLEDGE_EXPERIENCE_DIR", dirs["experience_dir"]):
         return _inject_knowledge(content, knowledge_type, None)
 
 

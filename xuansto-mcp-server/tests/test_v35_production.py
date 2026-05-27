@@ -12,7 +12,7 @@ import pytest
 
 from xuansto_mcp.core.config import MCP_API_VERSION
 from xuansto_mcp.core.errors import make_success_response, make_error_response
-from xuansto_mcp.tools.agent_status import (
+from xuansto_mcp.tools.agent_manage import (
     _AGENT_INSTANCES,
     _agents_lock,
     _MAX_AGENT_INSTANCES,
@@ -174,7 +174,7 @@ class TestAgentResourceMetrics:
         assert popped.total_duration_ms == 1200
 
     def test_persist_and_load_metrics(self, tmp_path):
-        import xuansto_mcp.tools.agent_status as agent_mod
+        import xuansto_mcp.tools.agent_manage as agent_mod
         original_work_dir = agent_mod.WORK_DIR
         try:
             agent_mod.WORK_DIR = tmp_path

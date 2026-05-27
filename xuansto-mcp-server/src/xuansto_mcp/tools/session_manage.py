@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from ..core.config import SESSION_DIR, PATTERNS_DIR
-from ..core.errors import make_error_response, make_success_response, ERR_VALIDATION
+from ..core.config import PATTERNS_DIR, SESSION_DIR
+from ..core.errors import ERR_VALIDATION, make_error_response, make_success_response
 from ..core.logging_config import get_logger
 from ..core.validator import validate_input, validate_path_safety
 from ..models.schemas import SessionManageInput
@@ -37,36 +37,87 @@ def _save_session(
     pending_tasks: list[str] | None = None,
     decisions: list[str] | None = None,
     experience: list[str] | None = None,
+    export_to_file: bool = False,
 ) -> dict[str, Any]:
-    SESSION_DIR.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    filename = f"session-{timestamp}.md"
-    filepath = SESSION_DIR / filename
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    session_id = f"session-{timestamp}"
 
-    completed = "\n".join(f"- {t}" for t in (completed_tasks or [])) or "- (无)"
-    pending = "\n".join(f"- {t}" for t in (pending_tasks or [])) or "- (无)"
-    dec = "\n".join(f"- {d}" for d in (decisions or [])) or "- (无)"
-    exp = "\n".join(f"- {e}" for e in (experience or [])) or "- (无)"
+    session_data: dict[str, Any] = {
+        "completed_tasks": completed_tasks or [],
+        "pending_tasks": pending_tasks or [],
+        "decisions": decisions or [],
+        "experience": experience or [],
+        "timestamp": timestamp,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
 
-    content = SESSION_TEMPLATE.format(
-        timestamp=timestamp,
-        completed=completed,
-        pending=pending,
-        decisions=dec,
-        experience=exp,
-    )
-    filepath.write_text(content, encoding="utf-8")
+    try:
+        from ..core.database import persist_state
+        persist_state("session_states", {
+            "id": session_id,
+            "session_data_json": session_data,
+        })
+        logger.info("Session saved to SQLite: %s", session_id)
+    except Exception as exc:
+        logger.warning("Failed to save session to SQLite: %s", exc)
 
-    _cleanup_old_sessions()
-    return {"path": str(filepath), "filename": filename}
+    filepath = None
+    filename = None
+    if export_to_file:
+        SESSION_DIR.mkdir(parents=True, exist_ok=True)
+        filename = f"{session_id}.md"
+        filepath = SESSION_DIR / filename
+
+        completed = "\n".join(f"- {t}" for t in (completed_tasks or [])) or "- (无)"
+        pending = "\n".join(f"- {t}" for t in (pending_tasks or [])) or "- (无)"
+        dec = "\n".join(f"- {d}" for d in (decisions or [])) or "- (无)"
+        exp = "\n".join(f"- {e}" for e in (experience or [])) or "- (无)"
+
+        content = SESSION_TEMPLATE.format(
+            timestamp=timestamp,
+            completed=completed,
+            pending=pending,
+            decisions=dec,
+            experience=exp,
+        )
+        filepath.write_text(content, encoding="utf-8")
+        _cleanup_old_sessions()
+
+    result: dict[str, Any] = {"session_id": session_id, "persisted_to": "sqlite"}
+    if export_to_file and filepath and filename:
+        result["path"] = str(filepath)
+        result["filename"] = filename
+        result["persisted_to"] = "sqlite+file"
+    return result
 
 
 def _load_last_session() -> dict[str, Any]:
+    try:
+        from ..core.database import load_state
+        results = load_state("session_states")
+        session_rows = [
+            r for r in results
+            if r.get("id", "").startswith("session-") and r.get("id") != "current_session"
+        ]
+        if session_rows:
+            session_rows.sort(key=lambda r: r.get("updated_at", ""), reverse=True)
+            row = session_rows[0]
+            data = row.get("session_data_json", {})
+            if isinstance(data, str):
+                data = json.loads(data)
+            return {
+                "content": data,
+                "session_id": row.get("id", ""),
+                "source": "sqlite",
+            }
+    except Exception as exc:
+        logger.warning("Failed to load session from SQLite: %s", exc)
+
     sessions = sorted(SESSION_DIR.glob("session-*.md"), reverse=True)
     if not sessions:
         return {"content": None, "message": "未找到会话记录"}
     content = sessions[0].read_text(encoding="utf-8")
-    return {"content": content, "filename": sessions[0].name}
+    return {"content": content, "filename": sessions[0].name, "source": "file"}
 
 
 def _list_sessions() -> dict[str, Any]:
@@ -88,13 +139,13 @@ def _detect_patterns(error_log: list[str] | None = None) -> dict[str, Any]:
     patterns = []
     for error, count in error_counts.items():
         if count >= 2:
-            pattern_file = PATTERNS_DIR / f"pattern-{datetime.now().strftime('%Y%m%d-%H%M%S')}.json"
+            pattern_file = PATTERNS_DIR / f"pattern-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.json"
             pattern_data = {
                 "error": error,
                 "count": count,
                 "confidence": 0.40,
                 "status": "draft",
-                "created_at": datetime.now().isoformat(),
+                "created_at": datetime.now(timezone.utc).isoformat(),
                 "verified": False,
             }
             pattern_file.write_text(
@@ -128,16 +179,30 @@ def _track_session(
     decisions: list[str] | None = None,
     pending_tasks: list[str] | None = None,
 ) -> dict[str, Any]:
-    SESSION_DIR.mkdir(parents=True, exist_ok=True)
-    current_path = SESSION_DIR / "current.json"
-    existing: dict[str, Any] = {}
-    if current_path.exists():
-        try:
-            existing = json.loads(current_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            existing = {}
+    now = datetime.now(timezone.utc).isoformat()
 
-    now = datetime.now().isoformat()
+    existing: dict[str, Any] = {}
+    try:
+        from ..core.database import load_state
+        sqlite_results = load_state("session_states", {"id": "current_session"})
+        if sqlite_results:
+            row = sqlite_results[0]
+            data = row.get("session_data_json", {})
+            if isinstance(data, str):
+                data = json.loads(data)
+            if data:
+                existing = data
+    except Exception:
+        pass
+
+    if not existing:
+        current_path = SESSION_DIR / "current.json"
+        if current_path.exists():
+            try:
+                existing = json.loads(current_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                existing = {}
+
     existing_decisions: list[str] = existing.get("decisions", [])
     if decisions:
         existing_decisions.extend(decisions)
@@ -159,10 +224,15 @@ def _track_session(
         "updated_at": now,
     }
 
-    current_path.write_text(
-        json.dumps(state, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    try:
+        from ..core.database import persist_state
+        persist_state("session_states", {
+            "id": "current_session",
+            "session_data_json": state,
+        })
+    except Exception as exc:
+        logger.warning("Failed to persist session state to SQLite: %s", exc)
+
     return state
 
 
@@ -170,13 +240,31 @@ def _restore_session() -> dict[str, Any]:
     if _RESTORED_STATE is not None:
         state = _RESTORED_STATE.copy()
     else:
-        current_path = SESSION_DIR / "current.json"
-        if not current_path.exists():
-            return {"status": "no_tracked_session", "message": "无追踪状态"}
+        state = None
         try:
-            state = json.loads(current_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
+            from ..core.database import load_state
+            sqlite_results = load_state("session_states", {"id": "current_session"})
+            if sqlite_results:
+                row = sqlite_results[0]
+                data = row.get("session_data_json", {})
+                if isinstance(data, str):
+                    data = json.loads(data)
+                if data:
+                    state = data
+        except Exception:
+            pass
+
+        if state is None:
+            current_path = SESSION_DIR / "current.json"
+            if current_path.exists():
+                try:
+                    state = json.loads(current_path.read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, OSError):
+                    return {"status": "no_tracked_session", "message": "无追踪状态"}
+
+        if state is None:
             return {"status": "no_tracked_session", "message": "无追踪状态"}
+
     sessions = sorted(SESSION_DIR.glob("session-*.md"), reverse=True)
     if sessions:
         state["last_session"] = sessions[0].read_text(encoding="utf-8")
@@ -190,6 +278,22 @@ _RESTORED_STATE: dict[str, Any] | None = None
 
 def restore_on_startup() -> dict[str, Any] | None:
     global _RESTORED_STATE
+
+    try:
+        from ..core.database import load_state
+        sqlite_results = load_state("session_states", {"id": "current_session"})
+        if sqlite_results:
+            row = sqlite_results[0]
+            data = row.get("session_data_json", {})
+            if isinstance(data, str):
+                data = json.loads(data)
+            if data:
+                _RESTORED_STATE = data
+                logger.info("Session restored from SQLite session_states")
+                return data
+    except Exception as exc:
+        logger.warning("Failed to restore session from SQLite: %s", exc)
+
     current_path = SESSION_DIR / "current.json"
     if not current_path.exists():
         _RESTORED_STATE = None
@@ -198,6 +302,14 @@ def restore_on_startup() -> dict[str, Any] | None:
         state: dict[str, Any] = json.loads(current_path.read_text(encoding="utf-8"))
         _RESTORED_STATE = state
         logger.info("Session restored from %s", current_path)
+        try:
+            from ..core.database import persist_state
+            persist_state("session_states", {
+                "id": "current_session",
+                "session_data_json": state,
+            })
+        except Exception:
+            pass
         return state
     except (json.JSONDecodeError, OSError):
         _RESTORED_STATE = None
@@ -230,15 +342,16 @@ def register(mcp: FastMCP) -> None:
         success: bool = True,
         current_phase: int | None = None,
         current_task: str | None = None,
+        export_to_file: bool = False,
     ) -> dict[str, Any]:
-        """会话状态管理：保存/加载/列出会话记录，检测重复错误模式，验证经验模式，追踪/恢复会话状态。save操作持久化当前进度，detect操作从错误日志中提取模式，verify操作提升模式置信度，track操作追踪当前阶段状态，restore操作恢复上次追踪状态。"""
+        """会话状态管理：保存/加载/列出会话记录，检测重复错误模式，验证经验模式，追踪/恢复会话状态。save操作持久化当前进度(默认存SQLite，export_to_file=True同时导出文件)，detect操作从错误日志中提取模式，verify操作提升模式置信度，track操作追踪当前阶段状态，restore操作恢复上次追踪状态。Prefer using Resource xuansto://sessions/list for read-only access."""
         validated, err = validate_input(SessionManageInput, action=action, completed_tasks=completed_tasks, pending_tasks=pending_tasks, decisions=decisions, experience=experience, error_log=error_log, pattern_path=pattern_path, success=success, current_phase=current_phase, current_task=current_task)
         if err:
             return err
         logger.info("session_manage called: action=%s", action)
         try:
             if action == "save":
-                return make_success_response(_save_session(completed_tasks, pending_tasks, decisions, experience))
+                return make_success_response(_save_session(completed_tasks, pending_tasks, decisions, experience, export_to_file=export_to_file))
             elif action == "load":
                 return make_success_response(_load_last_session())
             elif action == "list":

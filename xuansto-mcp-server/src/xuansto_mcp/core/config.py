@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sys
 import threading
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -84,18 +85,37 @@ DEFAULT_GATE_SCRIPTS_MAP = {
     "FILE-ENCODING": "check-encoding.py",
     "COMMENT-LANGUAGE": "check-comment-lang.py",
     "SCRIPT-SECURITY": "script-security-scanner.py",
+    "SCRIPT-CLEANUP": "script-cleanup-checker.py",
+    "DESIGN-TOKENS": "design-tokens-sync.js",
+    "GATE-004": "api-contract-validator.py",
+    "SPEC-CONSISTENCY": "spec-drift-detector.py",
+    "AGENTIC-SECURITY": "agentic-security-scanner.py",
+    "AI-PENTEST": "ai-pentest-runner.py",
+    "VISUAL-REGRESSION": "visual-regression.js",
+    "ACCESSIBILITY": "accessibility-test.js",
+    "PERFORMANCE": "performance-benchmark.js",
+    "DOC-COMPLETENESS": "documentation-coverage.py",
+    "IPC-CONTRACT": "ipc-contract-validator.js",
+    "ITERATION-BUDGET": "loop-guard.py",
+    "SESSION-RECOVERY": "session-catchup.py",
+    "DESKTOP-BUILD": "build-desktop.ps1",
+    "DESKTOP-SIGN": "sign-desktop.ps1",
+    "DESKTOP-UPDATE": "verify-auto-update.ps1",
+    "TOKEN-BUDGET": "token-budget-guard.py",
+    "SECURITY-FIX-CLOSED": "security-fix-closure.py",
 }
 
 DEFAULT_QUALITY_GATES_PHASE_MAP = {
-    "0": ["DESIGN-SYSTEM-COMPLETE", "ANTI-PATTERN-CHECK", "DESIGN-REVIEW-PRODUCT", "DESIGN-REVIEW-TECH", "DESIGN-REVIEW-DESIGN"],
-    "1": ["BRAINSTORM-COMPLETE", "GATE-001", "GATE-002"],
-    "2": ["PLAN-ATOMIC", "GATE-003", "GATE-004"],
+    "0": ["DESIGN-REVIEW-PRODUCT", "DESIGN-REVIEW-TECH", "DESIGN-REVIEW-DESIGN", "DESIGN-TOKENS", "DESIGN-SYSTEM-COMPLETE", "ANTI-PATTERN-CHECK"],
+    "1": ["GATE-001", "GATE-002", "BRAINSTORM-COMPLETE"],
+    "2": ["GATE-003", "GATE-004", "PLAN-ATOMIC", "SPEC-ATOMIC"],
     "3": ["TEST-FIRST"],
-    "4": ["SUBAGENT-REVIEW", "REVIEW-CONFIDENCE", "GATE-007", "TEST-PASS", "GATE-009", "FILE-ENCODING"],
-    "5": ["PLAYWRIGHT-E2E-PASS", "GATE-011", "GATE-012", "AI-PENTEST", "SPEC-CONSISTENCY"],
-    "6": ["GATE-013", "GATE-014", "INFRA-HEALTH", "UX-ACCEPTANCE"],
-    "7": ["SIMPLIFICATION-BEHAVIOR", "CHESTERTON-FENCE", "GATE-015"],
+    "4": ["GATE-007", "TEST-PASS", "GATE-009", "MULTI-PERSPECTIVE-COVERAGE", "TDD-RED", "TDD-GREEN", "TDD-REFACTOR", "EXECUTION-VERIFY", "SCRIPT-SECURITY", "SCRIPT-CLEANUP", "FILE-ENCODING", "COMMENT-LANGUAGE"],
+    "5": ["GATE-011", "GATE-012", "SPEC-CONSISTENCY", "AGENTIC-SECURITY", "AI-PENTEST", "VISUAL-REGRESSION", "RENDER-CHECK", "ACCESSIBILITY", "PERFORMANCE", "SECURITY-FIX-CLOSED", "PLAYWRIGHT-E2E-PASS"],
+    "6": ["GATE-013", "GATE-014", "UX-ACCEPTANCE", "DOD-CHECK", "INFRA-HEALTH"],
+    "7": ["GATE-015", "DOC-COMPLETENESS", "SIMPLIFICATION-BEHAVIOR", "CHESTERTON-FENCE", "SCRIPT-CLEANUP"],
     "8": ["DESKTOP-BUILD", "DESKTOP-SIGN", "DESKTOP-UPDATE", "DESKTOP-CROSS", "IPC-CONTRACT"],
+    "cross": ["TOKEN-BUDGET", "ITERATION-BUDGET", "SESSION-RECOVERY", "BUILD-SUCCESS", "ROLLBACK-SAFETY", "INIT-COMPLETE", "STATUS-HEALTHY"],
 }
 
 DEFAULT_HOOK_SCRIPTS_MAP = {
@@ -119,6 +139,9 @@ DEFAULT_HOOK_SCRIPTS_MAP = {
 
 _CONFIG = _load_yaml_config(_resolve_skill_file(".xuansto-config.yaml"))
 
+_CONSTRAINTS_CONFIG = _load_yaml_config(_resolve_skill_file("constraints.yaml"))
+_SKILL_CONFIG = _load_yaml_config(_resolve_skill_file(".skill-config.yaml"))
+
 GATE_SCRIPTS_MAP = _CONFIG.get("gate_scripts", DEFAULT_GATE_SCRIPTS_MAP)
 QUALITY_GATES_PHASE_MAP = _CONFIG.get("gates_by_phase", DEFAULT_QUALITY_GATES_PHASE_MAP)
 HOOK_SCRIPTS_MAP = _CONFIG.get("hook_scripts", DEFAULT_HOOK_SCRIPTS_MAP)
@@ -138,12 +161,69 @@ def _validate_config_legacy(config: dict) -> list[str]:
         errors.append("hook_scripts must be a dict")
     return errors
 
+def _load_constraints() -> dict[str, Any]:
+    global _CONSTRAINTS_CONFIG
+    path = _resolve_skill_file("constraints.yaml")
+    if not path.exists():
+        logger.debug("constraints.yaml not found at %s, keeping current config", path)
+        return {"loaded": False, "reason": "file_not_found", "path": str(path)}
+    try:
+        import yaml
+        new_config = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        if not isinstance(new_config, dict):
+            new_config = {}
+        old_keys = set(_CONSTRAINTS_CONFIG.keys())
+        new_keys = set(new_config.keys())
+        changed_fields = sorted((old_keys ^ new_keys) | {k for k in old_keys & new_keys if _CONSTRAINTS_CONFIG.get(k) != new_config.get(k)})
+        _CONSTRAINTS_CONFIG = new_config
+        logger.info("Reloaded constraints.yaml from %s", path)
+        return {"loaded": True, "path": str(path), "changed_fields": changed_fields}
+    except Exception as exc:
+        logger.warning("Failed to load constraints.yaml: %s", exc)
+        return {"loaded": False, "reason": str(exc), "path": str(path)}
+
+
+def _load_skill_config() -> dict[str, Any]:
+    global _SKILL_CONFIG
+    path = _resolve_skill_file(".skill-config.yaml")
+    if not path.exists():
+        logger.debug(".skill-config.yaml not found at %s, keeping current config", path)
+        return {"loaded": False, "reason": "file_not_found", "path": str(path)}
+    try:
+        import yaml
+        new_config = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        if not isinstance(new_config, dict):
+            new_config = {}
+        old_keys = set(_SKILL_CONFIG.keys())
+        new_keys = set(new_config.keys())
+        changed_fields = sorted((old_keys ^ new_keys) | {k for k in old_keys & new_keys if _SKILL_CONFIG.get(k) != new_config.get(k)})
+        _SKILL_CONFIG = new_config
+        logger.info("Reloaded .skill-config.yaml from %s", path)
+        return {"loaded": True, "path": str(path), "changed_fields": changed_fields}
+    except Exception as exc:
+        logger.warning("Failed to load .skill-config.yaml: %s", exc)
+        return {"loaded": False, "reason": str(exc), "path": str(path)}
+
+
+def _notify_config_change(file_name: str, changed_fields: list[str]) -> None:
+    from datetime import datetime, timezone
+
+    from .notifications import notify
+    timestamp = datetime.now(timezone.utc).isoformat()
+    notify(
+        f"Config file changed: {file_name} | fields: {', '.join(changed_fields) if changed_fields else 'none'} | at: {timestamp}",
+        "info",
+    )
+    logger.info("Config change notification: file=%s, fields=%s, timestamp=%s", file_name, changed_fields, timestamp)
+
+
 def reload_config() -> dict[str, Any]:
     global GATE_SCRIPTS_MAP, QUALITY_GATES_PHASE_MAP, HOOK_SCRIPTS_MAP, DEGRADATION_HEALTH_CHECK_INTERVAL
     import yaml
 
     config_path = _resolve_skill_file(".xuansto-config.yaml")
     validation_warnings: list[str] = []
+    reload_details: dict[str, Any] = {}
 
     if not config_path.exists():
         with _config_lock:
@@ -151,11 +231,16 @@ def reload_config() -> dict[str, Any]:
             QUALITY_GATES_PHASE_MAP = DEFAULT_QUALITY_GATES_PHASE_MAP
             HOOK_SCRIPTS_MAP = DEFAULT_HOOK_SCRIPTS_MAP
             DEGRADATION_HEALTH_CHECK_INTERVAL = 30.0
+        constraints_result = _load_constraints()
+        skill_config_result = _load_skill_config()
+        reload_details["constraints"] = constraints_result
+        reload_details["skill_config"] = skill_config_result
         return {
             "gate_scripts_count": len(GATE_SCRIPTS_MAP),
             "gates_by_phase_count": len(QUALITY_GATES_PHASE_MAP),
             "hook_scripts_count": len(HOOK_SCRIPTS_MAP),
             "validation_warnings": validation_warnings,
+            "reload_details": reload_details,
         }
 
     try:
@@ -164,10 +249,10 @@ def reload_config() -> dict[str, Any]:
     except yaml.YAMLError as exc:
         logger.error("YAML parse error during config reload: %s", exc)
         return {
-            "error": True,
-            "code": "YAML_PARSE_ERROR",
-            "message": str(exc),
-            "validation_warnings": validation_warnings,
+            "status": "error",
+            "data": None,
+            "error": {"code": "YAML_PARSE_ERROR", "message": str(exc), "validation_warnings": validation_warnings},
+            "metadata": {},
         }
 
     if not isinstance(_new_config, dict):
@@ -179,12 +264,18 @@ def reload_config() -> dict[str, Any]:
         "hook_scripts": dict,
         "degradation": dict,
     }
+    changed_fields: list[str] = []
     for field, expected_type in field_validators.items():
         if field in _new_config and not isinstance(_new_config[field], expected_type):
             warning = f"{field} must be a {expected_type.__name__}, got {type(_new_config[field]).__name__}; using default"
             validation_warnings.append(warning)
             logger.warning("Config validation warning: %s", warning)
             del _new_config[field]
+        else:
+            old_val = _CONFIG.get(field)
+            new_val = _new_config.get(field)
+            if old_val != new_val:
+                changed_fields.append(field)
 
     try:
         from ..models.config_models import SkillConfigModel
@@ -201,18 +292,40 @@ def reload_config() -> dict[str, Any]:
         if not isinstance(_new_degradation, dict):
             _new_degradation = {}
         DEGRADATION_HEALTH_CHECK_INTERVAL = _new_degradation.get("health_check_interval", 30.0)
+
+    if changed_fields:
+        _notify_config_change(".xuansto-config.yaml", changed_fields)
+
+    constraints_result = _load_constraints()
+    skill_config_result = _load_skill_config()
+    reload_details["constraints"] = constraints_result
+    reload_details["skill_config"] = skill_config_result
+
+    if constraints_result.get("loaded") and constraints_result.get("changed_fields"):
+        _notify_config_change("constraints.yaml", constraints_result["changed_fields"])
+    if skill_config_result.get("loaded") and skill_config_result.get("changed_fields"):
+        _notify_config_change(".skill-config.yaml", skill_config_result["changed_fields"])
+
     return {
         "gate_scripts_count": len(GATE_SCRIPTS_MAP),
         "gates_by_phase_count": len(QUALITY_GATES_PHASE_MAP),
         "hook_scripts_count": len(HOOK_SCRIPTS_MAP),
         "validation_warnings": validation_warnings,
+        "reload_details": reload_details,
     }
 
 def _get_config_mtime() -> float:
     config_path = _resolve_skill_file(".xuansto-config.yaml")
+    constraints_path = _resolve_skill_file("constraints.yaml")
+    skill_config_path = _resolve_skill_file(".skill-config.yaml")
+    mtimes = []
     if config_path.exists():
-        return config_path.stat().st_mtime
-    return 0.0
+        mtimes.append(config_path.stat().st_mtime)
+    if constraints_path.exists():
+        mtimes.append(constraints_path.stat().st_mtime)
+    if skill_config_path.exists():
+        mtimes.append(skill_config_path.stat().st_mtime)
+    return max(mtimes) if mtimes else 0.0
 
 _config_watcher_thread: threading.Thread | None = None
 _config_watcher_stop = threading.Event()
@@ -242,10 +355,12 @@ def _config_watcher_watchfiles() -> None:
     if not watch_dir.exists():
         _config_watcher_poll()
         return
+    watched_files = {".xuansto-config.yaml", "constraints.yaml", ".skill-config.yaml"}
     try:
-        for _changes in _watchfiles_module.watch(watch_dir, stop_event=_config_watcher_stop):
-            config_path_check = _resolve_skill_file(".xuansto-config.yaml")
-            if config_path_check.exists():
+        for changes in _watchfiles_module.watch(watch_dir, stop_event=_config_watcher_stop):
+            changed_watched = {Path(c[1]).name for c in changes} & watched_files
+            if changed_watched:
+                logger.info("Config watcher detected changes in: %s", ", ".join(sorted(changed_watched)))
                 reload_config()
     except Exception as exc:
         logger.warning("watchfiles watcher failed, falling back to polling: %s", exc)
@@ -286,8 +401,37 @@ KNOWLEDGE_DIR = DATA_DIR / "knowledge"
 KNOWLEDGE_GENERAL_DIR = KNOWLEDGE_DIR / "general"
 KNOWLEDGE_WORKSPACE_DIR = KNOWLEDGE_DIR / "workspace"
 KNOWLEDGE_EXPERIENCE_DIR = KNOWLEDGE_DIR / "experience"
-KNOWLEDGE_DB_PATH = KNOWLEDGE_DIR / "index" / "knowledge.db"
+KNOWLEDGE_REFERENCES_DIR = KNOWLEDGE_DIR / "references"
+KNOWLEDGE_DB_PATH = WORK_DIR / "xuansto.db"
 KNOWLEDGE_CHROMA_PATH = KNOWLEDGE_DIR / "index" / "chroma_db"
+
+DECISIONS_DB_PATH = WORK_DIR / "xuansto.db"
+LEGACY_DECISIONS_DB_PATH = WORK_DIR / "decisions.db"
+LEGACY_KNOWLEDGE_DB_PATH = KNOWLEDGE_DIR / "index" / "knowledge.db"
+
+
+def get_db_path() -> Path:
+    return WORK_DIR / "xuansto.db"
+
+
+def get_decisions_db_path() -> Path:
+    warnings.warn(
+        "get_decisions_db_path() is deprecated: all databases are unified into xuansto.db. "
+        "Use get_db_path() instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return get_db_path()
+
+
+def get_knowledge_db_path() -> Path:
+    warnings.warn(
+        "get_knowledge_db_path() is deprecated: all databases are unified into xuansto.db. "
+        "Use get_db_path() instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return get_db_path()
 
 if not KNOWLEDGE_CHROMA_PATH.exists():
     logger.warning("KNOWLEDGE_CHROMA_PATH does not exist: %s", KNOWLEDGE_CHROMA_PATH)
@@ -336,6 +480,9 @@ _migrate_chroma_path()
 
 MCP_API_VERSION = "3.0.0"
 MCP_MIN_SUPPORTED_VERSION = "2.0.0"
+SKILL_MIN_VERSION = "8.0.0"
+
+KNOWLEDGE_VERSION_CLEANUP_KEEP_LAST_N: int = int(os.environ.get("XUANSTO_KNOWLEDGE_CLEANUP_KEEP_LAST_N", "10"))
 
 API_CHANGELOG: dict[str, list[str]] = {
     "2.0.0": [
@@ -353,3 +500,57 @@ API_CHANGELOG: dict[str, list[str]] = {
         "Backward compatible with v2.0.0 and v1.0.0 clients",
     ],
 }
+
+
+def parse_version(version_str: str) -> tuple[int, int, int]:
+    parts = version_str.lstrip("v").split(".")
+    major = int(parts[0]) if len(parts) > 0 else 0
+    minor = int(parts[1]) if len(parts) > 1 else 0
+    patch = int(parts[2]) if len(parts) > 2 else 0
+    return (major, minor, patch)
+
+
+CURRENT_SCHEMA_VERSION = "1.0"
+
+_SCHEMA_MIGRATIONS: list[tuple[str, Any]] = []
+
+
+def _ensure_schema_version(data: dict) -> dict:
+    if not isinstance(data, dict):
+        return data
+    file_version = data.get("schema_version", "0.0")
+    if file_version == CURRENT_SCHEMA_VERSION:
+        return data
+    parsed_file = parse_version(str(file_version))
+    parsed_current = parse_version(CURRENT_SCHEMA_VERSION)
+    if parsed_file >= parsed_current:
+        return data
+    for target_version, migrate_fn in _SCHEMA_MIGRATIONS:
+        if parse_version(target_version) > parsed_file and parse_version(target_version) <= parsed_current:
+            data = migrate_fn(data)
+    data["schema_version"] = CURRENT_SCHEMA_VERSION
+    return data
+
+
+def get_token_budget_config() -> dict[str, int]:
+    token_budgets = _CONSTRAINTS_CONFIG.get("token_budgets", {})
+    if not isinstance(token_budgets, dict) or not token_budgets:
+        return {}
+    result: dict[str, int] = {}
+    for phase_key, phase_data in token_budgets.items():
+        if isinstance(phase_data, dict) and "budget" in phase_data:
+            name = phase_key.split("_")[-1]
+            result[name] = int(phase_data["budget"])
+        elif isinstance(phase_data, (int, float)):
+            result[phase_key] = int(phase_data)
+    return result
+
+
+def _merge_configs(user_config: dict[str, Any], defaults: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(defaults)
+    for key, value in user_config.items():
+        if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
+            merged[key] = _merge_configs(value, merged[key])
+        else:
+            merged[key] = value
+    return merged

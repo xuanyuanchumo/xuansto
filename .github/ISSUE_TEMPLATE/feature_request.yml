@@ -9,6 +9,9 @@ body:
       options:
         - label: MCP Server (xuansto-mcp-server)
         - label: Skill (xuansto-skill-v2)
+        - label: Knowledge Base
+        - label: Agent System
+        - label: Degradation Chain
   - type: textarea
     id: problem
     attributes:
@@ -16,6 +19,11 @@ body:
       description: What problem does this feature solve?
     validations:
       required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why is this feature important? What use cases does it enable?
   - type: textarea
     id: solution
     attributes:
@@ -26,3 +34,27 @@ body:
     id: alternatives
     attributes:
       label: Alternatives Considered
+  - type: input
+    id: unified_issue
+    attributes:
+      label: Related UNIFIED Issue
+      description: UNIFIED issue number from REFACTOR_PLAN (e.g., UNIFIED-01)
+  - type: dropdown
+    id: target_phase
+    attributes:
+      label: Target Progressive Loading Phase
+      description: Which phase level should this feature target?
+      options:
+        - Phase 0 - Core (always loaded)
+        - Phase 1 - Standard (loaded on demand)
+        - Phase 2 - Extended (lazy loaded)
+        - Phase 3 - Optional (rarely needed)
+  - type: dropdown
+    id: priority_assessment
+    attributes:
+      label: Priority Assessment
+      options:
+        - Critical - Blocks other work
+        - High - Significant value
+        - Medium - Useful but not urgent
+        - Low - Nice to have

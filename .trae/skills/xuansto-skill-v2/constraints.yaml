@@ -1,4 +1,4 @@
-version: "8.0.0"
+version: "9.0.0"
 
 core:
   - id: spec-first
@@ -33,6 +33,21 @@ token_budgets:
     load: "完整参考+模板+知识库访问+全部Agent定义+所有详情"
     estimate: "≤20K"
     budget: 20000
+  dynamic_scaling:
+    enabled: true
+    project_sizes:
+      small:
+        file_count_max: 50
+        agent_count_max: 10
+        budget_multiplier: 0.7
+      medium:
+        file_count_max: 500
+        agent_count_max: 30
+        budget_multiplier: 1.0
+      large:
+        file_count_max: 99999
+        agent_count_max: 999
+        budget_multiplier: 1.5
 
 resource_priority:
   P0_must:
@@ -93,7 +108,7 @@ disclosure:
     phase_2:
       start: "<!-- PHASE_2_START -->"
       end: "<!-- PHASE_2_END -->"
-      content: "完整命令路由表({{include:commands/routes.yaml}}) + 完整Agent注册表({{include:agents/registry.yaml}}) + 外部参考文件表 + MCP工具摘要表"
+      content: "MCP Resource URI索引 + 配置文件来源(核心约束内联，其余MCP Resource) + 外部参考文件表 + MCP工具摘要表"
     phase_3:
       start: "<!-- PHASE_3_START -->"
       end: "<!-- PHASE_3_END -->"
@@ -113,7 +128,7 @@ disclosure:
       resource_priority: P0_must + P1_important
     - phase: "Phase 2: 增强"
       skill_md_range: "PHASE_0_START → PHASE_2_END"
-      available: "完整命令路由(含降级策略)+完整Agent注册表(13层57个)+外部参考文件+MCP工具摘要+知识检索"
+      available: "MCP Resource URI索引+命令路由/Agent注册表(通过MCP Resource按需获取)+外部参考文件+MCP工具摘要+知识检索"
       unavailable: "Hook系统详情、模型路由详情、关键规则完整说明"
       token_budget: 10000
       resource_priority: P0_must + P1_important + P2_enhanced
@@ -141,10 +156,11 @@ disclosure:
     P2_enhanced:
       loaded_from: "Phase 2"
       items:
-        - "完整命令路由表(含降级策略, {{include:commands/routes.yaml}})"
-        - "完整Agent注册表(13层57个, {{include:agents/registry.yaml}})"
-        - "外部参考文件表({{include:triggers.yaml}}, {{include:constraints.yaml}}等)"
-        - "MCP工具摘要表(17个工具)"
+        - "完整命令路由表(含降级策略, MCP Resource xuansto://commands/routes)"
+        - "完整Agent注册表(13层57个, MCP Resource xuansto://agents/registry)"
+        - "MCP Resource URI索引表(8个资源)"
+        - "外部参考文件表(核心约束内联，其余MCP Resource)"
+        - "MCP工具摘要表(22个工具)"
     P3_optional:
       loaded_from: "Phase 3"
       items:
@@ -158,7 +174,8 @@ disclosure:
   degradation_on_unavailable:
     command_execution:
       unavailable_in: "Phase 0"
-      behavior: "仅展示命令列表，不执行；提示用户执行任意命令以推进到Phase 1"
+      behavior: "仅展示命令列表，不执行；例外：/status、/help和/budget在Phase 0可用"
+      skeleton_allowed_commands: ["/status", "/help", "/budget"]
     workflow_details:
       unavailable_in: "Phase 0"
       behavior: "使用核心约束中的精简规则替代完整工作流定义"
@@ -173,7 +190,7 @@ disclosure:
       behavior: "跳过知识检索步骤，使用内嵌模板和默认知识；Phase 2起可用knowledge_search工具"
     reference_documents:
       unavailable_in: "Phase 0, Phase 1"
-      behavior: "使用SKILL.md内嵌摘要替代参考文档；Phase 2起通过{{include:}}按需加载"
+      behavior: "使用SKILL.md内嵌摘要替代参考文档；Phase 2起通过MCP Resource URI按需获取"
     hook_system:
       unavailable_in: "Phase 0, Phase 1, Phase 2"
       behavior: "使用minimal配置(security-block仅)；Phase 3加载完整Hook系统说明"
@@ -186,20 +203,79 @@ degradation:
   script_fallback: "使用 python scripts/xxx.py --format json 调用"
   result_format: "降级模式下结果包装为与MCP工具相同的JSON结构"
   tool_fallbacks:
-    skill_analyze: "scripts/skill-test.py --analyze"
-    quality_gate_check: "scripts/skill-test.py --gate"
-    knowledge_search: "scripts/knowledge-server.py --search"
-    knowledge_inject: "scripts/knowledge_server/main.py --inject"
-    spec_drift_detect: "scripts/spec-drift-detector.py → 内联漂移检测"
-    security_scan: "scripts/agentic-security-scanner.py → 内联agentic+dependency扫描"
-    code_simplify: "scripts/code-simplifier.py → 内联simplify+dedup"
-    session_manage: "scripts/init-session.py / scripts/session-catchup.py / scripts/session-persist.py"
-    workflow_dispatch: "scripts/project-initializer.py (start) / 内联Phase推进"
-    agent_status: "静态注册表查询(agents/目录) / scripts/skill-test.py --agents"
-    hook_manage: "scripts/check-encoding.py / scripts/token-budget-guard.py / scripts/session-persist.py / 内联Hook执行"
-    resource_load_status: "内联状态检查(resource_state.json)"
-    context_compress: "scripts/context-compressor.py"
-    server_health: "scripts/health-checker.py → 降级状态返回"
+    skill_analyze:
+      script: scripts/skill_analyze.py
+      args: ["--format", "json"]
+    quality_gate_check:
+      script: scripts/quality_gate_check.py
+      args: ["--format", "json"]
+    spec_drift_detect:
+      script: scripts/spec_drift_detect.py
+      args: ["--format", "json"]
+      inline: _inline_spec_drift_detect
+    security_scan:
+      script: scripts/security_scan.py
+      args: ["--format", "json"]
+      inline: _inline_security_scan
+    code_simplify:
+      script: scripts/code_simplify.py
+      args: ["--format", "json"]
+      inline: _inline_code_simplify
+    session_manage:
+      script: scripts/session_manage.py
+      args: ["--format", "json"]
+    workflow_dispatch:
+      script: scripts/workflow_dispatch.py
+      args: ["--format", "json"]
+      inline: _inline_workflow_dispatch
+    agent_status:
+      script: scripts/agent_status.py
+      args: ["--format", "json"]
+      inline: _inline_agent_status
+    hook_manage:
+      script: scripts/hook_manage.py
+      args: ["--format", "json"]
+      inline: _inline_hook_manage
+    context_compress:
+      script: scripts/context_compress.py
+      args: ["--format", "json"]
+    server_health:
+      script: scripts/server_health.py
+      args: ["--format", "json"]
+      inline: _inline_server_health
+    decision_log:
+      script: scripts/decision_log.py
+      args: ["--format", "json"]
+    token_budget:
+      script: scripts/token_budget.py
+      args: ["--format", "json"]
+    knowledge_inject:
+      script: scripts/knowledge_inject.py
+      args: ["--format", "json"]
+      knowledge_dir: "data/knowledge"
+    knowledge_search:
+      script: scripts/knowledge_search.py
+      args: ["--format", "json"]
+      inline: _inline_knowledge_search
+      knowledge_dir: "data/knowledge"
+    resource_load_status:
+      inline: _inline_resource_load_status
+    project_init:
+      script: scripts/project_init.py
+      args: ["--format", "json"]
+      inline: _inline_project_init
+    agent_manage:
+      inline: _inline_agent_manage
+    metrics_report:
+      script: scripts/metrics_report.py
+      args: ["--format", "json"]
+      inline: _inline_metrics_report
+    config_manage:
+      inline: _inline_config_manage
+    resource_subscribe:
+      inline: _inline_resource_subscribe
+    audit_query:
+      inline: _inline_audit_query
   knowledge_search_degradation: "ChromaDB→SQLite FTS→关键词匹配"
 
 key_rules:

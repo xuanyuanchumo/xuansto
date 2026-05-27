@@ -1,0 +1,105 @@
+openapi: 3.0.3
+info:
+  title: API Specification Template
+  description: |
+    OpenAPI 3.0规范模板，用于定义项目API接口契约。
+    由Backend Developer和Technical Writer维护，通过api-contract-validator.py验证与实现一致性。
+  version: 0.1.0
+  contact:
+    name: Development Team
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: 开发环境
+  - url: https://staging.example.com/api/v1
+    description: 测试环境
+  - url: https://api.example.com/api/v1
+    description: 生产环境
+
+tags:
+  - name: health
+    description: 健康检查端点
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: 服务健康检查
+      description: 返回服务运行状态，用于监控和负载均衡健康探测
+      operationId: getHealth
+      responses:
+        '200':
+          description: 服务正常
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: 服务不可用
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, timestamp]
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+          description: 服务健康状态
+        timestamp:
+          type: string
+          format: date-time
+          description: 响应生成时间
+        version:
+          type: string
+          description: 服务版本号
+        uptime_seconds:
+          type: integer
+          description: 服务运行时长（秒）
+
+    ErrorResponse:
+      type: object
+      required: [error, message, timestamp]
+      properties:
+        error:
+          type: string
+          description: 错误类型标识
+        message:
+          type: string
+          description: 人类可读的错误描述
+        timestamp:
+          type: string
+          format: date-time
+        trace_id:
+          type: string
+          description: 请求追踪ID，用于日志关联
+
+    PaginationMeta:
+      type: object
+      properties:
+        total:
+          type: integer
+          description: 总记录数
+        page:
+          type: integer
+          description: 当前页码（从1开始）
+        per_page:
+          type: integer
+          description: 每页记录数
+        total_pages:
+          type: integer
+          description: 总页数
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - BearerAuth: []

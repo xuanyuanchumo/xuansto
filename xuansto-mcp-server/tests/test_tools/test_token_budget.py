@@ -23,7 +23,8 @@ def budget_file(tmp_path):
 
 
 def test_get_status_no_budget(budget_file):
-    with patch("xuansto_mcp.tools.token_budget.BUDGET_FILE", budget_file):
+    with patch("xuansto_mcp.tools.token_budget.BUDGET_FILE", budget_file), \
+         patch("xuansto_mcp.tools.token_budget._restore_from_sqlite", return_value=None):
         result = _get_status()
         assert result["total_budget"] == 0
         assert result["status"] == "no_budget_set"
@@ -67,7 +68,8 @@ def test_recommend_with_team_size():
 
 
 def test_report_no_budget(budget_file):
-    with patch("xuansto_mcp.tools.token_budget.BUDGET_FILE", budget_file):
+    with patch("xuansto_mcp.tools.token_budget.BUDGET_FILE", budget_file), \
+         patch("xuansto_mcp.tools.token_budget._restore_from_sqlite", return_value=None):
         result = _report()
         assert result["total_budget"] == 0
         assert result["usage_pct"] == 0

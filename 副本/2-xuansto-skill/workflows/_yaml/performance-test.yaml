@@ -1,0 +1,100 @@
+metadata:
+  name: 性能基准测试工作流
+  version: "1.9.1"
+  description: 性能基准测试与优化分析工作流
+  platform: all
+  min_agents: 2
+  max_agents: 4
+phases:
+  - id: phase-5
+    name: 性能测试验证
+    order: 0
+    optional: false
+    trigger_condition: 用户请求性能测试或系统上线前验证
+    agents:
+      primary: [performance-tester, system-architect, devops-engineer]
+      supporting: []
+    inputs:
+      - name: 业务需求
+        type: document
+        required: true
+      - name: 用户规模预估
+        type: document
+        required: true
+      - name: 系统架构文档
+        type: document
+        required: true
+    outputs:
+      - name: 性能需求文档
+        type: document
+        validation: 性能指标已量化
+      - name: 性能测试计划
+        type: document
+        validation: 测试场景已覆盖关键业务
+      - name: 测试环境文档
+        type: document
+        validation: 环境配置完成
+      - name: 性能测试脚本
+        type: code
+        validation: 脚本功能正确
+      - name: 性能分析报告
+        type: document
+        validation: 瓶颈已定位
+      - name: 性能测试报告
+        type: document
+        validation: 性能指标达标
+      - name: 性能基线文档
+        type: document
+    quality_gates:
+      - gate_id: metrics_quantified
+        blocking: true
+        pass_criteria: 性能指标已量化
+      - gate_id: scenarios_covered
+        blocking: true
+        pass_criteria: 测试场景已覆盖关键业务
+      - gate_id: acceptance_confirmed
+        blocking: true
+        pass_criteria: 验收标准已确认
+      - gate_id: env_ready
+        blocking: true
+        pass_criteria: 环境配置完成
+      - gate_id: scripts_valid
+        blocking: true
+        pass_criteria: 脚本功能正确
+      - gate_id: execution_complete
+        blocking: true
+        pass_criteria: 测试场景完整执行
+      - gate_id: bottleneck_located
+        blocking: true
+        pass_criteria: 瓶颈已定位且根因已分析
+      - gate_id: optimization_feasible
+        blocking: true
+        pass_criteria: 优化建议可行
+    timeout_minutes: 240
+    retry:
+      max_attempts: 3
+      backoff: exponential
+agent_matrix:
+  performance-tester:
+    phases: [phase-5]
+    role: primary
+    max_parallel_instances: 1
+  system-architect:
+    phases: [phase-5]
+    role: primary
+    max_parallel_instances: 1
+  devops-engineer:
+    phases: [phase-5]
+    role: primary
+    max_parallel_instances: 1
+exception_handling:
+  phase_failure:
+    action: retry_then_escalate
+    escalation_target: orchestrator
+    max_retries: 3
+  agent_unavailable:
+    action: substitute_and_continue
+    substitute_agent: performance-tester
+  quality_gate_blocked:
+    action: auto_fix_then_pause
+    auto_fix_agents: [system-architect, devops-engineer]

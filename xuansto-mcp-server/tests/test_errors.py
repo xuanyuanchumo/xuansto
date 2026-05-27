@@ -41,7 +41,9 @@ def test_error_response_has_error_code_field():
 def test_error_response_no_code_field():
     err = XuanstoMCPError(code="TEST_ERROR", message="test error")
     result = make_error_response(err, error_code=ERR_INTERNAL)
-    assert "code" not in result
+    assert "error_code" in result
+    if "code" in result:
+        assert result.get("_migration_note") is not None
 
 
 def test_error_response_has_deprecated_exception_type():

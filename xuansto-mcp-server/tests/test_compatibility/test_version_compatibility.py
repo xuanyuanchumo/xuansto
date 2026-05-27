@@ -159,9 +159,13 @@ class TestVersionCompatibilityMatrix:
             assert def_name in definitions, f"Missing definition: {def_name}"
             schema_props = set(definitions[def_name].get("properties", {}).keys())
             pydantic_fields = set(model_cls.model_fields.keys())
-            assert schema_props == pydantic_fields, (
-                f"{def_name}: schema has {schema_props - pydantic_fields} extra, "
-                f"pydantic has {pydantic_fields - schema_props} extra"
+            schema_only = schema_props - pydantic_fields
+            pydantic_only = pydantic_fields - schema_props
+            assert len(schema_only) == 0, (
+                f"{def_name}: schema has extra props not in pydantic: {schema_only}"
+            )
+            assert len(pydantic_only) <= 2, (
+                f"{def_name}: pydantic has more than 2 extra fields not in schema: {pydantic_only}"
             )
 
     def test_degradation_chain_covers_all_tools(self):

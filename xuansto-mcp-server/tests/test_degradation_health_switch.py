@@ -80,7 +80,7 @@ def test_health_check_response_includes_services_chromadb():
                 break
 
         assert tool_fn is not None
-        result = tool_fn.fn()
+        result = tool_fn.fn(action="check")
         if hasattr(result, "__await__"):
             import asyncio
             result = asyncio.run(result)

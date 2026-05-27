@@ -1,0 +1,171 @@
+metadata:
+  name: 用户验收与部署验证工作流
+  version: "1.9.1"
+  description: 用户验收部署验证与桌面专项验收
+  platform: all
+  min_agents: 2
+  max_agents: 5
+phases:
+  - id: phase-6
+    name: 验收
+    order: 0
+    optional: false
+    trigger_condition: 开发完成后交付前或用户请求验收
+    agents:
+      primary: [product-manager, test-architect, e2e-tester]
+      supporting: [security-auditor, performance-tester, documentation-engineer, desktop-developer, build-release-engineer]
+    inputs:
+      - name: 需求规格说明书
+        type: document
+        required: true
+      - name: 用户故事列表
+        type: document
+        required: true
+      - name: 验收标准
+        type: document
+        required: true
+      - name: 待验收系统
+        type: code
+        required: true
+    outputs:
+      - name: 验收标准文档
+        type: document
+        validation: 验收标准已确认
+      - name: 验收测试用例
+        type: document
+        validation: 测试用例覆盖完整
+      - name: 功能验收报告
+        type: document
+        validation: 核心功能全部通过
+      - name: 性能验收报告
+        type: document
+        validation: 性能指标达标
+      - name: 安全验收报告
+        type: document
+        validation: 无高危安全漏洞
+      - name: 文档验收报告
+        type: document
+        validation: 必要文档齐全
+      - name: UAT测试报告
+        type: document
+        validation: 用户满意度>=80%
+      - name: 桌面安装验证报告
+        type: document
+      - name: 自动更新验证报告
+        type: document
+      - name: 跨平台兼容性验证报告
+        type: document
+    quality_gates:
+      - gate_id: acceptance_criteria_confirmed
+        blocking: true
+        pass_criteria: 验收标准已确认
+      - gate_id: test_coverage_complete
+        blocking: true
+        pass_criteria: 测试用例覆盖完整
+      - gate_id: plan_approved
+        blocking: true
+        pass_criteria: 验收计划已批准
+      - gate_id: core_function_pass
+        blocking: true
+        pass_criteria: 核心功能全部通过
+      - gate_id: no_p0_p1_defects
+        blocking: true
+        pass_criteria: 无P0/P1级未修复缺陷
+      - gate_id: performance_met
+        blocking: true
+        pass_criteria: 性能指标达标
+      - gate_id: no_high_risk_vuln
+        blocking: true
+        pass_criteria: 无高危安全漏洞
+      - gate_id: docs_complete
+        blocking: true
+        pass_criteria: 必要文档齐全
+      - gate_id: uat_pass
+        blocking: true
+        pass_criteria: 关键业务场景通过
+      - gate_id: satisfaction_80
+        blocking: true
+        pass_criteria: 用户满意度>=80%
+    timeout_minutes: 120
+    retry:
+      max_attempts: 2
+      backoff: fixed
+  - id: phase-7
+    name: 验收决策与交付
+    order: 1
+    optional: false
+    trigger_condition: 验收测试完成
+    agents:
+      primary: [product-manager, e2e-tester]
+      supporting: []
+    inputs:
+      - name: 各阶段验收报告
+        type: document
+        required: true
+        source_phase: phase-6
+      - name: 缺陷清单
+        type: document
+        required: true
+      - name: 用户反馈
+        type: document
+        required: true
+    outputs:
+      - name: 验收报告
+        type: document
+        validation: 所有验收项已评估
+      - name: 交付清单
+        type: document
+        validation: 交付物已准备就绪
+      - name: 交付说明文档
+        type: document
+        validation: 验收决策已做出
+    quality_gates:
+      - gate_id: all_items_evaluated
+        blocking: true
+        pass_criteria: 所有验收项已评估
+      - gate_id: decision_made
+        blocking: true
+        pass_criteria: 验收决策已做出
+      - gate_id: deliverables_ready
+        blocking: true
+        pass_criteria: 交付物已准备就绪
+    timeout_minutes: 60
+    retry:
+      max_attempts: 2
+      backoff: fixed
+agent_matrix:
+  product-manager:
+    phases: [phase-6, phase-7]
+    role: primary
+    max_parallel_instances: 1
+  test-architect:
+    phases: [phase-6]
+    role: primary
+    max_parallel_instances: 1
+  e2e-tester:
+    phases: [phase-6, phase-7]
+    role: primary
+    max_parallel_instances: 1
+  security-auditor:
+    phases: [phase-6]
+    role: supporting
+    max_parallel_instances: 1
+  performance-tester:
+    phases: [phase-6]
+    role: supporting
+    max_parallel_instances: 1
+  documentation-engineer:
+    phases: [phase-6]
+    role: supporting
+    max_parallel_instances: 1
+exception_handling:
+  phase_failure:
+    action: retry_then_escalate
+    escalation_target: orchestrator
+    max_retries: 3
+  agent_unavailable:
+    action: substitute_and_continue
+    substitute_agent: product-manager
+  quality_gate_blocked:
+    action: auto_fix_then_pause
+    auto_fix_agents: [e2e-tester, test-architect]

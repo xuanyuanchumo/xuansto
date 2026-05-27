@@ -76,7 +76,24 @@ def test_console_log_detect_with_logs(tmp_path):
 
 
 def test_inline_hook_logic_keys():
-    expected = {"security-block", "dangerous-cmd-confirm", "auto-format", "console-log-detect", "type-check", "git-status-check", "decision-log-persist"}
+    expected = {
+        "security-block",
+        "dangerous-cmd-confirm",
+        "auto-format",
+        "console-log-detect",
+        "type-check",
+        "git-status-check",
+        "decision-log-persist",
+        "token-budget-check",
+        "encoding-check",
+        "load-context",
+        "kb-health-check",
+        "platform-detect",
+        "session-save",
+        "experience-precipitate",
+        "pattern-detect",
+        "save-state",
+    }
     assert set(INLINE_HOOK_LOGIC.keys()) == expected
 
 

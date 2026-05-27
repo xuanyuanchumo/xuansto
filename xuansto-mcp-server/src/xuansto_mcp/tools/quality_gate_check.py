@@ -1,28 +1,61 @@
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import hashlib
 import json
 import re
-import shutil
 import subprocess
 import sys
 import threading
 import time
+from collections.abc import Callable
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core import atomic_write
-from ..core.config import SCRIPTS_DIR, GATE_SCRIPTS_MAP, QUALITY_GATES_PHASE_MAP, WORK_DIR
-from ..core.errors import make_error_response, make_success_response, ERR_VALIDATION
+from ..core.config import GATE_SCRIPTS_MAP, QUALITY_GATES_PHASE_MAP, SCRIPTS_DIR, WORK_DIR
+from ..core.errors import ERR_VALIDATION, make_error_response, make_success_response
 from ..core.logging_config import get_logger
 from ..core.notifications import notify
 from ..core.validator import validate_input, validate_path_safety
 from ..models.schemas import QualityGateCheckInput
 
 logger = get_logger("quality_gate_check")
+
+_SECURITY_HARD_GATES: set[str] = {
+    "production_deploy",
+    "secret_key_rotation",
+    "database_schema_destructive_change",
+}
+
+
+def _load_hard_gates_from_config() -> set[str]:
+    try:
+        from ..core.config import _load_yaml_config, _resolve_skill_file
+        config_path = _resolve_skill_file("configs/default.yaml")
+        config = _load_yaml_config(config_path)
+        hc = config.get("human_collaboration", {})
+        hard_gates = hc.get("security_hard_gates", [])
+        if isinstance(hard_gates, list) and hard_gates:
+            return set(hard_gates)
+    except Exception:
+        pass
+    return _SECURITY_HARD_GATES
+
+
+_SECURITY_HARD_GATES = _load_hard_gates_from_config()
+
+
+def _check_hard_gate(gate_id: str) -> dict[str, Any]:
+    if gate_id in _SECURITY_HARD_GATES:
+        logger.info("hard_gate_triggered: gate_id=%s requires_manual_approval", gate_id)
+        return {"approved": False, "reason": "hard_gate_requires_manual_approval", "gate_id": gate_id}
+    return {"approved": True, "reason": "not_a_hard_gate", "gate_id": gate_id}
 
 
 def _resolve_gates(gate_ids: list[str] | None, phase: str | None) -> list[str]:
@@ -39,10 +72,7 @@ def _resolve_gates(gate_ids: list[str] | None, phase: str | None) -> list[str]:
 
 
 def _parse_gate_result(gate_id: str, result: subprocess.CompletedProcess[str]) -> dict[str, Any]:
-    if result.returncode == 0:
-        status = "PASS"
-    else:
-        status = "FAIL"
+    status = "PASS" if result.returncode == 0 else "FAIL"
     output = result.stdout.strip() if result.stdout else ""
     try:
         parsed = json.loads(output)
@@ -93,7 +123,7 @@ def _check_test_pass(project_path: str) -> dict[str, Any]:
             capture_output=True, text=True, timeout=30, cwd=str(project),
         )
         if result.returncode == 0:
-            test_count = len([l for l in result.stdout.strip().split("\n") if l.strip() and not l.startswith("=")])
+            test_count = len([ln for ln in result.stdout.strip().split("\n") if ln.strip() and not ln.startswith("=")])
             return {"status": "PASS", "gate_id": "TEST-PASS", "message": f"Tests collectible: {test_count} tests found"}
         else:
             return {"status": "FAIL", "gate_id": "TEST-PASS", "message": f"pytest collection failed: {result.stderr[:200]}", "suggestion": "Fix test collection errors before proceeding"}
@@ -953,10 +983,8 @@ def _save_persistent_hash_cache() -> None:
                     "mtime": mtimes.get(rel, 0.0),
                 }
             merged[proj] = entries
-    try:
+    with contextlib.suppress(OSError):
         atomic_write(_HASH_CACHE_PATH, json.dumps(merged, ensure_ascii=False, indent=2))
-    except OSError:
-        pass
 
 
 def _compute_file_hashes(project_path: str, force_refresh: bool = False) -> dict[str, str]:
@@ -1054,7 +1082,7 @@ def _is_cache_valid(cache: dict[str, Any], current_hashes: dict[str, str]) -> bo
 def register(mcp: FastMCP) -> None:
     @mcp.tool(
         annotations=ToolAnnotations(
-            readOnlyHint=True,
+            readOnlyHint=False,
             destructiveHint=False,
             idempotentHint=True,
             openWorldHint=False,
@@ -1067,7 +1095,7 @@ def register(mcp: FastMCP) -> None:
         severity_filter: str = "all",
         force_refresh: bool = False,
     ) -> dict[str, Any]:
-        """执行54项质量门禁检查，支持按门禁ID或开发阶段(0-8)过滤。自动映射门禁到检查脚本，返回PASS/FAIL/SKIP状态和详细结果。"""
+        """执行54项质量门禁检查，支持按门禁ID或开发阶段(0-8)过滤。自动映射门禁到检查脚本，返回PASS/FAIL/SKIP状态和详细结果。Prefer using Resource xuansto://gates/list for read-only access."""
         validated, err = validate_input(QualityGateCheckInput, gate_ids=gate_ids, phase=phase, project_path=project_path, severity_filter=severity_filter, force_refresh=force_refresh)
         if err:
             return err
@@ -1078,12 +1106,19 @@ def register(mcp: FastMCP) -> None:
                 return make_error_response(ValueError(path_err), error_code=ERR_VALIDATION)
             gates_to_check = _resolve_gates(gate_ids, phase)
 
-            current_hashes = _compute_file_hashes(project_path, force_refresh=force_refresh)
-            cache = _load_gate_cache(project_path)
+            current_hashes = await asyncio.to_thread(_compute_file_hashes, project_path, force_refresh=force_refresh)
+            cache = await asyncio.to_thread(_load_gate_cache, project_path)
             cache_hit = not force_refresh and _is_cache_valid(cache, current_hashes)
             cache_age = 0.0
             if cache_hit and "timestamp" in cache:
-                cache_age = time.time() - cache["timestamp"]
+                ts = cache["timestamp"]
+                if isinstance(ts, (int, float)):
+                    cache_age = time.time() - ts
+                else:
+                    try:
+                        cache_age = (datetime.now(timezone.utc) - datetime.fromisoformat(ts)).total_seconds()
+                    except (ValueError, OSError):
+                        cache_age = 0.0
 
             if cache_hit and "checks" in cache:
                 cached_checks = cache["checks"]
@@ -1112,15 +1147,30 @@ def register(mcp: FastMCP) -> None:
                     })
 
             checks: list[dict[str, Any]] = []
+            hard_gate_wait_start = time.time()
 
             for gate_id in gates_to_check:
+                hard_gate_result = _check_hard_gate(gate_id)
+                if not hard_gate_result["approved"]:
+                    wait_duration = time.time() - hard_gate_wait_start
+                    logger.info("hard_gate_wait_duration: gate_id=%s wait_seconds=%.2f", gate_id, wait_duration)
+                    checks.append({
+                        "gate_id": gate_id,
+                        "status": "BLOCKED",
+                        "source": "hard_gate",
+                        "message": "安全硬门禁：必须人工确认",
+                        "hard_gate": True,
+                        "auto_approve": False,
+                        "reason": hard_gate_result["reason"],
+                    })
+                    continue
                 script = GATE_SCRIPTS_MAP.get(gate_id)
                 if script:
                     script_path = SCRIPTS_DIR / script
                     if not script_path.exists():
                         if gate_id in INLINE_CHECKS and INLINE_CHECKS[gate_id] is not None:
                             try:
-                                inline_result = INLINE_CHECKS[gate_id](project_path)
+                                inline_result = await asyncio.to_thread(INLINE_CHECKS[gate_id], project_path)
                                 check_entry: dict[str, Any] = {
                                     "gate_id": gate_id,
                                     "status": inline_result["status"],
@@ -1148,7 +1198,8 @@ def register(mcp: FastMCP) -> None:
                             checks.append({"gate_id": gate_id, "status": "SKIP", "source": "no_inline_check", "details": "检查脚本不存在且无内嵌检查"})
                         continue
                     try:
-                        result = subprocess.run(
+                        result = await asyncio.to_thread(
+                            subprocess.run,
                             [sys.executable, str(script_path), "--format", "json"],
                             capture_output=True,
                             text=True,
@@ -1173,7 +1224,7 @@ def register(mcp: FastMCP) -> None:
                         })
                     else:
                         try:
-                            inline_result = INLINE_CHECKS[gate_id](project_path)
+                            inline_result = await asyncio.to_thread(INLINE_CHECKS[gate_id], project_path)
                             check_entry = {
                                 "gate_id": gate_id,
                                 "status": inline_result["status"],
@@ -1198,16 +1249,16 @@ def register(mcp: FastMCP) -> None:
 
             passed = sum(1 for c in checks if c["status"] == "PASS")
             failed = sum(1 for c in checks if c["status"] == "FAIL")
-            blocked = any(c["status"] == "FAIL" for c in checks)
+            blocked = any(c["status"] == "FAIL" for c in checks) or any(c.get("hard_gate") for c in checks)
 
             if blocked:
-                failed_ids = [c["gate_id"] for c in checks if c["status"] == "FAIL"]
+                failed_ids = [c["gate_id"] for c in checks if c["status"] == "FAIL" or c.get("hard_gate")]
                 notify(f"Quality gates blocked: {failed_ids}", "warning")
 
-            _save_gate_cache(project_path, {
+            await asyncio.to_thread(_save_gate_cache, project_path, {
                 "file_hashes": current_hashes,
                 "checks": checks,
-                "timestamp": time.time(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             })
 
             cache_hit_count = 0
@@ -1221,6 +1272,7 @@ def register(mcp: FastMCP) -> None:
                     "failed": failed,
                     "skipped": sum(1 for c in checks if c["status"] == "SKIP"),
                     "blocked": blocked,
+                    "hard_gate_blocked": sum(1 for c in checks if c.get("hard_gate")),
                 },
                 "cache_info": {
                     "hit": cache_hit,

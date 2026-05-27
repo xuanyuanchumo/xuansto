@@ -1,15 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 import json
-import subprocess
 import logging
+import subprocess
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger("xuansto-mcp")
 
 
-def run_script(
+async def run_script(
     script_path: Path,
     args: list[str] | None = None,
     cwd: str = ".",
@@ -17,10 +18,10 @@ def run_script(
 ) -> dict[str, Any]:
     if not script_path.exists():
         return {
-            "error": True,
-            "code": "SCRIPT_NOT_FOUND",
-            "message": f"脚本不存在: {script_path.name}",
-            "details": {"script": str(script_path)},
+            "status": "error",
+            "data": None,
+            "error": {"code": "SCRIPT_NOT_FOUND", "message": f"脚本不存在: {script_path.name}", "details": {"script": str(script_path)}},
+            "metadata": {},
         }
 
     cmd = ["python", str(script_path)]
@@ -28,7 +29,8 @@ def run_script(
         cmd.extend(args)
 
     try:
-        result = subprocess.run(
+        result = await asyncio.to_thread(
+            subprocess.run,
             cmd,
             capture_output=True,
             text=True,
@@ -40,29 +42,33 @@ def run_script(
 
         output = result.stdout.strip() if result.stdout else ""
         try:
-            return {"error": False, "data": json.loads(output)}
+            return {"status": "success", "data": json.loads(output), "error": None, "metadata": {}}
         except json.JSONDecodeError:
             return {
-                "error": False,
+                "status": "success",
                 "data": {"raw_output": output[:2000]},
-                "parse_warning": "Output was not valid JSON",
+                "error": None,
+                "metadata": {"parse_warning": "Output was not valid JSON"},
             }
 
     except subprocess.TimeoutExpired:
         return {
-            "error": True,
-            "code": "TIMEOUT",
-            "message": f"脚本执行超时({timeout}s): {script_path.name}",
+            "status": "error",
+            "data": None,
+            "error": {"code": "TIMEOUT", "message": f"脚本执行超时({timeout}s): {script_path.name}"},
+            "metadata": {},
         }
     except FileNotFoundError:
         return {
-            "error": True,
-            "code": "PYTHON_NOT_FOUND",
-            "message": "Python解释器未找到，请确保python在PATH中",
+            "status": "error",
+            "data": None,
+            "error": {"code": "PYTHON_NOT_FOUND", "message": "Python解释器未找到，请确保python在PATH中"},
+            "metadata": {},
         }
     except Exception as e:
         return {
-            "error": True,
-            "code": "EXECUTION_ERROR",
-            "message": str(e),
+            "status": "error",
+            "data": None,
+            "error": {"code": "EXECUTION_ERROR", "message": str(e)},
+            "metadata": {},
         }

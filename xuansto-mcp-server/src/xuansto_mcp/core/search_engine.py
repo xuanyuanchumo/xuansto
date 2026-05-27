@@ -10,10 +10,10 @@ from typing import Any, Protocol, runtime_checkable
 from .config import (
     KNOWLEDGE_CHROMA_PATH,
     KNOWLEDGE_DB_PATH,
-    KNOWLEDGE_GENERAL_DIR,
-    KNOWLEDGE_WORKSPACE_DIR,
     KNOWLEDGE_EXPERIENCE_DIR,
-    REFERENCES_DIR,
+    KNOWLEDGE_GENERAL_DIR,
+    KNOWLEDGE_REFERENCES_DIR,
+    KNOWLEDGE_WORKSPACE_DIR,
 )
 from .logging_config import get_logger
 
@@ -56,6 +56,8 @@ class SearchEngine(Protocol):
 
 
 class ChromaDBSearchEngine:
+    _COLLECTION_NAME = "knowledge"
+
     def __init__(self, chroma_path: Path | None = None) -> None:
         self._chroma_path = chroma_path or KNOWLEDGE_CHROMA_PATH
         self._client: Any = None
@@ -75,8 +77,14 @@ class ChromaDBSearchEngine:
         min_confidence = (filters or {}).get("min_confidence", 0.0)
         try:
             client = self._get_client()
-            collection = client.get_or_create_collection("knowledge")
-            results = collection.query(query_texts=[query], n_results=top_k)
+            collection = client.get_or_create_collection(self._COLLECTION_NAME)
+            chroma_where = None
+            if filters and "embedding_tier" in filters:
+                chroma_where = {"embedding_tier": filters["embedding_tier"]}
+            query_kwargs: dict[str, Any] = {"query_texts": [query], "n_results": top_k}
+            if chroma_where is not None:
+                query_kwargs["where"] = chroma_where
+            results = collection.query(**query_kwargs)
             if not results["ids"] or not results["ids"][0]:
                 return []
             items: list[SearchResult] = []
@@ -85,11 +93,17 @@ class ChromaDBSearchEngine:
                 relevance = max(0, 1 - distance)
                 if relevance < min_confidence:
                     continue
+                metadata = {}
+                if results.get("metadatas") and results["metadatas"][0]:
+                    meta = results["metadatas"][0][i]
+                    if isinstance(meta, dict):
+                        metadata = meta
                 items.append(SearchResult(
                     source=doc_id,
                     content=results["documents"][0][i] if results["documents"] else "",
                     match_type="semantic",
                     relevance=round(relevance, 3),
+                    metadata=metadata,
                 ))
             return items
         except ImportError:
@@ -108,8 +122,42 @@ class SimpleSearchEngine:
             KNOWLEDGE_GENERAL_DIR,
             KNOWLEDGE_WORKSPACE_DIR,
             KNOWLEDGE_EXPERIENCE_DIR,
-            REFERENCES_DIR,
+            KNOWLEDGE_REFERENCES_DIR,
         ]
+
+    @staticmethod
+    def _compute_tf(tokens: list[str]) -> dict[str, float]:
+        if not tokens:
+            return {}
+        counts: dict[str, int] = {}
+        for token in tokens:
+            counts[token] = counts.get(token, 0) + 1
+        total = len(tokens)
+        return {token: count / total for token, count in counts.items()}
+
+    @staticmethod
+    def _compute_idf(documents: list[list[str]]) -> dict[str, float]:
+        if not documents:
+            return {}
+        n = len(documents)
+        df: dict[str, int] = {}
+        for doc_tokens in documents:
+            seen = set(doc_tokens)
+            for token in seen:
+                df[token] = df.get(token, 0) + 1
+        return {token: math.log((n + 1) / (count + 1)) + 1 for token, count in df.items()}
+
+    @staticmethod
+    def _compute_cosine_similarity(vec_a: dict[str, float], vec_b: dict[str, float]) -> float:
+        common_keys = set(vec_a.keys()) & set(vec_b.keys())
+        if not common_keys:
+            return 0.0
+        dot = sum(vec_a[k] * vec_b[k] for k in common_keys)
+        norm_a = math.sqrt(sum(v * v for v in vec_a.values()))
+        norm_b = math.sqrt(sum(v * v for v in vec_b.values()))
+        if norm_a == 0.0 or norm_b == 0.0:
+            return 0.0
+        return dot / (norm_a * norm_b)
 
     def search(
         self,
@@ -119,18 +167,23 @@ class SimpleSearchEngine:
     ) -> list[SearchResult]:
         scope = (filters or {}).get("scope")
         min_confidence = (filters or {}).get("min_confidence", 0.0)
-        results: list[SearchResult] = []
-        query_terms = set(query.lower().split())
-        total_query_terms = len(query_terms)
+
+        if not query or not query.strip():
+            return []
 
         search_dirs = self._search_dirs
         if scope == "general":
-            search_dirs = [KNOWLEDGE_GENERAL_DIR, REFERENCES_DIR]
+            search_dirs = [KNOWLEDGE_GENERAL_DIR, KNOWLEDGE_REFERENCES_DIR]
         elif scope == "workspace":
             search_dirs = [KNOWLEDGE_WORKSPACE_DIR]
         elif scope == "experience":
             search_dirs = [KNOWLEDGE_EXPERIENCE_DIR]
 
+        query_tokens = query.lower().split()
+        if not query_tokens:
+            return []
+
+        doc_data: list[tuple[Path, Path, str, list[str]]] = []
         for search_dir in search_dirs:
             if not search_dir.exists():
                 continue
@@ -139,30 +192,55 @@ class SimpleSearchEngine:
                     if f.stat().st_size > self._MAX_FILE_BYTES:
                         continue
                     content = f.read_text(encoding="utf-8")
-                    content_lower = content.lower()
-                    if query.lower() in content_lower:
-                        matched_terms = sum(1 for term in query_terms if term in content_lower)
-                        content_length = len(content)
-                        length_factor = 1.0 / (1.0 + max(0.0, math.log(max(content_length, 1) / 1000)))
-                        relevance = min(1.0, max(0.0, matched_terms / total_query_terms * length_factor)) if total_query_terms > 0 else 0.0
-                        relevance = round(relevance, 4)
-                        if relevance < min_confidence:
-                            continue
-                        snippet_start = max(0, content_lower.index(query.lower()) - 100)
-                        snippet_end = min(len(content), content_lower.index(query.lower()) + len(query) + 100)
-                        snippet = content[snippet_start:snippet_end]
-                        results.append(SearchResult(
-                            source=str(f.relative_to(search_dir)),
-                            content=snippet,
-                            match_type="keyword",
-                            relevance=relevance,
-                        ))
-                        if len(results) >= top_k:
-                            break
+                    tokens = content.lower().split()
+                    doc_data.append((f, search_dir, content, tokens))
                 except (OSError, UnicodeDecodeError):
                     continue
+
+        if not doc_data:
+            return []
+
+        all_doc_tokens = [tokens for _, _, _, tokens in doc_data]
+        idf = self._compute_idf(all_doc_tokens + [query_tokens])
+        query_tf = self._compute_tf(query_tokens)
+        query_vec = {token: query_tf.get(token, 0.0) * idf.get(token, 0.0) for token in query_tf}
+
+        scored: list[tuple[float, Path, Path, str, list[str]]] = []
+        for f, search_dir, content, tokens in doc_data:
+            doc_tf = self._compute_tf(tokens)
+            doc_vec = {token: doc_tf.get(token, 0.0) * idf.get(token, 0.0) for token in doc_tf}
+            similarity = self._compute_cosine_similarity(query_vec, doc_vec)
+            if similarity > 0.0:
+                scored.append((similarity, f, search_dir, content, tokens))
+
+        if not scored:
+            return []
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+
+        results: list[SearchResult] = []
+        for similarity, f, search_dir, content, tokens in scored:
+            relevance = round(min(1.0, max(0.0, similarity)), 4)
+            if relevance < min_confidence:
+                continue
+            content_lower = content.lower()
+            snippet_start = 0
+            for qt in query_tokens:
+                idx = content_lower.find(qt)
+                if idx != -1:
+                    snippet_start = max(0, idx - 100)
+                    break
+            snippet_end = min(len(content), snippet_start + 300)
+            snippet = content[snippet_start:snippet_end]
+            results.append(SearchResult(
+                source=str(f.relative_to(search_dir)),
+                content=snippet,
+                match_type="keyword_fallback",
+                relevance=relevance,
+            ))
             if len(results) >= top_k:
                 break
+
         return results
 
 
@@ -219,15 +297,12 @@ class SQLiteFTSSearchEngine:
                     rows = cursor.fetchall()
                 items: list[SearchResult] = []
                 for row in rows:
-                    if "bm25_score" in row.keys():
-                        relevance = self._bm25_score_to_relevance(row["bm25_score"])
-                    else:
-                        relevance = 0.3
+                    relevance = self._bm25_score_to_relevance(row["bm25_score"]) if "bm25_score" in row else 0.3
                     if relevance < min_confidence:
                         continue
                     items.append(SearchResult(
-                        source=row["id"] if "id" in row.keys() else str(row[0]),
-                        content=row["content"] if "content" in row.keys() else str(row[1]),
+                        source=row["id"] if "id" in row else str(row[0]),
+                        content=row["content"] if "content" in row else str(row[1]),
                         match_type="fts5_bm25",
                         relevance=relevance,
                     ))
@@ -327,10 +402,9 @@ def get_search_engine(name: str | None = None) -> SearchEngine:
     if engine_class is None:
         logger.warning("Search engine '%s' not found, falling back to simple", engine_name)
         return SimpleSearchEngine()
-    if engine_name in ("chromadb", "hybrid"):
-        if not _is_chromadb_available():
-            logger.warning("ChromaDB not available, falling back to SQLite FTS5 + BM25")
-            return SQLiteFTSSearchEngine()
+    if engine_name in ("chromadb", "hybrid") and not _is_chromadb_available():
+        logger.warning("ChromaDB not available, falling back to SQLite FTS5 + BM25")
+        return SQLiteFTSSearchEngine()
     return engine_class()
 
 

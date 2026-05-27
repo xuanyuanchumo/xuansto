@@ -1,0 +1,87 @@
+token_budget:
+  default: 100000
+  warning_threshold: 0.8
+  compression_threshold: 0.8
+  compression_triggers:
+    level_1_threshold: 0.6
+    level_1_action: lossless
+    level_2_threshold: 0.8
+    level_2_action: semantic
+    level_3_threshold: 0.95
+    level_3_action: selective_discard
+  block_threshold: 1.0
+  per_phase:
+    phase_0: 10000
+    phase_1: 15000
+    phase_2: 20000
+    phase_3: 10000
+    phase_4: 30000
+    phase_5: 15000
+    phase_6: 8000
+    phase_7: 12000
+    phase_8: 10000
+  per_agent_default: 20000
+
+on_demand_loading:
+  enabled: true
+  strategy: lazy
+  preload:
+    - references/karpathy-guidelines.md
+    - references/quality-gates.md
+    - references/agent-registry.md
+  cache_size: 5
+  max_reference_lines: 300
+  unloading:
+    enabled: true
+    strategy: phase_aware
+    always_retain:
+      - karpathy-guidelines
+      - quality-gates
+      - agent-registry
+      - coding-standards
+    phase_transition_rules:
+      phase_0_to_1: [design-guidelines, desktop-dev-guidelines]
+      phase_1_to_2: [human-collaboration]
+      phase_2_to_3: [ci-cd-integration, git-workflow]
+      phase_3_to_4: [test-guidelines, database-guidelines]
+      phase_4_to_5: [acceptance-criteria, documentation-standards]
+      phase_5_to_6: [security-guidelines, owasp-top10-2026]
+      phase_6_to_7: [iteration-scheduling, spec-drift-handling]
+      phase_7_to_8: [desktop-dev-guidelines, electron-security, ipc-contracts]
+
+knowledge_service:
+  host: 127.0.0.1
+  port: 8765
+  auth_mode: optional
+  read_only_key: ""
+  read_write_key: ""
+  backup_dir: .knowledge/backup
+  max_backup_count: 10
+
+logging:
+  level: INFO
+  dir: .skill-logs
+  gate_exceptions_file: gate-exceptions.jsonl
+  gate_degradation_file: gate-degradation.jsonl
+  deadlock_events_file: deadlock-events.jsonl
+  degradation_events_file: degradation-events.jsonl
+
+degradation:
+  l1:
+    trigger_token_ratio: 0.8
+    max_parallel_agents: 5
+  l2:
+    trigger_token_ratio: 0.95
+    core_layers: [orchestration, engineering, testing, security]
+    max_agents: 15
+  l3:
+    trigger_token_ratio: 1.0
+    min_agents: 3
+  recovery:
+    token_ratio_threshold: 0.6
+    stepwise: true
+
+platform:
+  auto_detect: true
+  fallback: trae
+  log_detection: true

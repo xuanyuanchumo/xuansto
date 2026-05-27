@@ -8,7 +8,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from ..core.config import SCRIPTS_DIR
-from ..core.errors import make_success_response, make_error_response, ERR_VALIDATION
+from ..core.errors import ERR_VALIDATION, make_error_response, make_success_response
 from ..core.logging_config import get_logger
 from ..core.subprocess_utils import run_script
 from ..core.validator import validate_input, validate_path_safety
@@ -277,8 +277,8 @@ def register(mcp: FastMCP) -> None:
         annotations=ToolAnnotations(
             readOnlyHint=True,
             destructiveHint=False,
-            idempotentHint=False,
-            openWorldHint=True,
+            idempotentHint=True,
+            openWorldHint=False,
         )
     )
     async def security_scan(
@@ -303,7 +303,7 @@ def register(mcp: FastMCP) -> None:
                 script_path = SCRIPTS_DIR / "agentic-security-scanner.py"
                 used_inline = False
                 if script_path.exists():
-                    result = run_script(
+                    result = await run_script(
                         script_path,
                         args=["--target", target, "--severity-threshold", severity_threshold, "--format", "json"],
                         timeout=120,
@@ -327,7 +327,7 @@ def register(mcp: FastMCP) -> None:
                 script_path = SCRIPTS_DIR / "dependency-scan.py"
                 used_inline = False
                 if script_path.exists():
-                    result = run_script(
+                    result = await run_script(
                         script_path,
                         args=["--target", target, "--format", "json"],
                         timeout=60,

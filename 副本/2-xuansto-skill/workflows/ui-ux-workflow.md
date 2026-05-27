@@ -1,0 +1,535 @@
+---
+metadata:
+  name: UI/UX设计专项工作流
+  version: "1.8.0"
+  description: UI/UX设计专项与前端实现工作流
+  platform: all
+  min_agents: 2
+  max_agents: 5
+phases:
+  - id: phase-1
+    name: 用户研究
+    order: 1
+    optional: false
+    trigger_condition: 用户请求UI/UX设计或界面优化
+    agents:
+      primary: [ux-designer]
+      supporting: [product-manager]
+    quality_gates:
+      - gate_id: user_research_complete
+        blocking: true
+        pass_criteria: 用户画像清晰且痛点已识别
+  - id: phase-2
+    name: 交互设计
+    order: 2
+    optional: false
+    agents:
+      primary: [ux-designer]
+      supporting: []
+    quality_gates:
+      - gate_id: interaction_design_review
+        blocking: true
+        pass_criteria: 交互设计方案评审通过
+  - id: phase-3
+    name: 视觉设计
+    order: 3
+    optional: false
+    agents:
+      primary: [ui-designer]
+      supporting: []
+    quality_gates:
+      - gate_id: design_review
+        blocking: true
+        pass_criteria: 设计评审通过且符合品牌规范
+      - gate_id: accessibility_check
+        blocking: true
+        pass_criteria: 可访问性无A级违规
+  - id: phase-4
+    name: 桌面UI适配
+    order: 4
+    optional: true
+    agents:
+      primary: [desktop-ui-adapter, ui-designer]
+      supporting: []
+    quality_gates:
+      - gate_id: desktop_adaptation
+        blocking: true
+        pass_criteria: 桌面窗口布局适配完成
+  - id: phase-5
+    name: 设计评审
+    order: 5
+    optional: false
+    agents:
+      primary: [ux-designer, ui-designer]
+      supporting: [product-manager]
+    quality_gates:
+      - gate_id: design_review_pass
+        blocking: true
+        pass_criteria: 设计评审通过
+  - id: phase-6
+    name: 前端实现
+    order: 6
+    optional: false
+    agents:
+      primary: [frontend-stylist, frontend-developer]
+      supporting: []
+    quality_gates:
+      - gate_id: restoration_95
+        blocking: true
+        pass_criteria: 还原度>=95%
+      - gate_id: responsive_done
+        blocking: true
+        pass_criteria: 响应式适配完成
+  - id: phase-7
+    name: 可用性测试
+    order: 7
+    optional: false
+    agents:
+      primary: [ux-designer, e2e-tester]
+      supporting: []
+    quality_gates:
+      - gate_id: task_completion_80
+        blocking: true
+        pass_criteria: 任务完成率>=80%
+      - gate_id: satisfaction_4
+        blocking: true
+        pass_criteria: 用户满意度>=4/5
+agent_matrix:
+  ux-designer:
+    phases: [phase-1, phase-2, phase-5, phase-7]
+    role: primary
+    max_parallel_instances: 1
+  ui-designer:
+    phases: [phase-3, phase-4, phase-5]
+    role: primary
+    max_parallel_instances: 1
+  frontend-stylist:
+    phases: [phase-6]
+    role: primary
+    max_parallel_instances: 1
+  frontend-developer:
+    phases: [phase-6]
+    role: primary
+    max_parallel_instances: 1
+  desktop-ui-adapter:
+    phases: [phase-4]
+    role: primary
+    max_parallel_instances: 1
+  e2e-tester:
+    phases: [phase-7]
+    role: primary
+    max_parallel_instances: 1
+exception_handling:
+  phase_failure:
+    action: retry_then_escalate
+    escalation_target: orchestrator
+    max_retries: 3
+  agent_unavailable:
+    action: substitute_and_continue
+    substitute_agent: frontend-developer
+  quality_gate_blocked:
+    action: auto_fix_then_pause
+    auto_fix_agents: [frontend-stylist, frontend-developer]
+---
+
+# UI/UX 设计工作流
+
+## 工作流名称
+UI/UX Design Workflow（用户界面与体验设计工作流）
+
+## 描述
+专注于用户界面设计和用户体验优化的工作流，涵盖从用户研究到设计交付的完整流程。该工作流强调以用户为中心的设计理念，确保产品既美观又易用。
+
+## 触发条件
+- 用户请求UI/UX设计
+- 新功能界面设计
+- 现有界面优化
+- 用户体验改进
+- 设计系统构建
+- 用户明确要求"UI设计"、"UX设计"、"界面设计"、"用户体验"
+
+## 涉及的Agent
+
+### 核心Agent
+| Agent | 角色 | 职责 |
+|-------|------|------|
+| ux-designer | UX设计师 | 用户研究、交互设计 |
+| ui-designer | UI设计师 | 视觉设计、组件设计 |
+| frontend-stylist | 前端样式工程师 | 样式实现、响应式适配 |
+| frontend-developer | 前端工程师 | 组件开发 |
+
+### 支撑Agent
+| Agent | 角色 | 职责 |
+|-------|------|------|
+| product-manager | 产品经理 | 需求确认、优先级 |
+| e2e-tester | E2E测试工程师 | 可用性测试 |
+| desktop-ui-adapter | 桌面UI适配工程师 | 桌面窗口/菜单/交互适配 |
+
+## 阶段定义
+
+### 阶段1：用户研究（User Research）
+**执行者**: ux-designer
+
+**输入**:
+- 产品需求
+- 用户画像
+- 业务目标
+
+**活动**:
+1. 用户访谈与分析
+2. 竞品分析
+3. 用户旅程映射
+4. 痛点识别
+
+**输出**:
+- 用户研究报告
+- 用户旅程图
+- 痛点清单
+
+**质量门禁**:
+- [ ] 用户画像清晰
+- [ ] 关键痛点已识别
+- [ ] 用户旅程完整
+
+---
+
+### 阶段2：交互设计（Interaction Design）
+**执行者**: ux-designer
+
+**输入**:
+- 用户研究报告
+- 痛点清单
+
+**活动**:
+1. 信息架构设计
+2. 交互流程设计
+3. 线框图绘制
+4. 原型制作
+
+**输出**:
+- 信息架构图
+- 交互流程图
+- 低保真原型
+- 交互说明文档
+
+**质量门禁**:
+- [ ] 信息架构合理
+- [ ] 交互流程清晰
+- [ ] 原型可演示
+
+---
+
+### 阶段3：视觉设计（Visual Design）
+**执行者**: ui-designer
+
+**输入**:
+- 低保真原型
+- 品牌规范
+
+**活动**:
+1. 设计系统定义
+2. 高保真设计稿
+3. 组件设计
+4. 设计规范文档
+
+**输出**:
+- 高保真设计稿
+- 设计系统文档
+- 组件库规范
+- 切图资源
+
+**质量门禁**:
+- [ ] 设计符合品牌规范
+- [ ] 组件可复用
+- [ ] 设计规范完整
+
+---
+
+### 阶段4：桌面UI适配（Desktop UI Adaptation）
+**执行者**: desktop-ui-adapter, ui-designer
+
+**输入**:
+- 高保真设计稿
+- 设计系统文档
+- 目标桌面平台规范
+
+**活动**:
+1. 桌面窗口尺寸适配
+   - 最小窗口尺寸定义
+   - 默认窗口尺寸与布局
+   - 全屏模式设计
+   - 窗口缩放响应策略
+2. 系统菜单设计
+   - 应用菜单栏设计（macOS菜单栏 vs Windows菜单栏）
+   - 右键上下文菜单设计
+   - 系统托盘菜单设计
+   - Dock/任务栏交互设计
+3. 桌面特有交互设计
+   - 键盘快捷键映射（跨平台差异处理）
+   - 拖拽交互设计（文件拖入/拖出）
+   - 系统通知与提醒设计
+   - 原生文件对话框集成
+4. 平台规范适配
+   - macOS Human Interface Guidelines适配
+   - Windows UI Design Guidelines适配
+   - Linux桌面环境适配（GNOME/KDE）
+5. 桌面无障碍设计
+   - 屏幕阅读器兼容性
+   - 高对比度模式支持
+   - 键盘导航完整性
+
+**输出**:
+- 桌面窗口布局规范
+- 系统菜单结构图
+- 键盘快捷键映射表
+- 平台适配设计稿
+- 桌面交互说明文档
+
+**质量门禁**:
+- [ ] 窗口尺寸适配方案完整
+- [ ] 系统菜单结构符合各平台规范
+- [ ] 键盘快捷键无冲突
+- [ ] 各平台设计稿已完成
+- [ ] 桌面无障碍设计达标
+
+---
+
+### 阶段5：设计评审（Design Review）
+**执行者**: ux-designer, ui-designer, product-manager
+
+**输入**:
+- 高保真设计稿
+- 设计规范文档
+
+**活动**:
+1. 设计走查
+2. 可用性评估
+3. 无障碍检查
+4. 反馈收集与修改
+
+**输出**:
+- 设计评审报告
+- 修改清单
+- 最终设计稿
+
+**质量门禁**:
+- [ ] 设计评审通过
+- [ ] 无障碍标准达标
+- [ ] 产品确认验收
+
+---
+
+### 阶段6：前端实现（Frontend Implementation）
+**执行者**: frontend-stylist, frontend-developer
+
+**输入**:
+- 最终设计稿
+- 设计规范文档
+- 切图资源
+
+**活动**:
+1. 样式系统搭建
+2. 组件开发
+3. 响应式适配
+4. 动效实现
+
+**输出**:
+- 样式代码
+- UI组件库
+- 响应式页面
+
+**质量门禁**:
+- [ ] 还原度 >= 95%
+- [ ] 响应式适配完成
+- [ ] 动效流畅
+
+---
+
+### 阶段7：可用性测试（Usability Testing）
+**执行者**: ux-designer, e2e-tester
+
+**输入**:
+- 实现的界面
+- 测试用户
+
+**活动**:
+1. 可用性测试执行
+2. 用户反馈收集
+3. 问题分析与优化
+4. 迭代改进
+
+**输出**:
+- 可用性测试报告
+- 优化建议清单
+- 迭代版本
+
+**质量门禁**:
+- [ ] 任务完成率 >= 80%
+- [ ] 用户满意度 >= 4/5
+- [ ] 关键问题已修复
+
+## 流程图
+
+```mermaid
+flowchart TD
+    subgraph Research[阶段1: 用户研究]
+        R1[用户访谈] --> R2[竞品分析]
+        R2 --> R3[用户旅程映射]
+        R3 --> R4[痛点识别]
+    end
+
+    subgraph Interaction[阶段2: 交互设计]
+        I1[信息架构] --> I2[交互流程]
+        I2 --> I3[线框图]
+        I3 --> I4[原型制作]
+    end
+
+    subgraph Visual[阶段3: 视觉设计]
+        V1[设计系统] --> V2[高保真设计]
+        V2 --> V3[组件设计]
+        V3 --> V4[设计规范]
+    end
+
+    subgraph Desktop[阶段4: 桌面UI适配]
+        DT1[窗口尺寸适配] --> DT2[系统菜单设计]
+        DT2 --> DT3[桌面交互设计]
+        DT3 --> DT4[平台规范适配]
+        DT4 --> DT5[桌面无障碍设计]
+    end
+
+    subgraph Review[阶段5: 设计评审]
+        E1[设计走查] --> E2[可用性评估]
+        E2 --> E3[无障碍检查]
+        E3 --> E4[反馈修改]
+    end
+
+    subgraph Implement[阶段6: 前端实现]
+        F1[样式系统] --> F2[组件开发]
+        F2 --> F3[响应式适配]
+        F3 --> F4[动效实现]
+    end
+
+    subgraph Testing[阶段7: 可用性测试]
+        T1[测试执行] --> T2[反馈收集]
+        T2 --> T3[问题分析]
+        T3 --> T4[迭代改进]
+    end
+
+    Research -->|研究报告| Interaction
+    Interaction -->|原型| Visual
+    Visual -->|设计稿| Desktop
+    Desktop -->|桌面适配稿| Review
+    Review -->|最终设计| Implement
+    Implement -->|实现界面| Testing
+    Testing -->|优化反馈| Visual
+
+    style Research fill:#e3f2fd
+    style Interaction fill:#e8f5e9
+    style Visual fill:#fff3e0
+    style Desktop fill:#e8eaf6
+    style Review fill:#fce4ec
+    style Implement fill:#f3e5f5
+    style Testing fill:#e0f2f1
+```
+
+## 输出产物清单
+
+| 阶段 | 输出产物 | 格式 |
+|------|----------|------|
+| 用户研究 | 用户研究报告 | Markdown/PDF |
+| 用户研究 | 用户旅程图 | Mermaid/Figma |
+| 交互设计 | 信息架构图 | Mermaid |
+| 交互设计 | 低保真原型 | Figma/Sketch |
+| 视觉设计 | 高保真设计稿 | Figma/Sketch |
+| 视觉设计 | 设计系统文档 | Markdown |
+| 视觉设计 | 组件规范 | Storybook |
+| 桌面UI适配 | 桌面窗口布局规范 | Markdown |
+| 桌面UI适配 | 系统菜单结构图 | Mermaid |
+| 桌面UI适配 | 键盘快捷键映射表 | Markdown |
+| 桌面UI适配 | 平台适配设计稿 | Figma/Sketch |
+| 桌面UI适配 | 桌面交互说明文档 | Markdown |
+| 前端实现 | 样式代码 | CSS/SCSS/Tailwind |
+| 前端实现 | UI组件 | React/Vue组件 |
+| 可用性测试 | 测试报告 | Markdown/PDF |
+
+## 设计原则
+
+### UX设计原则
+1. **用户优先**: 所有设计决策以用户需求为中心
+2. **简洁明了**: 减少认知负担，界面简洁直观
+3. **一致性**: 保持交互和视觉的一致性
+4. **反馈及时**: 提供清晰的操作反馈
+5. **容错设计**: 预防错误，提供恢复机制
+
+### UI设计原则
+1. **视觉层次**: 通过对比、大小、颜色建立层次
+2. **对齐与间距**: 遵循网格系统，保持对齐
+3. **色彩和谐**: 使用协调的配色方案
+4. **字体易读**: 选择合适的字体和字号
+5. **响应式**: 适配不同设备和屏幕尺寸
+
+## 无障碍标准
+
+遵循 WCAG 2.1 AA 级别标准：
+- **可感知**: 信息和UI组件必须可被用户感知
+- **可操作**: UI组件和导航必须可操作
+- **可理解**: 信息和UI操作必须可理解
+- **健壮性**: 内容必须足够健壮以适应各种用户代理
+
+## 工具与资源
+
+### 设计工具
+- Figma: 协作设计
+- Sketch: macOS设计
+- Adobe XD: 原型设计
+
+### 前端框架
+- Tailwind CSS: 原子化CSS
+- shadcn/ui: React组件库
+- Radix UI: 无障碍组件
+
+### 设计系统参考
+- Material Design
+- Apple Human Interface Guidelines
+- Ant Design
+
+## 执行建议
+
+1. **早期介入**: UX设计师应尽早参与需求讨论
+2. **迭代设计**: 设计是一个迭代过程，允许多轮修改
+3. **用户验证**: 关键设计决策应有用户数据支撑
+4. **开发协作**: 设计师与开发者保持紧密沟通
+5. **文档同步**: 设计变更及时更新文档
+
+## 桌面设计质量门禁
+
+### 桌面UI设计检查清单
+- [ ] 窗口最小尺寸下核心内容可访问
+- [ ] 窗口缩放时布局无错位
+- [ ] 系统菜单符合目标平台规范
+- [ ] 键盘快捷键不与系统快捷键冲突
+- [ ] 托盘图标在所有目标平台正常显示
+- [ ] 文件拖拽交互符合平台习惯
+- [ ] 系统通知样式与平台一致
+- [ ] 高DPI/Retina显示适配
+
+### 桌面设计考量
+
+#### 窗口尺寸设计
+| 平台 | 最小宽度 | 最小高度 | 默认宽度 | 默认高度 |
+|------|----------|----------|----------|----------|
+| Windows | 800px | 600px | 1280px | 800px |
+| macOS | 800px | 600px | 1280px | 800px |
+| Linux | 800px | 600px | 1280px | 800px |
+
+#### 系统菜单设计要点
+- macOS: 菜单栏始终在屏幕顶部，遵循Apple HIG
+- Windows: 菜单栏在窗口内，支持Alt键导航
+- 右键菜单: 上下文相关，选项不超过15个
+- 托盘菜单: 核心操作入口，选项不超过10个
+
+#### 键盘快捷键设计原则
+- macOS使用Cmd键，Windows/Linux使用Ctrl键
+- 避免与系统级快捷键冲突
+- 常用操作提供快捷键支持
+- 快捷键在所有平台保持功能一致（键位可不同）
